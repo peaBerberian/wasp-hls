@@ -1,0 +1,28 @@
+{
+  "name": "wasp-hls",
+  "version": "0.0.1",
+  "description": "WebAssembly HLS Player Proof Of Concept",
+  "scripts": {
+    "build:all": "npm run clean && npm run build:ts && npm run build:wasm",
+    "build:ts": " tsc --project .",
+    "build:release": "npm run clean && npm run build:ts && npm run build:wasm:release",
+    "build:wasm": "npm run compile:rs && npm run move:wasm",
+    "build:wasm:release": "npm run compile:rs:release && npm run move:wasm",
+    "clean": "find ./build ! -name 'index.html' ! -name 'build' -exec rm -rf {} +",
+    "compile:rs": "cargo build --target=wasm32-unknown-unknown && ~/.cargo/bin/wasm-bindgen --keep-debug --target web ./target/wasm32-unknown-unknown/debug/wasp_hls.wasm --out-dir wasm",
+    "compile:rs:release": "cargo build --release --target=wasm32-unknown-unknown && ~/.cargo/bin/wasm-bindgen --target web ./target/wasm32-unknown-unknown/debug/wasp_hls.wasm --out-dir wasm",
+    "lint": "eslint src -c .eslintrc.js",
+    "move:wasm": "mkdir -p build/wasm && cp wasm/wasp_hls_bg.wasm build/wasm/wasp_hls_bg.wasm",
+    "serve": "http-server ./build"
+  },
+  "author": "peaberberian",
+  "license": "MIT",
+  "devDependencies": {
+    "@typescript-eslint/eslint-plugin": "^5.23.0",
+    "eslint": "^8.15.0",
+    "eslint-plugin-import": "^2.26.0",
+    "eslint-plugin-jsdoc": "^39.2.9",
+    "http-server": "^14.1.0",
+    "typescript": "^4.6.4"
+  }
+}
