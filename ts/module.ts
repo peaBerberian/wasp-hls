@@ -11,6 +11,8 @@ import init, {
   RemoveBufferError,
 } from "../wasm/wasp_hls.js";
 
+const MAX_U32 = Math.pow(2, 32) - 1;
+
 // TODO also use enum for error code?
 let lastError : null | string = null;
 
@@ -51,7 +53,7 @@ function log(logLevel: LogLevel, logStr: string) {
  */
 function fetchU8(playerId: PlayerId, url: string): RequestId {
   const currentRequestId = nextRequestId;
-  nextRequestId = loopingIncrement(nextRequestId);
+  incrementRequestId();
   const abortController = new AbortController();
   currentRequests[currentRequestId] = { abortController };
   fetch(url, { signal: abortController.signal })
@@ -83,7 +85,7 @@ function fetchU8(playerId: PlayerId, url: string): RequestId {
  */
 function fetchU8NoCopy(playerId: PlayerId, url: string): RequestId {
   const currentRequestId = nextRequestId;
-  nextRequestId = loopingIncrement(nextRequestId);
+  incrementRequestId();
   const abortController = new AbortController();
   currentRequests[currentRequestId] = { abortController };
   fetch(url, { signal: abortController.signal })
@@ -96,7 +98,7 @@ function fetchU8NoCopy(playerId: PlayerId, url: string): RequestId {
         jsMemoryResources[nextResourceId] = segmentArray;
         playerObj.player
           .on_u8_no_copy_request_finished(currentRequestId, nextResourceId);
-        nextResourceId = loopingIncrement(nextResourceId);
+        incrementResourceId();
       }
     })
     .catch(err => {
@@ -601,10 +603,16 @@ function getSourceBuffer(
   return undefined;
 }
 
-const maxU32 = Math.pow(2, 32) - 1;
+function incrementResourceId() : void {
+  do {
+    nextResourceId = nextResourceId >= MAX_U32 ? 0 : nextResourceId + 1;
+  } while (jsMemoryResources[nextResourceId] !== undefined);
+}
 
-function loopingIncrement(num : number) : number {
-  return num >= maxU32 ? 0 : num + 1;
+function incrementRequestId() : void {
+  do {
+    nextRequestId = nextRequestId >= MAX_U32 ? 0 : nextRequestId + 1;
+  } while (currentRequests[nextRequestId] !== undefined);
 }
 
 // TODO real way of binding
