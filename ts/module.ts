@@ -100,11 +100,12 @@ function fetchU8NoCopy(playerId: PlayerId, url: string): RequestId {
       delete currentRequests[currentRequestId];
       const playerObj = getPlayerObject(playerId);
       if (playerObj !== undefined) {
-        const segmentArray = new Uint8Array(arrRes);
-        jsMemoryResources[nextResourceId] = segmentArray;
-        playerObj.player
-          .on_u8_no_copy_request_finished(currentRequestId, nextResourceId);
+        const currentResourceId = nextResourceId;
         incrementResourceId();
+        const segmentArray = new Uint8Array(arrRes);
+        jsMemoryResources[currentResourceId] = segmentArray;
+        playerObj.player
+          .on_u8_no_copy_request_finished(currentRequestId, currentResourceId);
       }
     })
     .catch(err => {
