@@ -3,7 +3,7 @@ use crate::{
     js_functions::{
         PlayerId,
         jsAttachMediaSource,
-        LogLevel,
+        LogLevel, jsFetchU8,
     },
     source_buffer::SourceBuffersStore,
     utils::url::Url,
@@ -42,7 +42,7 @@ impl WaspHlsPlayer {
         let content_url = Url::new(content_url);
         self.requester.fetch_playlist(content_url, PlaylistFileType::Unknown);
         Logger::info("Attaching MediaSource");
-        jsAttachMediaSource(self.id)
+        jsAttachMediaSource(self.id);
     }
 
     pub fn stop(&mut self) {
@@ -56,6 +56,10 @@ impl WaspHlsPlayer {
             LogLevel::Info => Logger::info(msg),
             LogLevel::Debug => Logger::debug(msg),
         }
+    }
+
+    pub fn test_seg_back_and_forth(&self) {
+        jsFetchU8(self.id, "http://127.0.0.1:8080/lowlat_vs_non_lowlat.mp4");
     }
 }
 

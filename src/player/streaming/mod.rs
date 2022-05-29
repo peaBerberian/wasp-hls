@@ -15,6 +15,7 @@ use super::{
     MediaSourceReadyState,
     WaspHlsPlayer,
     WaspHlsPlayerReadyState,
+    api::SegmentData,
 };
 
 mod segment_queues;
@@ -237,12 +238,12 @@ impl WaspHlsPlayer {
     /// Method called once a segment request ended with success
     pub(super) fn on_segment_fetch_success(&mut self,
         segment_req: SegmentRequestInfo,
-        result: Vec<u8>
+        result: SegmentData
     ) {
         let media_type = segment_req.media_type;
         Logger::debug(&format!("{} segment request finished, pushing it...", media_type));
         if let Some(sb) = self.source_buffer_store.get_mut(media_type) {
-            sb.append_buffer(PushMetadata { data: result });
+            sb.append_buffer(PushMetadata::new(result));
             self.request_next_segment(media_type);
         }
     }

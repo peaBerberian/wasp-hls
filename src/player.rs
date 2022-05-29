@@ -9,6 +9,7 @@ use crate::{
 mod api;
 mod streaming;
 
+pub use api::{JsMemoryBlob, SegmentData};
 use streaming::SegmentQueues;
 
 /// The `WaspHlsPlayer` is the player Interface exported to the JavaScript-side,

@@ -1,6 +1,7 @@
 use crate::{
     js_functions::{
         jsFetchU8,
+        jsFetchU8NoCopy,
         PlayerId,
         RequestId,
         jsAbortRequest,
@@ -92,7 +93,7 @@ impl Requester {
     /// `player_id` associated to this Requester  will be called with the result.
     pub(crate) fn request_init_segment(&mut self, media_type: MediaType, url: Url) {
         Logger::debug(&format!("Requesting {} initialization segment", media_type));
-        let request_id = jsFetchU8(self.player_id, url.get_ref());
+        let request_id = jsFetchU8NoCopy(self.player_id, url.get_ref());
         self.pending_segment_requests.push(SegmentRequestInfo {
             request_id,
             media_type,
@@ -112,7 +113,7 @@ impl Requester {
     ) {
         Logger::debug(&format!("Requesting {} segment: t: {}, d: {}", media_type, seg.start, seg.duration));
         let time_info = Some((seg.start, seg.start + seg.duration));
-        let request_id = jsFetchU8(self.player_id, seg.url.get_ref());
+        let request_id = jsFetchU8NoCopy(self.player_id, seg.url.get_ref());
         self.pending_segment_requests.push(SegmentRequestInfo {
             request_id,
             media_type,

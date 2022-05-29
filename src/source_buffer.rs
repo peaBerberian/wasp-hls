@@ -1,10 +1,15 @@
 use std::fmt;
 
-use crate::js_functions::{
-    PlayerId,
-    jsAddSourceBuffer,
-    jsAppendBuffer,
-    jsRemoveBuffer, jsGetSourceBufferBuffered,
+use crate::{
+    player::SegmentData,
+    js_functions::{
+        PlayerId,
+        jsAddSourceBuffer,
+        jsAppendBuffer,
+        jsAppendBufferJsBlob,
+        jsRemoveBuffer,
+        AddSourceBufferError,
+    },
 };
 
 /// Identify a unique JavaScript `SourceBuffer`
@@ -135,36 +140,42 @@ pub enum SourceBufferQueueElement {
 
 impl SourceBuffer {
     fn new(player_id: PlayerId, typ: String) -> Result<Self, SourceBufferCreationError> {
-        let res = jsAddSourceBuffer(player_id, &typ);
-        match res {
-            x if x >= 0 => Ok(Self {
-                player_id,
-                id: x as u32,
-                typ,
-                is_updating: false,
-                queue: vec![],
-                has_been_updated: false,
-            }),
-            -1 => Err(SourceBufferCreationError::NoMediaSourceAttached),
-            -2 => Err(SourceBufferCreationError::MediaSourceIsClosed),
-            -3 => Err(SourceBufferCreationError::QuotaExceededError),
-            -4 => Err(SourceBufferCreationError::CantPlayType(typ)),
+        match jsAddSourceBuffer(player_id, &typ).result() {
+            Ok(x) => {
+                Ok(Self {
+                    player_id,
+                    id: x as u32,
+                    typ,
+                    is_updating: false,
+                    queue: vec![],
+                    has_been_updated: false,
+                })
+            },
+            Err(AddSourceBufferError::NoMediaSourceAttached) =>
+                Err(SourceBufferCreationError::NoMediaSourceAttached),
+            Err(AddSourceBufferError::QuotaExceededError) =>
+                Err(SourceBufferCreationError::QuotaExceededError),
+            Err(AddSourceBufferError::MediaSourceIsClosed) =>
+                Err(SourceBufferCreationError::MediaSourceIsClosed),
+            Err(AddSourceBufferError::TypeNotSupportedError) |
+                Err(AddSourceBufferError::EmptyMimeType) =>
+                Err(SourceBufferCreationError::CantPlayType(typ)),
             _ => Err(SourceBufferCreationError::UnknownError),
         }
     }
 
-    pub fn get_buffered(&self) -> Vec<(f64, f64)> {
-        let buffered = jsGetSourceBufferBuffered(self.player_id, self.id);
-        let og_len = buffered.len();
-        if og_len % 2 != 0 {
-            panic!("Unexpected buffered value: not even.");
-        }
-        let mut ret : Vec<(f64, f64)> = Vec::with_capacity(og_len / 2);
-        for i in 0..og_len / 2 {
-            ret.push((buffered[i], buffered[i+1]));
-        }
-        ret
-    }
+//     pub fn get_buffered(&self) -> Vec<(f64, f64)> {
+//         let buffered = jsGetSourceBufferBuffered(self.player_id, self.id);
+//         let og_len = buffered.len();
+//         if og_len % 2 != 0 {
+//             panic!("Unexpected buffered value: not even.");
+//         }
+//         let mut ret : Vec<(f64, f64)> = Vec::with_capacity(og_len / 2);
+//         for i in 0..og_len / 2 {
+//             ret.push((buffered[i], buffered[i+1]));
+//         }
+//         ret
+//     }
 
     pub fn get_segment_queue(&self) -> &[SourceBufferQueueElement] {
         &self.queue
@@ -175,8 +186,7 @@ impl SourceBuffer {
         if self.is_updating {
             self.queue.push(SourceBufferQueueElement::Push(metadata));
         } else {
-            self.is_updating = true;
-            jsAppendBuffer(self.player_id, self.id, &metadata.data);
+            self.push_now(metadata);
         }
     }
 
@@ -197,16 +207,36 @@ impl SourceBuffer {
         } else {
             let next_item = self.queue.remove(0);
             match next_item {
-                Push(md) =>
-                    jsAppendBuffer(self.player_id, self.id, &md.data),
-                Remove { start, end } => jsRemoveBuffer(self.id, start, end),
+                Push(md) => self.push_now(md),
+                Remove { start, end } => {
+                    jsRemoveBuffer(self.id, start, end);
+                },
             }
         }
+    }
+
+    pub fn push_now(&mut self, md: PushMetadata) {
+        self.is_updating = true;
+        match md.segment_data {
+            SegmentData::Raw(v) => {
+                jsAppendBuffer(self.player_id, self.id, &v);
+            },
+            SegmentData::JsBlob(j) => {
+                jsAppendBufferJsBlob(self.player_id, self.id, j.get_id());
+            },
+        }
+
     }
 }
 
 pub struct PushMetadata {
-    pub data: Vec<u8>,
+    segment_data: SegmentData,
+}
+
+impl PushMetadata {
+    pub fn new(segment_data: SegmentData) -> Self {
+        Self { segment_data }
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]

@@ -1,6 +1,6 @@
 use crate::{
     wasm_bindgen,
-    js_functions::{RequestId, SourceBufferId},
+    js_functions::{self, RequestId, SourceBufferId},
     requester::FinishedRequestType,
     Logger,
 };
@@ -23,12 +23,22 @@ impl WaspHlsPlayer {
     pub fn on_u8_request_finished(&mut self, request_id: RequestId, result: Vec<u8>) {
         match self.requester.remove_pending_request(request_id) {
             Some(FinishedRequestType::Segment(seg_info)) =>
-                self.on_segment_fetch_success(seg_info, result),
+                self.on_segment_fetch_success(seg_info, result.into()),
             Some(FinishedRequestType::Playlist(pl_info)) =>
                 self.on_playlist_fetch_success(pl_info, result),
-            _ => {
-                Logger::warn("Unknown request finished");
-            },
+            _ => Logger::warn("Unknown request finished"),
+        }
+    }
+
+    pub fn on_u8_no_copy_request_finished(&mut self,
+        request_id: RequestId,
+        resource_id: u32
+    ) {
+        let resource_handle = JsMemoryBlob::from_resource_id(resource_id);
+        match self.requester.remove_pending_request(request_id) {
+            Some(FinishedRequestType::Segment(seg_info)) =>
+                self.on_segment_fetch_success(seg_info, resource_handle.into()),
+            _ => Logger::warn("Unknown no-copy request finished"),
         }
     }
 
@@ -95,4 +105,44 @@ pub enum PlaybackTickReason {
     Seeking,
     Seeked,
     RegularInterval,
+}
+
+pub enum SegmentData {
+    /// When the Segment to push is available right now in memory.
+    Raw(Vec<u8>),
+    /// When the Segment to push is only accessible through JavaScript's memory.
+    JsBlob(JsMemoryBlob),
+}
+
+impl From<Vec<u8>> for SegmentData {
+    fn from(v: Vec<u8>) -> SegmentData {
+        SegmentData::Raw(v)
+    }
+}
+
+impl From<JsMemoryBlob> for SegmentData {
+    fn from(b: JsMemoryBlob) -> SegmentData {
+        SegmentData::JsBlob(b)
+    }
+}
+
+pub struct JsMemoryBlob {
+    id: u32,
+}
+
+/// Special structure to handle data
+impl JsMemoryBlob {
+    pub fn from_resource_id(id: u32) -> Self {
+        Self { id }
+    }
+
+    pub fn get_id(&self) -> u32 {
+        self.id
+    }
+}
+
+impl Drop for JsMemoryBlob {
+    fn drop(&mut self) {
+        js_functions::jsFreeResource(self.id);
+    }
 }
