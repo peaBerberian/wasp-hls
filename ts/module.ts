@@ -58,6 +58,9 @@ function fetchU8(playerId: PlayerId, url: string): RequestId {
   currentRequests[currentRequestId] = { abortController };
   fetch(url, { signal: abortController.signal })
     .then(async res => {
+      if (abortController.signal.aborted) {
+        return; // Should not be possible. Still, exit if that's the case.
+      }
       const arrRes = await res.arrayBuffer();
       delete currentRequests[currentRequestId];
       const playerObj = getPlayerObject(playerId);
@@ -68,6 +71,9 @@ function fetchU8(playerId: PlayerId, url: string): RequestId {
       }
     })
     .catch(err => {
+      if (abortController.signal.aborted) {
+        return;
+      }
       delete currentRequests[currentRequestId];
       if (err instanceof Error && err.name === "AbortError") {
         return;
@@ -119,6 +125,13 @@ function abortRequest(id: RequestId) : boolean {
   const requestObj = currentRequests[id];
   if (requestObj !== undefined) {
     requestObj.abortController.abort();
+
+    // NOTE: we prefer deleting the id on a microtask to avoid possible RequestId
+    // conflicts due to other microtask pending while this `abortRequest` call was
+    // made (e.g. what if a request failure associated to that request was already
+    // scheduled yet another request is made synchronously with the same RequestId?).
+    /* eslint-disable-next-line @typescript-eslint/no-floating-promises */
+    Promise.resolve().then(() => { delete currentRequests[id]; });
     return true;
   }
   return false;
