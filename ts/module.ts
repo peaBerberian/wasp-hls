@@ -603,16 +603,34 @@ function getSourceBuffer(
   return undefined;
 }
 
+const MAX_LOOP_ITERATIONS = 1e6;
+
 function incrementResourceId() : void {
+  let iteration = 0;
   do {
     nextResourceId = nextResourceId >= MAX_U32 ? 0 : nextResourceId + 1;
-  } while (jsMemoryResources[nextResourceId] !== undefined);
+    iteration++;
+  } while (
+    jsMemoryResources[nextResourceId] !== undefined ||
+    iteration >= MAX_LOOP_ITERATIONS
+  );
+  if (iteration >= MAX_LOOP_ITERATIONS) {
+    throw new Error("Too many resources reserved. Is it normal?");
+  }
 }
 
 function incrementRequestId() : void {
+  let iteration = 0;
   do {
     nextRequestId = nextRequestId >= MAX_U32 ? 0 : nextRequestId + 1;
-  } while (currentRequests[nextRequestId] !== undefined);
+    iteration++;
+  } while (
+    currentRequests[nextRequestId] !== undefined ||
+    iteration >= MAX_LOOP_ITERATIONS
+  );
+  if (iteration >= MAX_LOOP_ITERATIONS) {
+    throw new Error("Too many pending requests. Is it normal?");
+  }
 }
 
 // TODO real way of binding
