@@ -1,13 +1,16 @@
 use crate::{
     wasm_bindgen,
-    js_functions::{self, RequestId, SourceBufferId},
-    requester::FinishedRequestType,
-    Logger,
+    player::{MediaSourceReadyState, WaspHlsPlayer},
 };
 
-use super::super::{MediaSourceReadyState, WaspHlsPlayer};
+use super::js_functions::{self, RequestId, SourceBufferId};
 
 /// Methods triggered on JavaScript events by the JavaScript code
+///
+/// Those functions are voluntarly written a certain way to put in evidence that
+/// those should just be bindings converting to the right types without directly
+/// interacting with the `WaspHlsPlayer`'s state (e.g. methods are called with
+/// an explicit `WaspHlsPlayer` reference).
 #[wasm_bindgen]
 impl WaspHlsPlayer {
     /// Called by the JavaScript code each time an HTTP(S) request started with
@@ -21,13 +24,7 @@ impl WaspHlsPlayer {
     ///
     /// * `result` - The data returned.
     pub fn on_u8_request_finished(&mut self, request_id: RequestId, result: Vec<u8>) {
-        match self.requester.remove_pending_request(request_id) {
-            Some(FinishedRequestType::Segment(seg_info)) =>
-                self.on_segment_fetch_success(seg_info, result.into()),
-            Some(FinishedRequestType::Playlist(pl_info)) =>
-                self.on_playlist_fetch_success(pl_info, result),
-            _ => Logger::warn("Unknown request finished"),
-        }
+        WaspHlsPlayer::on_request_succeeded(self, request_id, DataSource::Raw(result));
     }
 
     pub fn on_u8_no_copy_request_finished(&mut self,
@@ -35,16 +32,11 @@ impl WaspHlsPlayer {
         resource_id: u32
     ) {
         let resource_handle = JsMemoryBlob::from_resource_id(resource_id);
-        match self.requester.remove_pending_request(request_id) {
-            Some(FinishedRequestType::Segment(seg_info)) =>
-                self.on_segment_fetch_success(seg_info, resource_handle.into()),
-            _ => Logger::warn("Unknown no-copy request finished"),
-        }
+        WaspHlsPlayer::on_request_succeeded(self, request_id, DataSource::JsBlob(resource_handle));
     }
 
-    pub fn on_u8_request_failed(&mut self) {
-        // TODO retry and whatnot
-        self.fail_on_error("A segment request failed.");
+    pub fn on_u8_request_failed(&mut self, request_id: RequestId) {
+        WaspHlsPlayer::on_request_failed(self, request_id);
     }
 
     /// Called by the JavaScript code when the MediaSource's readyState changed.
@@ -53,7 +45,7 @@ impl WaspHlsPlayer {
     ///
     /// * `state` - The new `readyState` of the MediaSource.
     pub fn on_media_source_state_change(&mut self, state: MediaSourceReadyState) {
-        self.internal_on_media_source_state_change(state);
+        WaspHlsPlayer::internal_on_media_source_state_change(self, state);
     }
 
     /// Called by the JavaScript code when a SourceBuffer emits an `updateend`
@@ -65,23 +57,11 @@ impl WaspHlsPlayer {
     ///   SourceBuffer was created. This allows the `WaspHlsPlayer` to identify
     ///   which SourceBuffer actually emitted this event.
     pub fn on_source_buffer_update(&mut self, source_buffer_id: SourceBufferId) {
-        if let Some(ref mut sb) = self.source_buffer_store.audio {
-            if sb.id == source_buffer_id {
-                sb.on_update_end();
-                return;
-            }
-        }
-        if let Some(ref mut sb) = self.source_buffer_store.video {
-            if sb.id == source_buffer_id {
-                sb.on_update_end();
-                return;
-            }
-        }
+        WaspHlsPlayer::internal_on_source_buffer_update(self, source_buffer_id);
     }
 
-    pub fn on_source_buffer_error(&mut self) {
-        // TODO check QuotaExceededError and so on...
-        self.fail_on_error("A SourceBuffer emitted an error");
+    pub fn on_source_buffer_error(&mut self, source_buffer_id: SourceBufferId) {
+        WaspHlsPlayer::internal_on_source_buffer_error(self, source_buffer_id);
     }
 
     /// Called by the JavaScript code once regular playback "tick" are enabled
@@ -93,8 +73,8 @@ impl WaspHlsPlayer {
         reason: PlaybackTickReason,
         position: f64) {
         match reason {
-            PlaybackTickReason::Seeking => self.on_seek(position),
-            _ => self.on_regular_tick(position),
+            PlaybackTickReason::Seeking => WaspHlsPlayer::on_seek(self, position),
+            _ => WaspHlsPlayer::on_regular_tick(self, position),
         }
     }
 }
@@ -107,22 +87,22 @@ pub enum PlaybackTickReason {
     RegularInterval,
 }
 
-pub enum SegmentData {
+pub enum DataSource {
     /// When the Segment to push is available right now in memory.
     Raw(Vec<u8>),
     /// When the Segment to push is only accessible through JavaScript's memory.
     JsBlob(JsMemoryBlob),
 }
 
-impl From<Vec<u8>> for SegmentData {
-    fn from(v: Vec<u8>) -> SegmentData {
-        SegmentData::Raw(v)
+impl From<Vec<u8>> for DataSource {
+    fn from(v: Vec<u8>) -> DataSource {
+        DataSource::Raw(v)
     }
 }
 
-impl From<JsMemoryBlob> for SegmentData {
-    fn from(b: JsMemoryBlob) -> SegmentData {
-        SegmentData::JsBlob(b)
+impl From<JsMemoryBlob> for DataSource {
+    fn from(b: JsMemoryBlob) -> DataSource {
+        DataSource::JsBlob(b)
     }
 }
 

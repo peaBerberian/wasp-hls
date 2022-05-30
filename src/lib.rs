@@ -3,8 +3,8 @@
 use wasm_bindgen::prelude::*;
 
 pub mod player;
+mod bindings;
 mod content;
-mod js_functions;
 mod parser;
 mod requester;
 mod source_buffer;

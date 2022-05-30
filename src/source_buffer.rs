@@ -1,14 +1,14 @@
 use std::fmt;
 
 use crate::{
-    player::SegmentData,
-    js_functions::{
-        PlayerId,
+    bindings::{
+        AddSourceBufferError,
+        DataSource,
         jsAddSourceBuffer,
         jsAppendBuffer,
         jsAppendBufferJsBlob,
         jsRemoveBuffer,
-        AddSourceBufferError,
+        PlayerId,
     },
 };
 
@@ -218,10 +218,10 @@ impl SourceBuffer {
     pub fn push_now(&mut self, md: PushMetadata) {
         self.is_updating = true;
         match md.segment_data {
-            SegmentData::Raw(v) => {
+            DataSource::Raw(v) => {
                 jsAppendBuffer(self.player_id, self.id, &v);
             },
-            SegmentData::JsBlob(j) => {
+            DataSource::JsBlob(j) => {
                 jsAppendBufferJsBlob(self.player_id, self.id, j.get_id());
             },
         }
@@ -230,11 +230,11 @@ impl SourceBuffer {
 }
 
 pub struct PushMetadata {
-    segment_data: SegmentData,
+    segment_data: DataSource,
 }
 
 impl PushMetadata {
-    pub fn new(segment_data: SegmentData) -> Self {
+    pub fn new(segment_data: DataSource) -> Self {
         Self { segment_data }
     }
 }

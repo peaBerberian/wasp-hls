@@ -1,5 +1,5 @@
 use crate::{
-    js_functions::{
+    bindings::{
         jsFetchU8,
         jsFetchU8NoCopy,
         PlayerId,

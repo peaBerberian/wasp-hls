@@ -1,13 +1,14 @@
 use crate::{
     wasm_bindgen,
-    js_functions::{
+    bindings::{
+        LogLevel,
         PlayerId,
         jsAttachMediaSource,
-        LogLevel, jsFetchU8,
+        jsFetchU8,
     },
+    Logger,
     source_buffer::SourceBuffersStore,
     utils::url::Url,
-    Logger,
     requester::{Requester, PlaylistFileType},
 };
 

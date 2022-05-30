@@ -1,13 +1,20 @@
 use crate::{
-    js_functions::{
+    bindings::{
+        DataSource,
         jsStartObservingPlayback,
         jsStopObservingPlayback,
         jsRemoveMediaSource,
+        RequestId, SourceBufferId,
     },
     Logger,
     content::{MediaPlaylistPermanentId, WaspHlsContent},
     parser::MultiVariantPlaylist,
-    requester::{PlaylistFileType, SegmentRequestInfo, PlaylistRequestInfo},
+    requester::{
+        PlaylistFileType,
+        SegmentRequestInfo,
+        PlaylistRequestInfo,
+        FinishedRequestType,
+    },
     source_buffer::{MediaType, PushMetadata},
     utils::url::Url,
 };
@@ -15,7 +22,6 @@ use super::{
     MediaSourceReadyState,
     WaspHlsPlayer,
     WaspHlsPlayerReadyState,
-    api::SegmentData,
 };
 
 mod segment_queues;
@@ -23,6 +29,37 @@ mod segment_queues;
 pub use segment_queues::SegmentQueues;
 
 impl WaspHlsPlayer {
+    pub(crate) fn on_request_succeeded(&mut self,
+        request_id: RequestId,
+        data: DataSource
+    ) {
+        match self.requester.remove_pending_request(request_id) {
+            Some(FinishedRequestType::Segment(seg_info)) =>
+                self.on_segment_fetch_success(seg_info, data),
+            Some(FinishedRequestType::Playlist(pl_info)) =>
+                match data {
+                    DataSource::Raw(d) => self.on_playlist_fetch_success(pl_info, d),
+                    _ => {
+                        self.fail_on_error("Unexpected data format for the Playlist file");
+                    }
+                }
+            _ => Logger::warn("Unknown request finished"),
+        }
+    }
+
+    pub(crate) fn on_request_failed(&mut self,
+        request_id: RequestId,
+    ) {
+        // TODO retry and whatnot
+        match self.requester.remove_pending_request(request_id) {
+            Some(FinishedRequestType::Segment(_seg_info)) =>
+                self.fail_on_error("A segment request failed."),
+            Some(FinishedRequestType::Playlist(_pl_info)) =>
+                self.fail_on_error("A Playlist request failed."),
+            _ => Logger::warn("Unknown request finished"),
+        }
+    }
+
     pub(super) fn fail_on_error(&mut self, error: &str) {
         Logger::error(error);
         self.internal_stop();
@@ -143,7 +180,7 @@ impl WaspHlsPlayer {
         }
     }
 
-    pub(super) fn internal_on_media_source_state_change(&mut self, state: MediaSourceReadyState) {
+    pub(crate) fn internal_on_media_source_state_change(&mut self, state: MediaSourceReadyState) {
         Logger::info(&format!("MediaSource state changed: {:?}", state));
         if let Some(ref mut mtdt) = self.media_source_state {
             *mtdt = state;
@@ -153,6 +190,30 @@ impl WaspHlsPlayer {
         if state == MediaSourceReadyState::Open {
             self.check_ready_to_load_segments();
         }
+    }
+
+    pub(crate) fn internal_on_source_buffer_update(&mut self,
+        source_buffer_id: SourceBufferId
+    ) {
+        if let Some(ref mut sb) = self.source_buffer_store.audio {
+            if sb.id == source_buffer_id {
+                sb.on_update_end();
+                return;
+            }
+        }
+        if let Some(ref mut sb) = self.source_buffer_store.video {
+            if sb.id == source_buffer_id {
+                sb.on_update_end();
+                return;
+            }
+        }
+    }
+
+    pub(crate) fn internal_on_source_buffer_error(&mut self,
+        _source_buffer_id: SourceBufferId
+    ) {
+        // TODO check QuotaExceededError and so on...
+        self.fail_on_error("A SourceBuffer emitted an error");
     }
 
     pub fn on_regular_tick(&mut self, position: f64) {
@@ -238,7 +299,7 @@ impl WaspHlsPlayer {
     /// Method called once a segment request ended with success
     pub(super) fn on_segment_fetch_success(&mut self,
         segment_req: SegmentRequestInfo,
-        result: SegmentData
+        result: DataSource
     ) {
         let media_type = segment_req.media_type;
         Logger::debug(&format!("{} segment request finished, pushing it...", media_type));
