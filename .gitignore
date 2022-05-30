@@ -1,5 +1,5 @@
 /target
 /node_modules
 /wasm
-/build
+/build/*
 !/build/index.html
