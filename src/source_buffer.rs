@@ -1,15 +1,13 @@
-use std::fmt;
-
-use crate::{
-    bindings::{
-        AddSourceBufferError,
-        DataSource,
-        jsAddSourceBuffer,
-        jsAppendBuffer,
-        jsAppendBufferJsBlob,
-        jsRemoveBuffer,
-        PlayerId,
-    },
+use crate::bindings::{
+    AddSourceBufferErrorCode,
+    DataSource,
+    jsAddSourceBuffer,
+    jsAppendBuffer,
+    jsAppendBufferJsBlob,
+    jsRemoveBuffer,
+    JsResult,
+    PlayerId,
+    MediaType,
 };
 
 /// Identify a unique JavaScript `SourceBuffer`
@@ -49,7 +47,7 @@ pub enum SourceBufferCreationError {
     /// The `SourceBuffer` could not have been created because a `QuotaExceededError`
     /// JavaScript error has been received while doing so. This often happens when
     /// a SourceBuffer is created after another one already had data pushed to it.
-    QuotaExceededError,
+    QuotaExceededError(String),
 
     /// The wanted SourceBuffer could not have been created because the given
     /// mime-type and codecs couple is not supported by the current device.
@@ -57,8 +55,7 @@ pub enum SourceBufferCreationError {
 
     /// An uncategorized error has been received while trying to create the
     /// SourceBuffer.
-    /// TODO Accompanying string?
-    UnknownError,
+    UnknownError(String),
 }
 
 impl SourceBuffersStore {
@@ -87,7 +84,7 @@ impl SourceBuffersStore {
                 if self.audio.is_some() {
                     Err(SourceBufferCreationError::AlreadyCreatedWithSameType(media_type))
                 } else {
-                    self.audio = Some(SourceBuffer::new(self.id, sb_codec)?);
+                    self.audio = Some(SourceBuffer::new(self.id, media_type, sb_codec)?);
                     Ok(())
                 }
             }
@@ -95,7 +92,7 @@ impl SourceBuffersStore {
                 if self.video.is_some() {
                     Err(SourceBufferCreationError::AlreadyCreatedWithSameType(media_type))
                 } else {
-                    self.video = Some(SourceBuffer::new(self.id, sb_codec)?);
+                    self.video = Some(SourceBuffer::new(self.id, media_type, sb_codec)?);
                     Ok(())
                 }
             }
@@ -139,8 +136,8 @@ pub enum SourceBufferQueueElement {
 }
 
 impl SourceBuffer {
-    fn new(player_id: PlayerId, typ: String) -> Result<Self, SourceBufferCreationError> {
-        match jsAddSourceBuffer(player_id, &typ).result() {
+    fn new(player_id: PlayerId, media_type: MediaType, typ: String) -> Result<Self, SourceBufferCreationError> {
+        match jsAddSourceBuffer(player_id, media_type, &typ,).result() {
             Ok(x) => {
                 Ok(Self {
                     player_id,
@@ -151,16 +148,22 @@ impl SourceBuffer {
                     has_been_updated: false,
                 })
             },
-            Err(AddSourceBufferError::NoMediaSourceAttached) =>
+            Err((AddSourceBufferErrorCode::NoMediaSourceAttached, _)) =>
                 Err(SourceBufferCreationError::NoMediaSourceAttached),
-            Err(AddSourceBufferError::QuotaExceededError) =>
-                Err(SourceBufferCreationError::QuotaExceededError),
-            Err(AddSourceBufferError::MediaSourceIsClosed) =>
+            Err((AddSourceBufferErrorCode::QuotaExceededError, desc)) =>
+                // TODO multiline string
+                Err(SourceBufferCreationError::QuotaExceededError(desc.unwrap_or_else(|| {
+                    "`QuotaExceededError` received while attempting to create a SourceBufferCreationError".to_owned()
+                }))),
+            Err((AddSourceBufferErrorCode::MediaSourceIsClosed, _)) =>
                 Err(SourceBufferCreationError::MediaSourceIsClosed),
-            Err(AddSourceBufferError::TypeNotSupportedError) |
-                Err(AddSourceBufferError::EmptyMimeType) =>
+            Err((AddSourceBufferErrorCode::TypeNotSupportedError, _)) |
+                Err((AddSourceBufferErrorCode::EmptyMimeType, _)) =>
                 Err(SourceBufferCreationError::CantPlayType(typ)),
-            _ => Err(SourceBufferCreationError::UnknownError),
+            Err((_, desc)) =>
+                Err(SourceBufferCreationError::UnknownError(desc.unwrap_or_else(|| {
+                    "Unknown Error while attempting to create a SourceBuffer.".to_owned()
+                }))),
         }
     }
 
@@ -236,22 +239,5 @@ pub struct PushMetadata {
 impl PushMetadata {
     pub fn new(segment_data: DataSource) -> Self {
         Self { segment_data }
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum MediaType {
-    Audio = 0,
-    Video = 1,
-}
-
-impl fmt::Display for MediaType {
-    /// When wanting to display the value, just format Audio as "audio" and
-    /// Video as "video"
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", match self {
-            MediaType::Audio => "audio",
-            MediaType::Video => "video",
-        })
     }
 }

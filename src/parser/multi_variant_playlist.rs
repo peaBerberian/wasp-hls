@@ -42,6 +42,8 @@ pub enum MultiVariantPlaylistParsingError {
     MediaTagMissingType,
     MediaTagMissingName,
     MediaTagMissingGroupId,
+
+    UnableToReadLine,
 }
 
 impl error::Error for MultiVariantPlaylistParsingError { }
@@ -63,6 +65,8 @@ impl fmt::Display for MultiVariantPlaylistParsingError {
                write!(f, "A media tag is missing a NAME attribute"),
            MultiVariantPlaylistParsingError::MediaTagMissingGroupId =>
                write!(f, "A media tag is missing a GROUP-ID attribute"),
+           MultiVariantPlaylistParsingError::UnableToReadLine =>
+               write!(f, "A line of the MultiVariantPlaylist was impossible to parse"),
         }
     }
 }
@@ -130,8 +134,11 @@ impl MultiVariantPlaylist {
 
         let mut lines = playlist.lines();
         while let Some(line) = lines.next() {
-            // XXX TODO
-            let str_line = line.unwrap();
+            let str_line = if let Ok(s) = line {
+                s
+            } else {
+                return Err(MultiVariantPlaylistParsingError::UnableToReadLine);
+            };
             if str_line.is_empty() {
                 continue;
             } else if str_line.starts_with("#EXT") {

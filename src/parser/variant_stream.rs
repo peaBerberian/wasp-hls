@@ -1,7 +1,7 @@
 use std::io::BufRead;
 
 use crate::{
-    source_buffer::{self, MediaType},
+    bindings::MediaType,
     Logger,
     utils::url::Url,
 };
@@ -87,7 +87,7 @@ pub struct VariantStream {
     /// Note that if a Variant Stream specifies one or more Renditions
     /// that include IMSC subtitles, the codecs attribute MUST indicate
     /// this with a format identifier such as "stpp.ttml.im1t".
-    codecs: Vec<(Option<source_buffer::MediaType>, String)>,
+    codecs: Vec<(Option<MediaType>, String)>,
 
     /// The value is the optimal pixel resolution at which to display all the
     /// video in the Variant Stream.
@@ -248,13 +248,19 @@ impl VariantStream {
         })
     }
 
-    pub(crate) fn get_codec(&self, media_type: MediaType) -> Option<&str> {
-        self.codecs.iter().find(|c| {
+    pub(crate) fn codecs(&self, media_type: MediaType) -> Option<String> {
+        let concerned_codecs = self.codecs.iter().filter(|c| {
             match c.0 {
-                Some(x) if x == media_type => true,
+                Some(MediaType::Audio) => media_type == MediaType::Audio || self.audio.is_none(),
+                Some(MediaType::Video) => media_type == MediaType::Video,
                 _ => false,
             }
-        }).map(|c| c.1.as_ref())
+        }).map(|c| c.1.as_ref()).collect::<Vec<&str>>();
+        if concerned_codecs.is_empty() {
+            None
+        } else {
+            Some(concerned_codecs.join(","))
+        }
     }
 
     /// TODO real update
@@ -278,7 +284,7 @@ impl VariantStream {
         let mut bandwidth : Option<u64> = None;
         let mut resolution : Option<VideoResolution> = None;
         let mut average_bandwitdh : Option<u64> = None;
-        let mut codecs : Vec<(Option<source_buffer::MediaType>, String)> = vec![];
+        let mut codecs : Vec<(Option<MediaType>, String)> = vec![];
         let mut hdcp_level : HdcpLevel = HdcpLevel::None;
         let mut video_range : VideoDynamicRange = VideoDynamicRange::Sdr;
         let mut program_id : Option<u64> = None;
@@ -328,11 +334,11 @@ impl VariantStream {
                             if let Ok(val) = parsed {
                                 codecs = val.iter().map(|c| {
                                     // TODO more codecs
-                                    let mut media_type : Option<source_buffer::MediaType> = None;
+                                    let mut media_type : Option<MediaType> = None;
                                     if c.starts_with("mp4a") {
-                                        media_type = Some(source_buffer::MediaType::Audio);
+                                        media_type = Some(MediaType::Audio);
                                     } else if c.starts_with("avc") || c.starts_with("hvc") {
-                                        media_type = Some(source_buffer::MediaType::Video);
+                                        media_type = Some(MediaType::Video);
                                     }
                                     (media_type, (*c).to_owned())
 
@@ -425,7 +431,7 @@ impl VariantStream {
                         },
                         "CLOSED-CAPTIONS" => {
                             if variant_line[offset + idx + 1..].starts_with("NONE") {
-                                skip_attribute_list_value(variant_line, offset + idx + 1);
+                                offset = skip_attribute_list_value(variant_line, offset + idx + 1);
                             } else {
                                 let (parsed, end_offset) = parse_quoted_string(variant_line, offset + idx + 1);
                                 offset = end_offset + 1;

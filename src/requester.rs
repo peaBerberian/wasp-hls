@@ -1,5 +1,6 @@
 use crate::{
     bindings::{
+        MediaType,
         jsFetchU8,
         jsFetchU8NoCopy,
         PlayerId,
@@ -9,7 +10,6 @@ use crate::{
     Logger,
     content::MediaPlaylistPermanentId,
     parser::SegmentInfo,
-    source_buffer::MediaType,
     utils::url::Url,
 };
 

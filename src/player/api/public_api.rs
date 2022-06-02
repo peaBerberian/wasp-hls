@@ -5,6 +5,7 @@ use crate::{
         PlayerId,
         jsAttachMediaSource,
         jsFetchU8,
+        JsResult,
     },
     Logger,
     source_buffer::SourceBuffersStore,
@@ -43,7 +44,14 @@ impl WaspHlsPlayer {
         let content_url = Url::new(content_url);
         self.requester.fetch_playlist(content_url, PlaylistFileType::Unknown);
         Logger::info("Attaching MediaSource");
-        jsAttachMediaSource(self.id);
+        // TODO handle exact error
+        if let Err((_, desc)) = jsAttachMediaSource(self.id).result() {
+            let err = match desc.as_ref() {
+                Some(s) => s.as_str(),
+                None => "Unknown error while trying to attach a MediaSource to the Media element",
+            };
+            self.fail_on_error(err);
+        }
     }
 
     pub fn stop(&mut self) {

@@ -1,6 +1,6 @@
 use crate::{
     wasm_bindgen,
-    player::{MediaSourceReadyState, WaspHlsPlayer},
+    player::{MediaSourceReadyState, WaspHlsPlayer}, utils::url::Url,
 };
 
 use super::js_functions::{self, RequestId, SourceBufferId};
@@ -23,16 +23,26 @@ impl WaspHlsPlayer {
     ///   is actually finished
     ///
     /// * `result` - The data returned.
-    pub fn on_u8_request_finished(&mut self, request_id: RequestId, result: Vec<u8>) {
-        WaspHlsPlayer::on_request_succeeded(self, request_id, DataSource::Raw(result));
+    pub fn on_u8_request_finished(&mut self,
+        request_id: RequestId,
+        result: Vec<u8>,
+        final_url: String
+    ) {
+        WaspHlsPlayer::on_request_succeeded(self,
+            request_id,
+            DataSource::Raw(result),
+            Url::new(final_url));
     }
 
     pub fn on_u8_no_copy_request_finished(&mut self,
         request_id: RequestId,
-        resource_id: u32
+        resource_id: u32,
+        final_url: String
     ) {
         let resource_handle = JsMemoryBlob::from_resource_id(resource_id);
-        WaspHlsPlayer::on_request_succeeded(self, request_id, DataSource::JsBlob(resource_handle));
+        WaspHlsPlayer::on_request_succeeded(self, request_id,
+            DataSource::JsBlob(resource_handle),
+            Url::new(final_url));
     }
 
     pub fn on_u8_request_failed(&mut self, request_id: RequestId) {

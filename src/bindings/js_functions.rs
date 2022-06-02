@@ -1,3 +1,4 @@
+use std::fmt;
 use crate::wasm_bindgen;
 
 /// # js_functions
@@ -68,21 +69,27 @@ extern "C" {
     /// when this MediaSource becomes usable or not when its
     /// `on_media_source_state_change` method is called with the "Open"
     /// `MediaSourceReadyState`.
-    pub fn jsAttachMediaSource(player_id: PlayerId) -> AttachMediaSourceError;
+    pub fn jsAttachMediaSource(player_id: PlayerId) -> AttachMediaSourceResult;
 
     /// Remove MediaSource attached to the <video> element associated with
     /// the `WaspHlsPlayer` if one, and free all its associated resources
     /// (such as event listeners or created ObjectURL).
     ///
     /// This function performs all those operations synchronously.
-    pub fn jsRemoveMediaSource(player_id: PlayerId) -> RemoveMediaSourceError;
+    pub fn jsRemoveMediaSource(player_id: PlayerId) -> RemoveMediaSourceResult;
+
+    pub fn jsSetMediaSourceDuration(duration: f64) -> MediaSourceDurationUpdateResult;
 
     /// Add a SourceBuffer to the created MediaSource, allowing to push media
     /// segment of a given type to a lower-level media buffer.
     ///
     /// This function performs this operation synchronously and may fail, see
     /// `AddSourceBufferResult` for more details on the return value.
-    pub fn jsAddSourceBuffer(player_id: PlayerId, typ: &str) -> AddSourceBufferResult;
+    pub fn jsAddSourceBuffer(
+        player_id: PlayerId,
+        media_type: MediaType,
+        typ: &str
+    ) -> AddSourceBufferResult;
 
     /// Append media data to the given SourceBuffer.
     ///
@@ -98,7 +105,7 @@ extern "C" {
         player_id: PlayerId,
         source_buffer_id: SourceBufferId,
         data: &[u8]
-    ) -> AppendBufferError;
+    ) -> AppendBufferResult;
 
     /// Variant of `jsAppendBuffer` where the data to append actually resides in JavaScript's
     /// memory.
@@ -110,7 +117,7 @@ extern "C" {
         player_id: PlayerId,
         source_buffer_id: SourceBufferId,
         segment_id: ResourceId
-    ) -> AppendBufferError;
+    ) -> AppendBufferResult;
 
     /// Remove media data from the given SourceBuffer.
     ///
@@ -126,7 +133,7 @@ extern "C" {
         source_buffer_id: SourceBufferId,
         start: f64,
         end: f64
-    ) -> RemoveBufferError;
+    ) -> RemoveBufferResult;
 
     /// After this method is called, the `WaspHlsPlayer` instance associated
     /// with the given `PlayerId` will regularly receive `PlaybackObservation`
@@ -151,12 +158,6 @@ extern "C" {
     /// Free resource stored in JavaScript's memory kept alive for the current
     /// `WaspHlsPlayer`.
     pub fn jsFreeResource(resource_id: ResourceId) -> bool;
-
-    /// Returns the last error message stored.
-    /// To avoid confusion, you should only call this function just after its underlying is set.
-    /// Situations where this is the case are documented.
-    pub fn jsGetLastError() -> String;
-
     //    /// Check if the given mime-type and codecs are supported for playback.
     //    ///
     //    /// Returns `true` if that is the case, false if it isn't
@@ -169,7 +170,7 @@ extern "C" {
     //    /// second the end.
     //    ///
     //    /// TODO this API might error depending on the underlying media element or MediaSource's
-    //    /// state. Find way to communicate failure.
+    //    /// state.
     //    pub fn jsGetSourceBufferBuffered(
     //        player_id: PlayerId,
     //        source_buffer_id: SourceBufferId
@@ -177,16 +178,13 @@ extern "C" {
 
 }
 
-/// Errors (or success) that can arise when attempting to remove a MediaSource previously attached
+// TODO some macro-based metaprogramming, instead of just repeating the same boilerplate for each
+// result type, would be welcome
+
+/// Errors that can arise when attempting to remove a MediaSource previously attached
 /// to a media element.
 #[wasm_bindgen]
-pub enum RemoveMediaSourceError {
-    /// MediaSource removal succeeded
-    ///
-    /// This is not actually an error, but was added in that enumeration to be compatible
-    /// with JavaScript.
-    None = 0,
-
+pub enum RemoveMediaSourceErrorCode {
     /// Could not remove MediaSource from the media element because the `WaspHlsPlayer`
     /// linked to the given `PlayerId` was not known by the JavaScript-side.
     PlayerInstanceNotFound = 1,
@@ -196,43 +194,123 @@ pub enum RemoveMediaSourceError {
     NoMediaSourceAttached = 2,
 
     /// Could not remove MediaSource from the media element because of an unknown error.
-    ///
-    /// A description of the error should be found by calling `jsGetLastError` synchronously
-    /// after receiving this error.
     UnknownError = 3,
+}
+
+/// Result of calling the `jsRemoveMediaSource` JavaScript function.
+///
+/// Creation of an `RemoveMediaSourceResult` should only be performed by the JavaScript side
+/// through the exposed static constructors.
+#[wasm_bindgen]
+pub struct RemoveMediaSourceResult {
+    error: Option<(RemoveMediaSourceErrorCode, Option<String>)>,
+}
+
+#[wasm_bindgen]
+impl RemoveMediaSourceResult {
+    /// Creates an `RemoveMediaSourceResult` indicating success, with the corresponding
+    /// `SourceBufferId`.
+    ///
+    /// This function should only be called by the JavaScript-side.
+    pub fn success() -> Self {
+        Self { error: None }
+    }
+
+    /// Creates an `RemoveMediaSourceResult` indicating failure, with the corresponding
+    /// error.
+    ///
+    /// This function should only be called by the JavaScript-side.
+    pub fn error(err: RemoveMediaSourceErrorCode, desc: Option<String>) -> Self {
+        Self { error: Some((err, desc)) }
+    }
+}
+
+impl JsResult<(), RemoveMediaSourceErrorCode> for RemoveMediaSourceResult {
+    /// Basically unwrap and consume the `RemoveMediaSourceResult`, converting it into a
+    /// Result enum.
+    fn result(self) -> Result<(), (RemoveMediaSourceErrorCode, Option<String>)> {
+        if let Some(err) = self.error {
+            Err(err)
+        } else {
+            Ok(())
+        }
+    }
+}
+
+pub(crate) trait JsResult<T, E> {
+    fn result(self)  -> Result<T, (E, Option<String>)>;
+}
+
+/// Errors that can arise when attempting to update the duration of a MediaSource.
+/// TODO defined errors when the MediaSource is closed and so on?
+#[wasm_bindgen]
+pub enum MediaSourceDurationUpdateErrorCode {
+    /// The `WaspHlsPlayer` linked to the given `PlayerId` was not known by the JavaScript-side.
+    PlayerInstanceNotFound = 1,
+
+    /// The `WaspHlsPlayer` linked to the given `PlayerId` had no MediaSource attached to its media
+    /// element.
+    NoMediaSourceAttached = 2,
+
+    /// An unknown error arised
+    UnknownError = 3,
+}
+
+/// Result of calling the `jsSetMediaSourceDuration` JavaScript function.
+///
+/// Creation of an `MediaSourceDurationUpdateResult` should only be performed by the JavaScript side
+/// through the exposed static constructors.
+#[wasm_bindgen]
+pub struct MediaSourceDurationUpdateResult {
+    error: Option<(MediaSourceDurationUpdateErrorCode, Option<String>)>,
+}
+
+#[wasm_bindgen]
+impl MediaSourceDurationUpdateResult {
+    /// Creates an `MediaSourceDurationUpdateResult` indicating success.
+    ///
+    /// This function should only be called by the JavaScript-side.
+    pub fn success() -> Self {
+        Self { error: None }
+    }
+
+    /// Creates an `MediaSourceDurationUpdateResult` indicating failure, with the corresponding
+    /// error.
+    ///
+    /// This function should only be called by the JavaScript-side.
+    pub fn error(err: MediaSourceDurationUpdateErrorCode, desc: Option<String>) -> Self {
+        Self { error: Some((err, desc)) }
+    }
+}
+
+impl JsResult<(), MediaSourceDurationUpdateErrorCode> for MediaSourceDurationUpdateResult {
+    /// Basically unwrap and consume the `MediaSourceDurationUpdateResult`, converting it into a
+    /// Result enum.
+    fn result(self) -> Result<(), (MediaSourceDurationUpdateErrorCode, Option<String>)> {
+        if let Some(err) = self.error {
+            Err(err)
+        } else {
+            Ok(())
+        }
+    }
 }
 
 /// Errors (or success) that can arise when attempting to "attach" a MediaSource to a media
 /// element.
 #[wasm_bindgen]
-pub enum AttachMediaSourceError {
-    /// MediaSource attachment succeeded
-    ///
-    /// This is not actually an error, but was added in that enumeration to be compatible
-    /// with JavaScript.
-    None = 0,
-
+pub enum AttachMediaSourceErrorCode {
     /// Could not attach MediaSource to the media element because the `WaspHlsPlayer`
     /// linked to the given `PlayerId` was not known by the JavaScript-side.
     PlayerInstanceNotFound = 1,
 
     /// Could not attach MediaSource to the media element because of an unknown error.
-    ///
-    /// A description of the error should be found by calling `jsGetLastError` synchronously
-    /// after receiving this error.
     UnknownError = 2,
 }
 
-/// Errors (or success) that can arise when calling the `appendBuffer` method on a
-/// `SourceBuffer` JavaScript object.
+/// Errors that can arise when calling the either the `jsAppendBuffer` or the
+/// `jsAppendBufferJsBlob` JavaScript functions.
 #[wasm_bindgen]
-pub enum AppendBufferError {
-    /// The operation succeeded.
-    ///
-    /// This is not actually an error, but was added in that enumeration to be compatible
-    /// with JavaScript.
-    None = 0,
-
+pub enum AppendBufferErrorCode {
     /// The operation failed because the `WaspHlsPlayer` linked to the given `PlayerId`
     /// and/or the SourceBuffer instance linked to the given `SourceBufferId` was not found.
     PlayerOrSourceBufferInstanceNotFound = 1,
@@ -244,31 +322,99 @@ pub enum AppendBufferError {
     GivenResourceNotFound = 2,
 
     /// The operation failed because of an unknown error.
-    ///
-    /// A description of the error should be found by calling `jsGetLastError` synchronously
-    /// after receiving this error.
     UnknownError = 3,
 }
 
-/// Errors (or success) that can arise when calling the `removeBuffer` method on a
-/// `SourceBuffer` JavaScript object.
+/// Result of calling either the `jsAppendBuffer` or the `jsAppendBufferJsBlob`
+/// JavaScript functions.
+///
+/// Creation of an `AppendBufferResult` should only be performed by the JavaScript side
+/// through the exposed static constructors.
 #[wasm_bindgen]
-pub enum RemoveBufferError {
-    /// The operation succeeded.
-    ///
-    /// This is not actually an error, but was added in that enumeration to be compatible
-    /// with JavaScript.
-    None = 0,
+pub struct AppendBufferResult {
+    error: Option<(AppendBufferErrorCode, Option<String>)>,
+}
 
+#[wasm_bindgen]
+impl AppendBufferResult {
+    /// Creates an `AppendBufferResult` indicating success, with the corresponding
+    /// `SourceBufferId`.
+    ///
+    /// This function should only be called by the JavaScript-side.
+    pub fn success() -> Self {
+        Self { error: None }
+    }
+
+    /// Creates an `AppendBufferResult` indicating failure, with the corresponding
+    /// error.
+    ///
+    /// This function should only be called by the JavaScript-side.
+    pub fn error(err: AppendBufferErrorCode, desc: Option<String>) -> Self {
+        Self { error: Some((err, desc)) }
+    }
+}
+
+impl JsResult<(), AppendBufferErrorCode> for AppendBufferResult {
+    /// Basically unwrap and consume the `AppendBufferResult`, converting it into a
+    /// Result enum.
+    fn result(self) -> Result<(), (AppendBufferErrorCode, Option<String>)> {
+        if let Some(err) = self.error {
+            Err(err)
+        } else {
+            Ok(())
+        }
+    }
+}
+
+/// Errors that can arise when calling the `jsRemoveBuffer` JavaScript function.
+#[wasm_bindgen]
+pub enum RemoveBufferErrorCode {
     /// The operation failed because the `WaspHlsPlayer` linked to the given `PlayerId`
     /// and/or the SourceBuffer instance linked to the given `SourceBufferId` was not found.
     PlayerOrSourceBufferInstanceNotFound = 1,
 
     /// The operation failed because of an unknown error.
-    ///
-    /// A description of the error should be found by calling `jsGetLastError` synchronously
-    /// after receiving this error.
     UnknownError = 2,
+}
+
+/// Result of calling the `jsRemoveBuffer` JavaScript function.
+///
+/// Creation of an `RemoveBufferResult` should only be performed by the JavaScript side
+/// through the exposed static constructors.
+#[wasm_bindgen]
+pub struct RemoveBufferResult {
+    error: Option<(RemoveBufferErrorCode, Option<String>)>,
+}
+
+#[wasm_bindgen]
+impl RemoveBufferResult {
+    /// Creates an `RemoveBufferResult` indicating success, with the corresponding
+    /// `SourceBufferId`.
+    ///
+    /// This function should only be called by the JavaScript-side.
+    pub fn success() -> Self {
+        Self { error: None }
+    }
+
+    /// Creates an `RemoveBufferResult` indicating failure, with the corresponding
+    /// error.
+    ///
+    /// This function should only be called by the JavaScript-side.
+    pub fn error(err: RemoveBufferErrorCode, desc: Option<String>) -> Self {
+        Self { error: Some((err, desc)) }
+    }
+}
+
+impl JsResult<(), RemoveBufferErrorCode> for RemoveBufferResult {
+    /// Basically unwrap and consume the `RemoveBufferResult`, converting it into a
+    /// Result enum.
+    fn result(self) -> Result<(), (RemoveBufferErrorCode, Option<String>)> {
+        if let Some(err) = self.error {
+            Err(err)
+        } else {
+            Ok(())
+        }
+    }
 }
 
 /// Result of calling the `jsAddSourceBuffer` JavaScript function.
@@ -278,12 +424,12 @@ pub enum RemoveBufferError {
 #[wasm_bindgen]
 pub struct AddSourceBufferResult {
     source_buffer_id: u32,
-    error: Option<AddSourceBufferError>,
+    error: Option<(AddSourceBufferErrorCode, Option<String>)>,
 }
 
 /// Error that might arise when adding a SourceBuffer through a MediaSource instance.
 #[wasm_bindgen]
-pub enum AddSourceBufferError {
+pub enum AddSourceBufferErrorCode {
     /// The `WaspHlsPlayer` linked to the given `PlayerId` was not known by the JavaScript-side.
     PlayerInstanceNotFound,
 
@@ -299,24 +445,15 @@ pub enum AddSourceBufferError {
     ///
     /// Such errors are often encountered when another SourceBuffer attached to the same
     /// MediaSource instance was already updated through a buffer operation.
-    ///
-    /// A description of the error should be found by calling `jsGetLastError` synchronously
-    /// after receiving this error.
     QuotaExceededError,
 
     /// The given mime-type and codec  combination is not supported
-    ///
-    /// A description of the error should be found by calling `jsGetLastError` synchronously
-    /// after receiving this error.
     TypeNotSupportedError,
 
     /// The given mime-type and codec combination is empty
     EmptyMimeType,
 
     /// An unknown error happened.
-    ///
-    /// A description of the error should be found by calling `jsGetLastError` synchronously
-    /// after receiving this error.
     UnknownError,
 }
 
@@ -335,19 +472,59 @@ impl AddSourceBufferResult {
     /// error.
     ///
     /// This function should only be called by the JavaScript-side.
-    pub fn error(err: AddSourceBufferError) -> Self {
-        Self { source_buffer_id: 0, error: Some(err) }
+    pub fn error(err: AddSourceBufferErrorCode, desc: Option<String>) -> Self {
+        Self { source_buffer_id: 0, error: Some((err, desc)) }
     }
 }
 
-impl AddSourceBufferResult {
+impl JsResult<u32, AddSourceBufferErrorCode> for AddSourceBufferResult {
     /// Basically unwrap and consume the `AddSourceBufferResult`, converting it into a
     /// Result enum.
-    pub(crate) fn result(self) -> Result<u32, AddSourceBufferError> {
+    fn result(self) -> Result<u32, (AddSourceBufferErrorCode, Option<String>)> {
         if let Some(err) = self.error {
             Err(err)
         } else {
             Ok(self.source_buffer_id)
+        }
+    }
+}
+
+/// Result of calling the `jsAttachMediaSource` JavaScript function.
+///
+/// Creation of an `AttachMediaSourceResult` should only be performed by the JavaScript side
+/// through the exposed static constructors.
+#[wasm_bindgen]
+pub struct AttachMediaSourceResult {
+    error: Option<(AttachMediaSourceErrorCode, Option<String>)>,
+}
+
+#[wasm_bindgen]
+impl AttachMediaSourceResult {
+    /// Creates an `AttachMediaSourceResult` indicating success, with the corresponding
+    /// `SourceBufferId`.
+    ///
+    /// This function should only be called by the JavaScript-side.
+    pub fn success() -> Self {
+        Self { error: None }
+    }
+
+    /// Creates an `AttachMediaSourceResult` indicating failure, with the corresponding
+    /// error.
+    ///
+    /// This function should only be called by the JavaScript-side.
+    pub fn error(err: AttachMediaSourceErrorCode, desc: Option<String>) -> Self {
+        Self { error: Some((err, desc)) }
+    }
+}
+
+impl JsResult<(), AttachMediaSourceErrorCode> for AttachMediaSourceResult {
+    /// Basically unwrap and consume the `AttachMediaSourceResult`, converting it into a
+    /// Result enum.
+    fn result(self) -> Result<(), (AttachMediaSourceErrorCode, Option<String>)> {
+        if let Some(err) = self.error {
+            Err(err)
+        } else {
+            Ok(())
         }
     }
 }
@@ -407,3 +584,21 @@ pub type RequestId = u32;
 
 /// Identify a SourceBuffer.
 pub type SourceBufferId = u32;
+
+#[wasm_bindgen]
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum MediaType {
+    Audio = 0,
+    Video = 1,
+}
+
+impl fmt::Display for MediaType {
+    /// When wanting to display the value, just format Audio as "audio" and
+    /// Video as "video"
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", match self {
+            MediaType::Audio => "audio",
+            MediaType::Video => "video",
+        })
+    }
+}

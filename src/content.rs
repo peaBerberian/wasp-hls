@@ -1,5 +1,6 @@
 use std::io::BufRead;
 use crate::{
+    bindings::MediaType,
     parser::{
         VariantStream,
         MediaPlaylist,
@@ -8,7 +9,6 @@ use crate::{
         MediaPlaylistUpdateError,
     },
     utils::url::Url,
-    source_buffer::MediaType,
 };
 
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -112,7 +112,7 @@ impl WaspHlsContent {
 
         let variant = self.playlist.get_variant(variant_idx).unwrap();
         if variant.has_type(MediaType::Video) {
-            self.curr_video_idx = Some(MediaPlaylistPermanentId::VariantStreamUrl(0));
+            self.curr_video_idx = Some(MediaPlaylistPermanentId::VariantStreamUrl(variant_idx));
         } else {
             self.curr_video_idx = None;
         }

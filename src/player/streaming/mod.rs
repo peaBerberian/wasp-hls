@@ -1,10 +1,12 @@
 use crate::{
     bindings::{
         DataSource,
+        MediaType,
         jsStartObservingPlayback,
         jsStopObservingPlayback,
         jsRemoveMediaSource,
-        RequestId, SourceBufferId,
+        RequestId,
+        SourceBufferId,
     },
     Logger,
     content::{MediaPlaylistPermanentId, WaspHlsContent},
@@ -15,7 +17,7 @@ use crate::{
         PlaylistRequestInfo,
         FinishedRequestType,
     },
-    source_buffer::{MediaType, PushMetadata},
+    source_buffer::{PushMetadata, SourceBufferCreationError},
     utils::url::Url,
 };
 use super::{
@@ -31,14 +33,15 @@ pub use segment_queues::SegmentQueues;
 impl WaspHlsPlayer {
     pub(crate) fn on_request_succeeded(&mut self,
         request_id: RequestId,
-        data: DataSource
+        data: DataSource,
+        final_url: Url
     ) {
         match self.requester.remove_pending_request(request_id) {
             Some(FinishedRequestType::Segment(seg_info)) =>
                 self.on_segment_fetch_success(seg_info, data),
             Some(FinishedRequestType::Playlist(pl_info)) =>
                 match data {
-                    DataSource::Raw(d) => self.on_playlist_fetch_success(pl_info, d),
+                    DataSource::Raw(d) => self.on_playlist_fetch_success(pl_info, d, final_url),
                     _ => {
                         self.fail_on_error("Unexpected data format for the Playlist file");
                     }
@@ -80,8 +83,14 @@ impl WaspHlsPlayer {
         } else { return; };
         if content.all_curr_media_playlists_ready() {
             self.ready_state = WaspHlsPlayerReadyState::AwaitingSegments;
-            self.try_init_source_buffer(MediaType::Audio);
-            self.try_init_source_buffer(MediaType::Video);
+            if let Some(Err(e)) = self.init_source_buffer(MediaType::Audio) {
+                self.fail_on_error(&format!("Error while creating audio SourceBuffer: {:?}", e));
+                return;
+            }
+            if let Some(Err(e)) = self.init_source_buffer(MediaType::Video) {
+                self.fail_on_error(&format!("Error while creating video SourceBuffer: {:?}", e));
+                return;
+            }
             self.request_init_segment(MediaType::Video);
             self.request_init_segment(MediaType::Audio);
             jsStopObservingPlayback(self.id);
@@ -92,12 +101,10 @@ impl WaspHlsPlayer {
     /// Method called as a MultiVariant Playlist is loaded
     pub(super) fn on_multivariant_playlist_loaded(&mut self,
         data: Vec<u8>,
-        url: Url
+        playlist_url: Url
     ) {
-        Logger::info("MultiVariant Playlist loaded successfully, parsing it...");
 
-        // TODO NOTE we should use the possibly redirected URL in the response
-        match MultiVariantPlaylist::parse(data.as_ref(), url) {
+        match MultiVariantPlaylist::parse(data.as_ref(), playlist_url) {
             Err(e) => {
                 self.fail_on_error(format!("Error while parsing MultiVariantPlaylist: {:?}", e).as_ref());
                 return;
@@ -132,52 +139,54 @@ impl WaspHlsPlayer {
     /// Method called as a MediaPlaylist Playlist is loaded
     pub(super) fn on_media_playlist_loaded(&mut self,
         playlist_id: MediaPlaylistPermanentId,
-        media_type: MediaType,
+        _media_type: MediaType,
         data: Vec<u8>,
-        url: Url
+        playlist_url: Url
     ) {
-        Logger::info(&format!("Media playlist loaded successfully: {}", url.get_ref()));
+        Logger::info(&format!("Media playlist loaded successfully: {}", playlist_url.get_ref()));
         if let Some(ref mut content) = self.content {
-            // TODO NOTE we should use the possibly redirected URL in the response
-            if let Err(e) = content.update_media_playlist(&playlist_id, data.as_ref(), url) {
+            if let Err(e) = content.update_media_playlist(&playlist_id, data.as_ref(), playlist_url) {
                 self.fail_on_error(&format!("Failed to parse MediaPlaylist: {:?}", e));
             } else if self.ready_state == WaspHlsPlayerReadyState::Loading {
-                self.try_init_source_buffer(media_type);
                 self.check_ready_to_load_segments();
             }
         } else { self.fail_on_error("Media playlist loaded but no MultiVariantPlaylist"); }
     }
 
-    fn try_init_source_buffer(&mut self,
+    fn init_source_buffer(&mut self,
         media_type: MediaType
-    ) {
-        if let Some(ref mut content) = self.content {
-            if let Some(MediaSourceReadyState::Open) = self.media_source_state {
-                if self.source_buffer_store.has(media_type) ||
-                    !self.source_buffer_store.can_still_create_source_buffer()
-                {
-                    return;
-                }
-                // TODO real container
-                let mime_type = if media_type == MediaType::Audio {
-                    "audio/mp4"
-                } else {
-                    "video/mp4"
-                };
-                let codec = match content.curr_variant().map(|v| v.get_codec(media_type)) {
-                    Some(Some(c)) => c,
-                    _ => "", // TODO default audio/video/text codecs?
-                };
-                if let Err(e) = self.source_buffer_store
-                    // TODO we should probably check the real container type
-                    .create_source_buffer(media_type, mime_type, codec) {
-                        self.fail_on_error(&format!("Error while creating {} SourceBuffer: {:?}",
-                                media_type, e));
-                        return;
-                }
-
-            }
+    ) -> Option<Result<(), SourceBufferCreationError>> {
+        // TODO cleaner way than this mess
+        if self.source_buffer_store.has(media_type) ||
+            !self.source_buffer_store.can_still_create_source_buffer()
+        {
+            // TODO return Err here
+            return None;
         }
+
+        let content = if let Some(c) = &mut self.content { c } else {
+            // TODO return Err here
+            return None;
+        };
+
+        let media_playlist = if let Some(p) = content.curr_media_playlist(media_type) { p } else {
+            return None;
+        };
+
+        let mime_type = if let Some(m) = media_playlist.mime_type(media_type) { m } else {
+            // TODO return Err here
+            return None;
+        };
+
+        let codecs = match content.curr_variant().map(|v| v.codecs(media_type)) {
+            Some(Some(c)) => c,
+            _ => {
+                // TODO return Err here
+                return None;
+            },
+        };
+
+        Some(self.source_buffer_store.create_source_buffer(media_type, mime_type, &codecs))
     }
 
     pub(crate) fn internal_on_media_source_state_change(&mut self, state: MediaSourceReadyState) {
@@ -259,13 +268,14 @@ impl WaspHlsPlayer {
     /// Method called once a playlist request ended with success
     pub(super) fn on_playlist_fetch_success(&mut self,
         pl_info: PlaylistRequestInfo,
-        result: Vec<u8>
+        result: Vec<u8>,
+        final_url: Url
     ) {
-        let PlaylistRequestInfo { url, playlist_type, .. } = pl_info;
+        let PlaylistRequestInfo { playlist_type, .. } = pl_info;
         if let PlaylistFileType::MediaPlaylist { id, media_type } = playlist_type {
-            self.on_media_playlist_loaded(id, media_type, result, url);
+            self.on_media_playlist_loaded(id, media_type, result, final_url);
         } else {
-            self.on_multivariant_playlist_loaded(result, url);
+            self.on_multivariant_playlist_loaded(result, final_url);
         }
     }
 

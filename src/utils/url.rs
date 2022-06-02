@@ -82,5 +82,14 @@ impl Url {
             None => self.inner.as_str(),
         }
     }
+
+    pub fn extension(&self) -> &str {
+        let filename = self.filename();
+        let last_dot = filename.rfind(".");
+        match last_dot {
+            Some(idx) => &filename[idx + 1..],
+            None => "",
+        }
+    }
 }
 

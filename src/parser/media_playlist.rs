@@ -1,5 +1,5 @@
 use std::{io::BufRead, error, fmt};
-use crate::{utils::url::Url, Logger};
+use crate::{utils::url::Url, Logger, bindings::MediaType};
 
 use super::utils::{parse_decimal_integer, parse_quoted_string, parse_decimal_floating_point, parse_enumerated_string};
 
@@ -245,6 +245,44 @@ impl MediaPlaylist {
             // server_control,
             // part_inf,
         })
+    }
+
+    fn extension(&self) -> Option<&str> {
+        self.segment_list.get(0).map(|s| s.url.extension())
+    }
+
+    /// TODO kind of weird to give the MediaType here
+    pub fn mime_type(&self, media_type: MediaType) -> Option<&str> {
+        match media_type {
+            MediaType::Audio => match self.extension() {
+               Some("mp4") => Some("audio/mp4"),
+               Some("mp4a") => Some("audio/mp4"),
+               Some("m4s") => Some("audio/mp4"),
+               Some("m4i") => Some("audio/mp4"),
+               Some("m4a") => Some("audio/mp4"),
+               Some("m4f") => Some("audio/mp4"),
+               Some("cmfa") => Some("audio/mp4"),
+               Some("aac") => Some("audio/aac"),
+               Some("ac3") => Some("audio/ac3"),
+               Some("ec3") => Some("audio/ec3"),
+               Some("mp3") => Some("audio/mpeg"),
+
+                // MPEG2-TS also uses video/ for audio
+                Some("ts") => Some("video/mp2t"),
+                _ => None,
+            },
+            MediaType::Video => match self.extension() {
+               Some("mp4") => Some("video/mp4"),
+               Some("mp4v") => Some("video/mp4"),
+               Some("m4s") => Some("video/mp4"),
+               Some("m4i") => Some("video/mp4"),
+               Some("m4v") => Some("video/mp4"),
+               Some("m4f") => Some("video/mp4"),
+               Some("cmfv") => Some("video/mp4"),
+               Some("ts") => Some("video/mp2t"),
+                _ => None,
+            }
+        }
     }
 
     pub fn init_segment(&self) -> Option<&MapInfo> {

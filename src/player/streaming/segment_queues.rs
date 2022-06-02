@@ -1,5 +1,8 @@
 use std::slice::Iter;
-use crate::{parser::SegmentInfo, source_buffer::MediaType};
+use crate::{
+    bindings::MediaType,
+    parser::SegmentInfo,
+};
 
 #[derive(Clone, Debug)]
 pub struct SegmentQueue {

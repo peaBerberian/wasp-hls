@@ -1,20 +1,29 @@
 import init, {
   WaspHlsPlayer,
   LogLevel,
+  MediaType,
   MediaSourceReadyState,
   PlaybackTickReason,
-  RemoveMediaSourceError,
-  AttachMediaSourceError,
+  RemoveMediaSourceResult,
+  RemoveMediaSourceErrorCode,
+  AttachMediaSourceResult,
+  AttachMediaSourceErrorCode,
   AddSourceBufferResult,
-  AddSourceBufferError,
-  AppendBufferError,
-  RemoveBufferError,
+  AddSourceBufferErrorCode,
+  AppendBufferResult,
+  RemoveBufferResult,
+  AppendBufferErrorCode,
+  RemoveBufferErrorCode,
+  MediaSourceDurationUpdateResult,
+  MediaSourceDurationUpdateErrorCode,
 } from "../wasm/wasp_hls.js";
+import {
+  getTransmuxedType,
+  shouldTransmux,
+  transmux,
+} from "./transmux.js";
 
 const MAX_U32 = Math.pow(2, 32) - 1;
-
-// TODO also use enum for error code?
-let lastError : null | string = null;
 
 let nextRequestId = 0;
 let nextResourceId = 0;
@@ -66,7 +75,7 @@ function fetchU8(playerId: PlayerId, url: string): RequestId {
       const playerObj = getPlayerObject(playerId);
       if (playerObj !== undefined) {
         playerObj.player
-          .on_u8_request_finished(currentRequestId, new Uint8Array(arrRes));
+          .on_u8_request_finished(currentRequestId, new Uint8Array(arrRes), res.url);
         console.timeEnd("WAY 1");
       }
     })
@@ -105,7 +114,7 @@ function fetchU8NoCopy(playerId: PlayerId, url: string): RequestId {
         const segmentArray = new Uint8Array(arrRes);
         jsMemoryResources[currentResourceId] = segmentArray;
         playerObj.player
-          .on_u8_no_copy_request_finished(currentRequestId, currentResourceId);
+          .on_u8_no_copy_request_finished(currentRequestId, currentResourceId, res.url);
       }
     })
     .catch(err => {
@@ -142,13 +151,13 @@ function abortRequest(id: RequestId) : boolean {
  * @param {number} playerId
  * @returns {number}
  */
-function attachMediaSource(playerId: PlayerId): AttachMediaSourceError {
+function attachMediaSource(playerId: PlayerId): AttachMediaSourceResult {
   try {
-    lastError = null;
     const playerObj = getPlayerObject(playerId);
     if (playerObj === undefined) {
-      setLastError("Unknown player asking to attach a MediaSource");
-      return AttachMediaSourceError.PlayerInstanceNotFound;
+      return AttachMediaSourceResult.error(
+        AttachMediaSourceErrorCode.PlayerInstanceNotFound
+      );
     }
     const mediaSource = new MediaSource();
     mediaSource.addEventListener("sourceclose", onMediaSourceClose);
@@ -181,10 +190,11 @@ function attachMediaSource(playerId: PlayerId): AttachMediaSourceError {
       playerObj?.player
         .on_media_source_state_change(MediaSourceReadyState.Closed);
     }
-    return AttachMediaSourceError.None;
+    return AttachMediaSourceResult.success();
   } catch (e) {
-    setLastError("Unknown error while trying to attach a MediaSource", e);
-    return AttachMediaSourceError.PlayerInstanceNotFound;
+    return AttachMediaSourceResult.error(
+      AttachMediaSourceErrorCode.PlayerInstanceNotFound,
+      getErrorMessage(e));
   }
 }
 
@@ -192,17 +202,16 @@ function attachMediaSource(playerId: PlayerId): AttachMediaSourceError {
  * @param {number} playerId
  * @returns {number}
  */
-function removeMediaSource(playerId: PlayerId): RemoveMediaSourceError {
+function removeMediaSource(playerId: PlayerId): RemoveMediaSourceResult {
   try {
-    lastError = null;
     const playerObj = getPlayerObject(playerId);
     if (playerObj === undefined) {
-      setLastError("Unknown player asking to remove a MediaSource");
-      return RemoveMediaSourceError.PlayerInstanceNotFound;
+      return RemoveMediaSourceResult
+        .error(RemoveMediaSourceErrorCode.PlayerInstanceNotFound);
     }
     if (playerObj.mediaSourceObj === null) {
-      setLastError("The player has no MediaSource attached");
-      return RemoveMediaSourceError.NoMediaSourceAttached;
+      return RemoveMediaSourceResult
+        .error(RemoveMediaSourceErrorCode.NoMediaSourceAttached);
     }
 
     const {
@@ -240,26 +249,62 @@ function removeMediaSource(playerId: PlayerId): RemoveMediaSourceError {
         WaspHlsPlayer.log(LogLevel.Error, "Could not revoke ObjectURL: " + msg);
       }
     }
-    return RemoveMediaSourceError.None;
+    return RemoveMediaSourceResult.success();
   } catch (e) {
-    setLastError("Unknown error while revoking ObjectURL", e);
-    return RemoveMediaSourceError.UnknownError;
+    return RemoveMediaSourceResult
+      .error(RemoveMediaSourceErrorCode.UnknownError, getErrorMessage(e));
   }
+}
+
+function setMediaSourceDuration(
+  playerId: number,
+  duration: number
+) : MediaSourceDurationUpdateResult {
+  const playerObj = getPlayerObject(playerId);
+  if (playerObj === undefined) {
+    return MediaSourceDurationUpdateResult
+      .error(MediaSourceDurationUpdateErrorCode.PlayerInstanceNotFound);
+  }
+  if (playerObj.mediaSourceObj === null) {
+    return MediaSourceDurationUpdateResult
+      .error(MediaSourceDurationUpdateErrorCode.NoMediaSourceAttached);
+  }
+
+  try {
+    const { mediaSource } = playerObj.mediaSourceObj;
+    mediaSource.duration = duration;
+    return MediaSourceDurationUpdateResult.success();
+  } catch (err) {
+    return MediaSourceDurationUpdateResult.error(
+      MediaSourceDurationUpdateErrorCode.UnknownError,
+      getErrorMessage(err)
+    );
+  }
+}
+
+function getErrorMessage(e: unknown) : string | undefined {
+  return e instanceof Error ?
+    e.message :
+    undefined;
 }
 
 /**
  * @param {number} playerId
+ * @param {number} mediaType
  * @param {string} typ
  * @returns {Object}
  */
-function addSourceBuffer(playerId: PlayerId, typ: string): AddSourceBufferResult {
-  lastError = null;
+function addSourceBuffer(
+  playerId: PlayerId,
+  mediaType: MediaType,
+  typ: string
+): AddSourceBufferResult {
   const playerObj = getPlayerObject(playerId);
   if (playerObj === undefined) {
-    return AddSourceBufferResult.error(AddSourceBufferError.PlayerInstanceNotFound);
+    return AddSourceBufferResult.error(AddSourceBufferErrorCode.PlayerInstanceNotFound);
   }
   if (playerObj.mediaSourceObj === null) {
-    return AddSourceBufferResult.error(AddSourceBufferError.NoMediaSourceAttached);
+    return AddSourceBufferResult.error(AddSourceBufferErrorCode.NoMediaSourceAttached);
   }
 
   const {
@@ -268,35 +313,42 @@ function addSourceBuffer(playerId: PlayerId, typ: string): AddSourceBufferResult
     nextSourceBufferId,
   } = playerObj.mediaSourceObj;
   if (mediaSource.readyState === "closed") {
-    return AddSourceBufferResult.error(AddSourceBufferError.MediaSourceIsClosed);
+    return AddSourceBufferResult.error(AddSourceBufferErrorCode.MediaSourceIsClosed);
   }
   if (typ === "") {
-    return AddSourceBufferResult.error(AddSourceBufferError.EmptyMimeType);
+    return AddSourceBufferResult.error(AddSourceBufferErrorCode.EmptyMimeType);
   }
   try {
-    const sourceBuffer = mediaSource.addSourceBuffer(typ);
+    let mimeType = typ;
+    if (shouldTransmux(typ)) {
+      mimeType = getTransmuxedType(typ, mediaType);
+    }
+    const sourceBuffer = mediaSource.addSourceBuffer(mimeType);
     const sourceBufferId = nextSourceBufferId;
-    sourceBuffers.push({ id: sourceBufferId, sourceBuffer });
+    sourceBuffers.push({
+      id: sourceBufferId,
+      sourceBuffer,
+      transmuxer: mimeType === typ ? null : transmux,
+    });
     playerObj.mediaSourceObj.nextSourceBufferId++;
     sourceBuffer.addEventListener("updateend", function() {
       playerObj.player.on_source_buffer_update(sourceBufferId);
     });
     return AddSourceBufferResult.success(sourceBufferId);
   } catch (err) {
-    setLastError("Unknown error when adding SourceBuffer", err);
     if (!(err instanceof Error)) {
-      return AddSourceBufferResult.error(AddSourceBufferError.UnknownError);
-    }
-    if (err.name === "QuotaExceededError") {
-      setLastError(err.message, err);
-      return AddSourceBufferResult.error(AddSourceBufferError.QuotaExceededError);
-    }
-    if (err.name === "NotSupportedError") {
-      setLastError(err.message, err);
-      return AddSourceBufferResult.error(AddSourceBufferError.TypeNotSupportedError);
+      return AddSourceBufferResult.error(AddSourceBufferErrorCode.UnknownError);
+    } else if (err.name === "QuotaExceededError") {
+      return AddSourceBufferResult.error(AddSourceBufferErrorCode.QuotaExceededError,
+                                         err.message);
+    } else if (err.name === "NotSupportedError") {
+      return AddSourceBufferResult.error(AddSourceBufferErrorCode.TypeNotSupportedError,
+                                         err.message);
+    } else {
+      return AddSourceBufferResult.error(AddSourceBufferErrorCode.UnknownError,
+                                         err.message);
     }
   }
-  return AddSourceBufferResult.error(AddSourceBufferError.UnknownError);
 }
 
 /**
@@ -308,20 +360,28 @@ function addSourceBuffer(playerId: PlayerId, typ: string): AddSourceBufferResult
 function appendBuffer(
   playerId: PlayerId,
   sourceBufferId: SourceBufferId,
-  data: ArrayBuffer
-): AppendBufferError {
+  data: Uint8Array
+): AppendBufferResult {
   try {
-    const sourceBuffer = getSourceBuffer(playerId, sourceBufferId);
-    if (sourceBuffer === undefined) {
-      setLastError("The SourceBuffer associated to the given `SourceBufferId` " +
-        "was not found");
-      return AppendBufferError.PlayerOrSourceBufferInstanceNotFound;
+    const sourceBufferObj = getSourceBufferObj(playerId, sourceBufferId);
+    if (sourceBufferObj === undefined) {
+      return AppendBufferResult
+        .error(AppendBufferErrorCode.PlayerOrSourceBufferInstanceNotFound);
     }
-    sourceBuffer.appendBuffer(data);
-    return AppendBufferError.None;
+    let pushedData = data;
+    if (sourceBufferObj.transmuxer !== null) {
+      const transmuxedData = sourceBufferObj.transmuxer(data);
+
+      // TODO specific error for transmuxing error
+      if (transmuxedData !== null) {
+        pushedData = transmuxedData;
+      }
+    }
+    sourceBufferObj.sourceBuffer.appendBuffer(pushedData);
+    return AppendBufferResult.success();
   } catch (err) {
-    setLastError("UnknownError when calling \"appendBuffer\"", err);
-    return AppendBufferError.UnknownError;
+    return AppendBufferResult
+      .error(AppendBufferErrorCode.UnknownError, getErrorMessage(err));
   }
 }
 
@@ -335,24 +395,12 @@ function appendBufferJsBlob(
   playerId: PlayerId,
   sourceBufferId: SourceBufferId,
   resourceId: ResourceId
-): AppendBufferError {
-  try {
-    const sourceBuffer = getSourceBuffer(playerId, sourceBufferId);
-    if (sourceBuffer === undefined) {
-      setLastError("The SourceBuffer associated to the given `SourceBufferId` " +
-        "was not found");
-      return AppendBufferError.PlayerOrSourceBufferInstanceNotFound;
-    }
-    const segment: Uint8Array | undefined = jsMemoryResources[resourceId];
-    if (segment === undefined) {
-      return AppendBufferError.GivenResourceNotFound;
-    }
-    sourceBuffer.appendBuffer(segment);
-    return AppendBufferError.None;
-  } catch (err) {
-    setLastError("UnknownError when calling \"appendBuffer\"", err);
-    return AppendBufferError.UnknownError;
+): AppendBufferResult {
+  const segment: Uint8Array | undefined = jsMemoryResources[resourceId];
+  if (segment === undefined) {
+    return AppendBufferResult.error(AppendBufferErrorCode.GivenResourceNotFound);
   }
+  return appendBuffer(playerId, sourceBufferId, segment);
 }
 
 /**
@@ -367,19 +415,18 @@ function removeBuffer(
   sourceBufferId: SourceBufferId,
   start: number,
   end: number
-): RemoveBufferError {
+): RemoveBufferResult {
   try {
-    const sourceBuffer = getSourceBuffer(playerId, sourceBufferId);
+    const sourceBuffer = getSourceBufferObj(playerId, sourceBufferId);
     if (sourceBuffer === undefined) {
-      setLastError("The SourceBuffer associated to the given `SourceBufferId` " +
-        "was not found");
-      return RemoveBufferError.PlayerOrSourceBufferInstanceNotFound;
+      return RemoveBufferResult
+        .error(RemoveBufferErrorCode.PlayerOrSourceBufferInstanceNotFound);
     }
-    sourceBuffer.remove(start, end);
-    return RemoveBufferError.None;
+    sourceBuffer.sourceBuffer.remove(start, end);
+    return RemoveBufferResult.success();
   } catch (err) {
-    setLastError("UnknownError when calling \"appendBuffer\"", err);
-    return RemoveBufferError.UnknownError;
+    return RemoveBufferResult
+      .error(RemoveBufferErrorCode.UnknownError, getErrorMessage(err));
   }
 }
 
@@ -468,13 +515,6 @@ function freeResource(resourceId: number) : boolean {
   return true;
 }
 
-/**
- * @returns {string}
- */
-function getLastError() : string {
-  return lastError ?? "";
-}
-
 type PlayerId = number;
 type RequestId = number;
 type SourceBufferId = number;
@@ -486,6 +526,7 @@ interface RequestObject {
 interface SourceBufferInstanceInfo {
   id: SourceBufferId;
   sourceBuffer: SourceBuffer;
+  transmuxer: null | ((input: Uint8Array) => Uint8Array | null);
 }
 
 interface MediaSourceInstanceInfo {
@@ -512,14 +553,6 @@ function formatErrMessage(err: unknown, defaultMsg: string) {
     defaultMsg;
 }
 
-function setLastError(defaultMsg: string, err?: unknown) {
-  if (err === undefined) {
-    lastError = defaultMsg;
-  } else {
-    lastError = formatErrMessage(err, defaultMsg);
-  }
-}
-
 function createPlayer(videoElement: HTMLVideoElement): PlayerInstanceInfo {
   let playerId = 0;
   while (currentPlayers[playerId] !== undefined) {
@@ -537,7 +570,7 @@ function createPlayer(videoElement: HTMLVideoElement): PlayerInstanceInfo {
 }
 
 async function run() {
-  await init();
+  await init(fetch("./wasp_hls_bg.wasm"));
   const videoElement = document.createElement("video");
   videoElement.autoplay = true;
   videoElement.controls = true;
@@ -545,7 +578,11 @@ async function run() {
   const playerObj = createPlayer(videoElement);
   // playerObj.player.test_seg_back_and_forth();
   playerObj.player.load_content(
-    "https://storage.googleapis.com/shaka-demo-assets/angel-one-hls/hls.m3u8");
+    "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8");
+  // playerObj.player.load_content(
+  //   "https://cdn.jwplayer.com/manifests/pZxWPRg4.m3u8");
+  // playerObj.player.load_content(
+  //   "https://storage.googleapis.com/shaka-demo-assets/angel-one-hls/hls.m3u8");
 }
 
 setTimeout(() => {
@@ -596,10 +633,10 @@ function getPlayerObject(playerId: PlayerId): PlayerInstanceInfo | undefined {
   return currentPlayers[playerId];
 }
 
-function getSourceBuffer(
+function getSourceBufferObj(
   playerId: PlayerId,
   sourceBufferId: SourceBufferId
-): SourceBuffer | undefined {
+): SourceBufferInstanceInfo | undefined {
   const playerObj = getPlayerObject(playerId);
   if (playerObj === undefined) {
     return undefined;
@@ -611,7 +648,7 @@ function getSourceBuffer(
   const { sourceBuffers } = mediaSourceObj;
   for (const sourceBufferObj of sourceBuffers) {
     if (sourceBufferObj.id === sourceBufferId) {
-      return sourceBufferObj.sourceBuffer;
+      return sourceBufferObj;
     }
   }
   return undefined;
@@ -656,6 +693,7 @@ win.jsFetchU8NoCopy = fetchU8NoCopy;
 win.jsAbortRequest = abortRequest;
 win.jsAttachMediaSource = attachMediaSource;
 win.jsRemoveMediaSource = removeMediaSource;
+win.jsSetMediaSourceDuration = setMediaSourceDuration;
 win.jsAddSourceBuffer = addSourceBuffer;
 win.jsAppendBuffer = appendBuffer;
 win.jsAppendBufferJsBlob = appendBufferJsBlob;
@@ -663,4 +701,3 @@ win.jsRemoveBuffer = removeBuffer;
 win.jsStartObservingPlayback = startObservingPlayback;
 win.jsStopObservingPlayback = stopObservingPlayback;
 win.jsFreeResource = freeResource;
-win.jsGetLastError = getLastError;
