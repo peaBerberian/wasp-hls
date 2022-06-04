@@ -50,8 +50,7 @@ export default class JsWaspHlsPlayer {
   }
 
   public dispose() {
-    // TODO
-    // this._playerInstanceInfo.stop();
+    this._playerInstanceInfo.player.stop();
     this._playerInstanceInfo.player.free();
     this._playerInstanceInfo.isDetroyed = true;
     stopObservingPlayback(this._playerId);
