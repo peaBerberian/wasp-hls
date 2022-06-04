@@ -55,5 +55,4 @@ The real reasons why I started this project are more personal, mainly:
 ## What's left to do?
 
 Almost everything, for the moment it can just play the main renditions of the
-first encountered variant for only some VoD contents, if the final segments
-are in an mp4 container! Quite a precize situation to be in.
+first encountered variant for VoD contents only.
