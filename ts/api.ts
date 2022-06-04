@@ -49,6 +49,10 @@ export default class JsWaspHlsPlayer {
     this._playerInstanceInfo.player.load_content(url);
   }
 
+  public stop() {
+    this._playerInstanceInfo.player.stop();
+  }
+
   public dispose() {
     this._playerInstanceInfo.player.stop();
     this._playerInstanceInfo.player.free();
