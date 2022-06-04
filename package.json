@@ -4,8 +4,8 @@
   "description": "WebAssembly HLS Player Proof Of Concept",
   "scripts": {
     "build:all": "npm run clean && npm run build:ts && npm run build:wasm",
-    "build:ts": "esbuild ts/module.ts --bundle --outfile=build/bundle.js",
-    "build:ts:release": "esbuild ts/module.ts --bundle --outfile=build/bundle.js --minify",
+    "build:ts": "esbuild ts/index.ts --bundle --outfile=build/bundle.js",
+    "build:ts:release": "esbuild ts/index.ts --bundle --outfile=build/bundle.js --minify",
     "build:release": "npm run clean && npm run build:ts:release && npm run build:wasm:release",
     "build:wasm": "npm run compile:rs && npm run move:wasm",
     "build:wasm:release": "npm run compile:rs:release && npm run move:wasm",

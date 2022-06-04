@@ -1,4 +1,4 @@
-import init, {
+import {
   WaspHlsPlayer,
   LogLevel,
   MediaType,
@@ -18,6 +18,16 @@ import init, {
   MediaSourceDurationUpdateErrorCode,
 } from "../wasm/wasp_hls.js";
 import {
+  jsMemoryResources,
+  PlayerId,
+  playersStore,
+  RequestId,
+  requestsStore,
+  ResourceId,
+  SourceBufferId,
+  SourceBufferInstanceInfo,
+} from "./globals.js";
+import {
   getTransmuxedType,
   shouldTransmux,
   transmux,
@@ -28,15 +38,11 @@ const MAX_U32 = Math.pow(2, 32) - 1;
 let nextRequestId = 0;
 let nextResourceId = 0;
 
-const jsMemoryResources : Partial<Record<ResourceId, Uint8Array>> = {};
-const currentPlayers : Partial<Record<PlayerId, PlayerInstanceInfo>> = {};
-const currentRequests : Partial<Record<RequestId, RequestObject>> = {};
-
 /**
  * @param {number} logLevel
  * @param {string} logStr
  */
-function log(logLevel: LogLevel, logStr: string) {
+export function log(logLevel: LogLevel, logStr: string) {
   const now = performance.now().toFixed(2);
   switch (logLevel) {
     case LogLevel.Error:
@@ -60,30 +66,29 @@ function log(logLevel: LogLevel, logStr: string) {
  * @param {string} url
  * @returns {number}
  */
-function fetchU8(playerId: PlayerId, url: string): RequestId {
+export function fetchU8(playerId: PlayerId, url: string): RequestId {
   const currentRequestId = nextRequestId;
   incrementRequestId();
   const abortController = new AbortController();
-  currentRequests[currentRequestId] = { abortController };
+  requestsStore.create(currentRequestId, { playerId, abortController });
   fetch(url, { signal: abortController.signal })
     .then(async res => {
       if (abortController.signal.aborted) {
         return; // Should not be possible. Still, exit if that's the case.
       }
       const arrRes = await res.arrayBuffer();
-      delete currentRequests[currentRequestId];
-      const playerObj = getPlayerObject(playerId);
+      requestsStore.delete(currentRequestId);
+      const playerObj = playersStore.get(playerId);
       if (playerObj !== undefined) {
         playerObj.player
           .on_u8_request_finished(currentRequestId, new Uint8Array(arrRes), res.url);
-        console.timeEnd("WAY 1");
       }
     })
     .catch(err => {
       if (abortController.signal.aborted) {
         return;
       }
-      delete currentRequests[currentRequestId];
+      requestsStore.delete(currentRequestId);
       if (err instanceof Error && err.name === "AbortError") {
         return;
       }
@@ -98,27 +103,27 @@ function fetchU8(playerId: PlayerId, url: string): RequestId {
  * @param {string} url
  * @returns {number}
  */
-function fetchU8NoCopy(playerId: PlayerId, url: string): RequestId {
+export function fetchU8NoCopy(playerId: PlayerId, url: string): RequestId {
   const currentRequestId = nextRequestId;
   incrementRequestId();
   const abortController = new AbortController();
-  currentRequests[currentRequestId] = { abortController };
+  requestsStore.create(currentRequestId, { playerId, abortController });
   fetch(url, { signal: abortController.signal })
     .then(async res => {
       const arrRes = await res.arrayBuffer();
-      delete currentRequests[currentRequestId];
-      const playerObj = getPlayerObject(playerId);
+      requestsStore.delete(currentRequestId);
+      const playerObj = playersStore.get(playerId);
       if (playerObj !== undefined) {
         const currentResourceId = nextResourceId;
         incrementResourceId();
         const segmentArray = new Uint8Array(arrRes);
-        jsMemoryResources[currentResourceId] = segmentArray;
+        jsMemoryResources.create(currentResourceId, playerId, segmentArray);
         playerObj.player
           .on_u8_no_copy_request_finished(currentRequestId, currentResourceId, res.url);
       }
     })
     .catch(err => {
-      delete currentRequests[currentRequestId];
+      requestsStore.delete(currentRequestId);
       if (err instanceof Error && err.name === "AbortError") {
         return;
       }
@@ -131,8 +136,8 @@ function fetchU8NoCopy(playerId: PlayerId, url: string): RequestId {
  * @param {number} id
  * @returns {boolean}
  */
-function abortRequest(id: RequestId) : boolean {
-  const requestObj = currentRequests[id];
+export function abortRequest(id: RequestId) : boolean {
+  const requestObj = requestsStore.get(id);
   if (requestObj !== undefined) {
     requestObj.abortController.abort();
 
@@ -141,7 +146,7 @@ function abortRequest(id: RequestId) : boolean {
     // made (e.g. what if a request failure associated to that request was already
     // scheduled yet another request is made synchronously with the same RequestId?).
     /* eslint-disable-next-line @typescript-eslint/no-floating-promises */
-    Promise.resolve().then(() => { delete currentRequests[id]; });
+    Promise.resolve().then(() => { requestsStore.delete(id); });
     return true;
   }
   return false;
@@ -151,9 +156,9 @@ function abortRequest(id: RequestId) : boolean {
  * @param {number} playerId
  * @returns {number}
  */
-function attachMediaSource(playerId: PlayerId): AttachMediaSourceResult {
+export function attachMediaSource(playerId: PlayerId): AttachMediaSourceResult {
   try {
-    const playerObj = getPlayerObject(playerId);
+    const playerObj = playersStore.get(playerId);
     if (playerObj === undefined) {
       return AttachMediaSourceResult.error(
         AttachMediaSourceErrorCode.PlayerInstanceNotFound
@@ -202,9 +207,9 @@ function attachMediaSource(playerId: PlayerId): AttachMediaSourceResult {
  * @param {number} playerId
  * @returns {number}
  */
-function removeMediaSource(playerId: PlayerId): RemoveMediaSourceResult {
+export function removeMediaSource(playerId: PlayerId): RemoveMediaSourceResult {
   try {
-    const playerObj = getPlayerObject(playerId);
+    const playerObj = playersStore.get(playerId);
     if (playerObj === undefined) {
       return RemoveMediaSourceResult
         .error(RemoveMediaSourceErrorCode.PlayerInstanceNotFound);
@@ -256,11 +261,11 @@ function removeMediaSource(playerId: PlayerId): RemoveMediaSourceResult {
   }
 }
 
-function setMediaSourceDuration(
+export function setMediaSourceDuration(
   playerId: number,
   duration: number
 ) : MediaSourceDurationUpdateResult {
-  const playerObj = getPlayerObject(playerId);
+  const playerObj = playersStore.get(playerId);
   if (playerObj === undefined) {
     return MediaSourceDurationUpdateResult
       .error(MediaSourceDurationUpdateErrorCode.PlayerInstanceNotFound);
@@ -282,7 +287,7 @@ function setMediaSourceDuration(
   }
 }
 
-function getErrorMessage(e: unknown) : string | undefined {
+export function getErrorMessage(e: unknown) : string | undefined {
   return e instanceof Error ?
     e.message :
     undefined;
@@ -294,12 +299,12 @@ function getErrorMessage(e: unknown) : string | undefined {
  * @param {string} typ
  * @returns {Object}
  */
-function addSourceBuffer(
+export function addSourceBuffer(
   playerId: PlayerId,
   mediaType: MediaType,
   typ: string
 ): AddSourceBufferResult {
-  const playerObj = getPlayerObject(playerId);
+  const playerObj = playersStore.get(playerId);
   if (playerObj === undefined) {
     return AddSourceBufferResult.error(AddSourceBufferErrorCode.PlayerInstanceNotFound);
   }
@@ -357,7 +362,7 @@ function addSourceBuffer(
  * @param {ArrayBuffer} data
  * @returns {number}
  */
-function appendBuffer(
+export function appendBuffer(
   playerId: PlayerId,
   sourceBufferId: SourceBufferId,
   data: Uint8Array
@@ -391,12 +396,12 @@ function appendBuffer(
  * @param {number} resourceId
  * @returns {number}
  */
-function appendBufferJsBlob(
+export function appendBufferJsBlob(
   playerId: PlayerId,
   sourceBufferId: SourceBufferId,
   resourceId: ResourceId
 ): AppendBufferResult {
-  const segment: Uint8Array | undefined = jsMemoryResources[resourceId];
+  const segment: Uint8Array | undefined = jsMemoryResources.get(resourceId);
   if (segment === undefined) {
     return AppendBufferResult.error(AppendBufferErrorCode.GivenResourceNotFound);
   }
@@ -410,7 +415,7 @@ function appendBufferJsBlob(
  * @param {number} end
  * @returns {number}
  */
-function removeBuffer(
+export function removeBuffer(
   playerId: PlayerId,
   sourceBufferId: SourceBufferId,
   start: number,
@@ -433,8 +438,8 @@ function removeBuffer(
 /**
  * @param {number} playerId
  */
-function startObservingPlayback(playerId: PlayerId): void {
-  const playerObj = getPlayerObject(playerId);
+export function startObservingPlayback(playerId: PlayerId): void {
+  const playerObj = playersStore.get(playerId);
   if (playerObj === undefined) {
     return;
   }
@@ -463,7 +468,7 @@ function startObservingPlayback(playerId: PlayerId): void {
   /* eslint-disable @typescript-eslint/no-floating-promises */
   Promise.resolve().then(() => onNextTick(PlaybackTickReason.Init));
   function onNextTick(reason: PlaybackTickReason) {
-    const innerPlayerObj = getPlayerObject(playerId);
+    const innerPlayerObj = playersStore.get(playerId);
     if (innerPlayerObj === undefined || innerPlayerObj.observationsObj === null) {
       return;
     }
@@ -492,8 +497,8 @@ function startObservingPlayback(playerId: PlayerId): void {
 /**
  * @param {number} playerId
  */
-function stopObservingPlayback(playerId: PlayerId) {
-  const playerObj = getPlayerObject(playerId);
+export function stopObservingPlayback(playerId: PlayerId) {
+  const playerObj = playersStore.get(playerId);
   if (playerObj === undefined) {
     return;
   }
@@ -507,44 +512,12 @@ function stopObservingPlayback(playerId: PlayerId) {
   playerObj.observationsObj = null;
 }
 
-function freeResource(resourceId: number) : boolean {
-  if (jsMemoryResources[resourceId] === undefined) {
+export function freeResource(resourceId: number) : boolean {
+  if (jsMemoryResources.get(resourceId) === undefined) {
     return false;
   }
-  delete jsMemoryResources[resourceId];
+  jsMemoryResources.delete(resourceId);
   return true;
-}
-
-type PlayerId = number;
-type RequestId = number;
-type SourceBufferId = number;
-type ResourceId = number;
-interface RequestObject {
-  abortController: AbortController;
-}
-
-interface SourceBufferInstanceInfo {
-  id: SourceBufferId;
-  sourceBuffer: SourceBuffer;
-  transmuxer: null | ((input: Uint8Array) => Uint8Array | null);
-}
-
-interface MediaSourceInstanceInfo {
-  mediaSource: MediaSource;
-  objectURL: string;
-  removeEventListeners: () => void;
-  nextSourceBufferId: number;
-  sourceBuffers: SourceBufferInstanceInfo[];
-}
-
-interface PlayerInstanceInfo {
-  player: WaspHlsPlayer;
-  videoElement: HTMLVideoElement;
-  mediaSourceObj: MediaSourceInstanceInfo | null;
-  observationsObj: {
-    removeEventListeners: () => void;
-    timeoutId: number | undefined;
-  } | null;
 }
 
 function formatErrMessage(err: unknown, defaultMsg: string) {
@@ -552,45 +525,6 @@ function formatErrMessage(err: unknown, defaultMsg: string) {
     err.name + ": " + err.message :
     defaultMsg;
 }
-
-function createPlayer(videoElement: HTMLVideoElement): PlayerInstanceInfo {
-  let playerId = 0;
-  while (currentPlayers[playerId] !== undefined) {
-    playerId++;
-  }
-  const player = new WaspHlsPlayer(playerId);
-  const playerObj = {
-    player,
-    videoElement,
-    mediaSourceObj: null,
-    observationsObj: null,
-  };
-  currentPlayers[playerId] = playerObj;
-  return playerObj;
-}
-
-async function run() {
-  await init(fetch("./wasp_hls_bg.wasm"));
-  const videoElement = document.createElement("video");
-  videoElement.autoplay = true;
-  videoElement.controls = true;
-  document.body.appendChild(videoElement);
-  const playerObj = createPlayer(videoElement);
-  // playerObj.player.test_seg_back_and_forth();
-  playerObj.player.load_content(
-    "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8");
-  // playerObj.player.load_content(
-  //   "https://cdn.jwplayer.com/manifests/pZxWPRg4.m3u8");
-  // playerObj.player.load_content(
-  //   "https://storage.googleapis.com/shaka-demo-assets/angel-one-hls/hls.m3u8");
-}
-
-setTimeout(() => {
-  run().catch(err => {
-    console.error("WebAssembly package initialization failed:", err);
-  });
-}, 100);
-
 
 /**
  * Clear element's src attribute.
@@ -629,15 +563,11 @@ function clearElementSrc(element: HTMLMediaElement): void {
   element.removeAttribute("src");
 }
 
-function getPlayerObject(playerId: PlayerId): PlayerInstanceInfo | undefined {
-  return currentPlayers[playerId];
-}
-
 function getSourceBufferObj(
   playerId: PlayerId,
   sourceBufferId: SourceBufferId
 ): SourceBufferInstanceInfo | undefined {
-  const playerObj = getPlayerObject(playerId);
+  const playerObj = playersStore.get(playerId);
   if (playerObj === undefined) {
     return undefined;
   }
@@ -662,7 +592,8 @@ function incrementResourceId() : void {
     nextResourceId = nextResourceId >= MAX_U32 ? 0 : nextResourceId + 1;
     iteration++;
   } while (
-    jsMemoryResources[nextResourceId] !== undefined ||
+    // TODO in store?
+    jsMemoryResources.get(nextResourceId) !== undefined ||
     iteration >= MAX_LOOP_ITERATIONS
   );
   if (iteration >= MAX_LOOP_ITERATIONS) {
@@ -676,7 +607,8 @@ function incrementRequestId() : void {
     nextRequestId = nextRequestId >= MAX_U32 ? 0 : nextRequestId + 1;
     iteration++;
   } while (
-    currentRequests[nextRequestId] !== undefined ||
+    // TODO in store?
+    requestsStore.get(nextRequestId) !== undefined ||
     iteration >= MAX_LOOP_ITERATIONS
   );
   if (iteration >= MAX_LOOP_ITERATIONS) {
