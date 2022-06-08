@@ -247,12 +247,16 @@ impl MediaPlaylist {
         })
     }
 
-    fn extension(&self) -> Option<&str> {
+    pub(crate) fn extension(&self) -> Option<&str> {
         self.segment_list.get(0).map(|s| s.url.extension())
     }
 
+    pub(crate) fn duration(&self) -> Option<f64> {
+        self.segment_list.last().map(|s| s.start + s.duration)
+    }
+
     /// TODO kind of weird to give the MediaType here
-    pub fn mime_type(&self, media_type: MediaType) -> Option<&str> {
+    pub(crate) fn mime_type(&self, media_type: MediaType) -> Option<&str> {
         match media_type {
             MediaType::Audio => match self.extension() {
                Some("mp4") => Some("audio/mp4"),

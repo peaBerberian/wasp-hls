@@ -7,6 +7,8 @@ use crate::{
         jsRemoveMediaSource,
         RequestId,
         SourceBufferId,
+        jsSetMediaSourceDuration,
+        JsResult,
     },
     Logger,
     content::{MediaPlaylistPermanentId, WaspHlsContent},
@@ -83,6 +85,15 @@ impl WaspHlsPlayer {
         } else { return; };
         if content.all_curr_media_playlists_ready() {
             self.ready_state = WaspHlsPlayerReadyState::AwaitingSegments;
+            if let Some(duration) = content.curr_duration() {
+                if let Err(_) = jsSetMediaSourceDuration(self.id, duration).result() {
+                    self.fail_on_error("Unable to update the MediaSource duration");
+                    return;
+                }
+            } else {
+                Logger::warn("Unknown content duration");
+            }
+
             if let Some(Err(e)) = self.init_source_buffer(MediaType::Audio) {
                 self.fail_on_error(&format!("Error while creating audio SourceBuffer: {:?}", e));
                 return;

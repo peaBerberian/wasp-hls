@@ -136,6 +136,23 @@ impl WaspHlsContent {
         }
     }
 
+    pub(crate) fn curr_duration(&self) -> Option<f64> {
+        let audio_duration = match self.curr_media_playlist(MediaType::Audio) {
+            None => None,
+            Some(m) => m.duration(),
+        };
+        let video_duration = match self.curr_media_playlist(MediaType::Video) {
+            None => None,
+            Some(m) => m.duration(),
+        };
+        match (audio_duration, video_duration) {
+            (None, None) => None,
+            (Some(a), Some(v)) => Some(f64::min(a, v)),
+            (Some(a), None) => Some(a),
+            (None, Some(v)) => Some(v)
+        }
+    }
+
     pub(crate) fn curr_variant(&self) -> Option<&VariantStream> {
         self.playlist.variants().get(self.curr_variant_idx?)
     }

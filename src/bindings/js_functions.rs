@@ -78,7 +78,7 @@ extern "C" {
     /// This function performs all those operations synchronously.
     pub fn jsRemoveMediaSource(player_id: PlayerId) -> RemoveMediaSourceResult;
 
-    pub fn jsSetMediaSourceDuration(duration: f64) -> MediaSourceDurationUpdateResult;
+    pub fn jsSetMediaSourceDuration(player_id: PlayerId, duration: f64) -> MediaSourceDurationUpdateResult;
 
     /// Add a SourceBuffer to the created MediaSource, allowing to push media
     /// segment of a given type to a lower-level media buffer.
