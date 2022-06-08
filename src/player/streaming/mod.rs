@@ -19,7 +19,7 @@ use crate::{
         PlaylistRequestInfo,
         FinishedRequestType,
     },
-    source_buffer::{PushMetadata, SourceBufferCreationError},
+    media_source::{PushMetadata, SourceBufferCreationError, MediaSourceHandle},
     utils::url::Url,
 };
 use super::{
@@ -76,7 +76,7 @@ impl WaspHlsPlayer {
     /// and the potential initialization segments are requested.
     pub(super) fn check_ready_to_load_segments(&mut self) {
         if self.ready_state >= WaspHlsPlayerReadyState::AwaitingSegments ||
-            self.media_source_state.is_none()
+            self.media_source.ready_state == MediaSourceReadyState::Closed
         {
             return;
         }
@@ -168,8 +168,8 @@ impl WaspHlsPlayer {
         media_type: MediaType
     ) -> Option<Result<(), SourceBufferCreationError>> {
         // TODO cleaner way than this mess
-        if self.source_buffer_store.has(media_type) ||
-            !self.source_buffer_store.can_still_create_source_buffer()
+        if self.media_source.has(media_type) ||
+            !self.media_source.can_still_create_source_buffer()
         {
             // TODO return Err here
             return None;
@@ -197,16 +197,12 @@ impl WaspHlsPlayer {
             },
         };
 
-        Some(self.source_buffer_store.create_source_buffer(media_type, mime_type, &codecs))
+        Some(self.media_source.create_source_buffer(media_type, mime_type, &codecs))
     }
 
     pub(crate) fn internal_on_media_source_state_change(&mut self, state: MediaSourceReadyState) {
         Logger::info(&format!("MediaSource state changed: {:?}", state));
-        if let Some(ref mut mtdt) = self.media_source_state {
-            *mtdt = state;
-        } else {
-            self.media_source_state = Some(state);
-        }
+        self.media_source.ready_state = state;
         if state == MediaSourceReadyState::Open {
             self.check_ready_to_load_segments();
         }
@@ -215,13 +211,13 @@ impl WaspHlsPlayer {
     pub(crate) fn internal_on_source_buffer_update(&mut self,
         source_buffer_id: SourceBufferId
     ) {
-        if let Some(ref mut sb) = self.source_buffer_store.audio {
+        if let Some(ref mut sb) = self.media_source.audio {
             if sb.id == source_buffer_id {
                 sb.on_update_end();
                 return;
             }
         }
-        if let Some(ref mut sb) = self.source_buffer_store.video {
+        if let Some(ref mut sb) = self.media_source.video {
             if sb.id == source_buffer_id {
                 sb.on_update_end();
                 return;
@@ -271,7 +267,7 @@ impl WaspHlsPlayer {
         jsRemoveMediaSource(self.id);
         self.segment_queues.reset(0.);
         self.content = None;
-        self.media_source_state = None;
+        self.media_source = MediaSourceHandle::new(self.id);
         self.last_position = 0.;
         self.ready_state = WaspHlsPlayerReadyState::Stopped;
     }
@@ -324,7 +320,7 @@ impl WaspHlsPlayer {
     ) {
         let media_type = segment_req.media_type;
         Logger::debug(&format!("{} segment request finished, pushing it...", media_type));
-        if let Some(sb) = self.source_buffer_store.get_mut(media_type) {
+        if let Some(sb) = self.media_source.get_mut(media_type) {
             sb.append_buffer(PushMetadata::new(result));
             self.request_next_segment(media_type);
         }

@@ -2,8 +2,8 @@ use crate::{
     wasm_bindgen,
     bindings::PlayerId,
     content::WaspHlsContent,
+    media_source::MediaSourceHandle,
     requester::Requester,
-    source_buffer::SourceBuffersStore,
 };
 
 mod api;
@@ -29,16 +29,11 @@ pub struct WaspHlsPlayer {
     /// `None` if no "MultiVariant Playlist" has been loaded yet.
     content: Option<WaspHlsContent>,
 
-    /// Current state of the attached MediaSource.
-    ///
-    /// `None` if no MediaSource is attached for now.
-    media_source_state: Option<MediaSourceReadyState>,
-
     requester: Requester,
 
     /// Abstraction allowing to create and store `SourceBuffer`s on the `MediaSource` attached
     /// to the media element itself linked to the `WaspHlsPlayer`.
-    source_buffer_store: SourceBuffersStore,
+    media_source: MediaSourceHandle,
 
     /// Amount of buffer, ahead of the current position we want to build in seconds.
     /// Once we reached that point, we won't try to load load new segments.

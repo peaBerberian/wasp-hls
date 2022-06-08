@@ -1,5 +1,6 @@
-use crate::bindings::{
+use crate::{bindings::{
     AddSourceBufferErrorCode,
+    AttachMediaSourceErrorCode,
     DataSource,
     jsAddSourceBuffer,
     jsAppendBuffer,
@@ -7,19 +8,21 @@ use crate::bindings::{
     jsRemoveBuffer,
     JsResult,
     PlayerId,
-    MediaType,
-};
+    MediaType, jsAttachMediaSource,
+}, player::MediaSourceReadyState};
 
-/// Identify a unique JavaScript `SourceBuffer`
-pub type SourceBufferId = u32;
-
-/// Structure keeping track of the created audio and video SourceBuffers, making
-/// sure only one is created for each and that one is not created once media
-/// data has been pushed to any of them.
-pub struct SourceBuffersStore {
+/// Structure keeping track of the MediaSource and its attached audio and video
+/// SourceBuffers, making sure only one is created for each and that one is not
+/// created once media data has been pushed to any of them.
+pub(crate) struct MediaSourceHandle {
     /// This identifier will identify the media element and MediaSource on the
     /// JavaScript-side (by proxy of the corresponding `WaspHlsPlayer`'s id).
     id: PlayerId,
+
+    /// Current state of the attached MediaSource.
+    ///
+    /// `None` if no MediaSource is attached for now.
+    pub(crate) ready_state: MediaSourceReadyState,
 
     /// Video SourceBuffer currently created for video data.
     /// None if no SourceBuffer has been created for that type.
@@ -30,37 +33,21 @@ pub struct SourceBuffersStore {
     pub audio: Option<SourceBuffer>,
 }
 
-/// Error that can trigger when attempting to create a SourceBuffer.
-#[derive(Debug)]
-pub enum SourceBufferCreationError {
-    /// A SourceBuffer was already created for the given `MediaType`.
-    AlreadyCreatedWithSameType(MediaType),
+impl MediaSourceHandle {
+    pub(crate) fn new(id: PlayerId) -> Self {
+        Self {
+            id,
+            ready_state: MediaSourceReadyState::Closed,
+            video: None,
+            audio: None,
+        }
+    }
 
-    /// No JavaScript MediaSource is currently attached to the media element
-    /// itself linked to the current player instance.
-    NoMediaSourceAttached,
+    pub(crate) fn attach_new(&mut self) -> Result<(), AttachMediaSourceErrorCode> {
+        self.ready_state = MediaSourceReadyState::Closed;
 
-    /// The `SourceBuffer` could not have been created because the `MediaSource`
-    /// has a "closed" state.
-    MediaSourceIsClosed,
-
-    /// The `SourceBuffer` could not have been created because a `QuotaExceededError`
-    /// JavaScript error has been received while doing so. This often happens when
-    /// a SourceBuffer is created after another one already had data pushed to it.
-    QuotaExceededError(String),
-
-    /// The wanted SourceBuffer could not have been created because the given
-    /// mime-type and codecs couple is not supported by the current device.
-    CantPlayType(String),
-
-    /// An uncategorized error has been received while trying to create the
-    /// SourceBuffer.
-    UnknownError(String),
-}
-
-impl SourceBuffersStore {
-    pub fn new(id: PlayerId) -> Self {
-        SourceBuffersStore { id, video: None, audio: None }
+        // TODO re-format error
+        jsAttachMediaSource(self.id).result().map_err(|e| e.0)
     }
 
     pub fn can_still_create_source_buffer(&self) -> bool {
@@ -119,6 +106,37 @@ impl SourceBuffersStore {
             MediaType::Video => self.video.as_mut()
         }
     }
+}
+
+/// Identify a unique JavaScript `SourceBuffer`
+pub type SourceBufferId = u32;
+
+/// Error that can trigger when attempting to create a SourceBuffer.
+#[derive(Debug)]
+pub enum SourceBufferCreationError {
+    /// A SourceBuffer was already created for the given `MediaType`.
+    AlreadyCreatedWithSameType(MediaType),
+
+    /// No JavaScript MediaSource is currently attached to the media element
+    /// itself linked to the current player instance.
+    NoMediaSourceAttached,
+
+    /// The `SourceBuffer` could not have been created because the `MediaSource`
+    /// has a "closed" state.
+    MediaSourceIsClosed,
+
+    /// The `SourceBuffer` could not have been created because a `QuotaExceededError`
+    /// JavaScript error has been received while doing so. This often happens when
+    /// a SourceBuffer is created after another one already had data pushed to it.
+    QuotaExceededError(String),
+
+    /// The wanted SourceBuffer could not have been created because the given
+    /// mime-type and codecs couple is not supported by the current device.
+    CantPlayType(String),
+
+    /// An uncategorized error has been received while trying to create the
+    /// SourceBuffer.
+    UnknownError(String),
 }
 
 pub struct SourceBuffer {

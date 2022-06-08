@@ -3,12 +3,10 @@ use crate::{
     bindings::{
         LogLevel,
         PlayerId,
-        jsAttachMediaSource,
         jsFetchU8,
-        JsResult,
     },
     Logger,
-    source_buffer::SourceBuffersStore,
+    media_source::MediaSourceHandle,
     utils::url::Url,
     requester::{Requester, PlaylistFileType},
 };
@@ -28,9 +26,8 @@ impl WaspHlsPlayer {
             id: player_id,
             ready_state: WaspHlsPlayerReadyState::Stopped,
             content: None,
-            media_source_state: None,
             requester: Requester::new(player_id),
-            source_buffer_store: SourceBuffersStore::new(player_id),
+            media_source: MediaSourceHandle::new(player_id),
             segment_queues: SegmentQueues::new(),
             last_position: 0.,
             buffer_goal: 30.,
@@ -45,12 +42,8 @@ impl WaspHlsPlayer {
         self.requester.fetch_playlist(content_url, PlaylistFileType::Unknown);
         Logger::info("Attaching MediaSource");
         // TODO handle exact error
-        if let Err((_, desc)) = jsAttachMediaSource(self.id).result() {
-            let err = match desc.as_ref() {
-                Some(s) => s.as_str(),
-                None => "Unknown error while trying to attach a MediaSource to the Media element",
-            };
-            self.fail_on_error(err);
+        if let Err(_) = self.media_source.attach_new() {
+            self.fail_on_error("Unknown error while trying to attach a MediaSource to the Media element");
         }
     }
 
