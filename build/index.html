@@ -14,12 +14,12 @@
         document.body.appendChild(videoElement);
 
         const player = new WaspHlsPlayer(videoElement);
-        // player.loadContent(
-        //   "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8");
+        player.loadContent(
+          "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8");
         // player.loadContent(
         //   "https://cdn.jwplayer.com/manifests/pZxWPRg4.m3u8");
-        player.loadContent(
-          "https://storage.googleapis.com/shaka-demo-assets/angel-one-hls/hls.m3u8");
+        // player.loadContent(
+        //   "https://storage.googleapis.com/shaka-demo-assets/angel-one-hls/hls.m3u8");
           window.player = player;
       });
     </script>
