@@ -1,8 +1,5 @@
 use std::slice::Iter;
-use crate::{
-    bindings::MediaType,
-    parser::SegmentInfo,
-};
+use crate::parser::SegmentInfo;
 
 #[derive(Clone, Debug)]
 pub struct SegmentQueue {
@@ -20,6 +17,10 @@ impl SegmentQueue {
         self.initial_pos = initial_pos;
     }
 
+    pub(crate) fn validate_start(&mut self, seg_start: f64) {
+        self.last_seg_start = Some(seg_start);
+    }
+
     pub(crate) fn get_next<'a>(&mut self,
         segment_list: &'a [SegmentInfo],
         maximum_position: f64
@@ -33,7 +34,6 @@ impl SegmentQueue {
         };
         match next_seg {
             Some(seg) if seg.start <= maximum_position => {
-                self.last_seg_start = Some(seg.start);
                 next_seg
             }
             _ => None
@@ -47,38 +47,5 @@ impl SegmentQueue {
         segment_list.iter()
             .position(|s| s.start + s.duration > position)
             .map_or([].iter(), |start_idx| segment_list[start_idx..].iter())
-    }
-}
-
-pub struct SegmentQueues {
-    audio: SegmentQueue,
-    video: SegmentQueue,
-}
-
-impl SegmentQueues {
-    pub(crate) fn new() -> Self {
-        Self {
-            audio: SegmentQueue::new(0.),
-            video: SegmentQueue::new(0.),
-        }
-    }
-
-    pub(crate) fn get(&self, media_type: MediaType) -> &SegmentQueue {
-        match media_type {
-            MediaType::Video => &self.video,
-            MediaType::Audio => &self.audio,
-        }
-    }
-
-    pub(crate) fn get_mut(&mut self, media_type: MediaType) -> &mut SegmentQueue {
-        match media_type {
-            MediaType::Video => &mut self.video,
-            MediaType::Audio => &mut self.audio,
-        }
-    }
-
-    pub(crate) fn reset(&mut self, position: f64) {
-        self.audio = SegmentQueue::new(position);
-        self.video = SegmentQueue::new(position);
     }
 }

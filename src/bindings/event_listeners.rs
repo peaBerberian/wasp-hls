@@ -1,6 +1,6 @@
 use crate::{
     wasm_bindgen,
-    player::{MediaSourceReadyState, WaspHlsPlayer}, utils::url::Url,
+    frontend::{MediaSourceReadyState, PlayerFrontEnd}, utils::url::Url,
 };
 
 use super::js_functions::{self, RequestId, SourceBufferId};
@@ -9,44 +9,52 @@ use super::js_functions::{self, RequestId, SourceBufferId};
 ///
 /// Those functions are voluntarly written a certain way to put in evidence that
 /// those should just be bindings converting to the right types without directly
-/// interacting with the `WaspHlsPlayer`'s state (e.g. methods are called with
-/// an explicit `WaspHlsPlayer` reference).
+/// interacting with the `PlayerFrontEnd`'s state (e.g. methods are called with
+/// an explicit `PlayerFrontEnd` reference).
 #[wasm_bindgen]
-impl WaspHlsPlayer {
+impl PlayerFrontEnd {
     /// Called by the JavaScript code each time an HTTP(S) request started with
     /// `jsFetchU8` finished with success.
     ///
     /// # Arguments
     ///
     /// * `request_id` - The identifier given by the JavaScript when the request
-    ///   was started. This allows the `WaspHlsPlayer` to identify which request
+    ///   was started. This allows the `PlayerFrontEnd` to identify which request
     ///   is actually finished
     ///
     /// * `result` - The data returned.
     pub fn on_u8_request_finished(&mut self,
         request_id: RequestId,
         result: Vec<u8>,
-        final_url: String
+        final_url: String,
+        duration_ms: f64 // TODO Rust-side?
     ) {
-        WaspHlsPlayer::on_request_succeeded(self,
+        let resource_size = result.len() as u32;
+        PlayerFrontEnd::on_request_succeeded(self,
             request_id,
             DataSource::Raw(result),
-            Url::new(final_url));
+            Url::new(final_url),
+            resource_size,
+            duration_ms);
     }
 
     pub fn on_u8_no_copy_request_finished(&mut self,
         request_id: RequestId,
         resource_id: u32,
-        final_url: String
+        resource_size: u32,
+        final_url: String,
+        duration_ms: f64 // TODO Rust-side?
     ) {
         let resource_handle = JsMemoryBlob::from_resource_id(resource_id);
-        WaspHlsPlayer::on_request_succeeded(self, request_id,
+        PlayerFrontEnd::on_request_succeeded(self, request_id,
             DataSource::JsBlob(resource_handle),
-            Url::new(final_url));
+            Url::new(final_url),
+            resource_size,
+            duration_ms);
     }
 
     pub fn on_u8_request_failed(&mut self, request_id: RequestId) {
-        WaspHlsPlayer::on_request_failed(self, request_id);
+        PlayerFrontEnd::on_request_failed(self, request_id);
     }
 
     /// Called by the JavaScript code when the MediaSource's readyState changed.
@@ -55,7 +63,7 @@ impl WaspHlsPlayer {
     ///
     /// * `state` - The new `readyState` of the MediaSource.
     pub fn on_media_source_state_change(&mut self, state: MediaSourceReadyState) {
-        WaspHlsPlayer::internal_on_media_source_state_change(self, state);
+        PlayerFrontEnd::internal_on_media_source_state_change(self, state);
     }
 
     /// Called by the JavaScript code when a SourceBuffer emits an `updateend`
@@ -64,14 +72,14 @@ impl WaspHlsPlayer {
     /// # Arguments
     ///
     /// * `source_buffer_id` - The identifier given by the JavaScript when the
-    ///   SourceBuffer was created. This allows the `WaspHlsPlayer` to identify
+    ///   SourceBuffer was created. This allows the `PlayerFrontEnd` to identify
     ///   which SourceBuffer actually emitted this event.
     pub fn on_source_buffer_update(&mut self, source_buffer_id: SourceBufferId) {
-        WaspHlsPlayer::internal_on_source_buffer_update(self, source_buffer_id);
+        PlayerFrontEnd::internal_on_source_buffer_update(self, source_buffer_id);
     }
 
     pub fn on_source_buffer_error(&mut self, source_buffer_id: SourceBufferId) {
-        WaspHlsPlayer::internal_on_source_buffer_error(self, source_buffer_id);
+        PlayerFrontEnd::internal_on_source_buffer_error(self, source_buffer_id);
     }
 
     /// Called by the JavaScript code once regular playback "tick" are enabled
@@ -83,8 +91,8 @@ impl WaspHlsPlayer {
         reason: PlaybackTickReason,
         position: f64) {
         match reason {
-            PlaybackTickReason::Seeking => WaspHlsPlayer::on_seek(self, position),
-            _ => WaspHlsPlayer::on_regular_tick(self, position),
+            PlaybackTickReason::Seeking => PlayerFrontEnd::on_seek(self, position),
+            _ => PlayerFrontEnd::on_regular_tick(self, position),
         }
     }
 }

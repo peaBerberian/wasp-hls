@@ -11,17 +11,50 @@
         const videoElement = document.createElement("video");
         videoElement.autoplay = true;
         videoElement.controls = true;
+
+        videoElement.addEventListener("canplay", () => {
+          videoElement.play();
+        });
+        const player = new WaspHlsPlayer(videoElement);
+
+        const labelElt = document.createElement("label");
+        labelElt.for = "url";
+        labelElt.textContent = "URL to HLS MultiVariant (a.k.a. Master) Playlist:";
+        document.body.appendChild(labelElt);
+
+        document.body.appendChild(createBreakElement());
+
+        const inputEl = document.createElement("input");
+        inputEl.style.width = "600px";
+        inputEl.type = "text";
+        inputEl.name = "url";
+        inputEl.value = "https://storage.googleapis.com/shaka-demo-assets/angel-one-hls/hls.m3u8";
+        document.body.appendChild(inputEl);
+
+        const loadingButton = document.createElement("button");
+        loadingButton.id = "loading-button";
+        loadingButton.textContent = "Load";
+        loadingButton.onclick = () => {
+          loadUrl(inputEl.value);
+        };
+        document.body.appendChild(loadingButton);
+        document.body.appendChild(createBreakElement());
         document.body.appendChild(videoElement);
 
-        const player = new WaspHlsPlayer(videoElement);
-        player.loadContent(
-          "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8");
-        // player.loadContent(
-        //   "https://cdn.jwplayer.com/manifests/pZxWPRg4.m3u8");
-        // player.loadContent(
-        //   "https://storage.googleapis.com/shaka-demo-assets/angel-one-hls/hls.m3u8");
-          window.player = player;
+        function loadUrl(url) {
+          player.loadContent(url);
+          // player.loadContent(
+          //   "https://cdn.jwplayer.com/manifests/pZxWPRg4.m3u8");
+          // player.loadContent(
+          //   "https://storage.googleapis.com/shaka-demo-assets/angel-one-hls/hls.m3u8");
+            window.player = player;
+        }
       });
+
+      function createBreakElement() {
+        return document.createElement("br");
+      }
+
     </script>
   </body>
 </html>

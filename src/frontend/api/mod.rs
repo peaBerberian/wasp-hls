@@ -6,44 +6,48 @@ use crate::{
         jsFetchU8,
     },
     Logger,
-    media_source::MediaSourceHandle,
+    buffers::MediaBuffers,
     utils::url::Url,
     requester::{Requester, PlaylistFileType},
+    adaptive::AdaptiveQualitySelector,
+    segment_selector::SegmentSelectors,
 };
 
-use super::super::SegmentQueues;
-use super::super::{
-    WaspHlsPlayer,
-    WaspHlsPlayerReadyState,
+use super::{
+    PlayerFrontEnd,
+    PlayerReadyState,
 };
 
 /// Methods exposed to the JavaScript-side
 #[wasm_bindgen]
-impl WaspHlsPlayer {
+impl PlayerFrontEnd {
     #[wasm_bindgen(constructor)]
     pub fn new(player_id: PlayerId) -> Self {
-        WaspHlsPlayer {
+        PlayerFrontEnd {
             id: player_id,
-            ready_state: WaspHlsPlayerReadyState::Stopped,
-            content: None,
+            ready_state: PlayerReadyState::Stopped,
+            adaptive_selector: AdaptiveQualitySelector::new(),
+            content_tracker: None,
             requester: Requester::new(player_id),
-            media_source: MediaSourceHandle::new(player_id),
-            segment_queues: SegmentQueues::new(),
+            buffers: None,
             last_position: 0.,
             buffer_goal: 30.,
+            segment_selectors: SegmentSelectors::new(0., 30.),
         }
     }
 
     pub fn load_content(&mut self, content_url: String) {
         Logger::info("load_content called");
         self.stop();
-        self.ready_state = WaspHlsPlayerReadyState::Loading;
+        self.ready_state = PlayerReadyState::Loading;
         let content_url = Url::new(content_url);
         self.requester.fetch_playlist(content_url, PlaylistFileType::Unknown);
         Logger::info("Attaching MediaSource");
-        // TODO handle exact error
-        if let Err(_) = self.media_source.attach_new() {
-            self.fail_on_error("Unknown error while trying to attach a MediaSource to the Media element");
+        match MediaBuffers::initialize(self.id) {
+            Err(_) =>
+                // TODO handle exact error
+                self.fail_on_error("Unknown error while trying to attach a MediaSource to the Media element"),
+            Ok(mb) => self.buffers = Some(mb),
         }
     }
 
@@ -64,4 +68,3 @@ impl WaspHlsPlayer {
         jsFetchU8(self.id, "http://127.0.0.1:8080/lowlat_vs_non_lowlat.mp4");
     }
 }
-

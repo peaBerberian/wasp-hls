@@ -41,7 +41,7 @@ pub struct VariantStream {
     /// Media Segments in the presentation have been encoded, this
     /// value SHOULD be the bandwidth value of a representative period of
     /// similar content, encoded using the same settings.
-    bandwidth: u64,
+    pub bandwidth: u64,
 
     /// The value represents the average segment bit rate of the Variant Stream.
     /// If all the Media Segments in a Variant Stream have already been
@@ -241,10 +241,7 @@ pub enum VariantParsingError {
 impl VariantStream {
     pub(crate) fn has_type(&self, media_type: MediaType) -> bool {
         self.codecs.iter().any(|c| {
-            match c.0 {
-                Some(x) if x == media_type => true,
-                _ => false
-            }
+            matches!(c.0, Some(x) if x == media_type)
         })
     }
 
@@ -303,7 +300,7 @@ impl VariantStream {
                 break;
             }
             // #EXT-X-STREAM-INF:AVERAGE-BANDWIDTH=746000,BANDWIDTH=886211,RESOLUTION=512x288,FRAME-RATE=25.000,CODECS="avc1.4D4015,mp4a.40.2",CLOSED-CAPTIONS=NONE,AUDIO="AUDIO_96000"
-            match variant_line[offset..].find("=") {
+            match variant_line[offset..].find('=') {
                 None => {
                     Logger::warn("Attribute Name not followed by equal sign");
                     break;

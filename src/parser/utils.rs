@@ -41,7 +41,7 @@ pub(super) fn find_attribute_end(
     line: &str,
     offset: usize
 ) -> usize {
-    line[offset..].find(",").map_or(line.len(), |x| x + offset)
+    line[offset..].find(',').map_or(line.len(), |x| x + offset)
 }
 
 pub(super) fn parse_quoted_string(
@@ -52,7 +52,7 @@ pub(super) fn parse_quoted_string(
         let end = find_attribute_end(line, value_start_offset);
         (Err(QuotedStringParsingError::NoStartingQuote), end)
     } else {
-        match line[value_start_offset + 1..].find("\"") {
+        match line[value_start_offset + 1..].find('"') {
             Some(relative_end_quote_idx) => {
                 let end_quote_idx = value_start_offset + 1 + relative_end_quote_idx;
                 let end = find_attribute_end(line, end_quote_idx + 1);
@@ -71,7 +71,7 @@ pub(super) fn parse_comma_separated_list(
     value_start_offset: usize
 ) -> (Result<Vec<&str>, QuotedStringParsingError>, usize) {
     let parsed = parse_quoted_string(line, value_start_offset);
-    let splitted = parsed.0.map(|s| s.split(",").collect());
+    let splitted = parsed.0.map(|s| s.split(',').collect());
     (splitted, parsed.1)
 }
 
@@ -85,14 +85,14 @@ pub(super) fn skip_attribute_list_value(
 
     // Check if the attribute list value is a quoted one
     if &line[value_start_offset..value_start_offset + 1] == "\"" {
-        match line[value_start_offset + 1..].find("\"") {
+        match line[value_start_offset + 1..].find('\"') {
             Some(relative_end_quote_idx) => {
                 let end_quote_idx = value_start_offset + relative_end_quote_idx;
 
-                // Technically, a comma (",") character should always be found
+                // Technically, a comma (',') character should always be found
                 // here if we're not at the end of the attribute list.
                 // Still, check where it is for resilience
-                match line[end_quote_idx + 1..].find(",") {
+                match line[end_quote_idx + 1..].find(',') {
                     Some(idx) => end_quote_idx + idx + 1,
                     None => line.len()
                 }
@@ -100,7 +100,7 @@ pub(super) fn skip_attribute_list_value(
             None => line.len()
         }
     } else {
-        match line[value_start_offset..].find(",") {
+        match line[value_start_offset..].find(',') {
             Some(idx) => value_start_offset + idx,
             None => line.len()
         }
@@ -118,13 +118,13 @@ pub(super) fn parse_resolution(
     line: &str,
     value_start_offset: usize
 ) -> (Result<Resolution, ResolutionParsingError>, usize) {
-    match line[value_start_offset..].find("x") {
+    match line[value_start_offset..].find('x') {
         Some(x_idx) => {
             let width_end_idx = value_start_offset + x_idx;
             match line[value_start_offset..width_end_idx].parse::<u32>() {
                 Ok(width) => {
                     let height_start_offset = width_end_idx + 1;
-                    match line[height_start_offset..].find(",") {
+                    match line[height_start_offset..].find(',') {
                         Some(idx) => {
                             let height_end_idx = height_start_offset + idx;
                             match line[height_start_offset..height_end_idx].parse::<u32>() {
@@ -145,14 +145,14 @@ pub(super) fn parse_resolution(
                         }
                     }
                 }
-                Err(x) => match line[value_start_offset..].find(",") {
+                Err(x) => match line[value_start_offset..].find(',') {
                     Some(idx) => (Err(ResolutionParsingError::ParseError(x)), idx),
                     None => (Err(ResolutionParsingError::ParseError(x)), line.len()),
                 }
             }
         },
         None => {
-            match line[value_start_offset..].find(",") {
+            match line[value_start_offset..].find(',') {
                 Some(idx) => (Err(ResolutionParsingError::NoXCharFound), idx),
                 None => (Err(ResolutionParsingError::NoXCharFound), line.len()),
             }
@@ -169,7 +169,7 @@ pub(super) fn parse_decimal_floating_point(
     line: &str,
     value_start_offset: usize
 ) -> (Result<f64, ParseFloatError>, usize) {
-    match line[value_start_offset..].find(",") {
+    match line[value_start_offset..].find(',') {
         Some(idx) => {
             let end = value_start_offset + idx;
             match line[value_start_offset..end].parse::<f64>() {

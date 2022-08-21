@@ -142,7 +142,7 @@ impl MultiVariantPlaylist {
             if str_line.is_empty() {
                 continue;
             } else if str_line.starts_with("#EXT") {
-                let colon_idx = match &str_line[4..].find(":") {
+                let colon_idx = match &str_line[4..].find(':') {
                     None => continue,
                     Some(idx) => idx + 4,
                 };
@@ -168,12 +168,13 @@ impl MultiVariantPlaylist {
                     },
                     _ => {},
                 }
-            } else if str_line.starts_with("#") {
+            } else if str_line.starts_with('#') {
                 continue;
             } else {
                 // URI
             }
         }
+        ret.variants.sort_by_key(|x| x.bandwidth);
         Ok(ret)
     }
 

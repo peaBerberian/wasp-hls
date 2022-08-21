@@ -107,9 +107,9 @@ impl Requester {
     ///
     /// Once it succeeds, `on_u8_request_finished` of the `WaspHlsPlayer` with the
     /// `player_id` associated to this Requester  will be called with the result.
-    pub(crate) fn request_media_segment<'a>(&mut self,
+    pub(crate) fn request_media_segment(&mut self,
         media_type: MediaType,
-        seg: &'a SegmentInfo
+        seg: &SegmentInfo
     ) {
         Logger::debug(&format!("Requesting {} segment: t: {}, d: {}", media_type, seg.start, seg.duration));
         let time_info = Some((seg.start, seg.start + seg.duration));
@@ -122,24 +122,37 @@ impl Requester {
         });
     }
 
-    // TODO `abort_segments_behind_position` instead?
     pub(crate) fn abort_segments<F>(&mut self, f: F)
         where F: Fn(&SegmentRequestInfo) -> bool
     {
         let mut i = 0;
         while i < self.pending_segment_requests.len() {
             let next_req = &self.pending_segment_requests[i];
-            if f(&self.pending_segment_requests[i]) {
+            if f(next_req) {
+                Logger::lazy_debug(&|| {
+                    let media_type = next_req.media_type;
+                    match next_req.time_info {
+                        None => format!("Aborting {} init segment", media_type),
+                        Some((start, duration)) =>
+                            format!("Aborting {} segment: t: {}, d: {}", media_type, start, duration),
+                    }
+                });
                 jsAbortRequest(next_req.request_id);
                 self.pending_segment_requests.remove(i);
             } else {
-                i = i + 1;
+                i += 1;
             }
         }
     }
 
     pub(crate) fn segment_requests(&self) -> &[SegmentRequestInfo] {
         self.pending_segment_requests.as_slice()
+    }
+
+    pub(crate) fn has_segment_request_pending(&self, media_type: MediaType) -> bool {
+        self.pending_segment_requests.iter().any(|r| {
+            r.media_type == media_type
+        })
     }
 
     // pub(crate) fn has_init_segment_request_pending(&self,

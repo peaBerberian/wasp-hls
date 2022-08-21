@@ -2,9 +2,9 @@ use std::sync::atomic::AtomicU8;
 
 use crate::bindings::{LogLevel, jsLog};
 
-static MAX_LOG_LEVEL: AtomicU8 = AtomicU8::new(4);
+pub static MAX_LOG_LEVEL: AtomicU8 = AtomicU8::new(4);
 
-#[derive(Clone, Copy, Debug, PartialEq, PartialOrd)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum LoggerLevel {
     None = 0,
     Error = 1,

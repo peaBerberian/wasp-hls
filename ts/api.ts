@@ -1,5 +1,5 @@
 import init,{
-  WaspHlsPlayer,
+  PlayerFrontEnd,
 } from "../wasm/wasp_hls";
 import { stopObservingPlayback } from "./bindings";
 import {
@@ -30,7 +30,7 @@ export default class JsWaspHlsPlayer {
       playerId++;
     }
     this._playerId = playerId;
-    const player = new WaspHlsPlayer(playerId);
+    const player = new PlayerFrontEnd(playerId);
     const playerObj: PlayerInstanceInfo = {
       player,
       videoElement,
@@ -65,7 +65,7 @@ export default class JsWaspHlsPlayer {
     if (initStatus !== InitializationStatus.Unloaded) {
       switch (initStatus) {
         case InitializationStatus.Loading:
-          throw new Error("WaspHlsPlayer already loading");
+          throw new Error("PlayerFrontEnd already loading");
         case InitializationStatus.Loaded:
           return Promise.resolve();
       }

@@ -1,4 +1,4 @@
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Url {
     inner: String,
 }
@@ -12,14 +12,14 @@ impl Url {
         if base_url.is_empty() {
             relative_url
         } else if base_url.as_bytes()[base_url.len() - 1] == b'/' {
-            let complete_url = if relative_url.inner.starts_with("/") {
+            let complete_url = if relative_url.inner.starts_with('/') {
                 format!("{}{}", base_url, &relative_url.inner[1..])
             } else {
                 format!("{}{}", base_url, relative_url.inner)
             };
             Url { inner: complete_url }
         } else {
-            let complete_url = if relative_url.inner.starts_with("/") {
+            let complete_url = if relative_url.inner.starts_with('/') {
                 format!("{}{}", base_url, relative_url.inner)
             } else {
                 format!("{}/{}", base_url, relative_url.inner)
@@ -47,13 +47,13 @@ impl Url {
             if (bytes[offset] >= b'A' && bytes[offset] <= b'Z') ||
                 (bytes[offset] >= b'a' && bytes[offset] <= b'z')
             {
-                offset = offset + 1;
+                offset += 1;
                 continue;
             } else if bytes[offset] == b':' {
                 if offset == 0 {
                     return false;
                 }
-                offset = offset + 1;
+                offset += 1;
                 break;
             } else {
                 break;
@@ -68,7 +68,7 @@ impl Url {
     }
 
     pub fn pathname(&self) -> &str {
-        let last_slash = self.inner.rfind("/");
+        let last_slash = self.inner.rfind('/');
         match last_slash {
             Some(idx) => &self.inner[0..idx],
             None => self.inner.as_str(),
@@ -76,7 +76,7 @@ impl Url {
     }
 
     pub fn filename(&self) -> &str {
-        let last_slash = self.inner.rfind("/");
+        let last_slash = self.inner.rfind('/');
         match last_slash {
             Some(idx) => &self.inner[idx + 1..],
             None => self.inner.as_str(),
@@ -85,11 +85,10 @@ impl Url {
 
     pub fn extension(&self) -> &str {
         let filename = self.filename();
-        let last_dot = filename.rfind(".");
+        let last_dot = filename.rfind('.');
         match last_dot {
             Some(idx) => &filename[idx + 1..],
             None => "",
         }
     }
 }
-

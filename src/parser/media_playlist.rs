@@ -118,7 +118,7 @@ impl MediaPlaylist {
                 continue;
             } else if str_line.starts_with("#EXT") {
                 let colon_idx = match str_line[4..].find(":") {
-                    None => continue,
+                    None => str_line.len(),
                     Some(idx) => idx + 4,
                 };
 
@@ -131,7 +131,9 @@ impl MediaPlaylist {
                         Ok(t) => target_duration = Some(t as u32),
                         Err(_) => Logger::warn("Unparsable TARGETDURATION value"),
                     },
-                    "-X-ENDLIST" => end_list = true,
+                    "-X-ENDLIST" => {
+                        end_list = true
+                    },
                     "-X-INDEPENDENT-SEGMENTS" => independent_segments = true,
                     "-X-START:" => /* TODO */ {},
                     "INF" => match parse_decimal_floating_point(&str_line, 4 + "INF:".len()).0 {
@@ -197,6 +199,7 @@ impl MediaPlaylist {
                             return Err(MediaPlaylistParsingError::UriMissingInMap);
                         }
                     },
+                    "M3U" => {},
                     x => Logger::debug(&format!("Unrecognized tag: \"{}\"", x)),
                 }
             } else if str_line.starts_with("#") {
@@ -291,5 +294,30 @@ impl MediaPlaylist {
 
     pub fn init_segment(&self) -> Option<&MapInfo> {
         self.map.as_ref()
+    }
+
+    pub fn last_segment_start(&self) -> Option<f64> {
+        match self.end_list {
+            false => {
+                Logger::warn("no end list");
+                None
+            },
+            true => self.segment_list.last().map(|x| x.start),
+        }
+    }
+
+    pub fn last_segment_end(&self) -> Option<f64> {
+        match self.end_list {
+            false => None,
+            true => self.segment_list.last().map(|x| x.start + x.duration),
+        }
+    }
+
+    pub fn first_segment_start(&self) -> Option<f64> {
+        self.segment_list.first().map(|x| x.start)
+    }
+
+    pub fn first_segment_end(&self) -> Option<f64> {
+        self.segment_list.first().map(|x| x.start + x.duration)
     }
 }

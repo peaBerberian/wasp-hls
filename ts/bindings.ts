@@ -1,5 +1,5 @@
 import {
-  WaspHlsPlayer,
+  PlayerFrontEnd,
   LogLevel,
   MediaType,
   MediaSourceReadyState,
@@ -16,9 +16,12 @@ import {
   RemoveBufferErrorCode,
   MediaSourceDurationUpdateResult,
   MediaSourceDurationUpdateErrorCode,
+  EndOfStreamResult,
+  EndOfStreamErrorCode,
 } from "../wasm/wasp_hls.js";
 import {
   jsMemoryResources,
+  MediaSourceInstanceInfo,
   PlayerId,
   playersStore,
   RequestId,
@@ -71,17 +74,22 @@ export function fetchU8(playerId: PlayerId, url: string): RequestId {
   incrementRequestId();
   const abortController = new AbortController();
   requestsStore.create(currentRequestId, { playerId, abortController });
+  const timestampBef = performance.now();
   fetch(url, { signal: abortController.signal })
     .then(async res => {
       if (abortController.signal.aborted) {
         return; // Should not be possible. Still, exit if that's the case.
       }
       const arrRes = await res.arrayBuffer();
+      const elapsedMs = performance.now() - timestampBef;
       requestsStore.delete(currentRequestId);
       const playerObj = playersStore.get(playerId);
       if (playerObj !== undefined) {
         playerObj.player
-          .on_u8_request_finished(currentRequestId, new Uint8Array(arrRes), res.url);
+          .on_u8_request_finished(currentRequestId,
+                                  new Uint8Array(arrRes),
+                                  res.url,
+                                  elapsedMs);
       }
     })
     .catch(err => {
@@ -108,9 +116,11 @@ export function fetchU8NoCopy(playerId: PlayerId, url: string): RequestId {
   incrementRequestId();
   const abortController = new AbortController();
   requestsStore.create(currentRequestId, { playerId, abortController });
+  const timestampBef = performance.now();
   fetch(url, { signal: abortController.signal })
     .then(async res => {
       const arrRes = await res.arrayBuffer();
+      const elapsedMs = performance.now() - timestampBef;
       requestsStore.delete(currentRequestId);
       const playerObj = playersStore.get(playerId);
       if (playerObj !== undefined) {
@@ -119,7 +129,11 @@ export function fetchU8NoCopy(playerId: PlayerId, url: string): RequestId {
         const segmentArray = new Uint8Array(arrRes);
         jsMemoryResources.create(currentResourceId, playerId, segmentArray);
         playerObj.player
-          .on_u8_no_copy_request_finished(currentRequestId, currentResourceId, res.url);
+          .on_u8_no_copy_request_finished(currentRequestId,
+                                          currentResourceId,
+                                          segmentArray.byteLength,
+                                          res.url,
+                                          elapsedMs);
       }
     })
     .catch(err => {
@@ -239,7 +253,7 @@ export function removeMediaSource(playerId: PlayerId): RemoveMediaSourceResult {
         catch (e) {
           // TODO proper WASM communication?
           const msg = formatErrMessage(e, "Unknown error while removing SourceBuffer");
-          WaspHlsPlayer.log(LogLevel.Error, "Could not remove SourceBuffer: " + msg);
+          PlayerFrontEnd.log(LogLevel.Error, "Could not remove SourceBuffer: " + msg);
         }
       }
     }
@@ -251,7 +265,7 @@ export function removeMediaSource(playerId: PlayerId): RemoveMediaSourceResult {
       } catch (e) {
           // TODO proper WASM communication?
         const msg = formatErrMessage(e, "Unknown error while revoking ObjectURL");
-        WaspHlsPlayer.log(LogLevel.Error, "Could not revoke ObjectURL: " + msg);
+        PlayerFrontEnd.log(LogLevel.Error, "Could not revoke ObjectURL: " + msg);
       }
     }
     return RemoveMediaSourceResult.success();
@@ -437,6 +451,27 @@ export function removeBuffer(
 
 /**
  * @param {number} playerId
+ * @returns {number}
+ */
+export function endOfStream(
+  playerId: PlayerId
+): EndOfStreamResult {
+  try {
+    const mediaSourceObj = getMediaSourceObj(playerId);
+    if (mediaSourceObj === undefined) {
+      return EndOfStreamResult
+        .error(EndOfStreamErrorCode.PlayerInstanceNotFound);
+    }
+    mediaSourceObj.mediaSource.endOfStream();
+    return EndOfStreamResult.success();
+  } catch (err) {
+    return EndOfStreamResult
+      .error(EndOfStreamErrorCode.UnknownError, getErrorMessage(err));
+  }
+}
+
+/**
+ * @param {number} playerId
  */
 export function startObservingPlayback(playerId: PlayerId): void {
   const playerObj = playersStore.get(playerId);
@@ -563,16 +598,26 @@ function clearElementSrc(element: HTMLMediaElement): void {
   element.removeAttribute("src");
 }
 
-function getSourceBufferObj(
-  playerId: PlayerId,
-  sourceBufferId: SourceBufferId
-): SourceBufferInstanceInfo | undefined {
+function getMediaSourceObj(
+  playerId: PlayerId
+) : MediaSourceInstanceInfo | undefined {
   const playerObj = playersStore.get(playerId);
   if (playerObj === undefined) {
     return undefined;
   }
   const { mediaSourceObj } = playerObj;
   if (mediaSourceObj === null) {
+    return undefined;
+  }
+  return mediaSourceObj;
+}
+
+function getSourceBufferObj(
+  playerId: PlayerId,
+  sourceBufferId: SourceBufferId
+): SourceBufferInstanceInfo | undefined {
+  const mediaSourceObj = getMediaSourceObj(playerId);
+  if (mediaSourceObj === undefined) {
     return undefined;
   }
   const { sourceBuffers } = mediaSourceObj;
@@ -630,6 +675,7 @@ win.jsAddSourceBuffer = addSourceBuffer;
 win.jsAppendBuffer = appendBuffer;
 win.jsAppendBufferJsBlob = appendBufferJsBlob;
 win.jsRemoveBuffer = removeBuffer;
+win.jsEndOfStream = endOfStream;
 win.jsStartObservingPlayback = startObservingPlayback;
 win.jsStopObservingPlayback = stopObservingPlayback;
 win.jsFreeResource = freeResource;

@@ -1,39 +1,42 @@
 use crate::{
     wasm_bindgen,
     bindings::PlayerId,
-    content::WaspHlsContent,
-    media_source::MediaSourceHandle,
+    buffers::MediaBuffers,
     requester::Requester,
+    content::ContentTracker,
+    adaptive::AdaptiveQualitySelector,
+    segment_selector::SegmentSelectors,
 };
 
 mod api;
 mod streaming;
 
-use streaming::SegmentQueues;
 
-/// The `WaspHlsPlayer` is the player Interface exported to the JavaScript-side,
+/// The `PlayerFrontEnd` is the player Interface exported to the JavaScript-side,
 /// providing an API to load contents and influence various parameters about playback.
 #[wasm_bindgen]
-pub struct WaspHlsPlayer {
-    /// Identifier for the current `WaspHlsPlayer` instance on the JS-side.
+pub struct PlayerFrontEnd {
+    /// Identifier for the current `PlayerFrontEnd` instance on the JS-side.
     /// Many JavaScript-side APIs rely on that `id`.
     id: PlayerId,
 
-    /// Current `WaspHlsPlayerReadyState` the `WaspHlsPlayer` is in.
-    ready_state: WaspHlsPlayerReadyState,
+    /// Current `PlayerReadyState` the `PlayerFrontEnd` is in.
+    ready_state: PlayerReadyState,
+
+    adaptive_selector: AdaptiveQualitySelector,
 
     /// Store the "MultiVariant Playlist" (structure which describes the currently
     /// loaded content) alongside some state to keep track of the chosen... tracks.
     /// (More technically of variants and media streams).
     ///
     /// `None` if no "MultiVariant Playlist" has been loaded yet.
-    content: Option<WaspHlsContent>,
-
-    requester: Requester,
+    content_tracker: Option<ContentTracker>,
 
     /// Abstraction allowing to create and store `SourceBuffer`s on the `MediaSource` attached
-    /// to the media element itself linked to the `WaspHlsPlayer`.
-    media_source: MediaSourceHandle,
+    /// to the media element itself linked to the `PlayerFrontEnd`.
+    buffers: Option<MediaBuffers>,
+
+    requester: Requester,
 
     /// Amount of buffer, ahead of the current position we want to build in seconds.
     /// Once we reached that point, we won't try to load load new segments.
@@ -46,8 +49,7 @@ pub struct WaspHlsPlayer {
     /// etc.)
     last_position: f64,
 
-    /// Interface allowing to keep track of which audio and video segments we need to load next.
-    segment_queues: SegmentQueues,
+    segment_selectors: SegmentSelectors,
 }
 
 /// Identify the JavaScript `readyState` of a created `MediaSource` instance.
@@ -62,9 +64,9 @@ pub enum MediaSourceReadyState {
     Open = 2,
 }
 
-/// Identify the playback-related state the `WaspHlsPlayer` is in.
+/// Identify the playback-related state the `PlayerFrontEnd` is in.
 #[derive(Clone, Copy, Debug, PartialEq, PartialOrd, Eq, Ord)]
-enum WaspHlsPlayerReadyState {
+enum PlayerReadyState {
     /// No content is currently loaded.
     Stopped = 0,
 

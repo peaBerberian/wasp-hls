@@ -17,15 +17,12 @@ pub enum MediaPlaylistPermanentId {
     MediaTagUrl(usize),
 }
 
-pub struct WaspHlsContent {
+pub struct ContentTracker {
     /// A struct representing the `MultiVariant Playlist`, a.k.a. `Master Playlist` of
     /// the currently loaded HLS content.
-    ///
-    /// `None` if either no HLS content is loaded or if its MultiVariant Playlist is
-    /// not yet parsed.
     playlist: MultiVariantPlaylist,
 
-    /// Index of the variant currently chosen variant, in terms of its index in the
+    /// Index of the currently chosen variant, in terms of its index in the
     /// MultiVariantPlaylist's `variants` slice.
     /// Has to be watched closely to avoid out-of-bounds and de-synchronizations.
     curr_variant_idx: Option<usize>,
@@ -40,7 +37,7 @@ pub enum MediaPlaylistLoadedState {
     NotLoaded,
 }
 
-impl WaspHlsContent {
+impl ContentTracker {
     pub(crate) fn new(playlist: MultiVariantPlaylist) -> Self {
         Self {
             playlist,
@@ -87,11 +84,11 @@ impl WaspHlsContent {
 
 
     pub(crate) fn update_media_playlist(&mut self,
-        variant_idx: &MediaPlaylistPermanentId,
+        id: &MediaPlaylistPermanentId,
         media_playlist_data: impl BufRead,
         url: Url
     ) -> Result<(), MediaPlaylistUpdateError> {
-        match variant_idx {
+        match id {
             MediaPlaylistPermanentId::VariantStreamUrl(idx) =>
                 self.playlist.update_variant_media_playlist(*idx, media_playlist_data, url),
             MediaPlaylistPermanentId::MediaTagUrl(idx) =>
@@ -119,10 +116,10 @@ impl WaspHlsContent {
 
         if let Some(group_id) = variant.audio.as_ref() {
             let best_audio = self.playlist.medias().iter().enumerate().fold(None, |acc, x| {
-                if x.1.typ() == &MediaTagType::Audio && x.1.group_id() == group_id && x.1.is_autoselect() {
-                    if acc.is_none() || x.1.is_default() {
-                        return Some(x.0);
-                    }
+                if x.1.typ() == &MediaTagType::Audio && x.1.group_id() == group_id &&
+                    x.1.is_autoselect() && (acc.is_none() || x.1.is_default())
+                {
+                    return Some(x.0);
                 }
                 acc
             });
@@ -155,6 +152,45 @@ impl WaspHlsContent {
 
     pub(crate) fn curr_variant(&self) -> Option<&VariantStream> {
         self.playlist.variants().get(self.curr_variant_idx?)
+    }
+
+    pub(crate) fn update_curr_bandwidth(
+        &mut self, bandwidth: f64
+    ) -> Vec<MediaType> {
+        let variants = self.playlist.variants();
+        let best_variant_idx = variants.iter().position(|x| {
+            (x.bandwidth as f64) > bandwidth
+        }).or_else(|| {
+            if variants.len() == 0 {
+                None
+            } else {
+                Some(variants.len() - 1)
+            }
+        });
+
+        if best_variant_idx != self.curr_variant_idx {
+            if let Some(idx) = best_variant_idx {
+                let prev_audio_idx = self.curr_audio_idx.clone();
+                let prev_video_idx = self.curr_video_idx.clone();
+                self.set_curr_variant(idx);
+
+                let mut updates = vec![];
+                if self.curr_audio_idx != prev_audio_idx {
+                    updates.push(MediaType::Audio);
+                }
+                if self.curr_video_idx != prev_video_idx {
+                    updates.push(MediaType::Video);
+                }
+                updates
+            } else {
+                self.curr_variant_idx = None;
+                self.curr_video_idx = None;
+                self.curr_audio_idx = None;
+                vec![MediaType::Audio, MediaType::Video]
+            }
+        } else {
+            vec![]
+        }
     }
 
     pub(crate) fn curr_media_playlist_request_info(&self,

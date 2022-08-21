@@ -8,13 +8,13 @@ use crate::{bindings::{
     jsRemoveBuffer,
     JsResult,
     PlayerId,
-    MediaType, jsAttachMediaSource,
-}, player::MediaSourceReadyState};
+    MediaType, jsAttachMediaSource, jsEndOfStream, jsRemoveMediaSource,
+}, frontend::MediaSourceReadyState, Logger};
 
 /// Structure keeping track of the MediaSource and its attached audio and video
 /// SourceBuffers, making sure only one is created for each and that one is not
 /// created once media data has been pushed to any of them.
-pub(crate) struct MediaSourceHandle {
+pub(crate) struct MediaBuffers {
     /// This identifier will identify the media element and MediaSource on the
     /// JavaScript-side (by proxy of the corresponding `WaspHlsPlayer`'s id).
     id: PlayerId,
@@ -22,34 +22,59 @@ pub(crate) struct MediaSourceHandle {
     /// Current state of the attached MediaSource.
     ///
     /// `None` if no MediaSource is attached for now.
-    pub(crate) ready_state: MediaSourceReadyState,
+    ready_state: MediaSourceReadyState,
 
     /// Video SourceBuffer currently created for video data.
-    /// None if no SourceBuffer has been created for that type.
-    pub video: Option<SourceBuffer>,
+    /// `None` if no SourceBuffer has been created for that type.
+    video: Option<SourceBuffer>,
 
     /// Audio SourceBuffer currently created for audio data.
-    /// None if no SourceBuffer has been created for that type.
-    pub audio: Option<SourceBuffer>,
+    /// `None` if no SourceBuffer has been created for that type.
+    audio: Option<SourceBuffer>,
 }
 
-impl MediaSourceHandle {
-    pub(crate) fn new(id: PlayerId) -> Self {
-        Self {
+impl MediaBuffers {
+    /// Only one `MediaBuffers` should be created by `PlayerId`.
+    pub(crate) fn initialize(id: PlayerId) -> Result<Self, AttachMediaSourceErrorCode> {
+        jsAttachMediaSource(id).result().map_err(|e| e.0)?;
+        Ok(Self {
             id,
             ready_state: MediaSourceReadyState::Closed,
             video: None,
             audio: None,
-        }
+        })
     }
 
-    pub(crate) fn attach_new(&mut self) -> Result<(), AttachMediaSourceErrorCode> {
-        self.ready_state = MediaSourceReadyState::Closed;
-
-        // TODO re-format error
-        jsAttachMediaSource(self.id).result().map_err(|e| e.0)
+    /// Returns the current `ready_state` of the `MediaBuffers`, which is
+    /// binded to the `MediaSource`'s (from the Media Source specification)
+    /// `readyState` concept.
+    ///
+    /// This `ready_state` is linked to the last "attached" (through the
+    /// `attach_new` method) `MediaSource` and should be equal to
+    /// `MediaSourceReadyState::Closed` when no `MediaSource` is currently
+    /// attached.
+    pub(crate) fn ready_state(&self) -> MediaSourceReadyState {
+        self.ready_state
     }
 
+    /// Update the current `ready_state` of the `MediaBuffers`.
+    /// This should be called only to link it to the original `MediaSource`'s
+    /// (from the Media Source specification) `readyState` concept.
+    ///
+    /// This `ready_state` is linked to the last "attached" (through the
+    /// `attach_new` method) `MediaSource` and should be equal to
+    /// `MediaSourceReadyState::Closed` when no `MediaSource` is currently
+    /// attached.
+    pub(crate) fn update_ready_state(&mut self, ready_state: MediaSourceReadyState) {
+        self.ready_state = ready_state;
+        self.check_end_of_stream();
+    }
+
+    /// Returns `true` if `SourceBuffer` can currently be created on this
+    /// `MediaBuffers`.
+    ///
+    /// Returns `false` when this is too late for the `MediaSource` currently
+    /// attached (see `attach_new` method).
     pub fn can_still_create_source_buffer(&self) -> bool {
         match (&self.audio, &self.video) {
             (None, None) => true,
@@ -59,6 +84,11 @@ impl MediaSourceHandle {
         }
     }
 
+    /// Create a new `SourceBuffer` instance linked to this
+    /// `MediaBuffers`'s `MediaSource`.
+    ///
+    /// A `MediaSource` first need to be attached for a `SourceBuffer` to be
+    /// created (see `attach_new` method).
     pub fn create_source_buffer(
         &mut self,
         media_type: MediaType,
@@ -86,25 +116,118 @@ impl MediaSourceHandle {
         }
     }
 
-    pub fn has(&self, media_type: MediaType) -> bool {
+    pub(crate) fn push_segment(
+        &mut self,
+        media_type: MediaType,
+        metadata: PushMetadata
+    ) -> Result<(), PushSegmentError> {
+        match self.get_mut(media_type) {
+            None => Err(PushSegmentError::NoSourceBuffer(media_type)),
+            Some(sb) => {
+                sb.append_buffer(metadata);
+                Ok(())
+            },
+        }
+    }
+
+    pub(crate) fn remove_data(
+        &mut self,
+        media_type: MediaType,
+        start: f64,
+        end: f64
+    ) -> Result<(), RemoveDataError> {
+        match self.get_mut(media_type) {
+            None => Err(RemoveDataError::NoSourceBuffer(media_type)),
+            Some(sb) => {
+                sb.remove_buffer(start, end);
+                Ok(())
+            },
+        }
+    }
+
+    /// Callback that should be called once one of the `SourceBuffer` linked to this
+    /// `MediaBuffers` has "updated" (meaning: one of its operation has ended).
+    pub(crate) fn on_source_buffer_update(&mut self, source_buffer_id: SourceBufferId) {
+        if let Some(ref mut sb) = self.audio {
+            if sb.id == source_buffer_id {
+                sb.on_update_end();
+            }
+        }
+        if let Some(ref mut sb) = self.video {
+            if sb.id == source_buffer_id {
+                sb.on_update_end();
+            }
+        }
+        self.check_end_of_stream();
+    }
+
+    /// Returns `true` if a `SourceBuffer` of the given `MediaType` is currently
+    /// linked to this `MediaBuffers`.
+    pub(crate) fn has(&self, media_type: MediaType) -> bool {
         match media_type {
             MediaType::Audio => self.audio.is_some(),
             MediaType::Video => self.video.is_some(),
         }
     }
 
-    pub fn get(&self, media_type: MediaType) -> Option<&SourceBuffer> {
+
+    pub fn end(&mut self, media_type: MediaType) {
+        match self.get_mut(media_type) {
+            None => {
+                Logger::warn(&format!("Asked to end a non existent {} buffer", media_type))
+            },
+            Some(sb) => {
+                sb.last_segment_pushed = true;
+            }
+        }
+        self.check_end_of_stream();
+    }
+
+    fn get(&self, media_type: MediaType) -> Option<&SourceBuffer> {
         match media_type {
             MediaType::Audio => self.audio.as_ref(),
             MediaType::Video => self.video.as_ref()
         }
     }
 
-    pub fn get_mut(&mut self, media_type: MediaType) -> Option<&mut SourceBuffer> {
+    fn get_mut(&mut self, media_type: MediaType) -> Option<&mut SourceBuffer> {
         match media_type {
             MediaType::Audio => self.audio.as_mut(),
             MediaType::Video => self.video.as_mut()
         }
+    }
+
+    fn check_end_of_stream(&self) {
+        if self.video.is_none() && self.audio.is_none() {
+            return;
+        }
+        if self.is_ended(MediaType::Audio) &&
+            self.is_ended(MediaType::Video) &&
+            self.ready_state != MediaSourceReadyState::Closed
+        {
+            jsEndOfStream(self.id);
+        }
+    }
+
+    fn is_ended(&self, media_type: MediaType) -> bool {
+        match self.get(media_type) {
+            None => true,
+            Some(sb) => sb.last_segment_pushed && !sb.is_updating,
+        }
+    }
+}
+
+pub enum PushSegmentError {
+    NoSourceBuffer(MediaType),
+}
+
+pub enum RemoveDataError {
+    NoSourceBuffer(MediaType),
+}
+
+impl Drop for MediaBuffers {
+    fn drop(&mut self) {
+        jsRemoveMediaSource(self.id);
     }
 }
 
@@ -139,17 +262,51 @@ pub enum SourceBufferCreationError {
     UnknownError(String),
 }
 
+/// Abstraction over the Media Source Extension's `SourceBuffer` concept.
+///
+/// This is the interface allowing to interact with lower-level media buffers.
 pub struct SourceBuffer {
+    /// The `PlayerId` used to identify the global player instance linked to
+    /// this `SourceBuffer`.
     player_id: PlayerId,
-    pub id: SourceBufferId,
+
+    /// The `SourceBufferId` given on SourceBuffer creation, used to identify
+    /// this `SourceBuffer` in the current player instance (itself identified by
+    /// `player_id`.
+    id: SourceBufferId,
+
+    /// The current queue of operations being scheduled, from the most urgent to
+    /// the less urgent.
+    /// The next operation in queue will be performed and removed from the queue
+    /// once the SourceBuffer is not "updating" anymore.
     queue: Vec<SourceBufferQueueElement>,
+
+    /// The Content-Type currently linked to the SourceBuffer
     typ: String,
+
+    /// If `true`, an operation is currently performed on the `SourceBuffer`, in
+    /// which case it will need to push further operations in its internal
+    /// `queue`.
     is_updating: bool,
+
+    /// Set to `true` as soon as the first operation is being performed, at
+    /// which point, some actions cannot be taken anymore (like creating other
+    /// `SourceBuffer` instances).
     has_been_updated: bool,
+
+    /// If `true` the chronologically last possible media chunk has been
+    /// scheduled to be pushed.
+    /// This allows for example to properly "end" the `SourceBuffer`.
+    last_segment_pushed: bool,
 }
 
+/// Enum listing possible operations awaiting to be performed on a `SourceBuffer`.
 pub enum SourceBufferQueueElement {
+    /// A new chunk of media data needs to be pushed.
     Push(PushMetadata),
+
+    /// Some already-buffered needs to be removed, `start` and `end` giving the
+    /// time range of the data to remove, in seconds.
     Remove { start: f64, end: f64 },
 }
 
@@ -164,12 +321,12 @@ impl SourceBuffer {
                     is_updating: false,
                     queue: vec![],
                     has_been_updated: false,
+                    last_segment_pushed: false,
                 })
             },
             Err((AddSourceBufferErrorCode::NoMediaSourceAttached, _)) =>
                 Err(SourceBufferCreationError::NoMediaSourceAttached),
             Err((AddSourceBufferErrorCode::QuotaExceededError, desc)) =>
-                // TODO multiline string
                 Err(SourceBufferCreationError::QuotaExceededError(desc.unwrap_or_else(|| {
                     "`QuotaExceededError` received while attempting to create a SourceBufferCreationError".to_owned()
                 }))),
@@ -221,7 +378,7 @@ impl SourceBuffer {
         }
     }
 
-    pub fn on_update_end(&mut self) {
+    fn on_update_end(&mut self) {
         use SourceBufferQueueElement::*;
         if self.queue.is_empty() {
             self.is_updating = false;
@@ -236,13 +393,15 @@ impl SourceBuffer {
         }
     }
 
-    pub fn push_now(&mut self, md: PushMetadata) {
+    fn push_now(&mut self, md: PushMetadata) {
         self.is_updating = true;
         match md.segment_data {
             DataSource::Raw(v) => {
+                Logger::debug(&format!("Pushing raw data {} {}", self.id, self.typ));
                 jsAppendBuffer(self.player_id, self.id, &v);
             },
             DataSource::JsBlob(j) => {
+                Logger::debug(&format!("Pushing JS Blob {} {}", self.id, self.typ));
                 jsAppendBufferJsBlob(self.player_id, self.id, j.get_id());
             },
         }

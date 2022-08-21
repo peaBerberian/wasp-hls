@@ -2,12 +2,14 @@
 
 use wasm_bindgen::prelude::*;
 
-pub mod player;
+pub mod frontend;
+mod adaptive;
 mod bindings;
+mod buffers;
 mod content;
-mod media_source;
 mod parser;
 mod requester;
+mod segment_selector;
 mod utils;
 
 pub use utils::logger::Logger;
