@@ -54,5 +54,46 @@ The real reasons why I started this project are more personal, mainly:
 
 ## What's left to do?
 
-Almost everything, for the moment it can just play the main renditions of the
-first encountered variant for VoD contents only.
+A lot:
+
+Type of contents:
+  - [x] Play HLS VoD contents
+  - [x] Transcode mpeg-ts (thanks to mux.js for now)
+  - [ ] Play HLS live contents _(high priority)_
+  - [ ] Proper support of HLS low-latency contents
+
+Adaptive BitRate:
+  - [x] Choose variant based on throughtput-based estimates
+  - [ ] Also choose variant based on buffer-based estimates
+
+Request Scheduling:
+  - [x] Lazy Media Playlist downloading
+  - [x] Buffer goal implementation (as in: stop loading segment once enough to fill
+    the buffer up to a certain point are loaded)
+  - [x] Parallel audio and video segment loading
+  - [ ] Retry of failed requests with an exponential backoff 
+  - [ ] Some sort of synchronization between audio requests and video requests (to
+    e.g. stop doing audio segment requests when video ones become urgent, to free
+    some bandwidth)
+
+Buffers:
+  - [x] End of stream support (as in: actually end when playback reached the end!)
+  - [x] Multiple simultaneous type of buffers support (for now only audio and video)
+  - [ ] Inventory storing which quality is where in the buffers, both for API reasons
+    and for several optimizations (though quality identification seems more difficult
+    to implement in HLS than in DASH due to the fact that HLS only link variants to
+    bitrate, not the actual audio and video streams - but it should be doable).
+
+Tracks:
+  - [ ] Provide API to set an audio, video or text track
+  - [ ] support of at least one format (didn't check which yet)
+    _(low priority)_
+
+Decryption:
+  - [ ] Support content decryption _(very low priority)_
+
+Miscellaneous:
+  - [ ] Make usage of the upcoming MSE-in-worker API
+  - [ ] WebAssembly-based mpeg-ts transcoder (very low priority)
+  - [ ] Proper Error API (should be high priority but that does not look like
+    fun for now!)
