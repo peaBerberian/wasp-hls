@@ -9,14 +9,14 @@ use crate::{bindings::{
     JsResult,
     PlayerId,
     MediaType, jsAttachMediaSource, jsEndOfStream, jsRemoveMediaSource,
-}, frontend::MediaSourceReadyState, Logger};
+}, dispatcher::MediaSourceReadyState, Logger};
 
 /// Structure keeping track of the MediaSource and its attached audio and video
 /// SourceBuffers, making sure only one is created for each and that one is not
 /// created once media data has been pushed to any of them.
 pub(crate) struct MediaBuffers {
     /// This identifier will identify the media element and MediaSource on the
-    /// JavaScript-side (by proxy of the corresponding `WaspHlsPlayer`'s id).
+    /// JavaScript-side.
     id: PlayerId,
 
     /// Current state of the attached MediaSource.
@@ -241,7 +241,7 @@ pub enum SourceBufferCreationError {
     AlreadyCreatedWithSameType(MediaType),
 
     /// No JavaScript MediaSource is currently attached to the media element
-    /// itself linked to the current player instance.
+    /// itself linked to the current dispatcher instance.
     NoMediaSourceAttached,
 
     /// The `SourceBuffer` could not have been created because the `MediaSource`
@@ -266,12 +266,12 @@ pub enum SourceBufferCreationError {
 ///
 /// This is the interface allowing to interact with lower-level media buffers.
 pub struct SourceBuffer {
-    /// The `PlayerId` used to identify the global player instance linked to
+    /// The `PlayerId` used to identify the global dispatcher instance linked to
     /// this `SourceBuffer`.
     player_id: PlayerId,
 
     /// The `SourceBufferId` given on SourceBuffer creation, used to identify
-    /// this `SourceBuffer` in the current player instance (itself identified by
+    /// this `SourceBuffer` in the current dispatcher instance (itself identified by
     /// `player_id`.
     id: SourceBufferId,
 

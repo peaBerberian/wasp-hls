@@ -2,7 +2,7 @@
 
 use wasm_bindgen::prelude::*;
 
-pub mod frontend;
+pub mod dispatcher;
 mod adaptive;
 mod bindings;
 mod buffers;

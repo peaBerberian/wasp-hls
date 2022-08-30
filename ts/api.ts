@@ -1,5 +1,5 @@
 import init,{
-  PlayerFrontEnd,
+  Dispatcher,
 } from "../wasm/wasp_hls";
 import { stopObservingPlayback } from "./bindings";
 import {
@@ -30,9 +30,9 @@ export default class JsWaspHlsPlayer {
       playerId++;
     }
     this._playerId = playerId;
-    const player = new PlayerFrontEnd(playerId);
+    const dispatcher = new Dispatcher(playerId);
     const playerObj: PlayerInstanceInfo = {
-      player,
+      dispatcher,
       videoElement,
       mediaSourceObj: null,
       observationsObj: null,
@@ -44,18 +44,18 @@ export default class JsWaspHlsPlayer {
 
   public loadContent(url: string) {
     if (this._playerInstanceInfo.isDetroyed) {
-      throw new Error("The player is disposed.");
+      throw new Error("The Player is disposed.");
     }
-    this._playerInstanceInfo.player.load_content(url);
+    this._playerInstanceInfo.dispatcher.load_content(url);
   }
 
   public stop() {
-    this._playerInstanceInfo.player.stop();
+    this._playerInstanceInfo.dispatcher.stop();
   }
 
   public dispose() {
-    this._playerInstanceInfo.player.stop();
-    this._playerInstanceInfo.player.free();
+    this._playerInstanceInfo.dispatcher.stop();
+    this._playerInstanceInfo.dispatcher.free();
     this._playerInstanceInfo.isDetroyed = true;
     stopObservingPlayback(this._playerId);
     playersStore.dispose(this._playerId);
@@ -65,7 +65,7 @@ export default class JsWaspHlsPlayer {
     if (initStatus !== InitializationStatus.Unloaded) {
       switch (initStatus) {
         case InitializationStatus.Loading:
-          throw new Error("PlayerFrontEnd already loading");
+          throw new Error("Player already loading");
         case InitializationStatus.Loaded:
           return Promise.resolve();
       }

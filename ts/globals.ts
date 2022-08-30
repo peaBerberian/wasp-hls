@@ -1,4 +1,4 @@
-import { PlayerFrontEnd } from "../wasm/wasp_hls";
+import { Dispatcher } from "../wasm/wasp_hls";
 
 class JsMemoryResourceStore {
   private _store: Partial<Record<ResourceId, MemoryResource>>;
@@ -117,7 +117,7 @@ export interface MediaSourceInstanceInfo {
 }
 
 export interface PlayerInstanceInfo {
-  player: PlayerFrontEnd;
+  dispatcher: Dispatcher;
   videoElement: HTMLVideoElement;
   mediaSourceObj: MediaSourceInstanceInfo | null;
   observationsObj: {

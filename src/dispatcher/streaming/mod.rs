@@ -9,6 +9,7 @@ use crate::{
         SourceBufferId,
         jsSetMediaSourceDuration,
         JsResult,
+        MediaObservation,
     },
     Logger,
     content::{MediaPlaylistPermanentId, ContentTracker},
@@ -25,11 +26,11 @@ use crate::{
 };
 use super::{
     MediaSourceReadyState,
-    PlayerFrontEnd,
+    Dispatcher,
     PlayerReadyState,
 };
 
-impl PlayerFrontEnd {
+impl Dispatcher {
     pub(crate) fn on_request_succeeded(&mut self,
         request_id: RequestId,
         data: DataSource,
@@ -70,7 +71,7 @@ impl PlayerFrontEnd {
     }
 
     /// Method called on various events that could lead to start loading segments.
-    /// If all conditions are met, the `PlayerFrontEnd` is set to the next
+    /// If all conditions are met, the `Dispatcher` is set to the next
     /// `AwaitingSegments` `PlayerReadyState`, playback observations begin,
     /// and the potential initialization segments are requested.
     pub(super) fn check_ready_to_load_segments(&mut self) {
@@ -224,14 +225,16 @@ impl PlayerFrontEnd {
         self.fail_on_error("A SourceBuffer emitted an error");
     }
 
-    pub fn on_regular_tick(&mut self, position: f64) {
+    pub fn on_regular_tick(&mut self, observation: MediaObservation) {
+        let position = observation.current_time();
         Logger::debug(&format!("Tick received: {}", position));
         self.last_position = position;
         self.segment_selectors.update_base_position(position);
         self.check_segments_to_request()
     }
 
-    pub fn on_seek(&mut self, position: f64) {
+    pub fn on_seek(&mut self, observation: MediaObservation) {
+        let position = observation.current_time();
         Logger::debug(&format!("Seeking tick received: {}", position));
         self.segment_selectors.reset_position(position);
 

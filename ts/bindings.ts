@@ -1,5 +1,5 @@
 import {
-  PlayerFrontEnd,
+  Dispatcher,
   LogLevel,
   MediaType,
   MediaSourceReadyState,
@@ -18,6 +18,7 @@ import {
   MediaSourceDurationUpdateErrorCode,
   EndOfStreamResult,
   EndOfStreamErrorCode,
+  MediaObservation,
 } from "../wasm/wasp_hls.js";
 import {
   jsMemoryResources,
@@ -85,7 +86,7 @@ export function fetchU8(playerId: PlayerId, url: string): RequestId {
       requestsStore.delete(currentRequestId);
       const playerObj = playersStore.get(playerId);
       if (playerObj !== undefined) {
-        playerObj.player
+        playerObj.dispatcher
           .on_u8_request_finished(currentRequestId,
                                   new Uint8Array(arrRes),
                                   res.url,
@@ -128,7 +129,7 @@ export function fetchU8NoCopy(playerId: PlayerId, url: string): RequestId {
         incrementResourceId();
         const segmentArray = new Uint8Array(arrRes);
         jsMemoryResources.create(currentResourceId, playerId, segmentArray);
-        playerObj.player
+        playerObj.dispatcher
           .on_u8_no_copy_request_finished(currentRequestId,
                                           currentResourceId,
                                           segmentArray.byteLength,
@@ -198,15 +199,15 @@ export function attachMediaSource(playerId: PlayerId): AttachMediaSourceResult {
       nextSourceBufferId: 0,
     };
     function onMediaSourceEnded() {
-      playerObj?.player
+      playerObj?.dispatcher
         .on_media_source_state_change(MediaSourceReadyState.Ended);
     }
     function onMediaSourceOpen() {
-      playerObj?.player
+      playerObj?.dispatcher
         .on_media_source_state_change(MediaSourceReadyState.Open);
     }
     function onMediaSourceClose() {
-      playerObj?.player
+      playerObj?.dispatcher
         .on_media_source_state_change(MediaSourceReadyState.Closed);
     }
     return AttachMediaSourceResult.success();
@@ -253,7 +254,7 @@ export function removeMediaSource(playerId: PlayerId): RemoveMediaSourceResult {
         catch (e) {
           // TODO proper WASM communication?
           const msg = formatErrMessage(e, "Unknown error while removing SourceBuffer");
-          PlayerFrontEnd.log(LogLevel.Error, "Could not remove SourceBuffer: " + msg);
+          Dispatcher.log(LogLevel.Error, "Could not remove SourceBuffer: " + msg);
         }
       }
     }
@@ -265,7 +266,7 @@ export function removeMediaSource(playerId: PlayerId): RemoveMediaSourceResult {
       } catch (e) {
           // TODO proper WASM communication?
         const msg = formatErrMessage(e, "Unknown error while revoking ObjectURL");
-        PlayerFrontEnd.log(LogLevel.Error, "Could not revoke ObjectURL: " + msg);
+        Dispatcher.log(LogLevel.Error, "Could not revoke ObjectURL: " + msg);
       }
     }
     return RemoveMediaSourceResult.success();
@@ -351,7 +352,7 @@ export function addSourceBuffer(
     });
     playerObj.mediaSourceObj.nextSourceBufferId++;
     sourceBuffer.addEventListener("updateend", function() {
-      playerObj.player.on_source_buffer_update(sourceBufferId);
+      playerObj.dispatcher.on_source_buffer_update(sourceBufferId);
     });
     return AddSourceBufferResult.success(sourceBufferId);
   } catch (err) {
@@ -470,6 +471,21 @@ export function endOfStream(
   }
 }
 
+const OBSERVATION_EVENTS = [
+  ["seeking", PlaybackTickReason.Seeking],
+  ["seeked", PlaybackTickReason.Seeked],
+  ["loadedmetadata", PlaybackTickReason.LoadedMetadata],
+  ["loadeddata", PlaybackTickReason.LoadedData],
+  ["canplay", PlaybackTickReason.CanPlay],
+  ["canplaythrough", PlaybackTickReason.CanPlayThrough],
+  ["ended", PlaybackTickReason.Ended],
+  ["pause", PlaybackTickReason.Pause],
+  ["play", PlaybackTickReason.Play],
+  ["ratechange", PlaybackTickReason.RateChange],
+  ["stalled", PlaybackTickReason.Stalled],
+  // "durationchange",
+] as const;
+
 /**
  * @param {number} playerId
  */
@@ -481,23 +497,20 @@ export function startObservingPlayback(playerId: PlayerId): void {
   if (playerObj.observationsObj !== null) {
     return;
   }
+  const { videoElement } = playerObj;
 
-  playerObj.videoElement.addEventListener("seeking", onSeeking);
-  playerObj.videoElement.addEventListener("seeked", onSeeked);
-  const removeEventListeners = () => {
-    playerObj.videoElement.removeEventListener("seeking", onSeeking);
-    playerObj.videoElement.removeEventListener("seeked", onSeeked);
-  };
-
-  function onSeeked() {
-    onNextTick(PlaybackTickReason.Seeked);
-  }
-  function onSeeking() {
-    onNextTick(PlaybackTickReason.Seeking);
-  }
+  const listenerRemovers = OBSERVATION_EVENTS.map(([evtName, reason]) => {
+    videoElement.addEventListener(evtName, onEvent);
+    function onEvent() {
+      onNextTick(reason);
+    }
+    return () => videoElement.removeEventListener(evtName, onEvent);
+  });
 
   playerObj.observationsObj = {
-    removeEventListeners,
+    removeEventListeners() {
+      listenerRemovers.forEach(removeCb => removeCb());
+    },
     timeoutId: undefined,
   };
   /* eslint-disable @typescript-eslint/no-floating-promises */
@@ -515,9 +528,23 @@ export function startObservingPlayback(playerId: PlayerId): void {
       clearTimeout(innerPlayerObj.observationsObj.timeoutId);
       innerPlayerObj.observationsObj.timeoutId = undefined;
     }
-    innerPlayerObj.player.on_playback_tick(
+
+    const buffered = new Float64Array(videoElement.buffered.length * 2);
+    for (let i = 0; i < videoElement.buffered.length; i++) {
+      const offset = i * 2;
+      buffered[offset] = videoElement.buffered.start(i);
+      buffered[offset + 1] = videoElement.buffered.end(i);
+    }
+
+    const observation = new MediaObservation(
       reason,
-      innerPlayerObj.videoElement.currentTime);
+      videoElement.currentTime,
+      videoElement.readyState,
+      buffered,
+      videoElement.paused,
+      videoElement.seeking
+    );
+    innerPlayerObj.dispatcher.on_playback_tick(observation);
 
     innerPlayerObj.observationsObj.timeoutId = setTimeout(() => {
       if (innerPlayerObj.observationsObj !== null) {

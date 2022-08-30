@@ -10,20 +10,20 @@ use crate::{
     utils::url::Url,
     requester::{Requester, PlaylistFileType},
     adaptive::AdaptiveQualitySelector,
-    segment_selector::SegmentSelectors,
+    segment_selector::NextSegmentSelectors,
 };
 
 use super::{
-    PlayerFrontEnd,
+    Dispatcher,
     PlayerReadyState,
 };
 
 /// Methods exposed to the JavaScript-side
 #[wasm_bindgen]
-impl PlayerFrontEnd {
+impl Dispatcher {
     #[wasm_bindgen(constructor)]
     pub fn new(player_id: PlayerId) -> Self {
-        PlayerFrontEnd {
+        Dispatcher {
             id: player_id,
             ready_state: PlayerReadyState::Stopped,
             adaptive_selector: AdaptiveQualitySelector::new(),
@@ -32,7 +32,7 @@ impl PlayerFrontEnd {
             buffers: None,
             last_position: 0.,
             buffer_goal: 30.,
-            segment_selectors: SegmentSelectors::new(0., 30.),
+            segment_selectors: NextSegmentSelectors::new(0., 30.),
         }
     }
 

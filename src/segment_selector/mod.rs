@@ -6,27 +6,27 @@ use crate::{
 mod segment_queue;
 use segment_queue::SegmentQueue;
 
-pub struct SegmentSelectors {
-    audio: SegmentSelector,
-    video: SegmentSelector,
+pub struct NextSegmentSelectors {
+    audio: NextSegmentSelector,
+    video: NextSegmentSelector,
 }
 
-impl SegmentSelectors {
+impl NextSegmentSelectors {
     pub fn new(base_pos: f64, buffer_goal: f64) -> Self {
         Self {
-            audio: SegmentSelector::new(base_pos, buffer_goal),
-            video: SegmentSelector::new(base_pos, buffer_goal),
+            audio: NextSegmentSelector::new(base_pos, buffer_goal),
+            video: NextSegmentSelector::new(base_pos, buffer_goal),
         }
     }
 
-    pub fn get(&self, media_type: MediaType) -> &SegmentSelector {
+    pub fn get(&self, media_type: MediaType) -> &NextSegmentSelector {
         match media_type {
             MediaType::Audio => &self.audio,
             MediaType::Video => &self.video,
         }
     }
 
-    pub fn get_mut(&mut self, media_type: MediaType) -> &mut SegmentSelector {
+    pub fn get_mut(&mut self, media_type: MediaType) -> &mut NextSegmentSelector {
         match media_type {
             MediaType::Audio => &mut self.audio,
             MediaType::Video => &mut self.video,
@@ -44,7 +44,7 @@ impl SegmentSelectors {
     }
 }
 
-pub struct SegmentSelector {
+pub struct NextSegmentSelector {
     /// Interface allowing to keep track of which audio and video segments we need to load next.
     segment_queue: SegmentQueue,
 
@@ -73,7 +73,7 @@ enum InitializationSegmentSelectorStatus {
     Validated,
 }
 
-impl SegmentSelector {
+impl NextSegmentSelector {
     fn new(base_pos: f64, buffer_goal: f64) -> Self {
         Self {
             segment_queue: SegmentQueue::new(base_pos),

@@ -5,24 +5,26 @@ use crate::{
     requester::Requester,
     content::ContentTracker,
     adaptive::AdaptiveQualitySelector,
-    segment_selector::SegmentSelectors,
+    segment_selector::NextSegmentSelectors,
 };
 
 mod api;
 mod streaming;
 
 
-/// The `PlayerFrontEnd` is the player Interface exported to the JavaScript-side,
+/// The `Dispatcher` is the player Interface exported to the JavaScript-side,
 /// providing an API to load contents and influence various parameters about playback.
 #[wasm_bindgen]
-pub struct PlayerFrontEnd {
-    /// Identifier for the current `PlayerFrontEnd` instance on the JS-side.
+pub struct Dispatcher {
+    /// Identifier for the current `Dispatcher` instance on the JS-side.
     /// Many JavaScript-side APIs rely on that `id`.
     id: PlayerId,
 
-    /// Current `PlayerReadyState` the `PlayerFrontEnd` is in.
+    /// Current `PlayerReadyState` the `Dispatcher` is in.
     ready_state: PlayerReadyState,
 
+    /// Struct allowing to obtain estimate of the optimal variants to play,
+    /// mostly based on network metrics.
     adaptive_selector: AdaptiveQualitySelector,
 
     /// Store the "MultiVariant Playlist" (structure which describes the currently
@@ -33,9 +35,13 @@ pub struct PlayerFrontEnd {
     content_tracker: Option<ContentTracker>,
 
     /// Abstraction allowing to create and store `SourceBuffer`s on the `MediaSource` attached
-    /// to the media element itself linked to the `PlayerFrontEnd`.
+    /// to the media element itself linked to the `Dispatcher`.
+    ///
+    /// None if not `MediaSource` has been attached yet.
     buffers: Option<MediaBuffers>,
 
+    /// Abstraction allowing to perform playlist and segment requests, while
+    /// easily monitoring requests that are pending.
     requester: Requester,
 
     /// Amount of buffer, ahead of the current position we want to build in seconds.
@@ -49,7 +55,16 @@ pub struct PlayerFrontEnd {
     /// etc.)
     last_position: f64,
 
-    segment_selectors: SegmentSelectors,
+    segment_selectors: NextSegmentSelectors,
+}
+
+pub struct MediaState {
+    last_position: f64,
+    ready_state: u8,
+    buffered: Vec<(f64, f64)>,
+    paused: bool,
+    seeking: bool,
+    initial_seek_performed: bool,
 }
 
 /// Identify the JavaScript `readyState` of a created `MediaSource` instance.
@@ -64,7 +79,7 @@ pub enum MediaSourceReadyState {
     Open = 2,
 }
 
-/// Identify the playback-related state the `PlayerFrontEnd` is in.
+/// Identify the playback-related state the `Dispatcher` is in.
 #[derive(Clone, Copy, Debug, PartialEq, PartialOrd, Eq, Ord)]
 enum PlayerReadyState {
     /// No content is currently loaded.

@@ -71,10 +71,9 @@ Request Scheduling:
   - [x] Buffer goal implementation (as in: stop loading segment once enough to fill
     the buffer up to a certain point are loaded)
   - [x] Parallel audio and video segment loading
-  - [ ] Retry of failed requests with an exponential backoff 
-  - [ ] Some sort of synchronization between audio requests and video requests (to
-    e.g. stop doing audio segment requests when video ones become urgent, to free
-    some bandwidth)
+  - [ ] Synchronization between progress of audio and video segment requests (to
+    e.g. stop doing audio segment requests when video ones become urgent).
+  - [ ] Retry of failed requests with an exponential backoff
 
 Buffers:
   - [x] End of stream support (as in: actually end when playback reached the end!)
@@ -83,10 +82,12 @@ Buffers:
     and for several optimizations (though quality identification seems more difficult
     to implement in HLS than in DASH due to the fact that HLS only link variants to
     bitrate, not the actual audio and video streams - but it should be doable).
+  - [ ] Proper handling of `QuotaExceededError` after pushing segments (when low
+    on memory)
 
 Tracks:
-  - [ ] Provide API to set an audio, video or text track
-  - [ ] support of at least one format (didn't check which yet)
+  - [ ] Provide API to set an audio, video and/or text track
+  - [ ] support of at least one text track format (didn't check which yet)
     _(low priority)_
 
 Decryption:
@@ -94,6 +95,103 @@ Decryption:
 
 Miscellaneous:
   - [ ] Make usage of the upcoming MSE-in-worker API
-  - [ ] WebAssembly-based mpeg-ts transcoder (very low priority)
   - [ ] Proper Error API (should be high priority but that does not look like
     fun for now!)
+  - [ ] WebAssembly-based mpeg-ts transcoder (very low priority)
+  - [ ] Delta playlist handling
+
+## Architecture
+
+The architecture of the project is as follow:
+```
+      +------------------------------------------------------------------------------+  |T
+      |                                                                              |  |y
+      |                                   JS API                                     |  |p
+      |                                                                              |  |e
+      +------------------------------------------------------------------------------+  |S
+                         |                                                              |c
+                         |                         +--------------------------------+   |r
+                         |                         |                                |   |i
+                         |                         |          TS bindings           |   |p
+                         |                         |                                |   |t
+                         |                         +--------------------------------+   |
+                         |                                 ^                |
+                         |                                 |                |
+                         |                                 |                |
+                         |                                 |                |
+                         |                                 |                |
+                         V                                 |                V
++-------------------------------------------------+      +-------------------+          |R
+|                 Dispatcher                      |<-----|    Rs Bindings    |          |u
++-------------------------------------------------+      +-------------------+          |s
+    |            |         |                   | |                ^                     |t
+    |            |         |                   | |                |                     |
+    |      +-----|---------|----------+------+-|-|----------------+                     |
+    |      |     |         |          |      | | |                |                     |
+    |      |     |         |          |      | | |                |                     |
+    V      |     |         V          |      | | V                |                     |
++-----------+    |   +---------------------+ | | +---------------------------+    | M   |
+| Requester |    |   | NextSegmentSelector | | | |  AdaptiveQualitySelector  |    | o   |
++-----------+    |   +---------------------+ | | +---------------------------+    | d   |
+                 V                           | V                                  | u   |
+    +----------------+                       | +------------------+               | l   |
+    | ContentTracker |-----------------------+-| Other modules... |               | e   |
+    +----------------+                         +----------------- +               | s   |
+                                                                                  |     |
+                                                                                  |     |
+                                                                                  |     |
+                                                                                        |
+                                                                                        |
+```
+
+Here's a definition of terms and blocks in this schema:
+
+  - **Typescript**: This upper part of the schema describes the Typescript
+    code - that will be compiled to JavaScript - present in the `./ts`
+    directory.
+
+  - **JS API**: Implement the library's API, callable from JS applications. This
+    is the only part visible to the outside.
+
+  - **TS bindings**: Provide web APIs to the WebAssembly part, for example media
+    buffering APIs. Also call event listeners on the Rust-side on various
+    events.
+
+  - **Rust**: This lower part of the schema describes the Rust code - that will
+    be compiled to WebAssembly - present in the `./src` directory.
+
+  - **Dispatcher**: Entry point of the Rust logic. Receive orders and/or events,
+    and call the right modules in the right order.
+
+    The Dispatcher is defined in the `./src/dispatcher` directory.
+
+  - **Rs bindings**: Define both Typescript functions exposed by TS bindings but
+    also "event listeners" (which are technically a part of the Dispatcher)
+    which will be called by TS bindings on various events.
+
+    Rs bindings are defined in the `./src/bindings` directory.
+
+  - **Modules**: Specialized blocks of the Rust logic doing specific tasks,
+    potentially calling Rs bindings when wanting to call web API.
+
+  - **Requester**: Schedule playlist and segment requests.
+
+    The Requester is defined in the `./src/requester.rs` file.
+
+  - **NextSegmentSelector**: Keep track of the next segments that should be
+    requested
+
+    The NextSegmentSelector is defined in the `./src/segment_selector`
+    directory.
+
+  - **AdaptiveQualitySelector**: Implement Adaptive BitRate (a.k.a. ABR)
+    management, such as calculating the network bandwidth, to be able to
+    choose the best variant and media selected.
+
+    The AdaptiveQualitySelector is defined in the `./src/adaptive`
+    directory.
+
+  - **ContentTracker**: Parses and stores the metadata of the current content as
+    well as keep tracks of the current variant and media playlists selected.
+
+    The ContentTracker is defined in the `./src/content.rs` file.
