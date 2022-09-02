@@ -63,8 +63,18 @@ impl ContentTracker {
     }
 
     pub(crate) fn all_curr_media_playlists_ready(&self) -> bool {
-        self.curr_media_playlist_ready(MediaType::Audio) &&
-            self.curr_media_playlist_ready(MediaType::Video)
+        if self.has_media_type(MediaType::Audio) &&
+            !self.curr_media_playlist_ready(MediaType::Audio)
+        {
+            false
+        } else if self.has_media_type(MediaType::Video) &&
+            !self.curr_media_playlist_ready(MediaType::Video)
+        {
+            false
+        } else {
+            true
+        }
+
     }
 
     pub(crate) fn has_media_type(&self, media_type: MediaType) -> bool {
