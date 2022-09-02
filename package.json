@@ -6,7 +6,7 @@
     "build:all": "npm run clean && npm run build:wasm && npm run build:ts",
     "build:ts": "esbuild ts/index.ts --bundle --outfile=build/bundle.js",
     "build:ts:release": "esbuild ts/index.ts --bundle --outfile=build/bundle.js --minify",
-    "build:release": "npm run clean && npm run build:ts:release && npm run build:wasm:release",
+    "build:release": "npm run clean && npm run build:wasm:release && npm run build:ts:release",
     "build:wasm": "npm run compile:rs && npm run move:wasm",
     "build:wasm:release": "npm run compile:rs:release && npm run move:wasm",
     "clean": "find ./build ! -name 'index.html' ! -name 'build' -exec rm -rf {} +",
