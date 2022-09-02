@@ -12,7 +12,7 @@ use crate::{
         MediaObservation,
     },
     Logger,
-    content::{MediaPlaylistPermanentId, ContentTracker},
+    content_tracker::{MediaPlaylistPermanentId, ContentTracker},
     parser::MultiVariantPlaylist,
     requester::{
         PlaylistFileType,
@@ -20,7 +20,7 @@ use crate::{
         PlaylistRequestInfo,
         FinishedRequestType,
     },
-    buffers::{PushMetadata, SourceBufferCreationError},
+    media_element::{PushMetadata, SourceBufferCreationError},
     utils::url::Url,
     segment_selector::NextSegmentInfo,
 };
@@ -79,7 +79,7 @@ impl Dispatcher {
             return;
         }
 
-        match self.buffers.as_ref() {
+        match self.media_element_ref.buffers() {
             None => { return; },
             Some(x) => if x.ready_state() == MediaSourceReadyState::Closed {
                 return;
@@ -91,6 +91,8 @@ impl Dispatcher {
         } else { return; };
         if content_tracker.all_curr_media_playlists_ready() {
             self.ready_state = PlayerReadyState::AwaitingSegments;
+            let start_time = content_tracker.get_expected_start_time();
+            self.media_element_ref.seek_once_ready(start_time);
             if let Some(duration) = content_tracker.curr_duration() {
                 if let Err(_) = jsSetMediaSourceDuration(self.id, duration).result() {
                     self.fail_on_error("Unable to update the MediaSource duration");
@@ -169,7 +171,7 @@ impl Dispatcher {
     fn init_source_buffer(&mut self,
         media_type: MediaType
     ) -> Option<Result<(), SourceBufferCreationError>> {
-        match self.buffers.as_mut() {
+        match self.media_element_ref.buffers_mut() {
             None => Some(Err(SourceBufferCreationError::NoMediaSourceAttached)),
             Some(buffers) => {
                 if buffers.has(media_type) || !buffers.can_still_create_source_buffer() {
@@ -197,7 +199,7 @@ impl Dispatcher {
     }
 
     pub(crate) fn internal_on_media_source_state_change(&mut self, state: MediaSourceReadyState) {
-        match self.buffers.as_mut() {
+        match self.media_element_ref.buffers_mut() {
             None => {},
             Some(buffers) => {
                 Logger::info(&format!("MediaSource state changed: {:?}", state));
@@ -212,7 +214,7 @@ impl Dispatcher {
     pub(crate) fn internal_on_source_buffer_update(&mut self,
         source_buffer_id: SourceBufferId
     ) {
-        match self.buffers.as_mut() {
+        match self.media_element_ref.buffers_mut() {
             None => {},
             Some(buffers) => buffers.on_source_buffer_update(source_buffer_id),
         }
@@ -272,7 +274,7 @@ impl Dispatcher {
         jsRemoveMediaSource(self.id);
         self.segment_selectors.reset_position(0.);
         self.content_tracker = None;
-        self.buffers = None;
+        self.media_element_ref.reset();
         self.last_position = 0.;
         self.ready_state = PlayerReadyState::Stopped;
     }
@@ -296,7 +298,7 @@ impl Dispatcher {
         media_type: MediaType,
         time_info: Option<(f64, f64)>
     ) {
-        match self.buffers.as_mut() {
+        match self.media_element_ref.buffers_mut() {
             None => {
                 let err = "Can't push: no Buffers created";
                 self.fail_on_error(err);

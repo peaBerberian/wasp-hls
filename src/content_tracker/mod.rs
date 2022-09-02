@@ -47,32 +47,24 @@ impl ContentTracker {
         }
     }
 
-    pub(crate) fn all_curr_media_playlists_ready(&self) -> bool {
-        self.curr_media_playlist_ready(MediaType::Audio) &&
-            self.curr_media_playlist_ready(MediaType::Video)
+    pub(crate) fn curr_media_playlists(&self) -> Vec<&MediaPlaylist> {
+        let mut ret = vec![];
+        if let Some(pl) = self.curr_media_playlist(MediaType::Audio) {
+            ret.push(pl)
+        }
+        if let Some(pl) = self.curr_media_playlist(MediaType::Video) {
+            ret.push(pl)
+        }
+        ret
     }
 
     pub(crate) fn curr_media_playlist_ready(&self, media_type: MediaType) -> bool {
-        let idx = if media_type == MediaType::Audio {
-            &self.curr_audio_idx
-        } else {
-            &self.curr_video_idx
-        };
-        match idx {
-            None => true,
-            Some(MediaPlaylistPermanentId::VariantStreamUrl(idx)) =>
-                if let Some(m) = self.playlist.get_variant(*idx) {
-                    m.media_playlist.is_some()
-                } else {
-                    false
-                }
-            Some(MediaPlaylistPermanentId::MediaTagUrl(idx)) =>
-                if let Some(m) = self.playlist.get_media(*idx) {
-                    m.media_playlist.is_some()
-                } else {
-                    false
-                }
-        }
+        self.curr_media_playlist(media_type).is_some()
+    }
+
+    pub(crate) fn all_curr_media_playlists_ready(&self) -> bool {
+        self.curr_media_playlist_ready(MediaType::Audio) &&
+            self.curr_media_playlist_ready(MediaType::Video)
     }
 
     pub(crate) fn has_media_type(&self, media_type: MediaType) -> bool {
@@ -237,6 +229,34 @@ impl ContentTracker {
 
     pub(crate) fn curr_init_segment(&self, media_type: MediaType) -> Option<&Url> {
         self.curr_media_playlist(media_type).as_ref()?.init_segment().map(|i| { &i.uri })
+    }
+
+    pub(crate) fn get_expected_start_time(&self) -> f64 {
+        let media_playlists = self.curr_media_playlists();
+        if media_playlists.is_empty() ||
+            media_playlists.iter().any(|p| { p.end_list })
+        {
+            0.
+        } else {
+            let initial_dur: Option<f64> = None;
+            let min_duration = media_playlists.iter().fold(initial_dur, |acc, p| {
+                let duration = p.duration();
+                if let Some(acc_dur) = acc {
+                    if let Some(p_dur) = duration {
+                        Some(acc_dur.min(p_dur))
+                    } else {
+                        Some(acc_dur)
+                    }
+                } else {
+                    duration
+                }
+            });
+            if let Some(min_duration) = min_duration {
+                (min_duration - 10.).max(0.)
+            } else {
+                0.
+            }
+        }
     }
 }
 

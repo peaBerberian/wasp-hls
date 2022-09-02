@@ -6,7 +6,7 @@ use crate::{
         jsFetchU8,
     },
     Logger,
-    buffers::MediaBuffers,
+    media_element::MediaElementReference,
     utils::url::Url,
     requester::{Requester, PlaylistFileType},
     adaptive::AdaptiveQualitySelector,
@@ -29,7 +29,7 @@ impl Dispatcher {
             adaptive_selector: AdaptiveQualitySelector::new(),
             content_tracker: None,
             requester: Requester::new(player_id),
-            buffers: None,
+            media_element_ref: MediaElementReference::new(player_id),
             last_position: 0.,
             buffer_goal: 30.,
             segment_selectors: NextSegmentSelectors::new(0., 30.),
@@ -43,11 +43,9 @@ impl Dispatcher {
         let content_url = Url::new(content_url);
         self.requester.fetch_playlist(content_url, PlaylistFileType::Unknown);
         Logger::info("Attaching MediaSource");
-        match MediaBuffers::initialize(self.id) {
-            Err(_) =>
-                // TODO handle exact error
-                self.fail_on_error("Unknown error while trying to attach a MediaSource to the Media element"),
-            Ok(mb) => self.buffers = Some(mb),
+        if let Err(_) = self.media_element_ref.initialize() {
+            // TODO handle exact error
+            self.fail_on_error("Unknown error while trying to attach a MediaSource to the Media element");
         }
     }
 

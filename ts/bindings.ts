@@ -167,6 +167,19 @@ export function abortRequest(id: RequestId) : boolean {
   return false;
 }
 
+export function seek(playerId: PlayerId, position: number) {
+  try {
+    const playerObj = playersStore.get(playerId);
+    if (playerObj === undefined) {
+      // XXX TODO
+      return ;
+    }
+    playerObj.videoElement.currentTime = position;
+  } catch (_e) {
+    // XXX TODO
+  }
+}
+
 /**
  * @param {number} playerId
  * @returns {number}
@@ -706,3 +719,4 @@ win.jsEndOfStream = endOfStream;
 win.jsStartObservingPlayback = startObservingPlayback;
 win.jsStopObservingPlayback = stopObservingPlayback;
 win.jsFreeResource = freeResource;
+win.jsSeek = seek;

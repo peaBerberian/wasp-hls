@@ -160,6 +160,8 @@ extern "C" {
     // Free resource stored in JavaScript's memory kept alive for the current
     // `WaspHlsPlayer`.
     pub fn jsFreeResource(resource_id: ResourceId) -> bool;
+
+    pub fn jsSeek(player_id: PlayerId, position: f64);
     //    // Check if the given mime-type and codecs are supported for playback.
     //    //
     //    // Returns `true` if that is the case, false if it isn't

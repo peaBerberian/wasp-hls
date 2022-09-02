@@ -1,9 +1,9 @@
 use crate::{
     wasm_bindgen,
     bindings::PlayerId,
-    buffers::MediaBuffers,
+    media_element::MediaElementReference,
     requester::Requester,
-    content::ContentTracker,
+    content_tracker::ContentTracker,
     adaptive::AdaptiveQualitySelector,
     segment_selector::NextSegmentSelectors,
 };
@@ -34,11 +34,13 @@ pub struct Dispatcher {
     /// `None` if no "MultiVariant Playlist" has been loaded yet.
     content_tracker: Option<ContentTracker>,
 
-    /// Abstraction allowing to create and store `SourceBuffer`s on the `MediaSource` attached
-    /// to the media element itself linked to the `Dispatcher`.
-    ///
-    /// None if not `MediaSource` has been attached yet.
-    buffers: Option<MediaBuffers>,
+    ///// Abstraction allowing to create and store `SourceBuffer`s on the `MediaSource` attached
+    ///// to the media element itself linked to the `Dispatcher`.
+    /////
+    ///// None if not `MediaSource` has been attached yet.
+    //buffers: Option<MediaBuffers>,
+
+    media_element_ref: MediaElementReference,
 
     /// Abstraction allowing to perform playlist and segment requests, while
     /// easily monitoring requests that are pending.
@@ -56,15 +58,6 @@ pub struct Dispatcher {
     last_position: f64,
 
     segment_selectors: NextSegmentSelectors,
-}
-
-pub struct MediaState {
-    last_position: f64,
-    ready_state: u8,
-    buffered: Vec<(f64, f64)>,
-    paused: bool,
-    seeking: bool,
-    initial_seek_performed: bool,
 }
 
 /// Identify the JavaScript `readyState` of a created `MediaSource` instance.

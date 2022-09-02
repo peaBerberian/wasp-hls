@@ -6,10 +6,83 @@ use crate::{bindings::{
     jsAppendBuffer,
     jsAppendBufferJsBlob,
     jsRemoveBuffer,
+    jsSeek,
     JsResult,
     PlayerId,
-    MediaType, jsAttachMediaSource, jsEndOfStream, jsRemoveMediaSource,
+    MediaType, jsAttachMediaSource, jsEndOfStream, jsRemoveMediaSource, MediaObservation,
 }, dispatcher::MediaSourceReadyState, Logger};
+
+pub(crate) struct MediaElementReference {
+    id: PlayerId,
+    initial_seek_performed: bool,
+    incoming_seek: Option<f64>,
+    last_observation: Option<MediaObservation>,
+    buffers: Option<MediaBuffers>,
+}
+
+impl MediaElementReference {
+    pub fn new(player_id: PlayerId) -> Self {
+        Self {
+            id: player_id,
+            initial_seek_performed: false,
+            incoming_seek: None,
+            last_observation: None,
+            buffers: None,
+        }
+    }
+
+    pub fn initialize(&mut self) -> Result<(), AttachMediaSourceErrorCode> {
+        self.initial_seek_performed = false;
+        jsAttachMediaSource(self.id).result().map_err(|e| e.0)?;
+        self.buffers = Some(MediaBuffers {
+            id: self.id,
+            ready_state: MediaSourceReadyState::Closed,
+            video: None,
+            audio: None,
+        });
+        Ok(())
+    }
+
+    pub fn buffers(&self) -> Option<&MediaBuffers> {
+        self.buffers.as_ref()
+    }
+
+    pub fn buffers_mut(&mut self) -> Option<&mut MediaBuffers> {
+        self.buffers.as_mut()
+    }
+
+    pub fn seek_once_ready(&mut self, position: f64) {
+        if !self.initial_seek_performed {
+            self.incoming_seek = Some(position);
+        } else {
+            if let Some(obs) = &self.last_observation {
+                if obs.ready_state() < 1 {
+                    self.incoming_seek = Some(position);
+                    return ;
+                }
+            }
+            jsSeek(self.id, position);
+        }
+    }
+
+    pub fn on_observation(&mut self, observation: MediaObservation) {
+        self.last_observation = Some(observation);
+        if !self.initial_seek_performed &&
+            self.last_observation.as_ref().unwrap().ready_state() >= 1
+        {
+            if let Some(pos) = self.incoming_seek {
+                jsSeek(self.id, pos);
+            }
+            self.initial_seek_performed = true;
+        }
+    }
+
+    pub fn reset(&mut self) {
+        self.initial_seek_performed = false;
+        self.last_observation = None;
+        self.buffers = None;
+    }
+}
 
 /// Structure keeping track of the MediaSource and its attached audio and video
 /// SourceBuffers, making sure only one is created for each and that one is not
@@ -34,17 +107,6 @@ pub(crate) struct MediaBuffers {
 }
 
 impl MediaBuffers {
-    /// Only one `MediaBuffers` should be created by `PlayerId`.
-    pub(crate) fn initialize(id: PlayerId) -> Result<Self, AttachMediaSourceErrorCode> {
-        jsAttachMediaSource(id).result().map_err(|e| e.0)?;
-        Ok(Self {
-            id,
-            ready_state: MediaSourceReadyState::Closed,
-            video: None,
-            audio: None,
-        })
-    }
-
     /// Returns the current `ready_state` of the `MediaBuffers`, which is
     /// binded to the `MediaSource`'s (from the Media Source specification)
     /// `readyState` concept.

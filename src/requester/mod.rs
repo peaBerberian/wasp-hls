@@ -8,7 +8,7 @@ use crate::{
         jsAbortRequest,
     },
     Logger,
-    content::MediaPlaylistPermanentId,
+    content_tracker::MediaPlaylistPermanentId,
     parser::SegmentInfo,
     utils::url::Url,
 };
