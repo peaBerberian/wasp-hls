@@ -94,7 +94,7 @@ pub struct MediaTag {
     // characteristics
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MediaTagType {
     Audio,
     Video,
@@ -279,8 +279,8 @@ impl MediaTag {
         self.url.as_ref()
     }
 
-    pub fn typ(&self) -> &MediaTagType {
-        &self.typ
+    pub fn typ(&self) -> MediaTagType {
+        self.typ
     }
 
     pub fn group_id(&self) -> &str {
@@ -293,5 +293,23 @@ impl MediaTag {
 
     pub fn is_default(&self) -> bool {
         self.default
+    }
+
+    pub fn language(&self) -> Option<&str> {
+        let l = self.language.as_ref()?;
+        Some(l.as_str())
+    }
+
+    pub fn assoc_language(&self) -> Option<&str> {
+        let l = self.assoc_language.as_ref()?;
+        Some(l.as_str())
+    }
+
+    pub fn name(&self) -> &str {
+        self.name.as_str()
+    }
+
+    pub fn channels(&self) -> Option<u32> {
+        self.channels
     }
 }

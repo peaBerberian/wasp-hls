@@ -37,6 +37,36 @@ pub enum MediaPlaylistLoadedState {
     NotLoaded,
 }
 
+pub struct AvailableAudioTrack<'a> {
+    is_current: bool,
+    id: usize,
+    language: Option<&'a str>,
+    assoc_language: Option<&'a str>,
+    name: &'a str,
+    channels: Option<u32>,
+}
+
+impl<'a> AvailableAudioTrack<'a> {
+   pub fn is_current(&self) -> bool {
+       self.is_current
+   }
+   pub fn id(&self) -> usize {
+       self.id
+   }
+   pub fn language(&self) -> Option<&'a str> {
+       self.language
+   }
+   pub fn assoc_language(&self) -> Option<&'a str> {
+       self.assoc_language
+   }
+   pub fn name(&self) -> &'a str {
+       self.name
+   }
+   pub fn channels(&self) -> Option<u32> {
+       self.channels
+   }
+}
+
 impl ContentTracker {
     pub(crate) fn new(playlist: MultiVariantPlaylist) -> Self {
         Self {
@@ -47,13 +77,35 @@ impl ContentTracker {
         }
     }
 
-    pub(crate) fn curr_media_playlists(&self) -> Vec<&MediaPlaylist> {
+    pub(crate) fn get_available_audio_tracks(&self) -> Vec<AvailableAudioTrack> {
+        let mut available_audio_tracks : Vec<AvailableAudioTrack> = vec![];
+        for (idx, media) in self.playlist.medias().iter().enumerate() {
+            if media.typ() == MediaTagType::Audio {
+                let is_current =  if let Some(MediaPlaylistPermanentId::MediaTagUrl(id)) = self.curr_audio_idx {
+                    id == idx
+                } else {
+                    false
+                };
+                available_audio_tracks.push(AvailableAudioTrack {
+                    is_current,
+                    id: idx,
+                    language: media.language(),
+                    assoc_language: media.assoc_language(),
+                    name: media.name(),
+                    channels: media.channels()
+                })
+            }
+        }
+        available_audio_tracks
+    }
+
+    pub(crate) fn curr_media_playlists(&self) -> Vec<(MediaType, &MediaPlaylist)> {
         let mut ret = vec![];
         if let Some(pl) = self.curr_media_playlist(MediaType::Audio) {
-            ret.push(pl)
+            ret.push((MediaType::Audio, pl));
         }
         if let Some(pl) = self.curr_media_playlist(MediaType::Video) {
-            ret.push(pl)
+            ret.push((MediaType::Video, pl));
         }
         ret
     }
@@ -84,7 +136,6 @@ impl ContentTracker {
         }
     }
 
-
     pub(crate) fn update_media_playlist(&mut self,
         id: &MediaPlaylistPermanentId,
         media_playlist_data: impl BufRead,
@@ -100,39 +151,6 @@ impl ContentTracker {
 
     pub(crate) fn variants(&self) -> &[VariantStream] {
         self.playlist.variants()
-    }
-
-    pub(crate) fn set_curr_variant(&mut self, variant_idx: usize) {
-        let variants = self.playlist.variants();
-        if variant_idx >= variants.len() {
-            panic!("Variant index provided is out of bounds.");
-        }
-        self.curr_variant_idx = Some(variant_idx);
-
-        let variant = self.playlist.get_variant(variant_idx).unwrap();
-        if variant.has_type(MediaType::Video) {
-            self.curr_video_idx = Some(MediaPlaylistPermanentId::VariantStreamUrl(variant_idx));
-        } else {
-            self.curr_video_idx = None;
-        }
-
-        if let Some(group_id) = variant.audio.as_ref() {
-            let best_audio = self.playlist.medias().iter().enumerate().fold(None, |acc, x| {
-                if x.1.typ() == &MediaTagType::Audio && x.1.group_id() == group_id &&
-                    x.1.is_autoselect() && (acc.is_none() || x.1.is_default())
-                {
-                    return Some(x.0);
-                }
-                acc
-            });
-            if let Some(idx) = best_audio {
-                self.curr_audio_idx = Some(MediaPlaylistPermanentId::MediaTagUrl(idx));
-            } else {
-                self.curr_audio_idx = None;
-            }
-        } else {
-            self.curr_audio_idx = None;
-        }
     }
 
     pub(crate) fn curr_duration(&self) -> Option<f64> {
@@ -244,13 +262,13 @@ impl ContentTracker {
     pub(crate) fn get_expected_start_time(&self) -> f64 {
         let media_playlists = self.curr_media_playlists();
         if media_playlists.is_empty() ||
-            media_playlists.iter().any(|p| { p.end_list })
+            media_playlists.iter().any(|p| { p.1.end_list })
         {
             0.
         } else {
             let initial_dur: Option<f64> = None;
             let min_duration = media_playlists.iter().fold(initial_dur, |acc, p| {
-                let duration = p.duration();
+                let duration = p.1.duration();
                 if let Some(acc_dur) = acc {
                     if let Some(p_dur) = duration {
                         Some(acc_dur.min(p_dur))
@@ -266,6 +284,39 @@ impl ContentTracker {
             } else {
                 0.
             }
+        }
+    }
+
+    fn set_curr_variant(&mut self, variant_idx: usize) {
+        let variants = self.playlist.variants();
+        if variant_idx >= variants.len() {
+            panic!("Variant index provided is out of bounds.");
+        }
+        self.curr_variant_idx = Some(variant_idx);
+
+        let variant = self.playlist.get_variant(variant_idx).unwrap();
+        if variant.has_type(MediaType::Video) {
+            self.curr_video_idx = Some(MediaPlaylistPermanentId::VariantStreamUrl(variant_idx));
+        } else {
+            self.curr_video_idx = None;
+        }
+
+        if let Some(group_id) = variant.audio.as_ref() {
+            let best_audio = self.playlist.medias().iter().enumerate().fold(None, |acc, x| {
+                if x.1.typ() == MediaTagType::Audio && x.1.group_id() == group_id &&
+                    x.1.is_autoselect() && (acc.is_none() || x.1.is_default())
+                {
+                    return Some(x.0);
+                }
+                acc
+            });
+            if let Some(idx) = best_audio {
+                self.curr_audio_idx = Some(MediaPlaylistPermanentId::MediaTagUrl(idx));
+            } else {
+                self.curr_audio_idx = None;
+            }
+        } else {
+            self.curr_audio_idx = None;
         }
     }
 }
