@@ -227,19 +227,19 @@ The architecture of the project is as follow:
 Here's a definition of terms and blocks in this schema:
 
   - **Typescript**: This upper part of the schema describes the Typescript
-    code - that will be compiled to JavaScript - present in the `./ts/`
+    code - that will be compiled to JavaScript - present in the `./src/ts/`
     directory.
 
   - **JS API**: Implement the library's API, callable from JS applications. This
     is the only part visible to the outside.
 
-    The JS API is defined in the `./ts/api.ts` file.
+    The JS API is defined in the `./src/ts/api.ts` file.
 
   - **TS bindings**: Provide web APIs to the WebAssembly part, for example media
     buffering APIs. Also call event listeners on the Rust-side on various
     events.
 
-    The TS bindings are defined in the `./ts/bindings.ts` file.
+    The TS bindings are defined in the `./src/ts/bindings.ts` file.
 
   - **Rust**: This lower part of the schema describes the Rust code - that will
     be compiled to WebAssembly - present in the `./src/` directory.
