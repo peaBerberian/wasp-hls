@@ -117,6 +117,7 @@ export interface MediaSourceInstanceInfo {
 }
 
 export interface PlayerInstanceInfo {
+  id: PlayerId;
   dispatcher: Dispatcher;
   videoElement: HTMLVideoElement;
   mediaSourceObj: MediaSourceInstanceInfo | null;

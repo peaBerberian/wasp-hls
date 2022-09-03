@@ -77,7 +77,7 @@ export function transmux(
   inputSegment: Uint8Array
 ) : Uint8Array | null {
   if (transmuxer === undefined) {
-    transmuxer = new muxjs.mp4.Transmuxer( );
+    transmuxer = new muxjs.mp4.Transmuxer();
   }
 
   const subSegments : Uint8Array[] = [];
