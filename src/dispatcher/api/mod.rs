@@ -53,7 +53,7 @@ impl Dispatcher {
     pub fn get_available_audio_tracks(&self) -> Vec<u8> {
         match self.content_tracker {
             None => vec![],
-            Some(ref c) => c.get_available_audio_tracks()
+            Some(ref c) => c.todo_get_available_audio_tracks()
                 .iter()
                 .map(|x| x.serialize_for_js())
                 .flatten()

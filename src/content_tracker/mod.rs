@@ -77,28 +77,6 @@ impl ContentTracker {
         }
     }
 
-    pub(crate) fn get_available_audio_tracks(&self) -> Vec<AvailableAudioTrack> {
-        let mut available_audio_tracks : Vec<AvailableAudioTrack> = vec![];
-        for (idx, media) in self.playlist.medias().iter().enumerate() {
-            if media.typ() == MediaTagType::Audio {
-                let is_current =  if let Some(MediaPlaylistPermanentId::MediaTagUrl(id)) = self.curr_audio_idx {
-                    id == idx
-                } else {
-                    false
-                };
-                available_audio_tracks.push(AvailableAudioTrack {
-                    is_current,
-                    id: idx,
-                    language: media.language(),
-                    assoc_language: media.assoc_language(),
-                    name: media.name(),
-                    channels: media.channels()
-                })
-            }
-        }
-        available_audio_tracks
-    }
-
     pub(crate) fn curr_media_playlists(&self) -> Vec<(MediaType, &MediaPlaylist)> {
         let mut ret = vec![];
         if let Some(pl) = self.curr_media_playlist(MediaType::Audio) {
@@ -319,5 +297,30 @@ impl ContentTracker {
             self.curr_audio_idx = None;
         }
     }
-}
 
+    // TODO Should not be relied on for now, still working out the details
+    pub(crate) fn todo_get_available_audio_tracks(&self) -> Vec<AvailableAudioTrack> {
+        let mut available_audio_tracks : Vec<AvailableAudioTrack> = vec![];
+        for (idx, media) in self.playlist.medias().iter().enumerate() {
+            if media.typ() == MediaTagType::Audio {
+                // TODO Implementing this method might actually be harder when considering
+                // multiple audio media tags with the same characteristics but used in different
+                // variants.
+                let is_current =  if let Some(MediaPlaylistPermanentId::MediaTagUrl(id)) = self.curr_audio_idx {
+                    id == idx
+                } else {
+                    false
+                };
+                available_audio_tracks.push(AvailableAudioTrack {
+                    is_current,
+                    id: idx,
+                    language: media.language(),
+                    assoc_language: media.assoc_language(),
+                    name: media.name(),
+                    channels: media.channels()
+                })
+            }
+        }
+        available_audio_tracks
+    }
+}
