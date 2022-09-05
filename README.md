@@ -1,14 +1,19 @@
-# Wasp-hls: A WebAssembly and Web Worker-based HLS Media Player
+<p align="center">
+  <img height="200px" src="https://user-images.githubusercontent.com/8694124/188496034-3b9bde98-58f0-49d0-9744-f3355cd2236e.png#gh-light-mode-only" alt="Wasp-hls's logo"/>
+  <img height="200px" src="https://user-images.githubusercontent.com/8694124/188496177-e02ac9f2-ecc5-4d79-a7ce-624eaa71a55b.png#gh-dark-mode-only" alt="Wasp-hls's logo"/>
+</p>
 
-This repository is the home of the `Wasp-hls` media player, a
-not-ready-at-all-yet personal project and proof of concept which tries to
-implement a simple [HLS (the adaptive streaming
-protocol)](https://en.wikipedia.org/wiki/HTTP_Live_Streaming) media player for
-the web while relying the most possible both on WebAssembly (by using the
-[Rust](https://www.rust-lang.org/) language) and on Web Workers, even using if 
-available the recent MSE-in-worker APIs to reduce the influence an heavy UI can
-have on media buffering.
+Wasp-hls is an [HLS](https://en.wikipedia.org/wiki/HTTP_Live_Streaming) media
+player for the web which:
 
+  1. Relies the most possible on WebAssembly (Written initially in the
+     [Rust](https://www.rust-lang.org/) language)
+
+  2. Runs mostly in a Web Worker (even for media buffering when APIs are
+     available), to reduce the influence an heavy UI can have on playback.
+
+Note that this is only a personal project as well as a proof of concept and it
+is still heavily in development. 
 
 ## Why starting this project?
 
