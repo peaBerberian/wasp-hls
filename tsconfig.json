@@ -2,7 +2,7 @@
   "compilerOptions": {
     "allowJs": true,
     "target": "es2020",
-    "lib": ["es2017", "dom"],
+    "lib": ["es2017", "dom", "WebWorker"],
     "exactOptionalPropertyTypes": true,
     "forceConsistentCasingInFileNames": true,
     "skipLibCheck": false,
@@ -20,7 +20,9 @@
     ]
   },
   "include": [
-    "./src/ts/**/*",
+    "./src/ts-main/**/*",
+    "./src/ts-worker/**/*",
+    "./src/ts-common/**/*",
     "./wasm/**/*"
   ]
 }

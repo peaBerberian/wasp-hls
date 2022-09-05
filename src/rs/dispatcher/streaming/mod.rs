@@ -8,7 +8,6 @@ use crate::{
         RequestId,
         SourceBufferId,
         jsSetMediaSourceDuration,
-        JsResult,
         MediaObservation,
     },
     Logger,
@@ -94,10 +93,7 @@ impl Dispatcher {
             let start_time = content_tracker.get_expected_start_time();
             self.media_element_ref.seek_once_ready(start_time);
             if let Some(duration) = content_tracker.curr_duration() {
-                if let Err(_) = jsSetMediaSourceDuration(self.id, duration).result() {
-                    self.fail_on_error("Unable to update the MediaSource duration");
-                    return;
-                }
+                jsSetMediaSourceDuration(self.id, duration);
             } else {
                 Logger::warn("Unknown content duration");
             }

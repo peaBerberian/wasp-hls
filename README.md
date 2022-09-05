@@ -1,10 +1,13 @@
-# Wasp-hls: A WebAssembly-based HLS Media Player
+# Wasp-hls: A WebAssembly and Web Worker-based HLS Media Player
 
 This repository is the home of the `Wasp-hls` media player, a
 not-ready-at-all-yet personal project and proof of concept which tries to
-implement a simple HLS (the adaptive streaming protocol) media player for
-the web while relying the most possible on WebAssembly, by using the
-[Rust](https://www.rust-lang.org/) language.
+implement a simple [HLS (the adaptive streaming
+protocol)](https://en.wikipedia.org/wiki/HTTP_Live_Streaming) media player for
+the web while relying the most possible both on WebAssembly (by using the
+[Rust](https://www.rust-lang.org/) language) and on Web Workers, even using if 
+available the recent MSE-in-worker APIs to reduce the influence an heavy UI can
+have on media buffering.
 
 
 ## Why starting this project?
@@ -18,15 +21,13 @@ worthwile need I personally observed when working on the RxPlayer.
 
 The real reasons why I started this project are more personal, mainly:
 
-  - for fun
-
   - to see how IO-heavy logic (like we have here with many requests, media
     segments streaming, playback observation, network metrics etc.) using web
     APIs only exposed to JavaScript could be conjugated with WebAssembly and
     Rust.
 
-  - to experiment with a big-enough WebAssembly-based library: how should it
-    interact with applications written in JavaScript?
+  - to experiment with a big-enough WebAssembly and Web Worker-based library:
+    how should it interact with applications written in JavaScript?
 
   - to learn more about the HLS streaming protocol, for which the RxPlayer does
     not provide first class support (yet?)
@@ -39,6 +40,10 @@ The real reasons why I started this project are more personal, mainly:
     disadvantage) in relying on WebAssembly for the core logic of a media
     player, in various situations (multiple players on the same page, large 4k
     segments, web workers, mse-in-worker).
+
+  - to play with a Web Worker-based media player, and find out its influence
+    in terms of API definition, synchronization difficulties, performance issues
+    etc.
 
   - to work on and improve my Rust skills
 
@@ -54,6 +59,11 @@ Type of contents:
   - [x] Transcode mpeg-ts (thanks to mux.js for now)
   - [ ] Play HLS live contents _(high priority)_
   - [ ] Proper support of HLS low-latency contents
+
+Worker-related features:
+  - [x] Load content-related resources and run main logic loop in worker
+  - [x] Use MSE-in-Worker when available
+  - [x] Rely on main thread for MSE when MSE-in-Worker is not available
 
 Adaptive BitRate:
   - [x] Choose variant based on throughtput-based estimates
@@ -87,7 +97,6 @@ Decryption:
   - [ ] Support content decryption _(very low priority)_
 
 Miscellaneous:
-  - [ ] Make usage of the upcoming MSE-in-worker API
   - [ ] Proper Error API (should be high priority but that does not look like
     fun for now!)
   - [ ] WebAssembly-based mpeg-ts transcoder (very low priority)
@@ -184,105 +193,143 @@ most do not prevent playback):
 
 The architecture of the project is as follow:
 ```
-      +------------------------------------------------------------------------------+  |T
-      |                                                                              |  |y
-      |                                   JS API                                     |  |p
-      |                                                                              |  |e
-      +------------------------------------------------------------------------------+  |S
-                         |                                                              |c
-                         |                         +--------------------------------+   |r
-                         |                         |                                |   |i
-                         |                         |          TS bindings           |   |p
-                         |                         |                                |   |t
-                         |                         +--------------------------------+   |
-                         |                                 ^                |
-                         |                                 |                |
-                         |                                 |                |
-                         |                                 |                |
-                         |                                 |                |
-                         V                                 |                V
-+-------------------------------------------------+      +-------------------+          |R
-|                 Dispatcher                      |<-----|    Rs Bindings    |          |u
-+-------------------------------------------------+      +-------------------+          |s
-    |            |         |                   | |                ^                     |t
-    |            |         |                   | |                |                     |
-    |      +-----|---------|----------+------+-|-|----------------+                     |
-    |      |     |         |          |      | | |                |                     |
-    |      |     |         |          |      | | |                |                     |
-    V      |     |         V          |      | | V                |                     |
-+-----------+    |   +---------------------+ | | +---------------------------+    | M   |
-| Requester |    |   | NextSegmentSelector | | | |  AdaptiveQualitySelector  |    | o   |
-+-----------+    |   +---------------------+ | | +---------------------------+    | d   |
-                 V                           | V                                  | u   |
-    +----------------+                       | +-----------------------+          | l   |
-    | ContentTracker |-----------------------+-| MediaElementReference |          | e   |
-    +----------------+                         +---------------------- +          | s   |
-                                                                                  |     |
-                       (and other modules...)                                     |     |
-                                                                                  |     |
-                                                                                        |
-                                                                                        |
+      +------------------------------------------------------------------------------+
+      |                                                                              |
+      |                                   JS API                                     |
+      |                                                                              |
+      +------------------------------------------------------------------------------+
+  ^                    |   ^                                        ^
+  | Main thread        |   |                                        |
+-----------------------|---|----------------------------------------|-------------------
+  | Web Worker         |   |                                        |
+  V                    V   |                                        |
+      +-----------------------------------+        +--------------------------------+
+      |                                   |        |                                |
+      |          MessageReceiver          |        |           TS bindings          |
+      |                                   |        |                                |
+      +-----------------------------------+        +--------------------------------+
+                        |                                 ^                |
+  ^ JavaScript          |                                 |                |
+  | (once compiled)     |                                 |                |
+---------------------------------------------------------------------------------------
+  |  WebAssembly        |                                 |                |
+  V  (once compiled)    |                                 |                |
+                        V                                 |                V
++-------------------------------------------------+      +-------------------+
+|                   Dispatcher                    |<-----|    Rs Bindings    |
++-------------------------------------------------+      +-------------------+
+    |            |         |                   | |                ^
+    |            |         |                   | |                |
+    |      +-----|---------|----------+------+-|-|----------------+
+    |      |     |         |          |      | | |                |
+    |      |     |         |          |      | | |                |
+    V      |     |         V          |      | | V                |
++-----------+    |   +---------------------+ | | +---------------------------+    | M
+| Requester |    |   | NextSegmentSelector | | | |  AdaptiveQualitySelector  |    | o
++-----------+    |   +---------------------+ | | +---------------------------+    | d
+                 V                           | V                                  | u
+    +----------------+                       | +-----------------------+          | l
+    | ContentTracker |-----------------------+-| MediaElementReference |          | e
+    +----------------+                         +---------------------- +          | s
+                                                                                  |
+                       (and other modules...)                                     |
+                                                                                  |
 ```
 
-Here's a definition of terms and blocks in this schema:
+Here's a definition of terms and blocks in this schema, from left to right and
+top to bottom:
 
-  - **Typescript**: This upper part of the schema describes the Typescript
-    code - that will be compiled to JavaScript - present in the `./src/ts/`
-    directory.
+  - **JS API**: Implement the library's API, callable from JS applications.
 
-  - **JS API**: Implement the library's API, callable from JS applications. This
-    is the only part visible to the outside.
+    The JS API is defined in the `src/ts-main/api.ts` file.
 
-    The JS API is defined in the `./src/ts/api.ts` file.
+  - **Main thread**: On top of the corresponding line is the code running in the
+    main thread, alongside your application.
+
+    It hosts the API as well as everything that needs to interact with the page,
+    such as handling the video element.
+
+    The corresponding code runs in the `src/ts-main/` directory.
+
+  - **Web Worker**: Below the corresponding line is the code running in a single
+    Web Worker. In it runs the main logic of the application.
+
+    That way, actions such as heavy UI interactions will only have a minimal
+    impact on media buffering, reducing the risk of rebuffering and improving
+    the user experience.
+
+    The corresponding code runs in:
+      - the `src/ts-worker/` directory for the TypeScript part of the code
+        (compiled into JavaScript once the library is built).
+      - the `src/rs/` directory for the Rust part of the code (compiled
+        into WebAssembly once the library is built).
+
+  - **MessageReceiver**: Entry point of the Web Worker, to which the API post
+    messages to.
+
+    The MessageReceiver is defined in the `src/ts-worker/MessageReceiver.ts`
+    file.
 
   - **TS bindings**: Provide web APIs to the WebAssembly part, for example media
     buffering APIs. Also call event listeners on the Rust-side on various
     events.
 
-    The TS bindings are defined in the `./src/ts/bindings.ts` file.
+    Some Web API can only be called on the main thread, which is why the TS
+    bindings sometimes need to post messages back to the API.
 
-  - **Rust**: This lower part of the schema describes the Rust code - that will
-    be compiled to WebAssembly - present in the `./src/` directory.
+    The TS bindings are defined in the `src/ts-worker/bindings.ts` file.
+
+  - **Javascript (once compiled)**: higher than the corresponding line is the
+    code written in TypeScript, which is then compiled to JavaScript.
+
+    That code is present in the following directories:
+      - `src/ts-main/` for the code running in the main thread, such as the
+        API
+      - `src/ts-worker/` for the code running on the WebWorker
+
+  - **WebAssembly (once compiled)**: Lower than the corresponding line is the
+    of code written in Rust - that will be compiled to WebAssembly - present in
+    the `src/rs` directory.
 
   - **Dispatcher**: Entry point of the Rust logic. Receive orders and/or events,
     and call the right modules in the right order.
 
-    The Dispatcher is defined in the `./src/dispatcher/` directory.
+    The Dispatcher is defined in the `src/rs/dispatcher/` directory.
 
-  - **Rs bindings**: Define both Typescript functions exposed by TS bindings but
+  - **Rs bindings**: Define both TypeScript functions exposed by TS bindings but
     also "event listeners" (which are technically a part of the Dispatcher)
     which will be called by TS bindings on various events.
 
-    Rs bindings are defined in the `./src/bindings/` directory.
-
-  - **Modules**: Specialized blocks of the Rust logic doing specific tasks,
-    potentially calling Rs bindings when wanting to call web API.
+    Rs bindings are defined in the `src/rs/bindings/` directory.
 
   - **Requester**: Schedule playlist and segment requests.
 
-    The Requester is defined in the `./src/requester/` directory.
+    The Requester is defined in the `src/rs/requester/` directory.
 
   - **NextSegmentSelector**: Keep track of the next segments that should be
     requested
 
-    The NextSegmentSelector is defined in the `./src/segment_selector/`
+    The NextSegmentSelector is defined in the `src/rs/segment_selector/`
     directory.
 
   - **AdaptiveQualitySelector**: Implement Adaptive BitRate (a.k.a. ABR)
     management, such as calculating the network bandwidth, to be able to
     choose the best variant and media selected.
 
-    The AdaptiveQualitySelector is defined in the `./src/adaptive/`
+    The AdaptiveQualitySelector is defined in the `src/rs/adaptive/`
     directory.
 
   - **ContentTracker**: Parses and stores the metadata of the current content as
     well as keep tracks of the current variant and media playlists selected.
 
-    The ContentTracker is defined in the `./src/content_tracker/`
+    The ContentTracker is defined in the `src/rs/content_tracker/`
     directory.
 
   - **MediaElementReference**: Interface to interact with the media element in
     the web page, as well as to buffer media.
 
-    The MediaElementReference is defined in the `./src/media_element/`
+    The MediaElementReference is defined in the `src/rs/media_element/`
     directory.
+
+  - **Modules**: Specialized blocks of the Rust logic doing specific tasks,
+    potentially calling Rs bindings when wanting to call web API.
