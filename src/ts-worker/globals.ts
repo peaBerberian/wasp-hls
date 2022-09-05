@@ -102,25 +102,35 @@ export interface RequestObject {
   abortController: AbortController;
 }
 
-export interface SourceBufferInstanceInfo {
+export interface SourceBufferInstanceInfo<HasMseInWorker extends boolean> {
   id: SourceBufferId;
-  sourceBuffer: SourceBuffer;
+  sourceBuffer: HasMseInWorker extends true ?
+    SourceBuffer :
+    null;
   transmuxer: null | ((input: Uint8Array) => Uint8Array | null);
 }
 
-export interface MediaSourceInstanceInfo {
+export interface WorkerMediaSourceInstanceInfo {
+  type: "worker";
+  mediaSourceId: number;
   mediaSource: MediaSource;
-  objectURL: string;
   removeEventListeners: () => void;
   nextSourceBufferId: number;
-  sourceBuffers: SourceBufferInstanceInfo[];
+  sourceBuffers: Array<SourceBufferInstanceInfo<true>>;
+}
+
+export interface MainMediaSourceInstanceInfo {
+  type: "main";
+  mediaSourceId: number;
+  nextSourceBufferId: number;
+  sourceBuffers: Array<SourceBufferInstanceInfo<false>>;
 }
 
 export interface PlayerInstanceInfo {
   id: PlayerId;
+  hasWorkerMse: boolean;
   dispatcher: Dispatcher;
-  videoElement: HTMLVideoElement;
-  mediaSourceObj: MediaSourceInstanceInfo | null;
+  mediaSourceObj: WorkerMediaSourceInstanceInfo | MainMediaSourceInstanceInfo | null;
   observationsObj: {
     removeEventListeners: () => void;
     timeoutId: number | undefined;

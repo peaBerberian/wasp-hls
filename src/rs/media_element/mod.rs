@@ -1,15 +1,12 @@
 use crate::{bindings::{
-    AddSourceBufferErrorCode,
-    AttachMediaSourceErrorCode,
     DataSource,
     jsAddSourceBuffer,
     jsAppendBuffer,
     jsAppendBufferJsBlob,
     jsRemoveBuffer,
     jsSeek,
-    JsResult,
     PlayerId,
-    MediaType, jsAttachMediaSource, jsEndOfStream, jsRemoveMediaSource, MediaObservation,
+    MediaType, jsAttachMediaSource, jsEndOfStream, MediaObservation,
 }, dispatcher::MediaSourceReadyState, Logger};
 
 pub(crate) struct MediaElementReference {
@@ -31,16 +28,15 @@ impl MediaElementReference {
         }
     }
 
-    pub fn initialize(&mut self) -> Result<(), AttachMediaSourceErrorCode> {
+    pub fn initialize(&mut self) {
         self.initial_seek_performed = false;
-        jsAttachMediaSource(self.id).result().map_err(|e| e.0)?;
+        jsAttachMediaSource(self.id);
         self.buffers = Some(MediaBuffers {
             id: self.id,
             ready_state: MediaSourceReadyState::Closed,
             video: None,
             audio: None,
         });
-        Ok(())
     }
 
     pub fn buffers(&self) -> Option<&MediaBuffers> {
@@ -163,7 +159,7 @@ impl MediaBuffers {
                 if self.audio.is_some() {
                     Err(SourceBufferCreationError::AlreadyCreatedWithSameType(media_type))
                 } else {
-                    self.audio = Some(SourceBuffer::new(self.id, media_type, sb_codec)?);
+                    self.audio = Some(SourceBuffer::new(self.id, media_type, sb_codec));
                     Ok(())
                 }
             }
@@ -171,7 +167,7 @@ impl MediaBuffers {
                 if self.video.is_some() {
                     Err(SourceBufferCreationError::AlreadyCreatedWithSameType(media_type))
                 } else {
-                    self.video = Some(SourceBuffer::new(self.id, media_type, sb_codec)?);
+                    self.video = Some(SourceBuffer::new(self.id, media_type, sb_codec));
                     Ok(())
                 }
             }
@@ -287,12 +283,6 @@ pub enum RemoveDataError {
     NoSourceBuffer(MediaType),
 }
 
-impl Drop for MediaBuffers {
-    fn drop(&mut self) {
-        jsRemoveMediaSource(self.id);
-    }
-}
-
 /// Identify a unique JavaScript `SourceBuffer`
 pub type SourceBufferId = u32;
 
@@ -373,34 +363,16 @@ pub enum SourceBufferQueueElement {
 }
 
 impl SourceBuffer {
-    fn new(player_id: PlayerId, media_type: MediaType, typ: String) -> Result<Self, SourceBufferCreationError> {
-        match jsAddSourceBuffer(player_id, media_type, &typ,).result() {
-            Ok(x) => {
-                Ok(Self {
-                    player_id,
-                    id: x as u32,
-                    typ,
-                    is_updating: false,
-                    queue: vec![],
-                    has_been_updated: false,
-                    last_segment_pushed: false,
-                })
-            },
-            Err((AddSourceBufferErrorCode::NoMediaSourceAttached, _)) =>
-                Err(SourceBufferCreationError::NoMediaSourceAttached),
-            Err((AddSourceBufferErrorCode::QuotaExceededError, desc)) =>
-                Err(SourceBufferCreationError::QuotaExceededError(desc.unwrap_or_else(|| {
-                    "`QuotaExceededError` received while attempting to create a SourceBufferCreationError".to_owned()
-                }))),
-            Err((AddSourceBufferErrorCode::MediaSourceIsClosed, _)) =>
-                Err(SourceBufferCreationError::MediaSourceIsClosed),
-            Err((AddSourceBufferErrorCode::TypeNotSupportedError, _)) |
-                Err((AddSourceBufferErrorCode::EmptyMimeType, _)) =>
-                Err(SourceBufferCreationError::CantPlayType(typ)),
-            Err((_, desc)) =>
-                Err(SourceBufferCreationError::UnknownError(desc.unwrap_or_else(|| {
-                    "Unknown Error while attempting to create a SourceBuffer.".to_owned()
-                }))),
+    fn new(player_id: PlayerId, media_type: MediaType, typ: String) -> Self {
+        let x = jsAddSourceBuffer(player_id, media_type, &typ,);
+        Self {
+            player_id,
+            id: x as u32,
+            typ,
+            is_updating: false,
+            queue: vec![],
+            has_been_updated: false,
+            last_segment_pushed: false,
         }
     }
 

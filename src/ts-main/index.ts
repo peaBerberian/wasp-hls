@@ -1,8 +1,8 @@
-import JsWaspHlsPlayer from "./api";
+import WaspHlsPlayer from "./api";
 
-// TODO only debug mode
+// TODO only debug mode?
 /* eslint-disable */
-(window as any).WaspHlsPlayer = JsWaspHlsPlayer;
+(window as any).WaspHlsPlayer = WaspHlsPlayer;
 /* eslint-enable */
 
-export default JsWaspHlsPlayer;
+export default WaspHlsPlayer;

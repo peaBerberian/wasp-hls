@@ -5,7 +5,7 @@
     <meta content="text/html;charset=utf-8" http-equiv="Content-Type"/>
   </head>
   <body>
-    <script src="./bundle.js"></script>
+    <script src="./main.js"></script>
     <script>
       const videoElement = document.createElement("video");
       videoElement.autoplay = true;
@@ -16,7 +16,10 @@
       });
 
       const player = new WaspHlsPlayer(videoElement);
-      player.initialize({ wasmUrl: "./wasp_hls_bg.wasm" }).then(() => {
+      player.initialize({
+        workerUrl: "./worker.js",
+        wasmUrl: "./wasp_hls_bg.wasm"
+      }).then(() => {
         const labelElt = document.createElement("label");
         labelElt.for = "url";
         labelElt.textContent = "URL to HLS MultiVariant (a.k.a. Master) Playlist:";

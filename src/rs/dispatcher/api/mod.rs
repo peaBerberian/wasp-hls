@@ -44,10 +44,7 @@ impl Dispatcher {
         let content_url = Url::new(content_url);
         self.requester.fetch_playlist(content_url, PlaylistFileType::Unknown);
         Logger::info("Attaching MediaSource");
-        if let Err(_) = self.media_element_ref.initialize() {
-            // TODO handle exact error
-            self.fail_on_error("Unknown error while trying to attach a MediaSource to the Media element");
-        }
+        self.media_element_ref.initialize();
     }
 
     pub fn get_available_audio_tracks(&self) -> Vec<u8> {

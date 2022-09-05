@@ -69,16 +69,16 @@ extern "C" {
     // when this MediaSource becomes usable or not when its
     // `on_media_source_state_change` method is called with the "Open"
     // `MediaSourceReadyState`.
-    pub fn jsAttachMediaSource(player_id: PlayerId) -> AttachMediaSourceResult;
+    pub fn jsAttachMediaSource(player_id: PlayerId);
 
     // Remove MediaSource attached to the <video> element associated with
     // the `WaspHlsPlayer` if one, and free all its associated resources
     // (such as event listeners or created ObjectURL).
     //
     // This function performs all those operations synchronously.
-    pub fn jsRemoveMediaSource(player_id: PlayerId) -> RemoveMediaSourceResult;
+    pub fn jsRemoveMediaSource(player_id: PlayerId);
 
-    pub fn jsSetMediaSourceDuration(player_id: PlayerId, duration: f64) -> MediaSourceDurationUpdateResult;
+    pub fn jsSetMediaSourceDuration(player_id: PlayerId, duration: f64);
 
     // Add a SourceBuffer to the created MediaSource, allowing to push media
     // segment of a given type to a lower-level media buffer.
@@ -89,7 +89,7 @@ extern "C" {
         player_id: PlayerId,
         media_type: MediaType,
         typ: &str
-    ) -> AddSourceBufferResult;
+    ) -> SourceBufferId;
 
     // Append media data to the given SourceBuffer.
     //
@@ -105,7 +105,7 @@ extern "C" {
         player_id: PlayerId,
         source_buffer_id: SourceBufferId,
         data: &[u8]
-    ) -> AppendBufferResult;
+    );
 
     // Variant of `jsAppendBuffer` where the data to append actually resides in JavaScript's
     // memory.
@@ -117,7 +117,7 @@ extern "C" {
         player_id: PlayerId,
         source_buffer_id: SourceBufferId,
         segment_id: ResourceId
-    ) -> AppendBufferResult;
+    );
 
     // Remove media data from the given SourceBuffer.
     //
@@ -133,9 +133,9 @@ extern "C" {
         source_buffer_id: SourceBufferId,
         start: f64,
         end: f64
-    ) -> RemoveBufferResult;
+    );
 
-    pub fn jsEndOfStream(player_id: PlayerId) -> EndOfStreamResult;
+    pub fn jsEndOfStream(player_id: PlayerId);
 
     // After this method is called, the `WaspHlsPlayer` instance associated
     // with the given `PlayerId` will regularly receive `PlaybackObservation`
