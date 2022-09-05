@@ -5,18 +5,21 @@
     <meta content="text/html;charset=utf-8" http-equiv="Content-Type"/>
   </head>
   <body>
-    <script src="./bundle.js"></script>
+    <script src="./main.js"></script>
     <script>
-      WaspHlsPlayer.initialize("./wasp_hls_bg.wasm").then(() => {
-        const videoElement = document.createElement("video");
-        videoElement.autoplay = true;
-        videoElement.controls = true;
+      const videoElement = document.createElement("video");
+      videoElement.autoplay = true;
+      videoElement.controls = true;
 
-        videoElement.addEventListener("canplay", () => {
-          videoElement.play();
-        });
-        const player = new WaspHlsPlayer(videoElement);
+      videoElement.addEventListener("canplay", () => {
+        videoElement.play();
+      });
 
+      const player = new WaspHlsPlayer(videoElement);
+      player.initialize({
+        workerUrl: "./worker.js",
+        wasmUrl: "./wasp_hls_bg.wasm"
+      }).then(() => {
         const labelElt = document.createElement("label");
         labelElt.for = "url";
         labelElt.textContent = "URL to HLS MultiVariant (a.k.a. Master) Playlist:";
