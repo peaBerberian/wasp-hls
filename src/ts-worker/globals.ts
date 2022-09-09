@@ -1,104 +1,86 @@
 import { Dispatcher } from "../wasm/wasp_hls";
 
-class JsMemoryResourceStore {
-  private _store: Partial<Record<ResourceId, MemoryResource>>;
+export interface WorkerInfo {
+  dispatcher: Dispatcher;
+  content: ContentInfo | null;
+}
+
+class PlayerInstance {
+  public hasWorkerMse: boolean | undefined;
+  private  _instanceInfo: WorkerInfo | null;
+  constructor() {
+    this._instanceInfo = null;
+    this.hasWorkerMse = undefined;
+  }
+
+  public start(hasWorkerMse: boolean) {
+    this.hasWorkerMse = hasWorkerMse;
+    this._instanceInfo = {
+      dispatcher: new Dispatcher(),
+      content: null,
+    };
+  }
+
+  public dispose(): void {
+    this._instanceInfo?.dispatcher.free();
+    jsMemoryResources.freeEverything();
+    requestsStore.freeEverything();
+  }
+
+  public changeContent(
+    content: ContentInfo
+  ) {
+    if (this._instanceInfo === null) {
+      // TODO
+      console.error();
+      return ;
+    }
+    jsMemoryResources.freeEverything();
+    requestsStore.freeEverything();
+    this._instanceInfo.content = content;
+  }
+
+  public getDispatcher(): Dispatcher | null {
+    return this._instanceInfo === null ?
+      null :
+      this._instanceInfo.dispatcher;
+  }
+
+  public getContentInfo(): ContentInfo | null {
+    return this._instanceInfo === null ?
+      null :
+      this._instanceInfo.content;
+  }
+}
+
+class GenericStore<T> {
+  private _store: Partial<Record<number, T>>;
   constructor() {
     this._store = {};
   }
 
-  public create(resourceId: ResourceId, playerId: PlayerId, data: Uint8Array) {
-    this._store[resourceId] = { playerId, data };
+  public create(id: number, data: T) {
+    this._store[id] = data;
   }
 
-  public delete(resourceId: ResourceId): void {
-    delete this._store[resourceId];
+  public delete(id: number): void {
+    delete this._store[id];
   }
 
-  public get(resourceId: ResourceId): Uint8Array | undefined {
-    return this._store[resourceId]?.data;
+  public get(id: number): T | undefined {
+    return this._store[id];
   }
 
-  public freeForPlayer(playerId: PlayerId): void {
-    Object.entries(this._store).forEach(([resourceId, resource]) => {
-      if (resource?.playerId === playerId) {
-        // Should work without the `Number` but TypeScript is happier with it,
-        // so well...
-        delete this._store[Number(resourceId)];
-      }
-    });
-  }
-}
-
-class PlayersStore {
-  private _store: Partial<Record<PlayerId, PlayerInstanceInfo>>;
-  constructor() {
+  public freeEverything(): void {
     this._store = {};
   }
-
-  public create(playerId: PlayerId, instanceInfo: PlayerInstanceInfo): void {
-    this._store[playerId] = instanceInfo;
-  }
-
-
-  public get(playerId: PlayerId): PlayerInstanceInfo | undefined {
-    return this._store[playerId];
-  }
-
-  public dispose(playerId: PlayerId): void {
-    jsMemoryResources.freeForPlayer(playerId);
-    requestsStore.freeForPlayer(playerId);
-    delete this._store[playerId];
-  }
 }
-
-class RequestsStore {
-  private _store: Partial<Record<RequestId, RequestObject>>;
-  constructor() {
-    this._store = {};
-  }
-
-  public create(requestId: RequestId, requestObj: RequestObject): void {
-    this._store[requestId] = requestObj;
-  }
-
-
-  public get(requestId: RequestId): RequestObject | undefined {
-    return this._store[requestId];
-  }
-
-  public delete(requestId: RequestId): void {
-    delete this._store[requestId];
-  }
-
-  public freeForPlayer(playerId: PlayerId): void {
-    Object.entries(this._store).forEach(([requestId, request]) => {
-      if (request?.playerId === playerId) {
-        request.abortController.abort();
-
-        // Should work without the `Number` but TypeScript is happier with it,
-        // so well...
-        delete this._store[Number(requestId)];
-      }
-    });
-  }
-}
-
-export const jsMemoryResources = new JsMemoryResourceStore();
-export const playersStore = new PlayersStore();
-export const requestsStore = new RequestsStore();
-
-export type PlayerId = number;
-export type RequestId = number;
-export type SourceBufferId = number;
-export type ResourceId = number;
 
 export interface MemoryResource {
   data: Uint8Array;
-  playerId: PlayerId;
 }
 
 export interface RequestObject {
-  playerId: PlayerId;
   abortController: AbortController;
 }
 
@@ -112,7 +94,7 @@ export interface SourceBufferInstanceInfo<HasMseInWorker extends boolean> {
 
 export interface WorkerMediaSourceInstanceInfo {
   type: "worker";
-  mediaSourceId: number;
+  mediaSourceId: string;
   mediaSource: MediaSource;
   removeEventListeners: () => void;
   nextSourceBufferId: number;
@@ -121,20 +103,24 @@ export interface WorkerMediaSourceInstanceInfo {
 
 export interface MainMediaSourceInstanceInfo {
   type: "main";
-  mediaSourceId: number;
+  mediaSourceId: string;
   nextSourceBufferId: number;
   sourceBuffers: Array<SourceBufferInstanceInfo<false>>;
 }
 
-export interface PlayerInstanceInfo {
-  id: PlayerId;
-  hasWorkerMse: boolean;
-  dispatcher: Dispatcher;
+export interface ContentInfo {
+  contentId: string;
   mediaSourceObj: WorkerMediaSourceInstanceInfo | MainMediaSourceInstanceInfo | null;
   observationsObj: {
     removeEventListeners: () => void;
     timeoutId: number | undefined;
   } | null;
-  isDetroyed: boolean;
 }
 
+export const playerInstance = new PlayerInstance();
+export const jsMemoryResources = new GenericStore<Uint8Array>();
+export const requestsStore = new GenericStore<RequestObject>();
+
+export type RequestId = number;
+export type SourceBufferId = number;
+export type ResourceId = number;

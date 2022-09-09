@@ -2,7 +2,6 @@ use crate::{
     wasm_bindgen,
     bindings::{
         LogLevel,
-        PlayerId,
         jsFetchU8,
     },
     Logger,
@@ -23,14 +22,13 @@ use super::{
 #[wasm_bindgen]
 impl Dispatcher {
     #[wasm_bindgen(constructor)]
-    pub fn new(player_id: PlayerId) -> Self {
+    pub fn new() -> Self {
         Dispatcher {
-            id: player_id,
             ready_state: PlayerReadyState::Stopped,
             adaptive_selector: AdaptiveQualitySelector::new(),
             content_tracker: None,
-            requester: Requester::new(player_id),
-            media_element_ref: MediaElementReference::new(player_id),
+            requester: Requester::new(),
+            media_element_ref: MediaElementReference::new(),
             last_position: 0.,
             buffer_goal: 30.,
             segment_selectors: NextSegmentSelectors::new(0., 30.),
@@ -72,7 +70,7 @@ impl Dispatcher {
     }
 
     pub fn test_seg_back_and_forth(&self) {
-        jsFetchU8(self.id, "http://127.0.0.1:8080/lowlat_vs_non_lowlat.mp4");
+        jsFetchU8("http://127.0.0.1:8080/lowlat_vs_non_lowlat.mp4");
     }
 }
 

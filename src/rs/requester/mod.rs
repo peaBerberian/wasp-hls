@@ -3,7 +3,6 @@ use crate::{
         MediaType,
         jsFetchU8,
         jsFetchU8NoCopy,
-        PlayerId,
         RequestId,
         jsAbortRequest,
     },
@@ -14,8 +13,6 @@ use crate::{
 };
 
 pub struct Requester {
-    player_id: PlayerId,
-
     /// List information on the current playlist requests awaited, by chronological order
     /// (from the time the request was made).
     pending_playlist_requests: Vec<PlaylistRequestInfo>,
@@ -67,9 +64,8 @@ pub enum FinishedRequestType {
 }
 
 impl Requester {
-    pub fn new(player_id: PlayerId) -> Self {
+    pub fn new() -> Self {
         Self {
-            player_id,
             pending_playlist_requests: vec![],
             pending_segment_requests: vec![],
         }
@@ -78,22 +74,20 @@ impl Requester {
     /// Fetch either the MultiVariantPlaylist or a MediaPlaylist reachable
     /// through the given `url` and add its `request_id` to `pending_playlist_requests`.
     ///
-    /// Once it succeeds, `on_u8_request_finished` of the `WaspHlsPlayer` with the
-    /// `player_id` associated to this Requester  will be called with the result.
+    /// Once it succeeds, the `on_u8_request_finished` function will be called.
     pub(crate) fn fetch_playlist(&mut self, url: Url, playlist_type: PlaylistFileType) {
         Logger::info(&format!("Fetching playlist {}", url.get_ref()));
-        let request_id = jsFetchU8(self.player_id, url.get_ref());
+        let request_id = jsFetchU8(url.get_ref());
         self.pending_playlist_requests.push(PlaylistRequestInfo { request_id, url, playlist_type });
     }
 
     /// Fetch the initialization segment whose metadata is given here add its
     /// `request_id` to `pending_segment_requests`.
     ///
-    /// Once it succeeds, `on_u8_request_finished` of the `WaspHlsPlayer` with the
-    /// `player_id` associated to this Requester  will be called with the result.
+    /// Once it succeeds, the `on_u8_request_finished` function will be called.
     pub(crate) fn request_init_segment(&mut self, media_type: MediaType, url: Url) {
         Logger::debug(&format!("Requesting {} initialization segment", media_type));
-        let request_id = jsFetchU8NoCopy(self.player_id, url.get_ref());
+        let request_id = jsFetchU8NoCopy(url.get_ref());
         self.pending_segment_requests.push(SegmentRequestInfo {
             request_id,
             media_type,
@@ -105,15 +99,14 @@ impl Requester {
     /// Fetch a segment in the right format through the given `url` and add its
     /// `request_id` to `pending_segment_requests`.
     ///
-    /// Once it succeeds, `on_u8_request_finished` of the `WaspHlsPlayer` with the
-    /// `player_id` associated to this Requester  will be called with the result.
+    /// Once it succeeds, the `on_u8_request_finished` function will be called.
     pub(crate) fn request_media_segment(&mut self,
         media_type: MediaType,
         seg: &SegmentInfo
     ) {
         Logger::debug(&format!("Requesting {} segment: t: {}, d: {}", media_type, seg.start, seg.duration));
         let time_info = Some((seg.start, seg.start + seg.duration));
-        let request_id = jsFetchU8NoCopy(self.player_id, seg.url.get_ref());
+        let request_id = jsFetchU8NoCopy(seg.url.get_ref());
         self.pending_segment_requests.push(SegmentRequestInfo {
             request_id,
             media_type,

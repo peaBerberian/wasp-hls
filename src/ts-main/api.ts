@@ -1,54 +1,125 @@
+import idGenerator from "../ts-common/idGenerator";
 import QueuedSourceBuffer from "../ts-common/QueuedSourceBuffer";
 import {
   WorkerMessage,
-  PlaybackTickReason,
   MediaSourceReadyState,
+  EndOfStreamErrorCode,
+  SourceBufferCreationErrorCode,
 } from "../ts-common/types";
+import InitializationError from "./errors";
+import observePlayback from "./observePlayback";
 import postMessageToWorker from "./postMessageToWorker";
 
-const OBSERVATION_EVENTS = [
-  ["seeking", PlaybackTickReason.Seeking],
-  ["seeked", PlaybackTickReason.Seeked],
-  ["loadedmetadata", PlaybackTickReason.LoadedMetadata],
-  ["loadeddata", PlaybackTickReason.LoadedData],
-  ["canplay", PlaybackTickReason.CanPlay],
-  ["canplaythrough", PlaybackTickReason.CanPlayThrough],
-  ["ended", PlaybackTickReason.Ended],
-  ["pause", PlaybackTickReason.Pause],
-  ["play", PlaybackTickReason.Play],
-  ["ratechange", PlaybackTickReason.RateChange],
-  ["stalled", PlaybackTickReason.Stalled],
-  // "durationchange",
-] as const;
+/**
+ * Structure storing metadata associated to a content being played by a
+ * `WaspHlsPlayer`.
+ */
+interface ContentMetadata {
+  /**
+   * Unique identifier identifying the loaded content.
+   *
+   * This identifier should be unique for any instances of `WaspHlsPlayer`
+   * created in the current JavaScript realm.
+   *
+   * Identifying a loaded content this way allows to ensure that messages
+   * exchanged with a Worker concern the same content, mostly in cases of race
+   * conditions.
+   */
+  contentId: string;
 
-interface CurrentPlaybackData {
-  mediaSourceId: number;
+  /**
+   * Unique identifier identifying a MediaSource attached to the
+   * HTMLVideoElement.
+   *
+   * This identifier should be unique for the worker in question.
+   *
+   * Identifying a MediaSource this way allows to ensure that messages
+   * exchanged with a Worker concern the same MediaSource instance.
+   *
+   * `null` when no `MediaSource` is created now.
+   */
+  mediaSourceId: string | null;
+
+  /**
+   * `MediaSource` instance linked to the current content being played.
+   *
+   * `null` when either:
+   *   - no `MediaSource` instance is active for now
+   *   - the `MediaSource` has been created on the Worker side.
+   *
+   * You can know whether a `MediaSource` is currently created at all by
+   * refering to `mediaSourceId` instead.
+   */
   mediaSource: MediaSource | null;
-  dispose: (() => void) | null;
+
+  /**
+   * Callback that should be called when the `MediaSource` linked to the current
+   * content becomes unattached - whether the `MediaSource` has been created in
+   * this realm or in the worker.
+   */
+  disposeMediaSource: (() => void) | null;
+
+  /**
+   * Describe `SourceBuffer` instances currently associated to the current
+   * `MediaSource` that have been created in this realm (and not in the Worker).
+   */
   sourceBuffers: Array<{
-    sourceBufferId: number | null;
-    queuedSourceBuffer: QueuedSourceBuffer | null;
+    /**
+     * Id uniquely identifying this SourceBuffer.
+     * It is generated from the Worker and it is unique for all SourceBuffers
+     * created after associated with the linked `mediaSourceId`.
+     */
+    sourceBufferId: number;
+    /**
+     * QueuedSourceBuffer associated to this SourceBuffers.
+     * This is the abstraction used to push and remove data to the SourceBuffer.
+     */
+    queuedSourceBuffer: QueuedSourceBuffer;
   }>;
-  observationsData: null | {
-    removeEventListeners: () => void;
-    timeoutId: number | undefined;
-    isStopped: boolean;
-  };
+
+  /**
+   * Callback allowing to stop playback observations currently pending.
+   * `null` if no "playback observation" is currently pending.
+   */
+  stopPlaybackObservations: null | (() => void);
 }
+
+const generateContentId = idGenerator();
 
 export default class WaspHlsPlayer {
   public initializationStatus: InitializationStatus;
   public videoElement: HTMLVideoElement;
   private _worker : Worker | null;
-  private _playbackData : CurrentPlaybackData | null;
+  private _currentContentMetadata : ContentMetadata | null;
 
+  /**
+   * Create a new WaspHlsPlayer, associating with a video element.
+   *
+   * Note that you will need to call `initialize` on it befor actually loading
+   * the content and perform most other operations.
+   *
+   * @param {HTMLVideoElement} videoElement
+   */
   constructor(videoElement: HTMLVideoElement) {
     this.videoElement = videoElement;
     this.initializationStatus = InitializationStatus.Uninitialized;
     this._worker = null;
-    this._playbackData = null;
+    this._currentContentMetadata = null;
   }
 
+  /**
+   * Begin "initialization", that is, start loading the web Worker and
+   * WebAssembly parts of the player so it can begin to load contents.
+   *
+   * The returned Promise:
+   *   - Resolves once the initialization is finished with success.
+   *     From that point on, you can begin to load contents.
+   *
+   *   - Rejects if the initialization failed, with a `InitializationError`
+   *     describing the error encountered.
+   * @param {Object} opts
+   * @returns {Promise}
+   */
   public initialize(opts: InitializationOptions) : Promise<void> {
     try {
       this.initializationStatus = InitializationStatus.Initializing;
@@ -72,9 +143,18 @@ export default class WaspHlsPlayer {
     if (this._worker === null) {
       throw new Error("The Player is not initialized or disposed.");
     }
+    const contentId = generateContentId();
+    this._currentContentMetadata = {
+      contentId,
+      mediaSourceId: null,
+      mediaSource: null,
+      disposeMediaSource: null,
+      sourceBuffers: [],
+      stopPlaybackObservations: null,
+    };
     postMessageToWorker(this._worker, {
       type: "load",
-      value: { url },
+      value: { contentId, url },
     });
   }
 
@@ -86,15 +166,32 @@ export default class WaspHlsPlayer {
     if (this._worker === null) {
       throw new Error("The Player is not initialized or disposed.");
     }
-    this._stopObservingPlayback();
-    postMessageToWorker(this._worker, { type: "stop", value: null });
+    if (
+      this._currentContentMetadata !== null &&
+      this._currentContentMetadata.stopPlaybackObservations !== null
+    ) {
+      this._currentContentMetadata.stopPlaybackObservations();
+      this._currentContentMetadata.stopPlaybackObservations = null;
+    }
+    if (this._currentContentMetadata !== null) {
+      postMessageToWorker(this._worker, {
+        type: "stop",
+        value: { contentId: this._currentContentMetadata.contentId },
+      });
+    }
   }
 
   public dispose() {
     if (this._worker === null) {
       return;
     }
-    this._stopObservingPlayback();
+    if (
+      this._currentContentMetadata !== null &&
+      this._currentContentMetadata.stopPlaybackObservations !== null
+    ) {
+      this._currentContentMetadata.stopPlaybackObservations();
+      this._currentContentMetadata.stopPlaybackObservations = null;
+    }
     // TODO needed? What about GC once it is set to `null`?
     postMessageToWorker(this._worker, { type: "dispose", value: null });
     this._worker = null;
@@ -133,272 +230,340 @@ export default class WaspHlsPlayer {
           resolveProm();
           break;
 
-        case "error":
-          // TODO use code
-          const error = new Error(data.value.message ?? "Unknown error");
+        case "initialization-error":
           if (mayStillReject) {
+            const error = new InitializationError(
+              data.value.code,
+              data.value.wasmHttpStatus,
+              data.value.message ?? "Error while initializing the WaspHlsPlayer"
+            );
             mayStillReject = false;
             rejectProm(error);
           }
           break;
 
         case "seek":
-          this.videoElement.currentTime = data.value;
+          if (
+            this._currentContentMetadata === null ||
+            this._currentContentMetadata.mediaSourceId !== data.value.mediaSourceId
+          ) {
+            console.info("API: Ignoring seek due to wrong `mediaSourceId`");
+            return;
+          }
+          try {
+            this.videoElement.currentTime = data.value.position;
+          } catch (err) {
+            console.error("Unexpected error while seeking:", err);
+          }
           break;
 
         case "attach-media-source":
+          if (
+            this._currentContentMetadata === null ||
+            this._currentContentMetadata.contentId !== data.value.contentId
+          ) {
+            console.info(
+              "API: Ignoring MediaSource attachment due to wrong `contentId`"
+            );
+            return;
+          }
+
+          if (this._currentContentMetadata.stopPlaybackObservations !== null) {
+            this._currentContentMetadata.stopPlaybackObservations();
+            this._currentContentMetadata.stopPlaybackObservations = null;
+          }
+
           if (data.value.handle !== undefined) {
             this.videoElement.srcObject = data.value.handle;
           } else if (data.value.src !== undefined) {
             this.videoElement.src = data.value.src;
           } else {
-            // TODO MediaSourceError?
+            throw new Error(
+              "Unexpected \"attach-media-source\" message: missing source"
+            );
           }
-          this._playbackData = {
-            mediaSourceId: data.value.mediaSourceId,
-            mediaSource: null,
-            dispose: () => {
-              if (data.value.src !== undefined) {
-                URL.revokeObjectURL(data.value.src);
-              }
-            },
-            sourceBuffers: [],
-            observationsData: null,
+          this._currentContentMetadata.mediaSourceId = data.value.mediaSourceId;
+          this._currentContentMetadata.mediaSource = null;
+          this._currentContentMetadata.disposeMediaSource = () => {
+            if (data.value.src !== undefined) {
+              URL.revokeObjectURL(data.value.src);
+            }
           };
+          this._currentContentMetadata.sourceBuffers = [];
+          this._currentContentMetadata.stopPlaybackObservations = null;
           break;
 
         case "create-media-source": {
+          if (
+            this._currentContentMetadata === null ||
+            this._currentContentMetadata.contentId !== data.value.contentId
+          ) {
+            console.info(
+              "API: Ignoring MediaSource attachment due to wrong `contentId`"
+            );
+            return;
+          }
           const { mediaSourceId } = data.value;
 
-          // TODO handle error
-          const mediaSource = new MediaSource();
+          let mediaSource;
+          try {
+            mediaSource = new MediaSource();
+          } catch (err) {
+            const { name, message } = getErrorInformation(
+              err,
+              "Unknown error when creating the MediaSource"
+            );
+            postMessageToWorker(worker, {
+              type: "create-media-source-error",
+              value: { mediaSourceId, message, name },
+            });
+            return;
+          }
 
-          // TODO do something with dispose code
-          const dispose =
+          const disposeMediaSource =
             bindMediaSource(worker, mediaSource, this.videoElement, mediaSourceId);
-          this._playbackData = {
-            mediaSourceId: data.value.mediaSourceId,
-            mediaSource,
-            dispose,
-            sourceBuffers: [],
-            observationsData: null,
-          };
+          this._currentContentMetadata.mediaSourceId = data.value.mediaSourceId;
+          this._currentContentMetadata.mediaSource = mediaSource;
+          this._currentContentMetadata.disposeMediaSource = disposeMediaSource;
+          this._currentContentMetadata.sourceBuffers = [];
+          this._currentContentMetadata.stopPlaybackObservations = null;
           break;
         }
 
         case "update-media-source-duration": {
           const { mediaSourceId } = data.value;
           if (
-            this._playbackData?.mediaSourceId !== mediaSourceId ||
-            this._playbackData.mediaSource === null
+            this._currentContentMetadata?.mediaSourceId !== mediaSourceId ||
+            this._currentContentMetadata.mediaSource === null
           ) {
             return;
           }
           try {
-            this._playbackData.mediaSource.duration = data.value.duration;
+            this._currentContentMetadata.mediaSource.duration = data.value.duration;
           } catch (err) {
-            // TODO handle errors
+            const { name, message } = getErrorInformation(
+              err,
+              "Unknown error when updating the MediaSource's duration"
+            );
+            postMessageToWorker(worker, {
+              type: "update-media-source-duration-error",
+              value: { mediaSourceId, message, name },
+            });
+            return;
           }
           break;
         }
 
         case "clear-media-source": {
-          if (this._playbackData?.mediaSourceId !== data.value.mediaSourceId) {
+          if (this._currentContentMetadata?.mediaSourceId !== data.value.mediaSourceId) {
             return;
           }
-          this._playbackData.dispose?.();
-          clearElementSrc(this.videoElement);
+          try {
+            this._currentContentMetadata.disposeMediaSource?.();
+            clearElementSrc(this.videoElement);
+          } catch (err) {
+            console.warn("API: Error when clearing current MediaSource:", err);
+          }
           break;
         }
 
         case "create-source-buffer": {
-          if (this._playbackData?.mediaSourceId !== data.value.mediaSourceId) {
+          if (this._currentContentMetadata?.mediaSourceId !== data.value.mediaSourceId) {
             return;
           }
-          if (this._playbackData.mediaSource === null) {
-            // TODO error
+          if (this._currentContentMetadata.mediaSource === null) {
+            postMessageToWorker(worker, {
+              type: "create-source-buffer-error",
+              value: {
+                mediaSourceId: data.value.mediaSourceId,
+                sourceBufferId: data.value.sourceBufferId,
+                code: SourceBufferCreationErrorCode.NoMediaSource,
+                message: "No MediaSource created on the main thread.",
+                name: undefined,
+              },
+            });
             return;
           }
           try {
-            const sourceBuffer = this._playbackData.mediaSource
+            const sourceBuffer = this._currentContentMetadata.mediaSource
               .addSourceBuffer(data.value.contentType);
             const queuedSourceBuffer = new QueuedSourceBuffer(sourceBuffer);
-            this._playbackData.sourceBuffers.push({
+            this._currentContentMetadata.sourceBuffers.push({
               sourceBufferId: data.value.sourceBufferId,
               queuedSourceBuffer,
             });
           } catch (err) {
-            // TODO
+            const { name, message } = getErrorInformation(
+              err,
+              "Unknown error when adding the SourceBuffer to the MediaSource"
+            );
+            postMessageToWorker(worker, {
+              type: "create-source-buffer-error",
+              value: {
+                mediaSourceId: data.value.mediaSourceId,
+                sourceBufferId: data.value.sourceBufferId,
+                code: SourceBufferCreationErrorCode.AddSourceBufferError,
+                message,
+                name,
+              },
+            });
           }
-          // TODO
           break;
         }
 
         case "append-buffer": {
-          if (this._playbackData?.mediaSourceId !== data.value.mediaSourceId) {
+          if (this._currentContentMetadata?.mediaSourceId !== data.value.mediaSourceId) {
             return;
           }
-          const sbObject = this._playbackData.sourceBuffers
+          const sbObject = this._currentContentMetadata.sourceBuffers
             .find(({ sourceBufferId }) => sourceBufferId === data.value.sourceBufferId);
-          if (sbObject === undefined || sbObject.queuedSourceBuffer === null) {
-            // TODO error
+          if (sbObject === undefined) {
             return;
           }
-          sbObject.queuedSourceBuffer.push(data.value.data)
-            .then(() => {
-              postMessageToWorker(worker, {
-                type: "source-buffer-updated",
-                value: {
-                  mediaSourceId: data.value.mediaSourceId,
-                  sourceBufferId: data.value.sourceBufferId,
-                },
-              });
-            })
-            .catch((_err: unknown) => {
-              // TODO report err
+          const { mediaSourceId, sourceBufferId } = data.value;
+          try {
+            sbObject.queuedSourceBuffer.push(data.value.data)
+              .then(() => {
+                postMessageToWorker(worker, {
+                  type: "source-buffer-updated",
+                  value: { mediaSourceId, sourceBufferId },
+                });
+              })
+              .catch(handleAppendBufferError);
+          } catch (err) {
+            handleAppendBufferError(err);
+          }
+          function handleAppendBufferError(err: unknown): void {
+            const { name, message } = getErrorInformation(
+              err,
+              "Unknown error when appending data to the SourceBuffer"
+            );
+            postMessageToWorker(worker, {
+              type: "source-buffer-error",
+              value: { sourceBufferId, message, name },
             });
+          }
           break;
         }
 
         case "remove-buffer": {
-          if (this._playbackData?.mediaSourceId !== data.value.mediaSourceId) {
+          if (this._currentContentMetadata?.mediaSourceId !== data.value.mediaSourceId) {
             return;
           }
-          const sbObject = this._playbackData.sourceBuffers
+          const sbObject = this._currentContentMetadata.sourceBuffers
             .find(({ sourceBufferId }) => sourceBufferId === data.value.sourceBufferId);
-          if (sbObject === undefined || sbObject.queuedSourceBuffer === null) {
-            // TODO error
+          if (sbObject === undefined) {
             return;
           }
-          sbObject.queuedSourceBuffer.removeBuffer(data.value.start, data.value.end)
-            .catch((_err) => {
-              // TODO report err
+          const { mediaSourceId, sourceBufferId } = data.value;
+          try {
+            sbObject.queuedSourceBuffer.removeBuffer(data.value.start, data.value.end)
+              .then(() => {
+                postMessageToWorker(worker, {
+                  type: "source-buffer-updated",
+                  value: { mediaSourceId, sourceBufferId },
+                });
+              })
+              .catch(handleRemoveBufferError);
+          } catch (err) {
+            handleRemoveBufferError(err);
+          }
+          function handleRemoveBufferError(err: unknown): void {
+            const { name, message } = getErrorInformation(
+              err,
+              "Unknown error when removing data to the SourceBuffer"
+            );
+            postMessageToWorker(worker, {
+              type: "source-buffer-error",
+              value: { sourceBufferId, message, name },
             });
+          }
           break;
         }
 
         case "start-playback-observation": {
-          this._startPlaybackObservation(data.value.mediaSourceId);
+          if (this._currentContentMetadata?.mediaSourceId !== data.value.mediaSourceId) {
+            return;
+          }
+          if (this._currentContentMetadata.stopPlaybackObservations !== null) {
+            this._currentContentMetadata.stopPlaybackObservations();
+            this._currentContentMetadata.stopPlaybackObservations = null;
+          }
+          this._currentContentMetadata.stopPlaybackObservations = observePlayback(
+            this.videoElement,
+            data.value.mediaSourceId,
+            (value) => postMessageToWorker(worker, { type: "observation", value })
+          );
           break;
         }
 
         case "stop-playback-observation": {
-          if (this._playbackData?.mediaSourceId !== data.value.mediaSourceId) {
+          if (this._currentContentMetadata?.mediaSourceId !== data.value.mediaSourceId) {
             return;
           }
-          this._stopObservingPlayback();
+          if (this._currentContentMetadata.stopPlaybackObservations !== null) {
+            this._currentContentMetadata.stopPlaybackObservations();
+            this._currentContentMetadata.stopPlaybackObservations = null;
+          }
           break;
         }
 
         case "end-of-stream":
-          if (this._playbackData?.mediaSourceId !== data.value.mediaSourceId) {
+          if (this._currentContentMetadata?.mediaSourceId !== data.value.mediaSourceId) {
             return;
           }
-          if (this._playbackData.mediaSource === null) {
-            // TODO error
+          const { mediaSourceId } = data.value;
+          if (this._currentContentMetadata.mediaSource === null) {
+            postMessageToWorker(worker, {
+              type: "end-of-stream-error",
+              value: {
+                mediaSourceId,
+                code: EndOfStreamErrorCode.NoMediaSource,
+                message: "No MediaSource created on the main thread.",
+                name: undefined,
+              },
+            });
             return;
           }
           try {
-            this._playbackData.mediaSource.endOfStream();
+            // TODO Maybe the best here would be a more complex logic to
+            // call `endOfStream` at the right time.
+            this._currentContentMetadata.mediaSource.endOfStream();
           } catch (err) {
-            // TODO report error?
+            const { name, message } = getErrorInformation(
+              err,
+              "Unknown error when calling MediaSource.endOfStream()"
+            );
+            postMessageToWorker(worker, {
+              type: "end-of-stream-error",
+              value: {
+                mediaSourceId,
+                code: EndOfStreamErrorCode.EndOfStreamError,
+                message,
+                name,
+              },
+            });
           }
           break;
       }
     };
 
+    // TODO check on which case this is triggered
     worker.onerror = (ev: ErrorEvent) => {
-      rejectProm(ev.error);
+      console.error("API: Worker Error encountered", ev.error);
+      if (mayStillReject) {
+        rejectProm(ev.error);
+      }
     };
   }
 
-  private _startPlaybackObservation(mediaSourceId: number): void {
-    if (
-      this._playbackData?.mediaSourceId !== mediaSourceId ||
-      this._worker === null ||
-      this._playbackData.observationsData !== null
-    ) {
-      return;
-    }
-    const worker = this._worker;
-    const videoElement = this.videoElement;
-
-    const listenerRemovers = OBSERVATION_EVENTS.map(([evtName, reason]) => {
-      videoElement.addEventListener(evtName, onEvent);
-      function onEvent() {
-        onNextTick(reason);
-      }
-      return () => videoElement.removeEventListener(evtName, onEvent);
-    });
-
-    this._playbackData.observationsData = {
-      removeEventListeners() {
-        listenerRemovers.forEach(removeCb => removeCb());
-      },
-      timeoutId: undefined,
-      isStopped: false,
-    };
-    const observationsData = this._playbackData.observationsData;
-    /* eslint-disable @typescript-eslint/no-floating-promises */
-    Promise.resolve().then(() => onNextTick(PlaybackTickReason.Init));
-    function onNextTick(reason: PlaybackTickReason) {
-      if (observationsData.isStopped) {
-        return;
-      }
-      if (observationsData.timeoutId !== undefined) {
-        clearTimeout(observationsData.timeoutId);
-        observationsData.timeoutId = undefined;
-      }
-
-      const buffered = new Float64Array(videoElement.buffered.length * 2);
-      for (let i = 0; i < videoElement.buffered.length; i++) {
-        const offset = i * 2;
-        buffered[offset] = videoElement.buffered.start(i);
-        buffered[offset + 1] = videoElement.buffered.end(i);
-      }
-
-      const { currentTime, readyState, paused, seeking } = videoElement;
-      postMessageToWorker(worker, {
-        type: "observation",
-        value: {
-          mediaSourceId,
-          reason,
-          currentTime,
-          readyState,
-          buffered,
-          paused,
-          seeking,
-        },
-      });
-
-      observationsData.timeoutId = setTimeout(() => {
-        if (observationsData.isStopped) {
-          observationsData.timeoutId = undefined;
-          return;
-        }
-        onNextTick(PlaybackTickReason.RegularInterval);
-      }, 1000);
-    }
-  }
-
-  private _stopObservingPlayback(): void {
-    if (this._playbackData === null || this._playbackData.observationsData === null) {
-      return;
-    }
-    this._playbackData.observationsData.isStopped = true;
-    this._playbackData.observationsData.removeEventListeners();
-    if (this._playbackData.observationsData.timeoutId !== undefined) {
-      clearTimeout(this._playbackData.observationsData.timeoutId);
-    }
-    this._playbackData.observationsData = null;
-  }
 }
 
 function bindMediaSource(
   worker: Worker,
   mediaSource: MediaSource,
   videoElement: HTMLVideoElement,
-  mediaSourceId: number
+  mediaSourceId: string
 ) : () => void {
   mediaSource.addEventListener("sourceclose", onMediaSourceClose);
   mediaSource.addEventListener("sourceended", onMediaSourceEnded);
@@ -511,4 +676,15 @@ function clearElementSrc(element: HTMLMediaElement): void {
   // does not clear properly the current MediaKey Session.
   // Microsoft recommended to use element.removeAttr("src").
   element.removeAttribute("src");
+}
+
+function getErrorInformation(err: unknown, defaultMsg: string) : {
+  name: string | undefined;
+  message: string;
+} {
+  if (err instanceof Error) {
+    return { message: err.message, name: err.name };
+  } else {
+    return { message: defaultMsg, name: undefined };
+  }
 }

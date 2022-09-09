@@ -6,6 +6,8 @@ use crate::wasm_bindgen;
 /// This file lists all JavaScript functions that are callable from Rust as well as
 /// struct and enumeration used by those functions.
 
+// XXX TODO remove PlayerId mentions
+
 #[wasm_bindgen]
 extern "C" {
     // Log the given text in the JavaScript console, with the log level given.
@@ -14,19 +16,18 @@ extern "C" {
     // Fetch the given `url` from the network and await a u8 slice response.
     //
     // If and when it finishes with success, the result will be emitted as a
-    // u8 slice through the `on_u8_request_finished` method of the
-    // `WaspHlsPlayer` which has the given `PlayerId`.
+    // u8 slice through the `on_u8_request_finished` method of this
+    // `WaspHlsPlayer`.
     //
     // If and when it fails, the error will be emitted through the
-    // `on_u8_request_failed` method of the `WaspHlsPlayer` which has the given
-    // `PlayerId`.
+    // `on_u8_request_failed` method of this `WaspHlsPlayer`.
     //
     // In both cases, those methods will always be called asynchronously after the `jsFetchU8`
     // call.
     //
     // If the request has been aborted while pending through the `jsAbortRequest`
     // function, no method will be called.
-    pub fn jsFetchU8(player_id: PlayerId, url: &str) -> RequestId;
+    pub fn jsFetchU8(url: &str) -> RequestId;
 
     // Variant of `jsFetchU8` where the resource requested is actually kept in
     // JavaScript's memory to avoid unnecesary copies of larges amount of data (and to avoid
@@ -45,7 +46,7 @@ extern "C" {
     //
     // In that last scenario, you will receive a corresponding error when trying to use that
     // `ResourceId` in the JavaScript functions receiving it.
-    pub fn jsFetchU8NoCopy(player_id: PlayerId, url: &str) -> RequestId;
+    pub fn jsFetchU8NoCopy(url: &str) -> RequestId;
 
     // Abort a request started with `jsFetchU8` or `jsFetchU8NoCopy` based on its
     // `request_id`.
@@ -69,16 +70,16 @@ extern "C" {
     // when this MediaSource becomes usable or not when its
     // `on_media_source_state_change` method is called with the "Open"
     // `MediaSourceReadyState`.
-    pub fn jsAttachMediaSource(player_id: PlayerId);
+    pub fn jsAttachMediaSource();
 
     // Remove MediaSource attached to the <video> element associated with
     // the `WaspHlsPlayer` if one, and free all its associated resources
     // (such as event listeners or created ObjectURL).
     //
     // This function performs all those operations synchronously.
-    pub fn jsRemoveMediaSource(player_id: PlayerId);
+    pub fn jsRemoveMediaSource();
 
-    pub fn jsSetMediaSourceDuration(player_id: PlayerId, duration: f64);
+    pub fn jsSetMediaSourceDuration(duration: f64);
 
     // Add a SourceBuffer to the created MediaSource, allowing to push media
     // segment of a given type to a lower-level media buffer.
@@ -86,7 +87,6 @@ extern "C" {
     // This function performs this operation synchronously and may fail, see
     // `AddSourceBufferResult` for more details on the return value.
     pub fn jsAddSourceBuffer(
-        player_id: PlayerId,
         media_type: MediaType,
         typ: &str
     ) -> SourceBufferId;
@@ -102,7 +102,6 @@ extern "C" {
     // (respectively by calling either the `on_source_buffer_update` method or the
     // `on_source_buffer_error` method of the `WaspHlsPlayer` linked to the given `PlayerId`).
     pub fn jsAppendBuffer(
-        player_id: PlayerId,
         source_buffer_id: SourceBufferId,
         data: &[u8]
     );
@@ -114,7 +113,6 @@ extern "C" {
     //
     // This function relies on the exact same rules than `jsAppendBuffer`.
     pub fn jsAppendBufferJsBlob(
-        player_id: PlayerId,
         source_buffer_id: SourceBufferId,
         segment_id: ResourceId
     );
@@ -135,7 +133,7 @@ extern "C" {
         end: f64
     );
 
-    pub fn jsEndOfStream(player_id: PlayerId);
+    pub fn jsEndOfStream();
 
     // After this method is called, the `WaspHlsPlayer` instance associated
     // with the given `PlayerId` will regularly receive `PlaybackObservation`
@@ -150,18 +148,18 @@ extern "C" {
     //
     // If the `WaspHlsPlayer` was already observing playback when that function
     // was called, this function does nothing.
-    pub fn jsStartObservingPlayback(player_id: PlayerId);
+    pub fn jsStartObservingPlayback();
 
     // If playback observations were being regularly sent to the
     // `WaspHlsPlayer` instance with the given `player_id`, stop emitting them
     // until `startObservingPlayback` is called again.
-    pub fn jsStopObservingPlayback(player_id: PlayerId);
+    pub fn jsStopObservingPlayback();
 
     // Free resource stored in JavaScript's memory kept alive for the current
     // `WaspHlsPlayer`.
     pub fn jsFreeResource(resource_id: ResourceId) -> bool;
 
-    pub fn jsSeek(player_id: PlayerId, position: f64);
+    pub fn jsSeek(position: f64);
     //    // Check if the given mime-type and codecs are supported for playback.
     //    //
     //    // Returns `true` if that is the case, false if it isn't
@@ -176,7 +174,7 @@ extern "C" {
     //    // TODO this API might error depending on the underlying media element or MediaSource's
     //    // state.
     //    pub fn jsGetSourceBufferBuffered(
-    //        player_id: PlayerId,
+    //        ,
     //        source_buffer_id: SourceBufferId
     //    ) -> Vec<f64>;
 
@@ -628,11 +626,6 @@ pub enum LogLevel {
 /// Special care of those id should be taken to avoid memory leaks: you should always call
 /// `jsFreeResource` as soon as the resource is not needed anymore.
 pub type ResourceId = u32;
-
-/// Identify a `WaspHlsPlayer`.
-///
-/// Multiple JavaScript-side API rely on that identifier.
-pub type PlayerId = u32;
 
 /// Identify a pending request.
 pub type RequestId = u32;

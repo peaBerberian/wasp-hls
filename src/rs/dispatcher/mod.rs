@@ -1,6 +1,5 @@
 use crate::{
     wasm_bindgen,
-    bindings::PlayerId,
     media_element::MediaElementReference,
     requester::Requester,
     content_tracker::ContentTracker,
@@ -16,9 +15,6 @@ mod streaming;
 /// providing an API to load contents and influence various parameters about playback.
 #[wasm_bindgen]
 pub struct Dispatcher {
-    /// Identifier for the current `Dispatcher` instance on the JS-side.
-    /// Many JavaScript-side APIs rely on that `id`.
-    id: PlayerId,
 
     /// Current `PlayerReadyState` the `Dispatcher` is in.
     ready_state: PlayerReadyState,

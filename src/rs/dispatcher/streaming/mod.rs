@@ -93,7 +93,7 @@ impl Dispatcher {
             let start_time = content_tracker.get_expected_start_time();
             self.media_element_ref.seek_once_ready(start_time);
             if let Some(duration) = content_tracker.curr_duration() {
-                jsSetMediaSourceDuration(self.id, duration);
+                jsSetMediaSourceDuration(duration);
             } else {
                 Logger::warn("Unknown content duration");
             }
@@ -106,8 +106,8 @@ impl Dispatcher {
                 self.fail_on_error(&format!("Error while creating video SourceBuffer: {:?}", e));
                 return;
             }
-            jsStopObservingPlayback(self.id);
-            jsStartObservingPlayback(self.id);
+            jsStopObservingPlayback();
+            jsStartObservingPlayback();
         }
     }
 
@@ -266,8 +266,8 @@ impl Dispatcher {
     pub fn internal_stop(&mut self) {
         Logger::info("Stopping current content (if one) and resetting player");
         self.requester.abort_all();
-        jsStopObservingPlayback(self.id);
-        jsRemoveMediaSource(self.id);
+        jsStopObservingPlayback();
+        jsRemoveMediaSource();
         self.segment_selectors.reset_position(0.);
         self.content_tracker = None;
         self.media_element_ref.reset();

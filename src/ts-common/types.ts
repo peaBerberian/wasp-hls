@@ -9,19 +9,26 @@ export {
 };
 
 /** Message sent from the main thread to the worker. */
-export type MainMessage = InitializationMainMessage |
-                          LoadContentMainMessage |
-                          StopContentMainMessage |
-                          DisposePlayerMainMessage |
-                          MediaSourceStateChangedMainMessage |
-                          MediaObservationMainMessage |
-                          SourceBufferOperationSuccess;
+export type MainMessage =
+  InitializationMainMessage |
+  LoadContentMainMessage |
+  StopContentMainMessage |
+  DisposePlayerMainMessage |
+  MediaSourceStateChangedMainMessage |
+  CreateMediaSourceErrorMainMessage |
+  SetMediaSourceDurationErrorMainMessage |
+  CreateSourceBufferErrorMainMessage |
+  MediaObservationMainMessage |
+  SourceBufferOperationErrorMainMessage |
+  SourceBufferOperationSuccessMainMessage |
+  EndOfStreamErrorMainMessage;
 
 /** Message sent from the worker to the main thread. */
 export type WorkerMessage =
   InitializedWorkerMessage |
   SeekWorkerMessage |
-  ErrorWorkerMessage |
+  InitializationErrorWorkerMessage |
+  ContentErrorWorkerMessage |
   AttachMediaSourceWorkerMessage |
   CreateMediaSourceWorkerMessage |
   SetMediaSourceDurationWorkerMessage |
@@ -33,11 +40,46 @@ export type WorkerMessage =
   StartPlaybackObservationWorkerMessage |
   StopPlaybackObservationWorkerMessage;
 
-export const enum WorkerErrorCode {
+/**
+ * Error codes generated for `InitializationErrorWorkerMessage` messages.
+ */
+export const enum InitializationErrorCode {
+  /**
+   * The corresponding worker received a `InitializationMainMessage` despite
+   * already being initialized.
+   */
   AlreadyInitializedError,
-  WasmInitializationError,
-  UnitializedLoadError,
-  UnitializedStopError,
+  /**
+   * The corresponding worker did not succeed to load the WebAssembly part of
+   * the WaspHlsPlayer due to the impossibility of requesting it.
+   */
+  WasmRequestError,
+  // /**
+  //  * The corresponding worker did not succeed to load the WebAssembly part of
+  //  * the WaspHlsPlayer due to an HTTP response not in the 200s.
+  //  */
+  // WasmRequestBadStatus,
+  /**
+   * The corresponding worker did not succeed to load the WebAssembly part of
+   * the WaspHlsPlayer due to a timeout during its HTTP request.
+   */
+  WasmRequestTimeout,
+  /** Any other, uncategorized, error. */
+  UnknownError,
+}
+
+export const enum ContentErrorCode {
+  UnitializedError,
+  // /**
+  //  * A `LoadContentMainMessage` messaage was received on a non-initialized
+  //  * worker.
+  //  */
+  // UnitializedLoadError,
+  // /**
+  //  * A `StopContentMainMessage` message was received on a non-initialized
+  //  * worker.
+  //  */
+  // UnitializedStopError,
 }
 
 /**
@@ -49,11 +91,47 @@ export interface InitializedWorkerMessage {
   value: null;
 }
 
-// TODO content or global worker error?
-export interface ErrorWorkerMessage {
-  type: "error";
+/**
+ * Message sent when the Worker has encountered a global error and may
+ * consequently not be able to operate anymore.
+ */
+export interface InitializationErrorWorkerMessage {
+  type: "initialization-error";
   value: {
-    code: WorkerErrorCode;
+    /**
+     * Code describing the error encountered.
+     */
+    code: InitializationErrorCode;
+    /**
+     * If set, human-readable string describing the error, for debugging
+     * purposes.
+     */
+    message?: string | undefined;
+    wasmHttpStatus?: number | undefined;
+  };
+}
+
+/**
+ * Message sent when the Worker has encountered a error linked to a specific
+ * content which consequenly has been stopped and disposed.
+ */
+export interface ContentErrorWorkerMessage {
+  type: "content-error";
+  value: {
+    /**
+     * The identifier for the content on which an error was received.
+     * This is the same `contentId` value that on the related
+     * `LoadContentMainMessage`.
+     */
+    contentId: string;
+    /**
+     * Code describing the error encountered.
+     */
+    code: ContentErrorCode;
+    /**
+     * If set, human-readable string describing the error, for debugging
+     * purposes.
+     */
     message?: string | undefined;
   };
 }
@@ -63,7 +141,15 @@ export interface SeekWorkerMessage {
   type: "seek";
 
   /** The position to seek to, in seconds. */
-  value: number;
+  value: {
+    /**
+     * Identify the MediaSource currently used by the worker.
+     * The main thread should only seek if the same MediaSource is still being
+     * used.
+     */
+    mediaSourceId: string;
+    position: number;
+  };
 }
 
 /**
@@ -77,9 +163,10 @@ export interface SeekWorkerMessage {
 export interface AttachMediaSourceWorkerMessage {
   type: "attach-media-source";
   value: {
+    contentId : string;
     handle: MediaProvider | undefined;
     src: string | undefined;
-    mediaSourceId: number;
+    mediaSourceId: string;
   };
 }
 
@@ -94,7 +181,8 @@ export interface AttachMediaSourceWorkerMessage {
 export interface CreateMediaSourceWorkerMessage {
   type: "create-media-source";
   value: {
-    mediaSourceId: number;
+    contentId : string;
+    mediaSourceId: string;
   };
 }
 
@@ -105,7 +193,7 @@ export interface CreateMediaSourceWorkerMessage {
 export interface SetMediaSourceDurationWorkerMessage {
   type: "update-media-source-duration";
   value: {
-    mediaSourceId: number;
+    mediaSourceId: string;
     duration: number;
   };
 }
@@ -118,7 +206,7 @@ export interface SetMediaSourceDurationWorkerMessage {
 export interface ClearMediaSourceWorkerMessage {
   type: "clear-media-source";
   value: {
-    mediaSourceId: number;
+    mediaSourceId: string;
   };
 }
 
@@ -130,7 +218,12 @@ export interface ClearMediaSourceWorkerMessage {
 export interface CreateSourceBufferWorkerMessage {
   type: "create-source-buffer";
   value: {
-    mediaSourceId: number;
+    mediaSourceId: string;
+    /**
+     * Id uniquely identifying this SourceBuffer.
+     * It is generated from the Worker and it is unique for all SourceBuffers
+     * created after associated with the `mediaSourceId`.
+     */
     sourceBufferId: number;
     contentType: string;
   };
@@ -148,9 +241,15 @@ export interface CreateSourceBufferWorkerMessage {
 export interface AppendBufferWorkerMessage {
   type: "append-buffer";
   value: {
-    mediaSourceId: number;
+    mediaSourceId: string;
+    /**
+     * Id uniquely identifying this SourceBuffer.
+     * It should be the same `sourceBufferId` than the one on the
+     * `CreateSourceBufferWorkerMessage`.
+     */
     sourceBufferId: number;
-    data: ArrayBuffer;
+    /** Raw data to append to the SourceBuffer. */
+    data: BufferSource;
   };
 }
 
@@ -159,16 +258,16 @@ export interface AppendBufferWorkerMessage {
  * `SourceBufferId`, running on the main thread, succeeded to perform the last
  * operation given to it (either through an `AppendBufferWorkerMessage` or a
  * `RemoveBufferWorkerMessage`).
- *
- * TODO should perhaps be removed altogether, as the main thread is doing the
- * queuing itself now.
- * For now, this event is needed as the player also awaits it in its current
- * `endOfStream` logic, which probably should be refactored.
  */
-export interface SourceBufferOperationSuccess {
+export interface SourceBufferOperationSuccessMainMessage {
   type: "source-buffer-updated";
   value: {
-    mediaSourceId: number;
+    mediaSourceId: string;
+    /**
+     * Id uniquely identifying this SourceBuffer.
+     * It should be the same `sourceBufferId` than the one on the
+     * `CreateSourceBufferWorkerMessage`.
+     */
     sourceBufferId: number;
   };
 }
@@ -185,9 +284,16 @@ export interface SourceBufferOperationSuccess {
 export interface RemoveBufferWorkerMessage {
   type: "remove-buffer";
   value: {
-    mediaSourceId: number;
+    mediaSourceId: string;
+    /**
+     * Id uniquely identifying this SourceBuffer.
+     * It should be the same `sourceBufferId` than the one on the
+     * `CreateSourceBufferWorkerMessage`.
+     */
     sourceBufferId: number;
+    /** Range start, in seconds, of the data that should be removed. */
     start: number;
+    /** Range end, in seconds, of the data that should be removed. */
     end: number;
   };
 }
@@ -199,7 +305,18 @@ export interface RemoveBufferWorkerMessage {
 export interface StartPlaybackObservationWorkerMessage {
   type: "start-playback-observation";
   value: {
-    mediaSourceId: number;
+    /**
+     * Playback observations are linked to an unique MediaSource.
+     *
+     * This `mediaSourceId` should be the same `mediaSourceId` than the one on
+     * the `CreateMediaSourceWorkerMessage` for it.
+     *
+     * Adding such identifier to this seemlingly unrelated event allows to
+     * protect against potential race conditions.
+     *
+     * If `mediaSourceId` don't match, the message will be ignored.
+     */
+    mediaSourceId: string;
   };
 }
 
@@ -211,15 +328,38 @@ export interface StartPlaybackObservationWorkerMessage {
 export interface StopPlaybackObservationWorkerMessage {
   type: "stop-playback-observation";
   value: {
-    mediaSourceId: number;
+    /**
+     * Playback observations are linked to an unique MediaSource.
+     *
+     * This `mediaSourceId` should be the same `mediaSourceId` than the one on
+     * the `CreateMediaSourceWorkerMessage` for it.
+     *
+     * Adding such identifier to this seemlingly unrelated event allows to
+     * protect against potential race conditions.
+     *
+     * If `mediaSourceId` don't match, the message will be ignored.
+     */
+    mediaSourceId: string;
   };
 }
 
-// TODO end of buffer instead? Might be much simpler to implement
+/**
+ * Sent when the worker wants to call the `endOfStream` method of the
+ * `MediaSource`, thus ending the stream.
+ */
 export interface EndOfStreamWorkerMessage {
   type: "end-of-stream";
   value: {
-    mediaSourceId: number;
+    /**
+     * This `mediaSourceId` should be the same `mediaSourceId` than the one on
+     * the `CreateMediaSourceWorkerMessage` for it.
+     *
+     * Adding such identifier to this seemlingly unrelated event allows to
+     * protect against potential race conditions.
+     *
+     * If `mediaSourceId` don't match, the message will be ignored.
+     */
+    mediaSourceId: string;
   };
 }
 
@@ -248,6 +388,11 @@ export interface InitializationMainMessage {
 export interface LoadContentMainMessage {
   type: "load";
   value: {
+    /**
+     * A unique identifier for the content being loaded, that will have to be
+     * present on the various events concerning that content.
+     */
+    contentId: string;
     /** URL to the HLS MultiVariant Playlist. */
     url: string;
   };
@@ -259,7 +404,14 @@ export interface LoadContentMainMessage {
  */
 export interface StopContentMainMessage {
   type: "stop";
-  value: null;
+  value: {
+    /**
+     * The identifier for the content that should be stopped.
+     * This is the same `contentId` value that on the related
+     * `LoadContentMainMessage`.
+     */
+    contentId: string;
+  };
 }
 
 /**
@@ -282,23 +434,144 @@ export interface MediaSourceStateChangedMainMessage {
   type: "media-source-state-changed";
   value: {
     /** Identify the MediaSource in question. */
-    mediaSourceId: number;
+    mediaSourceId: string;
     /** The new state of the MediaSource. */
     state: MediaSourceReadyState;
   };
 }
 
-export interface MediaObservationMainMessage {
-  type: "observation";
+/**
+ * Sent by the main thread to a Worker when the creation of a MediaSource, due
+ * to a previously-received `CreateMediaSourceWorkerMessage`, failed.
+ */
+export interface CreateMediaSourceErrorMainMessage {
+  type: "create-media-source-error";
   value: {
     /** Identify the MediaSource in question. */
-    mediaSourceId: number;
+    mediaSourceId: string;
+    /** The error's message. */
+    message: string;
+    /** The error's name. */
+    name?: string | undefined;
+  };
+}
 
-    reason: PlaybackTickReason;
-    currentTime: number;
-    readyState: number;
-    buffered: Float64Array;
-    paused: boolean;
-    seeking: boolean;
+/** Codes that should be sent alongside a `CreateSourceBufferErrorMainMessage`. */
+export enum SourceBufferCreationErrorCode {
+  /**
+   * The given `mediaSourceId` was right but there was no MediaSource on the
+   * main thread.
+   *
+   * This looks like the MediaSource has been created on the worker but the
+   * SourceBuffer is asked to be created on the main thread, which is an error.
+   */
+  NoMediaSource,
+  /**
+   * An error arised when creating the SourceBuffer through the MediaSource.
+   */
+  AddSourceBufferError,
+}
+
+/**
+ * Sent by the main thread to a Worker when the creation of a SourceBuffer, due
+ * to a previously-received `CreateSourceBufferWorkerMessage`, failed.
+ */
+export interface CreateSourceBufferErrorMainMessage {
+  type: "create-source-buffer-error";
+  value: {
+    mediaSourceId: string;
+    /** Identify the SourceBuffer in question. */
+    sourceBufferId: number;
+    /** Error code to better specify the error encountered. */
+    code: SourceBufferCreationErrorCode;
+    /** The error's message. */
+    message: string;
+    /** The error's name. */
+    name?: string | undefined;
+  };
+}
+
+/**
+ * Sent by the main thread to a Worker when the update of a MediaSource's
+ * duration, due to a previously-received `SetMediaSourceDurationWorkerMessage`,
+ * failed.
+ */
+export interface SetMediaSourceDurationErrorMainMessage {
+  type: "update-media-source-duration-error";
+  value: {
+    /** Identify the MediaSource in question. */
+    mediaSourceId: string;
+    /** The error's message. */
+    message: string;
+    /** The error's name. */
+    name?: string | undefined;
+  };
+}
+
+export interface MediaObservationMainMessage {
+  type: "observation";
+  value: MediaObservation;
+}
+
+export interface MediaObservation {
+  /** Identify the MediaSource in question. */
+  mediaSourceId: string;
+
+  reason: PlaybackTickReason;
+  currentTime: number;
+  readyState: number;
+  buffered: Float64Array;
+  paused: boolean;
+  seeking: boolean;
+}
+
+/**
+ * Sent by the main thread to a Worker when the last operation performed on a
+ * SourceBuffer either an "append" operation, provoked by a
+ * `AppendBufferWorkerMessage` or a "remove" operation, provoked by a
+ * `RemoveBufferWorkerMessage`.
+ */
+export interface SourceBufferOperationErrorMainMessage {
+  type: "source-buffer-error";
+  value: {
+    /** Identify the SourceBuffer in question. */
+    sourceBufferId: number;
+    /** The error's message. */
+    message: string;
+    /** The error's name. */
+    name?: string | undefined;
+  };
+}
+
+/** Codes that should be sent alongside a `EndOfStreamErrorMainMessage`. */
+export enum EndOfStreamErrorCode {
+  /**
+   * The given `mediaSourceId` was right but there was no MediaSource on the
+   * main thread.
+   *
+   * This looks like the MediaSource has been created on the worker but the
+   * the worker wants to call `endOfStream` on the main thread, which is an
+   * error.
+   */
+  NoMediaSource,
+  /** An error arised when calling `endOfStream` on the MediaSource. */
+  EndOfStreamError,
+}
+
+/**
+ * Sent by the main thread to a Worker when the creation of a SourceBuffer, due
+ * to a previously-received `CreateSourceBufferWorkerMessage`, failed.
+ */
+export interface EndOfStreamErrorMainMessage {
+  type: "end-of-stream-error";
+  value: {
+    /** Identify the MediaSource in question. */
+    mediaSourceId: string;
+    /** Error code to better specify the error encountered. */
+    code: EndOfStreamErrorCode;
+    /** The error's message. */
+    message: string;
+    /** The error's name. */
+    name?: string | undefined;
   };
 }

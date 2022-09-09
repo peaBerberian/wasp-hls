@@ -1,3 +1,4 @@
+import idGenerator from "../ts-common/idGenerator.js";
 import {
   Dispatcher,
   LogLevel,
@@ -22,12 +23,11 @@ import {
   WorkerMediaSourceInstanceInfo,
   MainMediaSourceInstanceInfo,
   jsMemoryResources,
-  PlayerId,
-  playersStore,
   RequestId,
   requestsStore,
   ResourceId,
   SourceBufferId,
+  playerInstance,
 } from "./globals";
 import postMessageToMain from "./postMessage.js";
 import {
@@ -36,19 +36,7 @@ import {
   transmux,
 } from "./transmux.js";
 
-function IdGenerator() {
-  let id = 0;
-  return function generateNewId() {
-    // TODO more intelligent id with notion of which is still in use, or
-    // infinite string-based?
-    if (id >= Number.MAX_SAFE_INTEGER) {
-      id = 0;
-    }
-    return id++;
-  };
-}
-
-const generateMediaSourceId = IdGenerator();
+const generateMediaSourceId = idGenerator();
 
 const MAX_U32 = Math.pow(2, 32) - 1;
 
@@ -79,15 +67,14 @@ export function log(logLevel: LogLevel, logStr: string) {
 
 /**
  * TODO failure cases
- * @param {number} playerId
  * @param {string} url
  * @returns {number}
  */
-export function fetchU8(playerId: PlayerId, url: string): RequestId {
+export function fetchU8(url: string): RequestId {
   const currentRequestId = nextRequestId;
   incrementRequestId();
   const abortController = new AbortController();
-  requestsStore.create(currentRequestId, { playerId, abortController });
+  requestsStore.create(currentRequestId, { abortController });
   const timestampBef = performance.now();
   fetch(url, { signal: abortController.signal })
     .then(async res => {
@@ -97,13 +84,14 @@ export function fetchU8(playerId: PlayerId, url: string): RequestId {
       const arrRes = await res.arrayBuffer();
       const elapsedMs = performance.now() - timestampBef;
       requestsStore.delete(currentRequestId);
-      const playerObj = playersStore.get(playerId);
-      if (playerObj !== undefined) {
-        playerObj.dispatcher
-          .on_u8_request_finished(currentRequestId,
-                                  new Uint8Array(arrRes),
-                                  res.url,
-                                  elapsedMs);
+      const dispatcher = playerInstance.getDispatcher();
+      if (dispatcher !== null) {
+        dispatcher.on_u8_request_finished(
+          currentRequestId,
+          new Uint8Array(arrRes),
+          res.url,
+          elapsedMs
+        );
       }
     })
     .catch(err => {
@@ -121,33 +109,33 @@ export function fetchU8(playerId: PlayerId, url: string): RequestId {
 
 /**
  * TODO failure cases
- * @param {number} playerId
  * @param {string} url
  * @returns {number}
  */
-export function fetchU8NoCopy(playerId: PlayerId, url: string): RequestId {
+export function fetchU8NoCopy(url: string): RequestId {
   const currentRequestId = nextRequestId;
   incrementRequestId();
   const abortController = new AbortController();
-  requestsStore.create(currentRequestId, { playerId, abortController });
+  requestsStore.create(currentRequestId, { abortController });
   const timestampBef = performance.now();
   fetch(url, { signal: abortController.signal })
     .then(async res => {
       const arrRes = await res.arrayBuffer();
       const elapsedMs = performance.now() - timestampBef;
       requestsStore.delete(currentRequestId);
-      const playerObj = playersStore.get(playerId);
-      if (playerObj !== undefined) {
+      const dispatcher = playerInstance.getDispatcher();
+      if (dispatcher !== null) {
         const currentResourceId = nextResourceId;
         incrementResourceId();
         const segmentArray = new Uint8Array(arrRes);
-        jsMemoryResources.create(currentResourceId, playerId, segmentArray);
-        playerObj.dispatcher
-          .on_u8_no_copy_request_finished(currentRequestId,
-                                          currentResourceId,
-                                          segmentArray.byteLength,
-                                          res.url,
-                                          elapsedMs);
+        jsMemoryResources.create(currentResourceId, segmentArray);
+        dispatcher.on_u8_no_copy_request_finished(
+          currentRequestId,
+          currentResourceId,
+          segmentArray.byteLength,
+          res.url,
+          elapsedMs
+        );
       }
     })
     .catch(err => {
@@ -180,30 +168,32 @@ export function abortRequest(id: RequestId) : boolean {
   return false;
 }
 
-export function seek(playerId: PlayerId, position: number) {
-  const playerObj = playersStore.get(playerId);
-  if (playerObj === undefined) {
-    // XXX TODO
+export function seek(position: number) {
+  const contentInfo = playerInstance.getContentInfo();
+  if (contentInfo === null || contentInfo.mediaSourceObj === null) {
+    console.error("Attempting to seek when no MediaSource is created");
     return ;
   }
-  postMessageToMain({ type: "seek", value: position });
+  postMessageToMain({
+    type: "seek",
+    value: {
+      mediaSourceId: contentInfo.mediaSourceObj.mediaSourceId,
+      position,
+    },
+  });
 }
 
-/**
- * @param {number} playerId
- * @returns {number}
- */
-export function attachMediaSource(playerId: PlayerId): void {
-  const playerObj = playersStore.get(playerId);
-  if (playerObj === undefined) {
+export function attachMediaSource(): void {
+  const contentInfo = playerInstance.getContentInfo();
+  if (contentInfo === null) {
     // TODO
     return;
   }
 
   try {
-    if (!playerObj.hasWorkerMse) {
+    if (playerInstance.hasWorkerMse !== true) {
       const mediaSourceId = generateMediaSourceId();
-      playerObj.mediaSourceObj = {
+      contentInfo.mediaSourceObj = {
         nextSourceBufferId: 0,
         sourceBuffers: [],
         type: "main",
@@ -212,6 +202,7 @@ export function attachMediaSource(playerId: PlayerId): void {
       postMessageToMain({
         type: "create-media-source",
         value: {
+          contentId: contentInfo.contentId,
           mediaSourceId,
         },
       });
@@ -233,7 +224,7 @@ export function attachMediaSource(playerId: PlayerId): void {
         objectURL = URL.createObjectURL(mediaSource);
       }
       const mediaSourceId = generateMediaSourceId();
-      playerObj.mediaSourceObj = {
+      contentInfo.mediaSourceObj = {
         type: "worker",
         mediaSourceId,
         mediaSource,
@@ -244,6 +235,7 @@ export function attachMediaSource(playerId: PlayerId): void {
       postMessageToMain({
         type: "attach-media-source",
         value: {
+          contentId: contentInfo.contentId,
           /* eslint-disable-next-line */
           handle,
           src: objectURL,
@@ -253,21 +245,24 @@ export function attachMediaSource(playerId: PlayerId): void {
     }
 
     function onMediaSourceEnded() {
-      playerObj?.dispatcher
-        .on_media_source_state_change(MediaSourceReadyState.Ended);
+      playerInstance.getDispatcher()?.on_media_source_state_change(
+        MediaSourceReadyState.Ended
+      );
     }
     function onMediaSourceOpen() {
-      playerObj?.dispatcher
-        .on_media_source_state_change(MediaSourceReadyState.Open);
+      playerInstance.getDispatcher()?.on_media_source_state_change(
+        MediaSourceReadyState.Open
+      );
     }
     function onMediaSourceClose() {
-      playerObj?.dispatcher
-        .on_media_source_state_change(MediaSourceReadyState.Closed);
+      playerInstance.getDispatcher()?.on_media_source_state_change(
+        MediaSourceReadyState.Closed
+      );
     }
   } catch (e) {
     // TODO
     scheduleMicrotask(() => {
-      // playerObj?.dispatcher.on_media_source_creation_error(
+      // contentInfo?.dispatcher.on_media_source_creation_error(
       //   getErrorMessage(e)
       // );
     });
@@ -285,29 +280,28 @@ function scheduleMicrotask(fn: () => unknown) : void {
 }
 
 /**
- * @param {number} playerId
  * @returns {number}
  */
-export function removeMediaSource(playerId: PlayerId): void {
-  const playerObj = playersStore.get(playerId);
-  if (playerObj === undefined) {
+export function removeMediaSource(): void {
+  const contentInfo = playerInstance.getContentInfo();
+  if (contentInfo === null) {
     // TODO
     return;
     // return RemoveMediaSourceResult
     //   .error(RemoveMediaSourceErrorCode.PlayerInstanceNotFound);
   }
-  if (playerObj.mediaSourceObj === null) {
+  if (contentInfo.mediaSourceObj === null) {
     // TODO
     return;
     // return RemoveMediaSourceResult
     //   .error(RemoveMediaSourceErrorCode.NoMediaSourceAttached);
   }
 
-  if (playerObj.mediaSourceObj.type === "worker") {
+  if (contentInfo.mediaSourceObj.type === "worker") {
     const {
       mediaSource,
       removeEventListeners,
-    } = playerObj.mediaSourceObj;
+    } = contentInfo.mediaSourceObj;
     removeEventListeners();
 
     if (mediaSource !== null && mediaSource.readyState !== "closed") {
@@ -332,7 +326,7 @@ export function removeMediaSource(playerId: PlayerId): void {
         }
       }
     }
-    // clearElementSrc(playerObj.videoElement);
+    // clearElementSrc(contentInfo.videoElement);
     // // if (objectURL !== null) {
     // //   try {
     // //     URL.revokeObjectURL(objectURL);
@@ -346,27 +340,24 @@ export function removeMediaSource(playerId: PlayerId): void {
 
   postMessageToMain({
     type: "clear-media-source",
-    value: { mediaSourceId: playerObj.mediaSourceObj.mediaSourceId },
+    value: { mediaSourceId: contentInfo.mediaSourceObj.mediaSourceId },
   });
 }
 
-export function setMediaSourceDuration(
-  playerId: number,
-  duration: number
-) : void {
-  const playerObj = playersStore.get(playerId);
-  if (playerObj === undefined) {
+export function setMediaSourceDuration(duration: number) : void {
+  const contentInfo = playerInstance.getContentInfo();
+  if (contentInfo === null) {
     // TODO
     return ;
   }
-  if (playerObj.mediaSourceObj === null) {
+  if (contentInfo.mediaSourceObj === null) {
     // TODO
     return;
   }
 
-  if (playerObj.mediaSourceObj.type === "worker") {
+  if (contentInfo.mediaSourceObj.type === "worker") {
     try {
-      playerObj.mediaSourceObj.mediaSource.duration = duration;
+      contentInfo.mediaSourceObj.mediaSource.duration = duration;
     } catch (err) {
       // TODO
     }
@@ -374,7 +365,7 @@ export function setMediaSourceDuration(
     postMessageToMain({
       type: "update-media-source-duration",
       value: {
-        mediaSourceId: playerObj.mediaSourceObj.mediaSourceId,
+        mediaSourceId: contentInfo.mediaSourceObj.mediaSourceId,
         duration,
       },
     });
@@ -388,31 +379,26 @@ export function getErrorMessage(e: unknown) : string | undefined {
 }
 
 /**
- * @param {number} playerId
  * @param {number} mediaType
  * @param {string} typ
- * @returns {Object}
+ * @returns {number}
  */
-export function addSourceBuffer(
-  playerId: PlayerId,
-  mediaType: MediaType,
-  typ: string
-): number {
-  const playerObj = playersStore.get(playerId);
-  if (playerObj === undefined) {
+export function addSourceBuffer(mediaType: MediaType, typ: string): number {
+  const contentInfo = playerInstance.getContentInfo();
+  if (contentInfo === null) {
     // TODO
     throw new Error("Error 1");
   }
-  if (playerObj.mediaSourceObj === null) {
+  if (contentInfo.mediaSourceObj === null) {
     // TODO
     throw new Error("Error 2");
   }
 
-  if (playerObj.mediaSourceObj.type === "main") {
+  if (contentInfo.mediaSourceObj.type === "main") {
     const {
       sourceBuffers,
       nextSourceBufferId,
-    } = playerObj.mediaSourceObj;
+    } = contentInfo.mediaSourceObj;
     try {
       let mimeType = typ;
       if (shouldTransmux(typ)) {
@@ -424,11 +410,11 @@ export function addSourceBuffer(
         transmuxer: mimeType === typ ? null : transmux,
         sourceBuffer: null,
       });
-      playerObj.mediaSourceObj.nextSourceBufferId++;
+      contentInfo.mediaSourceObj.nextSourceBufferId++;
       postMessageToMain({
         type: "create-source-buffer",
         value: {
-          mediaSourceId: playerObj.mediaSourceObj.mediaSourceId,
+          mediaSourceId: contentInfo.mediaSourceObj.mediaSourceId,
           sourceBufferId,
           contentType: mimeType,
         },
@@ -443,7 +429,7 @@ export function addSourceBuffer(
       mediaSource,
       sourceBuffers,
       nextSourceBufferId,
-    } = playerObj.mediaSourceObj;
+    } = contentInfo.mediaSourceObj;
     if (mediaSource.readyState === "closed") {
       // TODO
       throw new Error("A");
@@ -464,9 +450,9 @@ export function addSourceBuffer(
         sourceBuffer,
         transmuxer: mimeType === typ ? null : transmux,
       });
-      playerObj.mediaSourceObj.nextSourceBufferId++;
+      contentInfo.mediaSourceObj.nextSourceBufferId++;
       sourceBuffer.addEventListener("updateend", function() {
-        playerObj.dispatcher.on_source_buffer_update(sourceBufferId);
+        playerInstance.getDispatcher()?.on_source_buffer_update(sourceBufferId);
       });
       // TODO
       return sourceBufferId;
@@ -490,18 +476,13 @@ export function addSourceBuffer(
 }
 
 /**
- * @param {number} playerId
  * @param {number} sourceBufferId
  * @param {ArrayBuffer} data
  * @returns {number}
  */
-export function appendBuffer(
-  playerId: PlayerId,
-  sourceBufferId: SourceBufferId,
-  data: Uint8Array
-): void {
+export function appendBuffer(sourceBufferId: SourceBufferId, data: Uint8Array): void {
   try {
-    const mediaSourceObj = getMediaSourceObj(playerId);
+    const mediaSourceObj = getMediaSourceObj();
     if (mediaSourceObj === undefined) {
       // TODO
       return;
@@ -546,13 +527,10 @@ export function appendBuffer(
 }
 
 /**
- * @param {number} playerId
  * @param {number} sourceBufferId
  * @param {number} resourceId
- * @returns {number}
  */
 export function appendBufferJsBlob(
-  playerId: PlayerId,
   sourceBufferId: SourceBufferId,
   resourceId: ResourceId
 ): void {
@@ -561,24 +539,21 @@ export function appendBufferJsBlob(
     // TODO
     return;
   }
-  return appendBuffer(playerId, sourceBufferId, segment);
+  return appendBuffer(sourceBufferId, segment);
 }
 
 /**
- * @param {number} playerId
  * @param {number} sourceBufferId
  * @param {number} start
  * @param {number} end
- * @returns {number}
  */
 export function removeBuffer(
-  playerId: PlayerId,
   sourceBufferId: SourceBufferId,
   start: number,
   end: number
 ): void {
   try {
-    const mediaSourceObj = getMediaSourceObj(playerId);
+    const mediaSourceObj = getMediaSourceObj();
     if (mediaSourceObj === undefined) {
       // TODO
       return;
@@ -610,14 +585,11 @@ export function removeBuffer(
 }
 
 /**
- * @param {number} playerId
  * @returns {number}
  */
-export function endOfStream(
-  playerId: PlayerId
-): void {
+export function endOfStream(): void {
   try {
-    const mediaSourceObj = getMediaSourceObj(playerId);
+    const mediaSourceObj = getMediaSourceObj();
     if (mediaSourceObj === undefined) {
       // TODO
       return;
@@ -637,38 +609,36 @@ export function endOfStream(
 }
 
 /**
- * @param {number} playerId
  */
-export function startObservingPlayback(playerId: PlayerId): void {
-  const playerObj = playersStore.get(playerId);
-  if (playerObj === undefined) {
+export function startObservingPlayback(): void {
+  const contentInfo = playerInstance.getContentInfo();
+  if (contentInfo === null) {
     return;
   }
-  if (playerObj.mediaSourceObj === null) {
+  if (contentInfo.mediaSourceObj === null) {
     // TODO error/log?
     return;
   }
   postMessageToMain({
     type: "start-playback-observation",
-    value: { mediaSourceId: playerObj.mediaSourceObj.mediaSourceId },
+    value: { mediaSourceId: contentInfo.mediaSourceObj.mediaSourceId },
   });
 }
 
 /**
- * @param {number} playerId
  */
-export function stopObservingPlayback(playerId: PlayerId) {
-  const playerObj = playersStore.get(playerId);
-  if (playerObj === undefined) {
+export function stopObservingPlayback() {
+  const contentInfo = playerInstance.getContentInfo();
+  if (contentInfo === null) {
     return;
   }
-  if (playerObj.mediaSourceObj === null) {
+  if (contentInfo.mediaSourceObj === null) {
     // TODO error/log?
     return;
   }
   postMessageToMain({
     type: "stop-playback-observation",
-    value: { mediaSourceId: playerObj.mediaSourceObj.mediaSourceId },
+    value: { mediaSourceId: contentInfo.mediaSourceObj.mediaSourceId },
   });
 }
 
@@ -687,13 +657,12 @@ function formatErrMessage(err: unknown, defaultMsg: string) {
 }
 
 function getMediaSourceObj(
-  playerId: PlayerId
 ) : MainMediaSourceInstanceInfo | WorkerMediaSourceInstanceInfo | undefined {
-  const playerObj = playersStore.get(playerId);
-  if (playerObj === undefined) {
+  const contentInfo = playerInstance.getContentInfo();
+  if (contentInfo === null) {
     return undefined;
   }
-  const { mediaSourceObj } = playerObj;
+  const { mediaSourceObj } = contentInfo;
   if (mediaSourceObj === null) {
     return undefined;
   }

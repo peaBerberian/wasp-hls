@@ -5,12 +5,10 @@ use crate::{bindings::{
     jsAppendBufferJsBlob,
     jsRemoveBuffer,
     jsSeek,
-    PlayerId,
     MediaType, jsAttachMediaSource, jsEndOfStream, MediaObservation,
 }, dispatcher::MediaSourceReadyState, Logger};
 
 pub(crate) struct MediaElementReference {
-    id: PlayerId,
     initial_seek_performed: bool,
     incoming_seek: Option<f64>,
     last_observation: Option<MediaObservation>,
@@ -18,9 +16,8 @@ pub(crate) struct MediaElementReference {
 }
 
 impl MediaElementReference {
-    pub fn new(player_id: PlayerId) -> Self {
+    pub fn new() -> Self {
         Self {
-            id: player_id,
             initial_seek_performed: false,
             incoming_seek: None,
             last_observation: None,
@@ -30,9 +27,8 @@ impl MediaElementReference {
 
     pub fn initialize(&mut self) {
         self.initial_seek_performed = false;
-        jsAttachMediaSource(self.id);
+        jsAttachMediaSource();
         self.buffers = Some(MediaBuffers {
-            id: self.id,
             ready_state: MediaSourceReadyState::Closed,
             video: None,
             audio: None,
@@ -57,7 +53,7 @@ impl MediaElementReference {
                     return ;
                 }
             }
-            jsSeek(self.id, position);
+            jsSeek(position);
         }
     }
 
@@ -67,7 +63,7 @@ impl MediaElementReference {
             self.last_observation.as_ref().unwrap().ready_state() >= 1
         {
             if let Some(pos) = self.incoming_seek {
-                jsSeek(self.id, pos);
+                jsSeek(pos);
             }
             self.initial_seek_performed = true;
         }
@@ -84,10 +80,6 @@ impl MediaElementReference {
 /// SourceBuffers, making sure only one is created for each and that one is not
 /// created once media data has been pushed to any of them.
 pub(crate) struct MediaBuffers {
-    /// This identifier will identify the media element and MediaSource on the
-    /// JavaScript-side.
-    id: PlayerId,
-
     /// Current state of the attached MediaSource.
     ///
     /// `None` if no MediaSource is attached for now.
@@ -159,7 +151,7 @@ impl MediaBuffers {
                 if self.audio.is_some() {
                     Err(SourceBufferCreationError::AlreadyCreatedWithSameType(media_type))
                 } else {
-                    self.audio = Some(SourceBuffer::new(self.id, media_type, sb_codec));
+                    self.audio = Some(SourceBuffer::new(media_type, sb_codec));
                     Ok(())
                 }
             }
@@ -167,7 +159,7 @@ impl MediaBuffers {
                 if self.video.is_some() {
                     Err(SourceBufferCreationError::AlreadyCreatedWithSameType(media_type))
                 } else {
-                    self.video = Some(SourceBuffer::new(self.id, media_type, sb_codec));
+                    self.video = Some(SourceBuffer::new(media_type, sb_codec));
                     Ok(())
                 }
             }
@@ -263,7 +255,7 @@ impl MediaBuffers {
             self.is_ended(MediaType::Video) &&
             self.ready_state != MediaSourceReadyState::Closed
         {
-            jsEndOfStream(self.id);
+            jsEndOfStream();
         }
     }
 
@@ -318,13 +310,8 @@ pub enum SourceBufferCreationError {
 ///
 /// This is the interface allowing to interact with lower-level media buffers.
 pub struct SourceBuffer {
-    /// The `PlayerId` used to identify the global dispatcher instance linked to
-    /// this `SourceBuffer`.
-    player_id: PlayerId,
-
     /// The `SourceBufferId` given on SourceBuffer creation, used to identify
-    /// this `SourceBuffer` in the current dispatcher instance (itself identified by
-    /// `player_id`.
+    /// this `SourceBuffer` in the current dispatcher instance.
     id: SourceBufferId,
 
     /// The current queue of operations being scheduled, from the most urgent to
@@ -363,10 +350,9 @@ pub enum SourceBufferQueueElement {
 }
 
 impl SourceBuffer {
-    fn new(player_id: PlayerId, media_type: MediaType, typ: String) -> Self {
-        let x = jsAddSourceBuffer(player_id, media_type, &typ,);
+    fn new(media_type: MediaType, typ: String) -> Self {
+        let x = jsAddSourceBuffer(media_type, &typ,);
         Self {
-            player_id,
             id: x as u32,
             typ,
             is_updating: false,
@@ -377,7 +363,7 @@ impl SourceBuffer {
     }
 
 //     pub fn get_buffered(&self) -> Vec<(f64, f64)> {
-//         let buffered = jsGetSourceBufferBuffered(self.player_id, self.id);
+//         let buffered = jsGetSourceBufferBuffered(self.id);
 //         let og_len = buffered.len();
 //         if og_len % 2 != 0 {
 //             panic!("Unexpected buffered value: not even.");
@@ -432,11 +418,11 @@ impl SourceBuffer {
         match md.segment_data {
             DataSource::Raw(v) => {
                 Logger::debug(&format!("Pushing raw data {} {}", self.id, self.typ));
-                jsAppendBuffer(self.player_id, self.id, &v);
+                jsAppendBuffer(self.id, &v);
             },
             DataSource::JsBlob(j) => {
                 Logger::debug(&format!("Pushing JS Blob {} {}", self.id, self.typ));
-                jsAppendBufferJsBlob(self.player_id, self.id, j.get_id());
+                jsAppendBufferJsBlob(self.id, j.get_id());
             },
         }
 

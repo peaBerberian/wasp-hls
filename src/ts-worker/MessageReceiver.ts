@@ -1,20 +1,19 @@
 import {
   MainMessage,
-  WorkerErrorCode,
+  InitializationErrorCode,
+  ContentErrorCode,
 } from "../ts-common/types";
 import initializeWasm, {
-  Dispatcher,
   MediaObservation,
 } from "../wasm/wasp_hls";
 import { stopObservingPlayback } from "./bindings";
 import {
-  PlayerInstanceInfo,
-  playersStore,
+  ContentInfo,
+  playerInstance,
 } from "./globals";
 import postMessageToMain from "./postMessage";
 
 let wasInitializedCalled = false;
-let playerInstanceInfo : PlayerInstanceInfo | null = null;
 
 export default function MessageReceiver() {
   onmessage = function(evt: MessageEvent<MainMessage>) {
@@ -32,72 +31,77 @@ export default function MessageReceiver() {
 
       case "init":
         if (wasInitializedCalled) {
-          return handleError(
+          return handleInitializationError(
             "Worker initialization already done",
-            WorkerErrorCode.AlreadyInitializedError
+            InitializationErrorCode.AlreadyInitializedError
           );
         }
         wasInitializedCalled = true;
         const { wasmUrl, hasWorkerMse } = data.value;
-        initialize(wasmUrl, hasWorkerMse)
-          .catch((err) => handleError(err, WorkerErrorCode.WasmInitializationError));
+        initialize(wasmUrl, hasWorkerMse);
         break;
 
       case "dispose":
         dispose();
         break;
 
-      case "load":
-        if (playerInstanceInfo === null) {
-          handleError(
-            "Loading content in an Uninitialized player",
-            WorkerErrorCode.UnitializedLoadError
-          );
-          return;
+      case "load": {
+        const dispatcher = playerInstance.getDispatcher();
+        if (dispatcher === null) {
+          return postUnitializedWorkerError(data.value.contentId);
         }
-        playerInstanceInfo.dispatcher.load_content(data.value.url);
+        const contentInfo: ContentInfo = {
+          contentId: data.value.contentId,
+          mediaSourceObj: null,
+          observationsObj: null,
+        };
+        playerInstance.changeContent(contentInfo);
+        dispatcher.load_content(data.value.url);
         break;
+      }
 
-      case "stop":
-        if (playerInstanceInfo === null) {
-          handleError(
-            "Stopping content in an Uninitialized player",
-            WorkerErrorCode.UnitializedStopError
-          );
-          return;
+      case "stop": {
+        const dispatcher = playerInstance.getDispatcher();
+        if (dispatcher === null) {
+          return postUnitializedWorkerError(data.value.contentId);
         }
-        playerInstanceInfo.dispatcher.stop();
+        dispatcher.stop();
         break;
+      }
 
-      case "media-source-state-changed":
+      case "media-source-state-changed": {
+        const dispatcher = playerInstance.getDispatcher();
+        const contentInfo = playerInstance.getContentInfo();
         if (
-          playerInstanceInfo === null ||
-          playerInstanceInfo.mediaSourceObj === undefined ||
-          playerInstanceInfo.mediaSourceObj?.mediaSourceId !== data.value.mediaSourceId
+          dispatcher === null || contentInfo === null ||
+          contentInfo.mediaSourceObj?.mediaSourceId !== data.value.mediaSourceId
         ) {
           return;
         }
-        playerInstanceInfo.dispatcher
-          .on_media_source_state_change(data.value.state);
+        dispatcher.on_media_source_state_change(data.value.state);
         break;
+      }
 
-      case "source-buffer-updated":
+      case "source-buffer-updated": {
+        const dispatcher = playerInstance.getDispatcher();
+        const contentInfo = playerInstance.getContentInfo();
         if (
-          playerInstanceInfo === null ||
-          playerInstanceInfo.mediaSourceObj === undefined ||
-          playerInstanceInfo.mediaSourceObj?.mediaSourceId !== data.value.mediaSourceId
+          dispatcher === null || contentInfo === null ||
+          contentInfo.mediaSourceObj?.mediaSourceId !== data.value.mediaSourceId
         ) {
           return;
         }
-        playerInstanceInfo.dispatcher.on_source_buffer_update(data.value.sourceBufferId);
+        dispatcher.on_source_buffer_update(data.value.sourceBufferId);
         break;
+      }
 
 
-      case "observation":
+      case "observation": {
+        const dispatcher = playerInstance.getDispatcher();
+        const contentInfo = playerInstance.getContentInfo();
         if (
-          playerInstanceInfo === null ||
-          playerInstanceInfo.mediaSourceObj === undefined ||
-          playerInstanceInfo.mediaSourceObj?.mediaSourceId !== data.value.mediaSourceId
+          dispatcher === null || contentInfo === null ||
+          contentInfo.mediaSourceObj?.mediaSourceId !== data.value.mediaSourceId
         ) {
           return;
         }
@@ -109,13 +113,60 @@ export default function MessageReceiver() {
           data.value.paused,
           data.value.seeking
         );
-        playerInstanceInfo.dispatcher.on_playback_tick(mediaObservation);
+        dispatcher.on_playback_tick(mediaObservation);
         break;
+      }
+
+      case "create-media-source-error": {
+        const dispatcher = playerInstance.getDispatcher();
+        const contentInfo = playerInstance.getContentInfo();
+        if (
+          dispatcher === null || contentInfo === null ||
+          contentInfo.mediaSourceObj?.mediaSourceId !== data.value.mediaSourceId
+        ) {
+          return;
+        }
+        dispatcher.stop();
+
+        // TODO re-dispatch ContentError
+        break;
+      }
+
+      case "update-media-source-duration-error": {
+        const dispatcher = playerInstance.getDispatcher();
+        const contentInfo = playerInstance.getContentInfo();
+        if (
+          dispatcher === null ||
+          contentInfo === null ||
+          contentInfo.mediaSourceObj?.mediaSourceId !== data.value.mediaSourceId
+        ) {
+          return;
+        }
+        // TODO this should proably not be sent
+        console.error("Error: when setting the MediaSource's duration");
+        break;
+      }
+
+      case "create-source-buffer-error": {
+        const dispatcher = playerInstance.getDispatcher();
+        const contentInfo = playerInstance.getContentInfo();
+        if (
+          dispatcher === null ||
+          contentInfo === null ||
+          contentInfo.mediaSourceObj?.mediaSourceId !== data.value.mediaSourceId
+        ) {
+          return;
+        }
+        dispatcher.stop();
+
+        // TODO re-dispatch ContentError
+        break;
+      }
     }
   };
 }
 
-function handleError(err: unknown, code: WorkerErrorCode) {
+function handleInitializationError(err: unknown, code: InitializationErrorCode) {
   let message : string | undefined;
   if (typeof err === "string") {
     message = err;
@@ -123,7 +174,7 @@ function handleError(err: unknown, code: WorkerErrorCode) {
     message = err.message;
   }
   postMessageToMain({
-    type: "error",
+    type: "initialization-error",
     value: {
       code,
       message,
@@ -131,36 +182,30 @@ function handleError(err: unknown, code: WorkerErrorCode) {
   });
 }
 
-async function initialize(wasmUrl: string, hasWorkerMse: boolean) {
-  await initializeWasm(fetch(wasmUrl));
-  let playerId = 0;
-  while (playersStore.get(playerId) !== undefined) {
-    playerId++;
-  }
-  const dispatcher = new Dispatcher(playerId);
-  const playerObj: PlayerInstanceInfo = {
-    id: playerId,
-    hasWorkerMse,
-    dispatcher,
-    mediaSourceObj: null,
-    observationsObj: null,
-    isDetroyed: false,
-  };
-  playersStore.create(playerId, playerObj);
-  playerInstanceInfo = playerObj;
+function postUnitializedWorkerError(contentId: string): void {
   postMessageToMain({
-    type: "initialized",
-    value: null,
+    type: "content-error",
+    value: {
+      contentId,
+      message: "Error: Worker not initialized.",
+      code: ContentErrorCode.UnitializedError,
+    },
+  });
+}
+
+function initialize(
+  wasmUrl: string,
+  hasWorkerMse: boolean
+) {
+  initializeWasm(fetch(wasmUrl)).then(() => {
+    playerInstance.start(hasWorkerMse);
+    postMessageToMain({ type: "initialized", value: null });
+  }).catch(err => {
+    handleInitializationError(err, InitializationErrorCode.WasmRequestError);
   });
 }
 
 function dispose() {
-  if (playerInstanceInfo !== null) {
-    playerInstanceInfo.dispatcher.stop();
-    playerInstanceInfo.dispatcher.free();
-    playerInstanceInfo.isDetroyed = true;
-    stopObservingPlayback(playerInstanceInfo.id);
-    playersStore.dispose(playerInstanceInfo.id);
-    playerInstanceInfo = null;
-  }
+  stopObservingPlayback();
+  playerInstance.dispose();
 }

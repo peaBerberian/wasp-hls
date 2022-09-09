@@ -48,7 +48,12 @@ type QSBQueueItem =
 
 /**
  * Allows to push and remove new Segments to a SourceBuffer in a FIFO queue (not
- * doing so can lead to browser Errors).
+ * doing so can lead to browser Errors) as well as being Promise-based, instead
+ * of event-based.
+ *
+ * TODO is this complexity really needed here? Event-based actually seems more
+ * logical, as main-worker messages are also event-based as of now.
+ * Time will tell...
  *
  * To work correctly, only a single QueuedSourceBuffer per SourceBuffer should
  * be created.
