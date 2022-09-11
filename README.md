@@ -79,8 +79,9 @@ Request Scheduling:
   - [x] Buffer goal implementation (as in: stop loading segment once enough to fill
     the buffer up to a certain point are loaded)
   - [x] Parallel audio and video segment loading
-  - [ ] Synchronization between progress of audio and video segment requests (to
-    e.g. stop doing audio segment requests when video ones become urgent).
+  - [X] Priorization between audio and video segment requests (to e.g. stop
+    doing audio segment requests when video ones become urgent).
+  - [ ] Range requests
   - [ ] Retry of failed requests with an exponential backoff
 
 Buffers:
@@ -106,6 +107,7 @@ Miscellaneous:
     fun for now!)
   - [ ] WebAssembly-based mpeg-ts transcoder (very low priority)
   - [ ] Delta playlist handling
+  - [ ] Content Steering handling
 
 Playlist tags specifically considered (unchecked ones are mainly just ignored,
 most do not prevent playback):

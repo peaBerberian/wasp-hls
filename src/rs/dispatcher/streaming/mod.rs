@@ -37,7 +37,7 @@ impl Dispatcher {
         resource_size: u32,
         duration_ms: f64,
     ) {
-        match self.requester.remove_pending_request(request_id) {
+        match self.requester.end_pending_request(request_id) {
             Some(FinishedRequestType::Segment(seg_info)) =>
                 self.on_segment_fetch_success(seg_info, data, resource_size, duration_ms),
             Some(FinishedRequestType::Playlist(pl_info)) =>
@@ -55,7 +55,7 @@ impl Dispatcher {
         request_id: RequestId,
     ) {
         // TODO retry and whatnot
-        match self.requester.remove_pending_request(request_id) {
+        match self.requester.end_pending_request(request_id) {
             Some(FinishedRequestType::Segment(_seg_info)) =>
                 self.fail_on_error("A segment request failed."),
             Some(FinishedRequestType::Playlist(_pl_info)) =>
@@ -106,7 +106,6 @@ impl Dispatcher {
                 self.fail_on_error(&format!("Error while creating video SourceBuffer: {:?}", e));
                 return;
             }
-            jsStopObservingPlayback();
             jsStartObservingPlayback();
         }
     }
@@ -227,8 +226,16 @@ impl Dispatcher {
         let position = observation.current_time();
         Logger::debug(&format!("Tick received: {}", position));
         self.last_position = position;
+
+        // Lock `Requester`, so it only do new segment requests when every
+        // wanted segments is scheduled - for better priorization
+        let was_already_locked = self.requester.lock_segment_requests();
+        self.requester.update_base_position(Some(position));
         self.segment_selectors.update_base_position(position);
-        self.check_segments_to_request()
+        self.check_segments_to_request();
+        if !was_already_locked {
+            self.requester.unlock_segment_requests();
+        }
     }
 
     pub fn on_seek(&mut self, observation: MediaObservation) {
@@ -236,8 +243,9 @@ impl Dispatcher {
         Logger::debug(&format!("Seeking tick received: {}", position));
         self.segment_selectors.reset_position(position);
 
-        // TODO better logic than aborting everything on seek
-        self.requester.abort_segments(|_| true);
+        // TODO better logic than aborting everything on seek?
+        self.requester.abort_all_segments();
+        self.requester.update_base_position(Some(position));
         self.check_segments_to_request()
     }
 
@@ -245,6 +253,7 @@ impl Dispatcher {
         match self.content_tracker.as_ref() {
             None => {},
             Some(ctnt) => {
+                let was_already_locked = self.requester.lock_segment_requests();
                 [MediaType::Video, MediaType::Audio].iter().for_each(|mt| {
                     let mt = *mt;
                     if !self.requester.has_segment_request_pending(mt) {
@@ -259,13 +268,16 @@ impl Dispatcher {
                         }
                     }
                 });
+                if !was_already_locked {
+                    self.requester.unlock_segment_requests();
+                }
             },
         }
     }
 
     pub fn internal_stop(&mut self) {
         Logger::info("Stopping current content (if one) and resetting player");
-        self.requester.abort_all();
+        self.requester.reset();
         jsStopObservingPlayback();
         jsRemoveMediaSource();
         self.segment_selectors.reset_position(0.);
@@ -330,7 +342,7 @@ impl Dispatcher {
                 ctnt.update_curr_bandwidth(bandwidth).iter().for_each(|mt| {
                     let mt = *mt;
                     Logger::debug(&format!("{} MediaPlaylist changed", mt));
-                    self.requester.abort_segments(|x| { x.media_type == mt });
+                    self.requester.abort_segments_with_type(mt);
                     let selector = self.segment_selectors.get_mut(mt);
                     selector.rollback();
                     selector.reset_init_segment();
