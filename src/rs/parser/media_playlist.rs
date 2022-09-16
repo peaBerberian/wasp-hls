@@ -17,6 +17,7 @@ pub struct MediaPlaylist {
     pub i_frames_only: bool,
     pub map: Option<MapInfo>,
     pub segment_list: Vec<SegmentInfo>,
+    pub url: Url,
 
     // TODO
     // pub server_control: ServerControl,
@@ -244,6 +245,7 @@ impl MediaPlaylist {
             i_frames_only,
             map,
             segment_list,
+            url,
             // TODO
             // server_control,
             // part_inf,
@@ -252,6 +254,10 @@ impl MediaPlaylist {
 
     pub(crate) fn extension(&self) -> Option<&str> {
         self.segment_list.get(0).map(|s| s.url.extension())
+    }
+
+    pub(crate) fn target_duration(&self) -> u32 {
+        self.target_duration
     }
 
     pub(crate) fn duration(&self) -> Option<f64> {
@@ -299,7 +305,6 @@ impl MediaPlaylist {
     pub fn last_segment_start(&self) -> Option<f64> {
         match self.end_list {
             false => {
-                Logger::warn("no end list");
                 None
             },
             true => self.segment_list.last().map(|x| x.start),

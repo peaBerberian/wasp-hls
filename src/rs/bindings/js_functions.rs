@@ -10,33 +10,39 @@ use crate::wasm_bindgen;
 
 #[wasm_bindgen]
 extern "C" {
+    pub fn jsPrepareSegment(
+        source_buffer_id: SourceBufferId,
+        segment_id: ResourceId
+    ) -> Option<f64>;
+
     // Log the given text in the JavaScript console, with the log level given.
     pub fn jsLog(log_level: LogLevel, log: &str);
 
-    // Fetch the given `url` from the network and await a u8 slice response.
+    pub fn jsTimer(duration: f64, reason: TimerReason) -> TimerId;
+
+    pub fn jsClearTimer(id: TimerId);
+
+    pub fn jsGetResourceData(id: ResourceId) -> Option<Vec<u8>>;
+
+    // Fetch the given `url` from the network and await a response.
     //
     // If and when it finishes with success, the result will be emitted as a
-    // u8 slice through the `on_u8_request_finished` method of this
+    // `resource_id` through the `on_request_finished` method of this
     // `WaspHlsPlayer`.
     //
     // If and when it fails, the error will be emitted through the
-    // `on_u8_request_failed` method of this `WaspHlsPlayer`.
+    // `on_request_failed` method of this `WaspHlsPlayer`.
     //
-    // In both cases, those methods will always be called asynchronously after the `jsFetchU8`
+    // In both cases, those methods will always be called asynchronously after the `jsFetch`
     // call.
     //
     // If the request has been aborted while pending through the `jsAbortRequest`
-    // function, no method will be called.
-    pub fn jsFetchU8(url: &str) -> RequestId;
-
-    // Variant of `jsFetchU8` where the resource requested is actually kept in
-    // JavaScript's memory to avoid unnecesary copies of larges amount of data (and to avoid
-    // stressing JavaScript's garbage collector in case where the data would go back and forth
-    // between JavaScript and WASM).
+    // function, none of those methods will be called.
     //
-    // This variant follows the exact same rules than `jsFetchU8` except that a `ResourceId`
-    // will be communicated on success through the `on_u8_no_copy_request_finished` method of the
-    // `WaspHlsPlayer` which has the given `PlayerId`.
+    // The resource requested is actually kept in JavaScript's memory to avoid unnecesary copies
+    // of larges amount of data (and to avoid stressing JavaScript's garbage collector in case
+    // where the data would go back and forth between JavaScript and WASM).
+    //
     // To avoid memory leaks, it is __VERY__ important to call the `jsFreeResource` function with
     // that `ResourceId` once it is not needed anymore.
     //
@@ -46,9 +52,9 @@ extern "C" {
     //
     // In that last scenario, you will receive a corresponding error when trying to use that
     // `ResourceId` in the JavaScript functions receiving it.
-    pub fn jsFetchU8NoCopy(url: &str) -> RequestId;
+    pub fn jsFetch(url: &str) -> RequestId;
 
-    // Abort a request started with `jsFetchU8` or `jsFetchU8NoCopy` based on its
+    // Abort a request started with `jsFetch`` based on its
     // `request_id`.
     //
     // After calling this function, you won't get any event linked to that
@@ -102,17 +108,6 @@ extern "C" {
     // (respectively by calling either the `on_source_buffer_update` method or the
     // `on_source_buffer_error` method of the `WaspHlsPlayer` linked to the given `PlayerId`).
     pub fn jsAppendBuffer(
-        source_buffer_id: SourceBufferId,
-        data: &[u8]
-    );
-
-    // Variant of `jsAppendBuffer` where the data to append actually resides in JavaScript's
-    // memory.
-    //
-    // Here, the data to puch is derived from its given `ResourceId`.
-    //
-    // This function relies on the exact same rules than `jsAppendBuffer`.
-    pub fn jsAppendBufferJsBlob(
         source_buffer_id: SourceBufferId,
         segment_id: ResourceId
     );
@@ -309,8 +304,7 @@ pub enum AttachMediaSourceErrorCode {
     UnknownError = 2,
 }
 
-/// Errors that can arise when calling the either the `jsAppendBuffer` or the
-/// `jsAppendBufferJsBlob` JavaScript functions.
+/// Errors that can arise when calling the `jsAppendBuffer` JavaScript function.
 #[wasm_bindgen]
 pub enum AppendBufferErrorCode {
     /// The operation failed because the `WaspHlsPlayer` linked to the given `PlayerId`
@@ -327,8 +321,7 @@ pub enum AppendBufferErrorCode {
     UnknownError = 3,
 }
 
-/// Result of calling either the `jsAppendBuffer` or the `jsAppendBufferJsBlob`
-/// JavaScript functions.
+/// Result of calling either the `jsAppendBuffer` JavaScript function.
 ///
 /// Creation of an `AppendBufferResult` should only be performed by the JavaScript side
 /// through the exposed static constructors.
@@ -602,6 +595,11 @@ pub enum PlaybackObservationReason {
     Error,
 }
 
+#[wasm_bindgen]
+pub enum TimerReason {
+    MediaPlaylistRefresh = 0,
+}
+
 /// Levels with which a log can be emitted.
 #[wasm_bindgen]
 #[derive(Clone, Copy, Debug, PartialEq, PartialOrd)]
@@ -629,6 +627,9 @@ pub type ResourceId = u32;
 
 /// Identify a pending request.
 pub type RequestId = u32;
+
+/// Identify a pending timer.
+pub type TimerId = u32;
 
 /// Identify a SourceBuffer.
 pub type SourceBufferId = u32;

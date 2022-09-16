@@ -1,10 +1,10 @@
 use crate::{
     wasm_bindgen,
     media_element::MediaElementReference,
-    requester::Requester,
+    requester::{Requester, PlaylistFileType},
     content_tracker::ContentTracker,
     adaptive::AdaptiveQualitySelector,
-    segment_selector::NextSegmentSelectors,
+    segment_selector::NextSegmentSelectors, bindings::TimerId, utils::url::Url,
 };
 
 mod api;
@@ -54,6 +54,9 @@ pub struct Dispatcher {
     last_position: f64,
 
     segment_selectors: NextSegmentSelectors,
+
+    // TODO move to content_tracker?
+    playlist_refresh_timers: Vec<(TimerId, Url, PlaylistFileType)>
 }
 
 /// Identify the JavaScript `readyState` of a created `MediaSource` instance.

@@ -115,10 +115,10 @@ impl MediaTag {
     pub fn update(&mut self,
         playlist: impl BufRead,
         url: Url
-    ) -> Result<(), MediaPlaylistParsingError> {
+    ) -> Result<&MediaPlaylist, MediaPlaylistParsingError> {
         let new_mp = MediaPlaylist::create(playlist, url)?;
         self.media_playlist = Some(new_mp);
-        Ok(())
+        Ok(self.media_playlist.as_ref().unwrap())
     }
 
     pub(super) fn create(

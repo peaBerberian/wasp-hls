@@ -1,9 +1,6 @@
 use crate::{
     wasm_bindgen,
-    bindings::{
-        LogLevel,
-        jsFetchU8,
-    },
+    bindings::LogLevel,
     Logger,
     media_element::MediaElementReference,
     utils::url::Url,
@@ -32,6 +29,7 @@ impl Dispatcher {
             last_position: 0.,
             buffer_goal: 30.,
             segment_selectors: NextSegmentSelectors::new(0., 30.),
+            playlist_refresh_timers: vec![],
         }
     }
 
@@ -67,10 +65,6 @@ impl Dispatcher {
             LogLevel::Info => Logger::info(msg),
             LogLevel::Debug => Logger::debug(msg),
         }
-    }
-
-    pub fn test_seg_back_and_forth(&self) {
-        jsFetchU8("http://127.0.0.1:8080/lowlat_vs_non_lowlat.mp4");
     }
 }
 

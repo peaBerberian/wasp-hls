@@ -73,6 +73,10 @@ export function getTransmuxedType(
   return mimeType;
 }
 
+export function resetTransmuxer() {
+  transmuxer = undefined;
+}
+
 export function transmux(
   inputSegment: Uint8Array
 ) : Uint8Array | null {

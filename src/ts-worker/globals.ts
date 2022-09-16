@@ -121,6 +121,7 @@ export const playerInstance = new PlayerInstance();
 export const jsMemoryResources = new GenericStore<Uint8Array>();
 export const requestsStore = new GenericStore<RequestObject>();
 
+export type TimerId = number;
 export type RequestId = number;
 export type SourceBufferId = number;
 export type ResourceId = number;

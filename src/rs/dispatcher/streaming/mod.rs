@@ -1,6 +1,5 @@
 use crate::{
     bindings::{
-        DataSource,
         MediaType,
         jsStartObservingPlayback,
         jsStopObservingPlayback,
@@ -9,6 +8,7 @@ use crate::{
         SourceBufferId,
         jsSetMediaSourceDuration,
         MediaObservation,
+        PlaybackTickReason, TimerId, jsTimer, TimerReason, JsMemoryBlob,
     },
     Logger,
     content_tracker::{MediaPlaylistPermanentId, ContentTracker},
@@ -19,7 +19,7 @@ use crate::{
         PlaylistRequestInfo,
         FinishedRequestType,
     },
-    media_element::{PushMetadata, SourceBufferCreationError},
+    media_element::{PushMetadata, SourceBufferCreationError, MediaElementReference},
     utils::url::Url,
     segment_selector::NextSegmentInfo,
 };
@@ -32,7 +32,7 @@ use super::{
 impl Dispatcher {
     pub(crate) fn on_request_succeeded(&mut self,
         request_id: RequestId,
-        data: DataSource,
+        data: JsMemoryBlob,
         final_url: Url,
         resource_size: u32,
         duration_ms: f64,
@@ -41,17 +41,12 @@ impl Dispatcher {
             Some(FinishedRequestType::Segment(seg_info)) =>
                 self.on_segment_fetch_success(seg_info, data, resource_size, duration_ms),
             Some(FinishedRequestType::Playlist(pl_info)) =>
-                match data {
-                    DataSource::Raw(d) => self.on_playlist_fetch_success(pl_info, d, final_url),
-                    _ => {
-                        self.fail_on_error("Unexpected data format for the Playlist file");
-                    }
-                }
+                self.on_playlist_fetch_success(pl_info, data.obtain(), final_url),
             _ => Logger::warn("Unknown request finished"),
         }
     }
 
-    pub(crate) fn on_request_failed(&mut self,
+    pub(crate) fn on_request_failed_inner(&mut self,
         request_id: RequestId,
     ) {
         // TODO retry and whatnot
@@ -78,11 +73,10 @@ impl Dispatcher {
             return;
         }
 
-        match self.media_element_ref.buffers() {
+        match self.media_element_ref.media_source_ready_state() {
+            Some(MediaSourceReadyState::Closed) |
             None => { return; },
-            Some(x) => if x.ready_state() == MediaSourceReadyState::Closed {
-                return;
-            }
+            _ => {},
         }
 
         let content_tracker = if let Some(ctnt) = self.content_tracker.as_ref() {
@@ -136,12 +130,12 @@ impl Dispatcher {
                 if let Some((url, id)) = content_tracker.curr_media_playlist_request_info(MediaType::Video) {
                     let id = id.clone();
                     let url = url.clone();
-                    self.requester.fetch_playlist(url, MediaPlaylist { id, media_type: MediaType::Video });
+                    self.requester.fetch_playlist(url, MediaPlaylist { id });
                 }
                 if let Some((url, id)) = content_tracker.curr_media_playlist_request_info(MediaType::Audio) {
                     let id = id.clone();
                     let url = url.clone();
-                    self.requester.fetch_playlist(url, MediaPlaylist { id, media_type: MediaType::Audio });
+                    self.requester.fetch_playlist(url, MediaPlaylist { id });
                 }
             },
         }
@@ -155,10 +149,23 @@ impl Dispatcher {
     ) {
         Logger::info(&format!("Media playlist loaded successfully: {}", playlist_url.get_ref()));
         if let Some(ref mut content_tracker) = self.content_tracker.as_mut() {
-            if let Err(e) = content_tracker.update_media_playlist(&playlist_id, data.as_ref(), playlist_url) {
-                self.fail_on_error(&format!("Failed to parse MediaPlaylist: {:?}", e));
-            } else if self.ready_state == PlayerReadyState::Loading {
-                self.check_ready_to_load_segments();
+            match content_tracker.update_media_playlist(&playlist_id, data.as_ref(), playlist_url) {
+                Err(e) =>
+                    self.fail_on_error(&format!("Failed to parse MediaPlaylist: {:?}", e)),
+                Ok(p) => {
+                    if !p.end_list {
+                        let target_duration = p.target_duration;
+                        let timer_id = jsTimer(target_duration as f64 * 1000., TimerReason::MediaPlaylistRefresh);
+                        let url = p.url.clone();
+                        self.playlist_refresh_timers.push(
+                            (timer_id, url, PlaylistFileType::MediaPlaylist { id: playlist_id }));
+                    }
+                    if self.ready_state == PlayerReadyState::Loading {
+                        self.check_ready_to_load_segments();
+                    } else if self.ready_state > PlayerReadyState::Loading {
+                        self.check_segments_to_request();
+                    }
+                },
             }
         } else { self.fail_on_error("Media playlist loaded but no MultiVariantPlaylist"); }
     }
@@ -166,53 +173,41 @@ impl Dispatcher {
     fn init_source_buffer(&mut self,
         media_type: MediaType
     ) -> Option<Result<(), SourceBufferCreationError>> {
-        match self.media_element_ref.buffers_mut() {
-            None => Some(Err(SourceBufferCreationError::NoMediaSourceAttached)),
-            Some(buffers) => {
-                if buffers.has(media_type) || !buffers.can_still_create_source_buffer() {
-                    // TODO return Err here
-                    return None;
-                }
-
-                let content = self.content_tracker.as_mut()?;
-                let media_playlist = content.curr_media_playlist(media_type)?;
-                let mime_type = if let Some(m) = media_playlist.mime_type(media_type) { m } else {
-                    // TODO return Err here
-                    return None;
-                };
-                let codecs = match content.curr_variant().map(|v| v.codecs(media_type)) {
-                    Some(Some(c)) => c,
-                    _ => {
-                        // TODO return Err here
-                        return None;
-                    },
-                };
-
-                Some(buffers.create_source_buffer(media_type, mime_type, &codecs))
-            }
+        if self.media_element_ref.has_buffer(media_type) ||
+            !self.media_element_ref.can_still_create_source_buffer() {
+            // TODO return Err here
+            return None;
         }
+
+        let content = self.content_tracker.as_mut()?;
+        let media_playlist = content.curr_media_playlist(media_type)?;
+        let mime_type = if let Some(m) = media_playlist.mime_type(media_type) { m } else {
+            // TODO return Err here
+            return None;
+        };
+        let codecs = match content.curr_variant().map(|v| v.codecs(media_type)) {
+            Some(Some(c)) => c,
+            _ => {
+                // TODO return Err here
+                return None;
+            },
+        };
+
+        Some(self.media_element_ref.create_source_buffer(media_type, mime_type, &codecs))
     }
 
     pub(crate) fn internal_on_media_source_state_change(&mut self, state: MediaSourceReadyState) {
-        match self.media_element_ref.buffers_mut() {
-            None => {},
-            Some(buffers) => {
-                Logger::info(&format!("MediaSource state changed: {:?}", state));
-                buffers.update_ready_state(state);
-                if state == MediaSourceReadyState::Open {
-                    self.check_ready_to_load_segments();
-                }
-            }
+        Logger::info(&format!("MediaSource state changed: {:?}", state));
+        self.media_element_ref.update_media_source_ready_state(state);
+        if state == MediaSourceReadyState::Open {
+            self.check_ready_to_load_segments();
         }
     }
 
     pub(crate) fn internal_on_source_buffer_update(&mut self,
         source_buffer_id: SourceBufferId
     ) {
-        match self.media_element_ref.buffers_mut() {
-            None => {},
-            Some(buffers) => buffers.on_source_buffer_update(source_buffer_id),
-        }
+        self.media_element_ref.on_source_buffer_update(source_buffer_id);
     }
 
     pub(crate) fn internal_on_source_buffer_error(&mut self,
@@ -222,30 +217,39 @@ impl Dispatcher {
         self.fail_on_error("A SourceBuffer emitted an error");
     }
 
-    pub fn on_regular_tick(&mut self, observation: MediaObservation) {
-        let position = observation.current_time();
-        Logger::debug(&format!("Tick received: {}", position));
-        self.last_position = position;
+    pub fn on_observation(&mut self, observation: MediaObservation) {
+        let reason = observation.reason();
+        Logger::debug(&format!("Tick received: {:?} {}",
+                reason, observation.current_time()));
+        self.media_element_ref.on_observation(observation);
+        match reason {
+            PlaybackTickReason::Seeking => self.on_seek(),
+            _ => self.on_regular_tick(),
+        }
+    }
+
+    pub fn on_regular_tick(&mut self) {
+        let wanted_pos = self.media_element_ref.wanted_position();
+        self.last_position = wanted_pos;
 
         // Lock `Requester`, so it only do new segment requests when every
         // wanted segments is scheduled - for better priorization
         let was_already_locked = self.requester.lock_segment_requests();
-        self.requester.update_base_position(Some(position));
-        self.segment_selectors.update_base_position(position);
+        self.requester.update_base_position(Some(wanted_pos));
+        self.segment_selectors.update_base_position(wanted_pos);
         self.check_segments_to_request();
         if !was_already_locked {
             self.requester.unlock_segment_requests();
         }
     }
 
-    pub fn on_seek(&mut self, observation: MediaObservation) {
-        let position = observation.current_time();
-        Logger::debug(&format!("Seeking tick received: {}", position));
-        self.segment_selectors.reset_position(position);
+    pub fn on_seek(&mut self) {
+        let wanted_pos = self.media_element_ref.wanted_position();
+        self.segment_selectors.reset_position(wanted_pos);
 
         // TODO better logic than aborting everything on seek?
         self.requester.abort_all_segments();
-        self.requester.update_base_position(Some(position));
+        self.requester.update_base_position(Some(wanted_pos));
         self.check_segments_to_request()
     }
 
@@ -282,7 +286,7 @@ impl Dispatcher {
         jsRemoveMediaSource();
         self.segment_selectors.reset_position(0.);
         self.content_tracker = None;
-        self.media_element_ref.reset();
+        self.media_element_ref = MediaElementReference::new();
         self.last_position = 0.;
         self.ready_state = PlayerReadyState::Stopped;
     }
@@ -302,31 +306,24 @@ impl Dispatcher {
     }
 
     fn push_and_validate_segment(&mut self,
-        data: DataSource,
+        data: JsMemoryBlob,
         media_type: MediaType,
         time_info: Option<(f64, f64)>
     ) {
-        match self.media_element_ref.buffers_mut() {
-            None => {
-                let err = "Can't push: no Buffers created";
+        match self.media_element_ref.push_segment(media_type, PushMetadata::new(data)) {
+            Err(_) => {
+                let err = &format!("Can't push: {} SourceBuffer not found", media_type);
                 self.fail_on_error(err);
                 return;
-            },
-            Some(buffers) => match buffers.push_segment(media_type, PushMetadata::new(data)) {
-                Err(_) => {
-                    let err = &format!("Can't push: {} SourceBuffer not found", media_type);
-                    self.fail_on_error(err);
-                    return;
+            }
+            Ok(()) => if let Some(ti) = time_info {
+                self.segment_selectors.get_mut(media_type).validate_media(ti.0);
+                if was_last_segment(self.content_tracker.as_ref(), media_type, ti.0) {
+                    Logger::debug(&format!("Last {} segment request finished, declaring its buffer's end", media_type));
+                    self.media_element_ref.end_buffer(media_type);
                 }
-                Ok(()) => if let Some(ti) = time_info {
-                    self.segment_selectors.get_mut(media_type).validate_media(ti.0);
-                    if was_last_segment(self.content_tracker.as_ref(), media_type, ti.0) {
-                        Logger::debug(&format!("Last {} segment request finished, declaring its buffer's end", media_type));
-                        buffers.end(media_type);
-                    }
-                } else {
-                    self.segment_selectors.get_mut(media_type).validate_init();
-                }
+            } else {
+                self.segment_selectors.get_mut(media_type).validate_init();
             }
         }
     }
@@ -352,7 +349,7 @@ impl Dispatcher {
                             Logger::debug("Media changed, requesting its media playlist");
                             let id = id.clone();
                             let url = url.clone();
-                            self.requester.fetch_playlist(url, MediaPlaylist { id, media_type: mt });
+                            self.requester.fetch_playlist(url, MediaPlaylist { id });
                         }
                     }
                 })
@@ -363,7 +360,7 @@ impl Dispatcher {
     /// Method called once a segment request ended with success
     pub(super) fn on_segment_fetch_success(&mut self,
         segment_req: SegmentRequestInfo,
-        result: DataSource,
+        result: JsMemoryBlob,
         resource_size: u32,
         duration_ms: f64,
     ) {
@@ -379,6 +376,17 @@ impl Dispatcher {
         self.push_and_validate_segment(result, segment_req.media_type, segment_req.time_info);
         self.process_request_metrics(resource_size, duration_ms);
         self.check_segments_to_request();
+    }
+
+    pub fn on_playlist_refresh_timer_ended(&mut self, id: TimerId) {
+        let found = self.playlist_refresh_timers.iter().position(|x| {
+            x.0 == id
+        });
+        if let Some(idx) = found {
+            let (_, url, playlist_type) = self.playlist_refresh_timers.remove(idx);
+            let url = url.clone();
+            self.requester.fetch_playlist(url, playlist_type);
+        }
     }
 }
 

@@ -1,18 +1,31 @@
 use crate::{bindings::{
-    DataSource,
     jsAddSourceBuffer,
     jsAppendBuffer,
-    jsAppendBufferJsBlob,
     jsRemoveBuffer,
     jsSeek,
-    MediaType, jsAttachMediaSource, jsEndOfStream, MediaObservation,
+    MediaType, jsAttachMediaSource, jsEndOfStream, MediaObservation, JsMemoryBlob,
 }, dispatcher::MediaSourceReadyState, Logger};
 
 pub(crate) struct MediaElementReference {
     initial_seek_performed: bool,
     incoming_seek: Option<f64>,
     last_observation: Option<MediaObservation>,
-    buffers: Option<MediaBuffers>,
+
+    // TODO
+    media_offset: Option<f64>,
+
+    /// Current state of the attached MediaSource.
+    ///
+    /// `None` if no MediaSource is attached for now.
+    media_source_ready_state: Option<MediaSourceReadyState>,
+
+    /// Video SourceBuffer currently created for video data.
+    /// `None` if no SourceBuffer has been created for that type.
+    video_buffer: Option<SourceBuffer>,
+
+    /// Audio SourceBuffer currently created for audio data.
+    /// `None` if no SourceBuffer has been created for that type.
+    audio_buffer: Option<SourceBuffer>,
 }
 
 impl MediaElementReference {
@@ -21,26 +34,27 @@ impl MediaElementReference {
             initial_seek_performed: false,
             incoming_seek: None,
             last_observation: None,
-            buffers: None,
+            media_source_ready_state: None,
+            media_offset: None,
+            video_buffer: None,
+            audio_buffer: None,
         }
     }
 
     pub fn initialize(&mut self) {
         self.initial_seek_performed = false;
         jsAttachMediaSource();
-        self.buffers = Some(MediaBuffers {
-            ready_state: MediaSourceReadyState::Closed,
-            video: None,
-            audio: None,
-        });
+        self.media_source_ready_state = Some(MediaSourceReadyState::Closed);
     }
 
-    pub fn buffers(&self) -> Option<&MediaBuffers> {
-        self.buffers.as_ref()
-    }
-
-    pub fn buffers_mut(&mut self) -> Option<&mut MediaBuffers> {
-        self.buffers.as_mut()
+    pub fn wanted_position(&self) -> f64 {
+        let wanted_media_pos = self.incoming_seek
+            .or(self.last_observation.as_ref().map(|o| o.current_time()))
+            .unwrap_or(0.);
+        match self.media_offset {
+            None => wanted_media_pos,
+            Some(offset) => wanted_media_pos - offset,
+        }
     }
 
     pub fn seek_once_ready(&mut self, position: f64) {
@@ -53,6 +67,8 @@ impl MediaElementReference {
                     return ;
                 }
             }
+            // TODO only when self.media_offset is known
+            self.incoming_seek = None;
             jsSeek(position);
         }
     }
@@ -62,80 +78,48 @@ impl MediaElementReference {
         if !self.initial_seek_performed &&
             self.last_observation.as_ref().unwrap().ready_state() >= 1
         {
-            if let Some(pos) = self.incoming_seek {
+            if let Some(pos) = self.incoming_seek.take() {
                 jsSeek(pos);
             }
+            // TODO only when self.media_offset is known
             self.initial_seek_performed = true;
         }
     }
 
-    pub fn reset(&mut self) {
-        self.initial_seek_performed = false;
-        self.last_observation = None;
-        self.buffers = None;
-    }
-}
-
-/// Structure keeping track of the MediaSource and its attached audio and video
-/// SourceBuffers, making sure only one is created for each and that one is not
-/// created once media data has been pushed to any of them.
-pub(crate) struct MediaBuffers {
-    /// Current state of the attached MediaSource.
+    /// Returns the current `readyState` of the `MediaSource`.
     ///
-    /// `None` if no MediaSource is attached for now.
-    ready_state: MediaSourceReadyState,
-
-    /// Video SourceBuffer currently created for video data.
-    /// `None` if no SourceBuffer has been created for that type.
-    video: Option<SourceBuffer>,
-
-    /// Audio SourceBuffer currently created for audio data.
-    /// `None` if no SourceBuffer has been created for that type.
-    audio: Option<SourceBuffer>,
-}
-
-impl MediaBuffers {
-    /// Returns the current `ready_state` of the `MediaBuffers`, which is
-    /// binded to the `MediaSource`'s (from the Media Source specification)
-    /// `readyState` concept.
-    ///
-    /// This `ready_state` is linked to the last "attached" (through the
-    /// `attach_new` method) `MediaSource` and should be equal to
-    /// `MediaSourceReadyState::Closed` when no `MediaSource` is currently
-    /// attached.
-    pub(crate) fn ready_state(&self) -> MediaSourceReadyState {
-        self.ready_state
+    /// This `readyState` is linked to the last "attached" (through the
+    /// `attach_new` method) `MediaSource`.
+    /// The return value should be equal to `None` when no `MediaSource`
+    /// is currently attached.
+    pub(crate) fn media_source_ready_state(&self) -> Option<MediaSourceReadyState> {
+        self.media_source_ready_state
     }
 
-    /// Update the current `ready_state` of the `MediaBuffers`.
-    /// This should be called only to link it to the original `MediaSource`'s
-    /// (from the Media Source specification) `readyState` concept.
-    ///
-    /// This `ready_state` is linked to the last "attached" (through the
-    /// `attach_new` method) `MediaSource` and should be equal to
-    /// `MediaSourceReadyState::Closed` when no `MediaSource` is currently
-    /// attached.
-    pub(crate) fn update_ready_state(&mut self, ready_state: MediaSourceReadyState) {
-        self.ready_state = ready_state;
+    /// Update the current `readyState` of the `MediaSource`.
+    pub(crate) fn update_media_source_ready_state(&mut self, ready_state: MediaSourceReadyState) {
+        self.media_source_ready_state = Some(ready_state);
         self.check_end_of_stream();
     }
 
     /// Returns `true` if `SourceBuffer` can currently be created on this
-    /// `MediaBuffers`.
+    /// `MediaElementReference`.
     ///
-    /// Returns `false` when this is too late for the `MediaSource` currently
-    /// attached (see `attach_new` method).
+    /// Returns `false` when it is either too late or too soon.
     pub fn can_still_create_source_buffer(&self) -> bool {
-        match (&self.audio, &self.video) {
-            (None, None) => true,
-            (Some(asb), Some(vsb)) => !asb.has_been_updated && !vsb.has_been_updated,
-            (Some(asb), None) => !asb.has_been_updated,
-            (None, Some(vsb)) => !vsb.has_been_updated,
+        match self.media_source_ready_state {
+            Some(MediaSourceReadyState::Open) => match (&self.audio_buffer, &self.video_buffer) {
+                (None, None) => true,
+                (Some(asb), Some(vsb)) => !asb.has_been_updated && !vsb.has_been_updated,
+                (Some(asb), None) => !asb.has_been_updated,
+                (None, Some(vsb)) => !vsb.has_been_updated,
+            }
+            _ => false,
         }
     }
 
     /// Create a new `SourceBuffer` instance linked to this
-    /// `MediaBuffers`'s `MediaSource`.
+    /// `MediaElementReference`.
     ///
     /// A `MediaSource` first need to be attached for a `SourceBuffer` to be
     /// created (see `attach_new` method).
@@ -145,21 +129,30 @@ impl MediaBuffers {
         mime_type: &str,
         codec: &str
     ) -> Result<(), SourceBufferCreationError> {
+        match self.media_source_ready_state {
+            Some(MediaSourceReadyState::Closed) => {
+                return Err(SourceBufferCreationError::MediaSourceIsClosed);
+            },
+            None => {
+                return Err(SourceBufferCreationError::NoMediaSourceAttached);
+            },
+            _ => {},
+        }
         let sb_codec = format!("{};codecs=\"{}\"", mime_type, codec).to_owned();
         match media_type {
             MediaType::Audio => {
-                if self.audio.is_some() {
+                if self.audio_buffer.is_some() {
                     Err(SourceBufferCreationError::AlreadyCreatedWithSameType(media_type))
                 } else {
-                    self.audio = Some(SourceBuffer::new(media_type, sb_codec));
+                    self.audio_buffer = Some(SourceBuffer::new(media_type, sb_codec));
                     Ok(())
                 }
             }
             MediaType::Video => {
-                if self.video.is_some() {
+                if self.video_buffer.is_some() {
                     Err(SourceBufferCreationError::AlreadyCreatedWithSameType(media_type))
                 } else {
-                    self.video = Some(SourceBuffer::new(media_type, sb_codec));
+                    self.video_buffer = Some(SourceBuffer::new(media_type, sb_codec));
                     Ok(())
                 }
             }
@@ -171,9 +164,16 @@ impl MediaBuffers {
         media_type: MediaType,
         metadata: PushMetadata
     ) -> Result<(), PushSegmentError> {
-        match self.get_mut(media_type) {
+        match self.get_buffer_mut(media_type) {
             None => Err(PushSegmentError::NoSourceBuffer(media_type)),
             Some(sb) => {
+                // if self.media_offset.is_none() &&
+                //     (media_type == MediaType::Audio ||
+                //      media_type == MediaType::Video)
+                // {
+                //     // TODO
+                //     // jsExtractTimeInfo();
+                // }
                 sb.append_buffer(metadata);
                 Ok(())
             },
@@ -186,7 +186,7 @@ impl MediaBuffers {
         start: f64,
         end: f64
     ) -> Result<(), RemoveDataError> {
-        match self.get_mut(media_type) {
+        match self.get_buffer_mut(media_type) {
             None => Err(RemoveDataError::NoSourceBuffer(media_type)),
             Some(sb) => {
                 sb.remove_buffer(start, end);
@@ -196,14 +196,14 @@ impl MediaBuffers {
     }
 
     /// Callback that should be called once one of the `SourceBuffer` linked to this
-    /// `MediaBuffers` has "updated" (meaning: one of its operation has ended).
+    /// `MediaElementReference` has "updated" (meaning: one of its operation has ended).
     pub(crate) fn on_source_buffer_update(&mut self, source_buffer_id: SourceBufferId) {
-        if let Some(ref mut sb) = self.audio {
+        if let Some(ref mut sb) = self.audio_buffer {
             if sb.id == source_buffer_id {
                 sb.on_update_end();
             }
         }
-        if let Some(ref mut sb) = self.video {
+        if let Some(ref mut sb) = self.video_buffer {
             if sb.id == source_buffer_id {
                 sb.on_update_end();
             }
@@ -212,17 +212,17 @@ impl MediaBuffers {
     }
 
     /// Returns `true` if a `SourceBuffer` of the given `MediaType` is currently
-    /// linked to this `MediaBuffers`.
-    pub(crate) fn has(&self, media_type: MediaType) -> bool {
+    /// linked to this `MediaElementReference`.
+    pub(crate) fn has_buffer(&self, media_type: MediaType) -> bool {
         match media_type {
-            MediaType::Audio => self.audio.is_some(),
-            MediaType::Video => self.video.is_some(),
+            MediaType::Audio => self.audio_buffer.is_some(),
+            MediaType::Video => self.video_buffer.is_some(),
         }
     }
 
 
-    pub fn end(&mut self, media_type: MediaType) {
-        match self.get_mut(media_type) {
+    pub fn end_buffer(&mut self, media_type: MediaType) {
+        match self.get_buffer_mut(media_type) {
             None => {
                 Logger::warn(&format!("Asked to end a non existent {} buffer", media_type))
             },
@@ -233,34 +233,34 @@ impl MediaBuffers {
         self.check_end_of_stream();
     }
 
-    fn get(&self, media_type: MediaType) -> Option<&SourceBuffer> {
+    fn get_buffer(&self, media_type: MediaType) -> Option<&SourceBuffer> {
         match media_type {
-            MediaType::Audio => self.audio.as_ref(),
-            MediaType::Video => self.video.as_ref()
+            MediaType::Audio => self.audio_buffer.as_ref(),
+            MediaType::Video => self.video_buffer.as_ref()
         }
     }
 
-    fn get_mut(&mut self, media_type: MediaType) -> Option<&mut SourceBuffer> {
+    fn get_buffer_mut(&mut self, media_type: MediaType) -> Option<&mut SourceBuffer> {
         match media_type {
-            MediaType::Audio => self.audio.as_mut(),
-            MediaType::Video => self.video.as_mut()
+            MediaType::Audio => self.audio_buffer.as_mut(),
+            MediaType::Video => self.video_buffer.as_mut()
         }
     }
 
     fn check_end_of_stream(&self) {
-        if self.video.is_none() && self.audio.is_none() {
+        if self.video_buffer.is_none() && self.audio_buffer.is_none() {
             return;
         }
-        if self.is_ended(MediaType::Audio) &&
-            self.is_ended(MediaType::Video) &&
-            self.ready_state != MediaSourceReadyState::Closed
+        if self.is_buffer_ended(MediaType::Audio) &&
+            self.is_buffer_ended(MediaType::Video) &&
+            self.media_source_ready_state != Some(MediaSourceReadyState::Closed)
         {
             jsEndOfStream();
         }
     }
 
-    fn is_ended(&self, media_type: MediaType) -> bool {
-        match self.get(media_type) {
+    fn is_buffer_ended(&self, media_type: MediaType) -> bool {
+        match self.get_buffer(media_type) {
             None => true,
             Some(sb) => sb.last_segment_pushed && !sb.is_updating,
         }
@@ -382,6 +382,7 @@ impl SourceBuffer {
     pub fn append_buffer(&mut self, metadata: PushMetadata) {
         self.has_been_updated = true;
         if self.is_updating {
+            Logger::debug(&format!("Buffer {} ({}): Queuing append.", self.id, self.typ));
             self.queue.push(SourceBufferQueueElement::Push(metadata));
         } else {
             self.push_now(metadata);
@@ -391,10 +392,11 @@ impl SourceBuffer {
     pub fn remove_buffer(&mut self, start: f64, end: f64) {
         self.has_been_updated = true;
         if self.is_updating {
+            Logger::debug(&format!("Buffer {} ({}): Queuing remove {} {}",
+            self.id, self.typ, start, end));
             self.queue.push(SourceBufferQueueElement::Remove { start, end });
         } else {
-            self.is_updating = true;
-            jsRemoveBuffer(self.id, start, end);
+            self.remove_now(start, end)
         }
     }
 
@@ -406,35 +408,32 @@ impl SourceBuffer {
             let next_item = self.queue.remove(0);
             match next_item {
                 Push(md) => self.push_now(md),
-                Remove { start, end } => {
-                    jsRemoveBuffer(self.id, start, end);
-                },
+                Remove { start, end } => self.remove_now(start, end),
             }
         }
     }
 
     fn push_now(&mut self, md: PushMetadata) {
         self.is_updating = true;
-        match md.segment_data {
-            DataSource::Raw(v) => {
-                Logger::debug(&format!("Pushing raw data {} {}", self.id, self.typ));
-                jsAppendBuffer(self.id, &v);
-            },
-            DataSource::JsBlob(j) => {
-                Logger::debug(&format!("Pushing JS Blob {} {}", self.id, self.typ));
-                jsAppendBufferJsBlob(self.id, j.get_id());
-            },
-        }
+        Logger::debug(&format!("Buffer {} ({}): Pushing", self.id, self.typ));
+        jsAppendBuffer(self.id, md.segment_data.get_id());
 
+    }
+
+    fn remove_now(&mut self, start: f64, end: f64) {
+        self.is_updating = true;
+        Logger::debug(&format!("Buffer {} ({}): Removing {} {}",
+            self.id, self.typ, start, end));
+        jsRemoveBuffer(self.id, start, end);
     }
 }
 
 pub struct PushMetadata {
-    segment_data: DataSource,
+    segment_data: JsMemoryBlob,
 }
 
 impl PushMetadata {
-    pub fn new(segment_data: DataSource) -> Self {
+    pub fn new(segment_data: JsMemoryBlob) -> Self {
         Self { segment_data }
     }
 }

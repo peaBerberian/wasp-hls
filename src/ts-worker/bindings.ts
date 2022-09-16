@@ -4,6 +4,7 @@ import {
   LogLevel,
   MediaType,
   MediaSourceReadyState,
+  TimerReason,
   // PlaybackTickReason,
   // RemoveMediaSourceResult,
   // RemoveMediaSourceErrorCode,
@@ -28,6 +29,7 @@ import {
   ResourceId,
   SourceBufferId,
   playerInstance,
+  TimerId,
 } from "./globals";
 import postMessageToMain from "./postMessage.js";
 import {
@@ -42,6 +44,19 @@ const MAX_U32 = Math.pow(2, 32) - 1;
 
 let nextRequestId = 0;
 let nextResourceId = 0;
+
+// export function prepareSegment(
+//   sourceBufferId: SourceBufferId,
+//   data: JsBlob
+// ): [] {
+
+// }
+
+export function getResourceData(
+  resourceId: ResourceId
+) : Uint8Array | undefined {
+  return jsMemoryResources.get(resourceId);
+}
 
 /**
  * @param {number} logLevel
@@ -65,46 +80,20 @@ export function log(logLevel: LogLevel, logStr: string) {
   }
 }
 
-/**
- * TODO failure cases
- * @param {string} url
- * @returns {number}
- */
-export function fetchU8(url: string): RequestId {
-  const currentRequestId = nextRequestId;
-  incrementRequestId();
-  const abortController = new AbortController();
-  requestsStore.create(currentRequestId, { abortController });
-  const timestampBef = performance.now();
-  fetch(url, { signal: abortController.signal })
-    .then(async res => {
-      if (abortController.signal.aborted) {
-        return; // Should not be possible. Still, exit if that's the case.
-      }
-      const arrRes = await res.arrayBuffer();
-      const elapsedMs = performance.now() - timestampBef;
-      requestsStore.delete(currentRequestId);
-      const dispatcher = playerInstance.getDispatcher();
-      if (dispatcher !== null) {
-        dispatcher.on_u8_request_finished(
-          currentRequestId,
-          new Uint8Array(arrRes),
-          res.url,
-          elapsedMs
-        );
-      }
-    })
-    .catch(err => {
-      if (abortController.signal.aborted) {
-        return;
-      }
-      requestsStore.delete(currentRequestId);
-      if (err instanceof Error && err.name === "AbortError") {
-        return;
-      }
-      // Here call the right WASM callback
-    });
-  return currentRequestId;
+export function timer(duration: number, reason: TimerReason): TimerId {
+  const timerId = setTimeout(() => {
+    const dispatcher = playerInstance.getDispatcher();
+    if (dispatcher === null) {
+      return;
+    }
+    dispatcher.on_timer_ended(timerId, reason);
+
+  }, duration);
+  return timerId;
+}
+
+export function clearTimer(id: TimerId) {
+  clearTimeout(id);
 }
 
 /**
@@ -112,7 +101,7 @@ export function fetchU8(url: string): RequestId {
  * @param {string} url
  * @returns {number}
  */
-export function fetchU8NoCopy(url: string): RequestId {
+export function doFetch(url: string): RequestId {
   const currentRequestId = nextRequestId;
   incrementRequestId();
   const abortController = new AbortController();
@@ -129,7 +118,7 @@ export function fetchU8NoCopy(url: string): RequestId {
         incrementResourceId();
         const segmentArray = new Uint8Array(arrRes);
         jsMemoryResources.create(currentResourceId, segmentArray);
-        dispatcher.on_u8_no_copy_request_finished(
+        dispatcher.on_request_finished(
           currentRequestId,
           currentResourceId,
           segmentArray.byteLength,
@@ -477,11 +466,19 @@ export function addSourceBuffer(mediaType: MediaType, typ: string): number {
 
 /**
  * @param {number} sourceBufferId
- * @param {ArrayBuffer} data
+ * @param {number} resourceId
  * @returns {number}
  */
-export function appendBuffer(sourceBufferId: SourceBufferId, data: Uint8Array): void {
+export function appendBuffer(
+  sourceBufferId: SourceBufferId,
+  resourceId: ResourceId
+): void {
   try {
+    const data: Uint8Array | undefined = jsMemoryResources.get(resourceId);
+    if (data === undefined) {
+      // TODO
+      return;
+    }
     const mediaSourceObj = getMediaSourceObj();
     if (mediaSourceObj === undefined) {
       // TODO
@@ -524,22 +521,6 @@ export function appendBuffer(sourceBufferId: SourceBufferId, data: Uint8Array): 
     // TODO
     return;
   }
-}
-
-/**
- * @param {number} sourceBufferId
- * @param {number} resourceId
- */
-export function appendBufferJsBlob(
-  sourceBufferId: SourceBufferId,
-  resourceId: ResourceId
-): void {
-  const segment: Uint8Array | undefined = jsMemoryResources.get(resourceId);
-  if (segment === undefined) {
-    // TODO
-    return;
-  }
-  return appendBuffer(sourceBufferId, segment);
 }
 
 /**
@@ -705,18 +686,19 @@ function incrementRequestId() : void {
 /* eslint-disable */
 const global = self as any;
 global.jsLog = log;
-global.jsFetchU8 = fetchU8;
-global.jsFetchU8NoCopy = fetchU8NoCopy;
+global.jsFetch = doFetch;
 global.jsAbortRequest = abortRequest;
 global.jsAttachMediaSource = attachMediaSource;
 global.jsRemoveMediaSource = removeMediaSource;
 global.jsSetMediaSourceDuration = setMediaSourceDuration;
 global.jsAddSourceBuffer = addSourceBuffer;
 global.jsAppendBuffer = appendBuffer;
-global.jsAppendBufferJsBlob = appendBufferJsBlob;
 global.jsRemoveBuffer = removeBuffer;
 global.jsEndOfStream = endOfStream;
 global.jsStartObservingPlayback = startObservingPlayback;
 global.jsStopObservingPlayback = stopObservingPlayback;
 global.jsFreeResource = freeResource;
 global.jsSeek = seek;
+global.jsTimer = timer;
+global.jsClearTimer = clearTimer;
+global.jsGetResourceData = getResourceData;
