@@ -1,17 +1,39 @@
-use crate::{bindings::{
+use crate::bindings::{
     jsAddSourceBuffer,
     jsAppendBuffer,
     jsRemoveBuffer,
     jsSeek,
-    MediaType, jsAttachMediaSource, jsEndOfStream, MediaObservation, JsMemoryBlob,
-}, dispatcher::MediaSourceReadyState, Logger};
+    MediaType,
+    jsAttachMediaSource,
+    jsEndOfStream,
+    MediaObservation,
+    JsMemoryBlob,
+    AppendBufferErrorCode,
+    JsResult, jsRemoveMediaSource, ParsedSegmentInfo,
+};
+use crate::dispatcher::MediaSourceReadyState;
+use crate::Logger;
 
+/// Structure linked to an HTMLMediaElement which allows to perform media-related actions on it,
+/// such as:
+///   - attaching a MediaSource and creating SourceBuffers
+///   - adding or removing data from those SourceBuffers
+///   - pausing playback and resuming it
+///   - seeking
+///   - etc.
 pub(crate) struct MediaElementReference {
-    initial_seek_performed: bool,
-    incoming_seek: Option<f64>,
+    /// Set when a seek operation awaits (e.g. when a seek has been asked but the HTMLMediaElement
+    /// is not yet ready to perform it).
+    awaiting_seek: Option<f64>,
+
+    /// Stores the last `MediaObservation` received.
     last_observation: Option<MediaObservation>,
 
-    // TODO
+    /// Offset used to convert the media position on the HTMLMediaElement (ultimately linked to
+    /// pushed segments and the browser's internal logic) to the playlist position as found in a
+    /// MultiVariant Playlist, that the WaspHlsPlayer actually uses.
+    ///
+    /// This offset is only known once a segment is being pushed.
     media_offset: Option<f64>,
 
     /// Current state of the attached MediaSource.
@@ -29,10 +51,13 @@ pub(crate) struct MediaElementReference {
 }
 
 impl MediaElementReference {
+    /// Create a new `MediaElementReference`.
+    /// This has no effect on playback, you may then call `attach_media_source` to being
+    /// attaching a MediaSource to the corresponding `HTMLMediaElement` or `reset` to remove
+    /// a `MediaSource` already-attached to it.
     pub fn new() -> Self {
         Self {
-            initial_seek_performed: false,
-            incoming_seek: None,
+            awaiting_seek: None,
             last_observation: None,
             media_source_ready_state: None,
             media_offset: None,
@@ -41,81 +66,103 @@ impl MediaElementReference {
         }
     }
 
-    pub fn initialize(&mut self) {
-        self.initial_seek_performed = false;
-        jsAttachMediaSource();
+    /// Dispose current MediaSource if one and completely reset this MediaElementReference
+    /// instance to its initial default state.
+    ///
+    /// To call once you want to stop the content.
+    pub fn reset(&mut self) {
+        jsRemoveMediaSource();
+        self.awaiting_seek = None;
+        self.last_observation = None;
         self.media_source_ready_state = Some(MediaSourceReadyState::Closed);
+        self.media_offset = None;
+        self.video_buffer = None;
+        self.audio_buffer = None;
     }
 
+    /// Attach a new `MediaSource` to the media element linked to this `MediaElementReference`.
+    ///
+    /// This is a necessary step before creating media buffers on it.
+    pub fn attach_media_source(&mut self) {
+        self.reset();
+        jsAttachMediaSource();
+    }
+
+    /// Returns the currently wanted playlist position.
+    /// That is:
+    ///   - If a seek has been asked for but could not be performed yet (for example,
+    ///     because initialization is still pending), the position for that seek
+    ///   - Else if no seek is pending, the last known media playhead position
+    ///     converted to a playlist position.
     pub fn wanted_position(&self) -> f64 {
-        let wanted_media_pos = self.incoming_seek
-            .or(self.last_observation.as_ref().map(|o| o.current_time()))
-            .unwrap_or(0.);
-        match self.media_offset {
-            None => wanted_media_pos,
-            Some(offset) => wanted_media_pos - offset,
+        match self.awaiting_seek {
+            Some(awaiting_seek) => awaiting_seek,
+            None => {
+                let last_media_pos = self.last_observation
+                    .as_ref()
+                    .map(|o| o.current_time())
+                    .unwrap_or(0.);
+                self.from_media_position(last_media_pos)
+                    .unwrap_or(last_media_pos)
+            },
         }
     }
 
-    pub fn seek_once_ready(&mut self, position: f64) {
-        if !self.initial_seek_performed {
-            self.incoming_seek = Some(position);
-        } else {
-            if let Some(obs) = &self.last_observation {
-                if obs.ready_state() < 1 {
-                    self.incoming_seek = Some(position);
-                    return ;
+    /// Perform a seek, that is, move the current position to another one.
+    ///
+    /// Note that depending on that `MediaElementReference`'s state, seeks might
+    /// not be able to be performed right now, and might in that case be postponed
+    /// until the right conditions are reached.
+    ///
+    /// The boolean returned indicates if the seek was able to be performed
+    /// synchronously.
+    pub fn seek(&mut self, position: f64) -> bool {
+        match &self.last_observation {
+            Some(obs) if obs.ready_state() >= 1 => {
+                match self.to_media_position(position) {
+                    Some(media_pos) => {
+                        self.awaiting_seek = None;
+                        jsSeek(media_pos);
+                        true
+                    },
+                    None => {
+                        self.awaiting_seek = Some(position);
+                        false
+                    },
                 }
-            }
-            // TODO only when self.media_offset is known
-            self.incoming_seek = None;
-            jsSeek(position);
+            },
+            _ => {
+                self.awaiting_seek = Some(position);
+                false
+            },
         }
     }
 
+    /// Method to call once a `MediaObservation` has been received.
     pub fn on_observation(&mut self, observation: MediaObservation) {
         self.last_observation = Some(observation);
-        if !self.initial_seek_performed &&
-            self.last_observation.as_ref().unwrap().ready_state() >= 1
-        {
-            if let Some(pos) = self.incoming_seek.take() {
-                jsSeek(pos);
-            }
-            // TODO only when self.media_offset is known
-            self.initial_seek_performed = true;
-        }
+self.check_awaiting_seek();
     }
 
-    /// Returns the current `readyState` of the `MediaSource`.
+    /// Returns the last communicated `readyState` of the `MediaSource` attached
+    /// to this `MediaElementReference`.
     ///
     /// This `readyState` is linked to the last "attached" (through the
     /// `attach_new` method) `MediaSource`.
     /// The return value should be equal to `None` when no `MediaSource`
     /// is currently attached.
+    ///
+    /// Note that you can (and should) communicate about new `readyState` by calling
+    /// `update_media_source_ready_state` first.
     pub(crate) fn media_source_ready_state(&self) -> Option<MediaSourceReadyState> {
         self.media_source_ready_state
     }
 
     /// Update the current `readyState` of the `MediaSource`.
+    /// TODO trigger MediaObservation when MediaSourceReadyState' changes?
     pub(crate) fn update_media_source_ready_state(&mut self, ready_state: MediaSourceReadyState) {
         self.media_source_ready_state = Some(ready_state);
         self.check_end_of_stream();
-    }
-
-    /// Returns `true` if `SourceBuffer` can currently be created on this
-    /// `MediaElementReference`.
-    ///
-    /// Returns `false` when it is either too late or too soon.
-    pub fn can_still_create_source_buffer(&self) -> bool {
-        match self.media_source_ready_state {
-            Some(MediaSourceReadyState::Open) => match (&self.audio_buffer, &self.video_buffer) {
-                (None, None) => true,
-                (Some(asb), Some(vsb)) => !asb.has_been_updated && !vsb.has_been_updated,
-                (Some(asb), None) => !asb.has_been_updated,
-                (None, Some(vsb)) => !vsb.has_been_updated,
-            }
-            _ => false,
-        }
     }
 
     /// Create a new `SourceBuffer` instance linked to this
@@ -164,17 +211,22 @@ impl MediaElementReference {
         media_type: MediaType,
         metadata: PushMetadata
     ) -> Result<(), PushSegmentError> {
+        let has_media_offset = self.media_offset.is_some();
         match self.get_buffer_mut(media_type) {
             None => Err(PushSegmentError::NoSourceBuffer(media_type)),
             Some(sb) => {
-                // if self.media_offset.is_none() &&
-                //     (media_type == MediaType::Audio ||
-                //      media_type == MediaType::Video)
-                // {
-                //     // TODO
-                //     // jsExtractTimeInfo();
-                // }
-                sb.append_buffer(metadata);
+                let do_time_parsing = !has_media_offset &&
+                    (media_type == MediaType::Audio ||
+                     media_type == MediaType::Video) &&
+                    metadata.time_info.is_some();
+                let start = metadata.time_info.map(|t| t.0);
+                let parsed = sb.append_buffer(metadata, do_time_parsing)?;
+                let media_start = parsed.map_or(None, |p| p.start);
+                if let (Some(segment_start), Some(media_start)) = (start, media_start) {
+                    Logger::info(&format!("Setting media offset: {}", media_start - segment_start));
+                    self.media_offset = Some(media_start - segment_start);
+                    self.check_awaiting_seek();
+                }
                 Ok(())
             },
         }
@@ -200,12 +252,12 @@ impl MediaElementReference {
     pub(crate) fn on_source_buffer_update(&mut self, source_buffer_id: SourceBufferId) {
         if let Some(ref mut sb) = self.audio_buffer {
             if sb.id == source_buffer_id {
-                sb.on_update_end();
+                sb.on_operation_end();
             }
         }
         if let Some(ref mut sb) = self.video_buffer {
             if sb.id == source_buffer_id {
-                sb.on_update_end();
+                sb.on_operation_end();
             }
         }
         self.check_end_of_stream();
@@ -262,47 +314,110 @@ impl MediaElementReference {
     fn is_buffer_ended(&self, media_type: MediaType) -> bool {
         match self.get_buffer(media_type) {
             None => true,
-            Some(sb) => sb.last_segment_pushed && !sb.is_updating,
+            Some(sb) => sb.last_segment_pushed && !sb.has_remaining_operation,
+        }
+    }
+
+    fn check_awaiting_seek(&mut self) {
+        if self.awaiting_seek.is_some() && self.last_observation.as_ref().unwrap().ready_state() >= 1 {
+            let awaiting_seek = self.awaiting_seek.unwrap();
+            if let Some(media_pos) = self.to_media_position(awaiting_seek) {
+                Logger::info(&format!("Perform awaited seek to {} ({})", awaiting_seek, media_pos));
+                jsSeek(media_pos);
+                self.awaiting_seek = None;
+            }
+        }
+    }
+
+    /// Convert a media position, which is the position as played on the
+    /// media element, to a playlist position, which is the position actually
+    /// used in this player.
+    ///
+    /// None if the `MediaElementReference` has not enough information yet to
+    /// make that conversion.
+    fn from_media_position(&self, pos: f64) -> Option<f64> {
+        Some(pos - self.media_offset?)
+    }
+
+    /// Convert a playlist position, which is the position used in this player,
+    /// to a media position, which is the position as played on the media
+    /// element.
+    ///
+    /// None if the `MediaElementReference` has not enough information yet to
+    /// make that conversion.
+    fn to_media_position(&self, pos: f64) -> Option<f64> {
+        Some(pos + self.media_offset?)
+    }
+}
+
+/// Identify a unique JavaScript `SourceBuffer`
+pub type SourceBufferId = f64;
+
+use thiserror::Error;
+
+#[derive(Error, Debug)]
+pub enum PushSegmentError {
+    #[error("No SourceBuffer created for {0}")]
+    NoSourceBuffer(MediaType),
+    #[error("The {0} resource appended did not exist.")]
+    NoResource(MediaType),
+    #[error("Could not transmux {0} resource: {1}.")]
+    TransmuxerError(MediaType, String),
+    #[error("Uncategorized Error with {0} buffer: {1}")]
+    UnknownError(MediaType, String),
+}
+
+impl PushSegmentError {
+    fn from_append_buffer_error(
+        media_type: MediaType,
+        err: (AppendBufferErrorCode, Option<String>)
+    ) -> Self {
+        match err.0 {
+            AppendBufferErrorCode::NoSourceBuffer =>
+                PushSegmentError::NoSourceBuffer(media_type),
+            AppendBufferErrorCode::NoResource =>
+                PushSegmentError::NoResource(media_type),
+            AppendBufferErrorCode::TransmuxerError =>
+                PushSegmentError::TransmuxerError(
+                    media_type,
+                    err.1.unwrap_or("Unknown transmuxing error.".to_owned())
+                ),
+            AppendBufferErrorCode::UnknownError =>
+                PushSegmentError::UnknownError(
+                    media_type,
+                    err.1.unwrap_or("Unknown error.".to_owned())
+                ),
         }
     }
 }
 
-pub enum PushSegmentError {
-    NoSourceBuffer(MediaType),
-}
-
+#[derive(Error, Debug)]
 pub enum RemoveDataError {
+    #[error("No SourceBuffer created for {0}")]
     NoSourceBuffer(MediaType),
 }
 
-/// Identify a unique JavaScript `SourceBuffer`
-pub type SourceBufferId = u32;
-
-/// Error that can trigger when attempting to create a SourceBuffer.
-#[derive(Debug)]
+#[derive(Error, Debug)]
 pub enum SourceBufferCreationError {
-    /// A SourceBuffer was already created for the given `MediaType`.
+    #[error("A SourceBuffer was already created for the {0} type.")]
     AlreadyCreatedWithSameType(MediaType),
 
-    /// No JavaScript MediaSource is currently attached to the media element
-    /// itself linked to the current dispatcher instance.
+    #[error("No JavaScript MediaSource is currently attached to the media element")]
     NoMediaSourceAttached,
 
-    /// The `SourceBuffer` could not have been created because the `MediaSource`
-    /// has a "closed" state.
+    #[error("The `MediaSource` has a \"closed\" state.")]
     MediaSourceIsClosed,
 
     /// The `SourceBuffer` could not have been created because a `QuotaExceededError`
     /// JavaScript error has been received while doing so. This often happens when
     /// a SourceBuffer is created after another one already had data pushed to it.
+    #[error("QuotaExceededError: {0}")]
     QuotaExceededError(String),
 
-    /// The wanted SourceBuffer could not have been created because the given
-    /// mime-type and codecs couple is not supported by the current device.
+    #[error("The given `{0}` mime-type and codecs couple is not supported by the current device.")]
     CantPlayType(String),
 
-    /// An uncategorized error has been received while trying to create the
-    /// SourceBuffer.
+    #[error("Unknown error: `{0}`")]
     UnknownError(String),
 }
 
@@ -314,29 +429,28 @@ pub struct SourceBuffer {
     /// this `SourceBuffer` in the current dispatcher instance.
     id: SourceBufferId,
 
-    /// The current queue of operations being scheduled, from the most urgent to
-    /// the less urgent.
-    /// The next operation in queue will be performed and removed from the queue
-    /// once the SourceBuffer is not "updating" anymore.
+    /// The current queue of operations being performed on the `SourceBuffer`.
     queue: Vec<SourceBufferQueueElement>,
 
     /// The Content-Type currently linked to the SourceBuffer
     typ: String,
 
-    /// If `true`, an operation is currently performed on the `SourceBuffer`, in
-    /// which case it will need to push further operations in its internal
-    /// `queue`.
-    is_updating: bool,
+    /// If `true`, at least one operation is still pending on the underlying MSE's
+    /// `SourceBuffer`.
+    has_remaining_operation: bool,
 
     /// Set to `true` as soon as the first operation is being performed, at
     /// which point, some actions cannot be taken anymore (like creating other
     /// `SourceBuffer` instances).
-    has_been_updated: bool,
+    was_used: bool,
 
     /// If `true` the chronologically last possible media chunk has been
     /// scheduled to be pushed.
     /// This allows for example to properly "end" the `SourceBuffer`.
     last_segment_pushed: bool,
+
+    /// The MediaType associated to this `SourceBuffer`.
+    media_type: MediaType,
 }
 
 /// Enum listing possible operations awaiting to be performed on a `SourceBuffer`.
@@ -351,18 +465,57 @@ pub enum SourceBufferQueueElement {
 
 impl SourceBuffer {
     fn new(media_type: MediaType, typ: String) -> Self {
+        Logger::info(&format!("Creating new {} SourceBuffer", media_type));
         let x = jsAddSourceBuffer(media_type, &typ,);
         Self {
-            id: x as u32,
+            id: x,
             typ,
-            is_updating: false,
+            has_remaining_operation: false,
             queue: vec![],
-            has_been_updated: false,
+            was_used: false,
             last_segment_pushed: false,
+            media_type,
         }
     }
 
-//     pub fn get_buffered(&self) -> Vec<(f64, f64)> {
+    pub fn get_segment_queue(&self) -> &[SourceBufferQueueElement] {
+        &self.queue
+    }
+
+    pub fn append_buffer(
+        &mut self,
+        metadata: PushMetadata,
+        parse_time_info: bool
+    ) -> Result<Option<ParsedSegmentInfo>, PushSegmentError> {
+        self.was_used = true;
+        self.has_remaining_operation = true;
+        let segment_id = metadata.segment_data.get_id();
+        self.queue.push(SourceBufferQueueElement::Push(metadata));
+        Logger::debug(&format!("Buffer {} ({}): Pushing", self.id, self.typ));
+        match jsAppendBuffer(self.id, segment_id, parse_time_info).result() {
+            Err(err) =>
+                Err(PushSegmentError::from_append_buffer_error(self.media_type, err)),
+            Ok(x) => Ok(x),
+        }
+    }
+
+    pub fn remove_buffer(&mut self, start: f64, end: f64) {
+        self.was_used = true;
+        self.has_remaining_operation = true;
+        self.queue.push(SourceBufferQueueElement::Remove { start, end });
+        Logger::debug(&format!("Buffer {} ({}): Removing {} {}",
+            self.id, self.typ, start, end));
+        jsRemoveBuffer(self.id, start, end);
+    }
+
+    pub fn on_operation_end(&mut self) {
+        self.queue.remove(0);
+        if self.queue.is_empty() {
+            self.has_remaining_operation = false;
+        }
+    }
+
+//     pub fn buffered(&self) -> Vec<(f64, f64)> {
 //         let buffered = jsGetSourceBufferBuffered(self.id);
 //         let og_len = buffered.len();
 //         if og_len % 2 != 0 {
@@ -374,66 +527,18 @@ impl SourceBuffer {
 //         }
 //         ret
 //     }
-
-    pub fn get_segment_queue(&self) -> &[SourceBufferQueueElement] {
-        &self.queue
-    }
-
-    pub fn append_buffer(&mut self, metadata: PushMetadata) {
-        self.has_been_updated = true;
-        if self.is_updating {
-            Logger::debug(&format!("Buffer {} ({}): Queuing append.", self.id, self.typ));
-            self.queue.push(SourceBufferQueueElement::Push(metadata));
-        } else {
-            self.push_now(metadata);
-        }
-    }
-
-    pub fn remove_buffer(&mut self, start: f64, end: f64) {
-        self.has_been_updated = true;
-        if self.is_updating {
-            Logger::debug(&format!("Buffer {} ({}): Queuing remove {} {}",
-            self.id, self.typ, start, end));
-            self.queue.push(SourceBufferQueueElement::Remove { start, end });
-        } else {
-            self.remove_now(start, end)
-        }
-    }
-
-    fn on_update_end(&mut self) {
-        use SourceBufferQueueElement::*;
-        if self.queue.is_empty() {
-            self.is_updating = false;
-        } else {
-            let next_item = self.queue.remove(0);
-            match next_item {
-                Push(md) => self.push_now(md),
-                Remove { start, end } => self.remove_now(start, end),
-            }
-        }
-    }
-
-    fn push_now(&mut self, md: PushMetadata) {
-        self.is_updating = true;
-        Logger::debug(&format!("Buffer {} ({}): Pushing", self.id, self.typ));
-        jsAppendBuffer(self.id, md.segment_data.get_id());
-
-    }
-
-    fn remove_now(&mut self, start: f64, end: f64) {
-        self.is_updating = true;
-        Logger::debug(&format!("Buffer {} ({}): Removing {} {}",
-            self.id, self.typ, start, end));
-        jsRemoveBuffer(self.id, start, end);
-    }
 }
 
 pub struct PushMetadata {
     segment_data: JsMemoryBlob,
+    time_info: Option<(f64, f64)>
 }
 
 impl PushMetadata {
-    pub fn new(segment_data: JsMemoryBlob) -> Self {
-        Self { segment_data }
+    pub fn new(
+        segment_data: JsMemoryBlob,
+        time_info: Option<(f64, f64)>
+    ) -> Self {
+        Self { segment_data, time_info }
     }
 }

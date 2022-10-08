@@ -16,3 +16,14 @@ export default function idGenerator() : () => string {
   };
 }
 
+export function numberIdGenerator() : () => number {
+  let currId = -1;
+  return function generateNewNumberId() : number {
+    currId++;
+    if (currId >= Number.MAX_SAFE_INTEGER) {
+      console.warn("Exceeding `numberIdGenerator` limit. Collisions may occur");
+      currId = 0;
+    }
+    return currId;
+  };
+}

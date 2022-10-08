@@ -3,7 +3,6 @@ use crate::{
         MediaType,
         jsStartObservingPlayback,
         jsStopObservingPlayback,
-        jsRemoveMediaSource,
         RequestId,
         SourceBufferId,
         jsSetMediaSourceDuration,
@@ -19,7 +18,7 @@ use crate::{
         PlaylistRequestInfo,
         FinishedRequestType,
     },
-    media_element::{PushMetadata, SourceBufferCreationError, MediaElementReference},
+    media_element::{PushMetadata, SourceBufferCreationError},
     utils::url::Url,
     segment_selector::NextSegmentInfo,
 };
@@ -85,7 +84,7 @@ impl Dispatcher {
         if content_tracker.all_curr_media_playlists_ready() {
             self.ready_state = PlayerReadyState::AwaitingSegments;
             let start_time = content_tracker.get_expected_start_time();
-            self.media_element_ref.seek_once_ready(start_time);
+            self.media_element_ref.seek(start_time);
             if let Some(duration) = content_tracker.curr_duration() {
                 jsSetMediaSourceDuration(duration);
             } else {
@@ -173,26 +172,13 @@ impl Dispatcher {
     fn init_source_buffer(&mut self,
         media_type: MediaType
     ) -> Option<Result<(), SourceBufferCreationError>> {
-        if self.media_element_ref.has_buffer(media_type) ||
-            !self.media_element_ref.can_still_create_source_buffer() {
-            // TODO return Err here
-            return None;
-        }
-
         let content = self.content_tracker.as_mut()?;
+        
         let media_playlist = content.curr_media_playlist(media_type)?;
-        let mime_type = if let Some(m) = media_playlist.mime_type(media_type) { m } else {
-            // TODO return Err here
-            return None;
-        };
-        let codecs = match content.curr_variant().map(|v| v.codecs(media_type)) {
-            Some(Some(c)) => c,
-            _ => {
-                // TODO return Err here
-                return None;
-            },
-        };
+        let mime_type = media_playlist.mime_type(media_type).unwrap_or("");
 
+        // TODO to_string should be unneeded here as &str is sufficient
+        let codecs = content.curr_variant()?.codecs(media_type).unwrap_or("".to_string());
         Some(self.media_element_ref.create_source_buffer(media_type, mime_type, &codecs))
     }
 
@@ -283,10 +269,9 @@ impl Dispatcher {
         Logger::info("Stopping current content (if one) and resetting player");
         self.requester.reset();
         jsStopObservingPlayback();
-        jsRemoveMediaSource();
+        self.media_element_ref.reset();
         self.segment_selectors.reset_position(0.);
         self.content_tracker = None;
-        self.media_element_ref = MediaElementReference::new();
         self.last_position = 0.;
         self.ready_state = PlayerReadyState::Stopped;
     }
@@ -310,7 +295,8 @@ impl Dispatcher {
         media_type: MediaType,
         time_info: Option<(f64, f64)>
     ) {
-        match self.media_element_ref.push_segment(media_type, PushMetadata::new(data)) {
+        let md = PushMetadata::new(data, time_info);
+        match self.media_element_ref.push_segment(media_type, md) {
             Err(_) => {
                 let err = &format!("Can't push: {} SourceBuffer not found", media_type);
                 self.fail_on_error(err);

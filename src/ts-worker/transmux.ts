@@ -19,8 +19,14 @@ export function isMpegTsType(typ: string) : boolean {
 }
 
 export function shouldTransmux(typ: string) {
-  return canTransmux(typ) &&
-         !MediaSource.isTypeSupported(typ);
+  if (!canTransmux(typ)) {
+    return false;
+  }
+  if (typeof MediaSource === "undefined") {
+    // TODO truly test support?
+    return true;
+  }
+  return !MediaSource.isTypeSupported(typ);
 }
 
 export function canTransmux(typ: string) : boolean {

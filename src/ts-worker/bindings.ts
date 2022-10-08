@@ -1,28 +1,16 @@
 import idGenerator from "../ts-common/idGenerator.js";
+import { getMDHDTimescale } from "../ts-common/isobmff-utils.js";
+import QueuedSourceBuffer from "../ts-common/QueuedSourceBuffer.js";
 import {
   Dispatcher,
   LogLevel,
   MediaType,
   MediaSourceReadyState,
   TimerReason,
-  // PlaybackTickReason,
-  // RemoveMediaSourceResult,
-  // RemoveMediaSourceErrorCode,
-  // AddSourceBufferResult,
-  // AddSourceBufferErrorCode,
-  // AppendBufferResult,
-  // RemoveBufferResult,
-  // AppendBufferErrorCode,
-  // RemoveBufferErrorCode,
-  // MediaSourceDurationUpdateResult,
-  // MediaSourceDurationUpdateErrorCode,
-  // EndOfStreamResult,
-  // EndOfStreamErrorCode,
-  // MediaObservation,
+  AppendBufferErrorCode,
+  AppendBufferResult,
 } from "../wasm/wasp_hls.js";
 import {
-  WorkerMediaSourceInstanceInfo,
-  MainMediaSourceInstanceInfo,
   jsMemoryResources,
   RequestId,
   requestsStore,
@@ -30,27 +18,19 @@ import {
   SourceBufferId,
   playerInstance,
   TimerId,
+  getMediaSourceObj,
 } from "./globals";
 import postMessageToMain from "./postMessage.js";
+import { getTimeInformationFromMp4 } from "./segment-preparation.js";
+// import { getTimeInformationFromMp4 } from "./segment-preparation.js";
 import {
   getTransmuxedType,
   shouldTransmux,
   transmux,
 } from "./transmux.js";
+import { formatErrMessage } from "./utils.js";
 
 const generateMediaSourceId = idGenerator();
-
-const MAX_U32 = Math.pow(2, 32) - 1;
-
-let nextRequestId = 0;
-let nextResourceId = 0;
-
-// export function prepareSegment(
-//   sourceBufferId: SourceBufferId,
-//   data: JsBlob
-// ): [] {
-
-// }
 
 export function getResourceData(
   resourceId: ResourceId
@@ -102,10 +82,8 @@ export function clearTimer(id: TimerId) {
  * @returns {number}
  */
 export function doFetch(url: string): RequestId {
-  const currentRequestId = nextRequestId;
-  incrementRequestId();
   const abortController = new AbortController();
-  requestsStore.create(currentRequestId, { abortController });
+  const currentRequestId = requestsStore.create({ abortController });
   const timestampBef = performance.now();
   fetch(url, { signal: abortController.signal })
     .then(async res => {
@@ -114,10 +92,8 @@ export function doFetch(url: string): RequestId {
       requestsStore.delete(currentRequestId);
       const dispatcher = playerInstance.getDispatcher();
       if (dispatcher !== null) {
-        const currentResourceId = nextResourceId;
-        incrementResourceId();
         const segmentArray = new Uint8Array(arrRes);
-        jsMemoryResources.create(currentResourceId, segmentArray);
+        const currentResourceId = jsMemoryResources.create(segmentArray);
         dispatcher.on_request_finished(
           currentRequestId,
           currentResourceId,
@@ -395,6 +371,7 @@ export function addSourceBuffer(mediaType: MediaType, typ: string): number {
       }
       const sourceBufferId = nextSourceBufferId;
       sourceBuffers.push({
+        lastInitTimescale: undefined,
         id: sourceBufferId,
         transmuxer: mimeType === typ ? null : transmux,
         sourceBuffer: null,
@@ -434,15 +411,14 @@ export function addSourceBuffer(mediaType: MediaType, typ: string): number {
       }
       const sourceBuffer = mediaSource.addSourceBuffer(mimeType);
       const sourceBufferId = nextSourceBufferId;
+      const queuedSourceBuffer = new QueuedSourceBuffer(sourceBuffer);
       sourceBuffers.push({
+        lastInitTimescale: undefined,
         id: sourceBufferId,
-        sourceBuffer,
+        sourceBuffer: queuedSourceBuffer,
         transmuxer: mimeType === typ ? null : transmux,
       });
       contentInfo.mediaSourceObj.nextSourceBufferId++;
-      sourceBuffer.addEventListener("updateend", function() {
-        playerInstance.getDispatcher()?.on_source_buffer_update(sourceBufferId);
-      });
       // TODO
       return sourceBufferId;
     } catch (err) {
@@ -471,43 +447,89 @@ export function addSourceBuffer(mediaType: MediaType, typ: string): number {
  */
 export function appendBuffer(
   sourceBufferId: SourceBufferId,
-  resourceId: ResourceId
-): void {
-  try {
-    const data: Uint8Array | undefined = jsMemoryResources.get(resourceId);
-    if (data === undefined) {
-      // TODO
-      return;
-    }
-    const mediaSourceObj = getMediaSourceObj();
-    if (mediaSourceObj === undefined) {
-      // TODO
-      return;
-    }
+  resourceId: ResourceId,
+  parseTimeInformation?: boolean
+): AppendBufferResult {
+  let segment = jsMemoryResources.get(resourceId);
+  const mediaSourceObj = getMediaSourceObj();
+  if (segment === undefined) {
+    return AppendBufferResult.error(
+      AppendBufferErrorCode.NoResource,
+      "Segment preparation error: No resource with the given `resourceId`"
+    );
+  }
+  if (mediaSourceObj === undefined) {
+    return AppendBufferResult.error(
+      AppendBufferErrorCode.NoSourceBuffer,
+      "Segment preparation error: No MediaSource attached"
+    );
+  }
 
-    // Weirdly enough TypeScript is only able to type-check when findIndex is
-    // used then used as an index. Not when `find` is used directly.
-    const sourceBufferObjIdx = mediaSourceObj.sourceBuffers
-      .findIndex(({ id }) => id === sourceBufferId);
-    if (sourceBufferObjIdx < 0) {
-      // TODO
-      return;
-    }
-    const sourceBufferObj = mediaSourceObj.sourceBuffers[sourceBufferObjIdx];
-    let pushedData = data;
-    if (sourceBufferObj.transmuxer !== null) {
-      const transmuxedData = sourceBufferObj.transmuxer(data);
+  // Weirdly enough TypeScript is only able to type-check when findIndex is
+  // used then used as an index. Not when `find` is used directly.
+  const sourceBufferObjIdx = mediaSourceObj.sourceBuffers
+    .findIndex(({ id }) => id === sourceBufferId);
+  if (sourceBufferObjIdx < -1) {
+    return AppendBufferResult.error(
+      AppendBufferErrorCode.NoSourceBuffer,
+      "Segment preparation error: No SourceBuffer with the given `SourceBufferId`"
+    );
+  }
 
-      // TODO specific error for transmuxing error
+  const sourceBufferObj = mediaSourceObj.sourceBuffers[sourceBufferObjIdx];
+  if (sourceBufferObj.transmuxer !== null) {
+    try {
+      const transmuxedData = sourceBufferObj.transmuxer(segment);
       if (transmuxedData !== null) {
-        pushedData = transmuxedData;
+        segment = transmuxedData;
+      } else {
+        return AppendBufferResult.error(
+          AppendBufferErrorCode.TransmuxerError,
+          "Segment preparation error: the transmuxer couldn't process the segment"
+        );
       }
+    } catch (err) {
+      const msg =
+        formatErrMessage(err, "Unknown error while transmuxing segment");
+      return AppendBufferResult.error(
+        AppendBufferErrorCode.TransmuxerError,
+        msg
+      );
     }
+  }
 
+  // TODO Check if mp4 first and if init segment?
+  let timescale = getMDHDTimescale(segment);
+  if (timescale !== undefined) {
+    sourceBufferObj.lastInitTimescale = timescale;
+  } else {
+    timescale = sourceBufferObj.lastInitTimescale;
+  }
+
+  let timeInfo;
+  if (parseTimeInformation === true && timescale !== undefined) {
+    // TODO Check if mp4 first
+    timeInfo = getTimeInformationFromMp4(segment, timescale);
+  }
+  try {
     if (sourceBufferObj.sourceBuffer !== null) {
-      sourceBufferObj.sourceBuffer.appendBuffer(pushedData);
+      sourceBufferObj.sourceBuffer.push(segment)
+        .then(() => {
+          try {
+            playerInstance.getDispatcher()?.on_source_buffer_update(sourceBufferId);
+          } catch (err) {
+            console.error("Error when calling `on_source_buffer_update`", err);
+          }
+        })
+        .catch(() => {
+          try {
+            playerInstance.getDispatcher()?.on_source_buffer_error(sourceBufferId);
+          } catch (err) {
+            console.error("Error when calling `on_source_buffer_error`", err);
+          }
+        });
     } else {
-      const buffer = pushedData.buffer;
+      const buffer = segment.buffer;
       postMessageToMain({
         type: "append-buffer",
         value: {
@@ -518,9 +540,9 @@ export function appendBuffer(
       }, [buffer]);
     }
   } catch (err) {
-    // TODO
-    return;
+    return AppendBufferResult.error(AppendBufferErrorCode.UnknownError);
   }
+  return AppendBufferResult.success(timeInfo?.time, timeInfo?.duration);
 }
 
 /**
@@ -547,7 +569,21 @@ export function removeBuffer(
         // TODO
         return;
       }
-      sourceBuffer.sourceBuffer.remove(start, end);
+      sourceBuffer.sourceBuffer.removeBuffer(start, end)
+        .then(() => {
+          try {
+            playerInstance.getDispatcher()?.on_source_buffer_update(sourceBufferId);
+          } catch (err) {
+            console.error("Error when calling `on_source_buffer_update`", err);
+          }
+        })
+        .catch(() => {
+          try {
+            playerInstance.getDispatcher()?.on_source_buffer_error(sourceBufferId);
+          } catch (err) {
+            console.error("Error when calling `on_source_buffer_error`", err);
+          }
+        });
     } else {
       postMessageToMain({
         type: "remove-buffer",
@@ -629,57 +665,6 @@ export function freeResource(resourceId: number) : boolean {
   }
   jsMemoryResources.delete(resourceId);
   return true;
-}
-
-function formatErrMessage(err: unknown, defaultMsg: string) {
-  return err instanceof Error ?
-    err.name + ": " + err.message :
-    defaultMsg;
-}
-
-function getMediaSourceObj(
-) : MainMediaSourceInstanceInfo | WorkerMediaSourceInstanceInfo | undefined {
-  const contentInfo = playerInstance.getContentInfo();
-  if (contentInfo === null) {
-    return undefined;
-  }
-  const { mediaSourceObj } = contentInfo;
-  if (mediaSourceObj === null) {
-    return undefined;
-  }
-  return mediaSourceObj;
-}
-
-const MAX_LOOP_ITERATIONS = 1e6;
-
-function incrementResourceId() : void {
-  let iteration = 0;
-  do {
-    nextResourceId = nextResourceId >= MAX_U32 ? 0 : nextResourceId + 1;
-    iteration++;
-  } while (
-    // TODO in store?
-    jsMemoryResources.get(nextResourceId) !== undefined ||
-    iteration >= MAX_LOOP_ITERATIONS
-  );
-  if (iteration >= MAX_LOOP_ITERATIONS) {
-    throw new Error("Too many resources reserved. Is it normal?");
-  }
-}
-
-function incrementRequestId() : void {
-  let iteration = 0;
-  do {
-    nextRequestId = nextRequestId >= MAX_U32 ? 0 : nextRequestId + 1;
-    iteration++;
-  } while (
-    // TODO in store?
-    requestsStore.get(nextRequestId) !== undefined ||
-    iteration >= MAX_LOOP_ITERATIONS
-  );
-  if (iteration >= MAX_LOOP_ITERATIONS) {
-    throw new Error("Too many pending requests. Is it normal?");
-  }
 }
 
 // TODO real way of binding

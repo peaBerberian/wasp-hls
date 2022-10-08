@@ -10,14 +10,16 @@ use crate::{
 mod api;
 mod streaming;
 
-
 /// The `Dispatcher` is the player Interface exported to the JavaScript-side,
 /// providing an API to load contents and influence various parameters about playback.
 #[wasm_bindgen]
 pub struct Dispatcher {
-
     /// Current `PlayerReadyState` the `Dispatcher` is in.
     ready_state: PlayerReadyState,
+
+    /// Allows to perform actions related to the HTMLMediaElement on the page, like buffering media,
+    /// pausing, seeking etc.
+    media_element_ref: MediaElementReference,
 
     /// Struct allowing to obtain estimate of the optimal variants to play,
     /// mostly based on network metrics.
@@ -29,14 +31,6 @@ pub struct Dispatcher {
     ///
     /// `None` if no "MultiVariant Playlist" has been loaded yet.
     content_tracker: Option<ContentTracker>,
-
-    ///// Abstraction allowing to create and store `SourceBuffer`s on the `MediaSource` attached
-    ///// to the media element itself linked to the `Dispatcher`.
-    /////
-    ///// None if not `MediaSource` has been attached yet.
-    //buffers: Option<MediaBuffers>,
-
-    media_element_ref: MediaElementReference,
 
     /// Abstraction allowing to perform playlist and segment requests, while
     /// easily monitoring requests that are pending.

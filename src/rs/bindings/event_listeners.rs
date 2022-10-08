@@ -25,7 +25,7 @@ impl Dispatcher {
     /// * `resource_id` - Id refering to the resource on the JavaScript-side.
     pub fn on_request_finished(&mut self,
         request_id: RequestId,
-        resource_id: u32,
+        resource_id: ResourceId,
         resource_size: u32,
         final_url: String,
         duration_ms: f64 // TODO Rust-side?
@@ -108,11 +108,11 @@ pub struct JsMemoryBlob {
 
 /// Special structure to handle data
 impl JsMemoryBlob {
-    pub fn from_resource_id(id: u32) -> Self {
+    pub fn from_resource_id(id: ResourceId) -> Self {
         Self { id }
     }
 
-    pub fn get_id(&self) -> u32 {
+    pub fn get_id(&self) -> ResourceId {
         self.id
     }
 

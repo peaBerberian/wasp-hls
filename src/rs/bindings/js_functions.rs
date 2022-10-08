@@ -10,11 +10,6 @@ use crate::wasm_bindgen;
 
 #[wasm_bindgen]
 extern "C" {
-    pub fn jsPrepareSegment(
-        source_buffer_id: SourceBufferId,
-        segment_id: ResourceId
-    ) -> Option<f64>;
-
     // Log the given text in the JavaScript console, with the log level given.
     pub fn jsLog(log_level: LogLevel, log: &str);
 
@@ -99,29 +94,44 @@ extern "C" {
 
     // Append media data to the given SourceBuffer.
     //
-    // This process is asynchronous, meaning that the data might not be directly
-    // considered directly after calling `jsAppendBuffer`.
+    // This process is asynchronous, meaning that the data might not be appended
+    // directly after calling `jsAppendBuffer`.
     //
-    // It is also forbidden to perform either append or remove operations on that SourceBuffer,
-    // respectively by calling `jsAppendBuffer` or `jsRemoveBuffer` with the same
-    // `SourceBufferId`, while that preceeding call did not either indicate success or failure
-    // (respectively by calling either the `on_source_buffer_update` method or the
-    // `on_source_buffer_error` method of the `WaspHlsPlayer` linked to the given `PlayerId`).
+    // Append and remove operations performed on that SourceBuffer, respectively
+    // through the `jsAppendBuffer` and `jsRemoveBuffer` functions, are all
+    // pushed to an internal queue of operations which will be executed in the
+    // same order than their calls have been made.
+    // You will be notified once each single one of these operations have
+    // succeeded when the `on_source_buffer_update` function is called on this
+    // `WaspHlsPlayer` instance, with the same `source_buffer_id`.
+    //
+    // If the `on_source_buffer_error` method of this `WaspHlsPlayer` instance,
+    // with the same `source_buffer_id`, it means that the currently scheduled
+    // operation (the first one in the queue) failed. In that case, the
+    // SourceBuffer is not usable anymore.
     pub fn jsAppendBuffer(
         source_buffer_id: SourceBufferId,
-        segment_id: ResourceId
-    );
+        segment_id: ResourceId,
+        parse_time_information: bool
+    ) -> AppendBufferResult;
 
     // Remove media data from the given SourceBuffer.
     //
     // This process is asynchronous, meaning that the data might not be directly
     // considered directly after calling `jsAppendBuffer`.
     //
-    // It is also forbidden to perform either append or remove operations on that SourceBuffer,
-    // respectively by calling `jsAppendBuffer` or `jsRemoveBuffer` with the same
-    // `SourceBufferId`, while that preceeding call did not either indicate success or failure
-    // (respectively by calling either the `on_source_buffer_update` method or the
-    // `on_source_buffer_error` method of the `WaspHlsPlayer` linked to the given `PlayerId`).
+    // Append and remove operations performed on that SourceBuffer, respectively
+    // through the `jsAppendBuffer` and `jsRemoveBuffer` functions, are all
+    // pushed to an internal queue of operations which will be executed in the
+    // same order than their calls have been made.
+    // You will be notified once each single one of these operations have
+    // succeeded when the `on_source_buffer_update` function is called on this
+    // `WaspHlsPlayer` instance, with the same `source_buffer_id`.
+    //
+    // If the `on_source_buffer_error` method of this `WaspHlsPlayer` instance,
+    // with the same `source_buffer_id`, it means that the currently scheduled
+    // operation (the first one in the queue) failed. In that case, the
+    // SourceBuffer is not usable anymore.
     pub fn jsRemoveBuffer(
         source_buffer_id: SourceBufferId,
         start: f64,
@@ -304,63 +314,6 @@ pub enum AttachMediaSourceErrorCode {
     UnknownError = 2,
 }
 
-/// Errors that can arise when calling the `jsAppendBuffer` JavaScript function.
-#[wasm_bindgen]
-pub enum AppendBufferErrorCode {
-    /// The operation failed because the `WaspHlsPlayer` linked to the given `PlayerId`
-    /// and/or the SourceBuffer instance linked to the given `SourceBufferId` was not found.
-    PlayerOrSourceBufferInstanceNotFound = 1,
-
-    /// The operation failed because the resource to append was not found.
-    ///
-    /// This error is only returned for cases where the data to push resides in JavaScript's
-    /// memory (as opposed to given by the WebAssembly code).
-    GivenResourceNotFound = 2,
-
-    /// The operation failed because of an unknown error.
-    UnknownError = 3,
-}
-
-/// Result of calling either the `jsAppendBuffer` JavaScript function.
-///
-/// Creation of an `AppendBufferResult` should only be performed by the JavaScript side
-/// through the exposed static constructors.
-#[wasm_bindgen]
-pub struct AppendBufferResult {
-    error: Option<(AppendBufferErrorCode, Option<String>)>,
-}
-
-#[wasm_bindgen]
-impl AppendBufferResult {
-    /// Creates an `AppendBufferResult` indicating success, with the corresponding
-    /// `SourceBufferId`.
-    ///
-    /// This function should only be called by the JavaScript-side.
-    pub fn success() -> Self {
-        Self { error: None }
-    }
-
-    /// Creates an `AppendBufferResult` indicating failure, with the corresponding
-    /// error.
-    ///
-    /// This function should only be called by the JavaScript-side.
-    pub fn error(err: AppendBufferErrorCode, desc: Option<String>) -> Self {
-        Self { error: Some((err, desc)) }
-    }
-}
-
-impl JsResult<(), AppendBufferErrorCode> for AppendBufferResult {
-    /// Basically unwrap and consume the `AppendBufferResult`, converting it into a
-    /// Result enum.
-    fn result(self) -> Result<(), (AppendBufferErrorCode, Option<String>)> {
-        if let Some(err) = self.error {
-            Err(err)
-        } else {
-            Ok(())
-        }
-    }
-}
-
 /// Errors that can arise when calling the `jsRemoveBuffer` JavaScript function.
 #[wasm_bindgen]
 pub enum RemoveBufferErrorCode {
@@ -469,7 +422,7 @@ impl JsResult<(), EndOfStreamErrorCode> for EndOfStreamResult {
 /// through the exposed static constructors.
 #[wasm_bindgen]
 pub struct AddSourceBufferResult {
-    source_buffer_id: u32,
+    source_buffer_id: SourceBufferId,
     error: Option<(AddSourceBufferErrorCode, Option<String>)>,
 }
 
@@ -510,7 +463,7 @@ impl AddSourceBufferResult {
     /// `SourceBufferId`.
     ///
     /// This function should only be called by the JavaScript-side.
-    pub fn success(val : u32) -> Self {
+    pub fn success(val : SourceBufferId) -> Self {
         Self { source_buffer_id: val, error: None }
     }
 
@@ -519,14 +472,14 @@ impl AddSourceBufferResult {
     ///
     /// This function should only be called by the JavaScript-side.
     pub fn error(err: AddSourceBufferErrorCode, desc: Option<String>) -> Self {
-        Self { source_buffer_id: 0, error: Some((err, desc)) }
+        Self { source_buffer_id: 0., error: Some((err, desc)) }
     }
 }
 
-impl JsResult<u32, AddSourceBufferErrorCode> for AddSourceBufferResult {
+impl JsResult<SourceBufferId, AddSourceBufferErrorCode> for AddSourceBufferResult {
     /// Basically unwrap and consume the `AddSourceBufferResult`, converting it into a
     /// Result enum.
-    fn result(self) -> Result<u32, (AddSourceBufferErrorCode, Option<String>)> {
+    fn result(self) -> Result<SourceBufferId, (AddSourceBufferErrorCode, Option<String>)> {
         if let Some(err) = self.error {
             Err(err)
         } else {
@@ -575,28 +528,127 @@ impl JsResult<(), AttachMediaSourceErrorCode> for AttachMediaSourceResult {
     }
 }
 
+/// Result of calling the `jsPrepareSegmentForBuffer` JavaScript function.
+///
+/// Creation of an `AppendBufferResult` should only be performed by the JavaScript side
+/// through the exposed static constructors.
 #[wasm_bindgen]
-// TODO
+pub struct AppendBufferResult {
+    success: Option<ParsedSegmentInfo>,
+    error: Option<(AppendBufferErrorCode, Option<String>)>,
+}
+
+pub struct ParsedSegmentInfo {
+    pub start: Option<f64>,
+    pub duration: Option<f64>,
+}
+
+#[wasm_bindgen]
+impl AppendBufferResult {
+    /// Creates an `AppendBufferResult` indicating success, with the corresponding
+    /// `SourceBufferId`.
+    ///
+    /// This function should only be called by the JavaScript-side.
+    pub fn success(
+        start: Option<f64>,
+        duration: Option<f64>
+    ) -> Self {
+        Self {
+            success: Some(ParsedSegmentInfo { start, duration }),
+            error: None,
+        }
+    }
+
+    /// Creates an `AppendBufferResult` indicating failure, with the corresponding
+    /// error.
+    ///
+    /// This function should only be called by the JavaScript-side.
+    pub fn error(err: AppendBufferErrorCode, desc: Option<String>) -> Self {
+        Self { success: None, error: Some((err, desc)) }
+    }
+}
+
+impl JsResult<
+    Option<ParsedSegmentInfo>,
+    AppendBufferErrorCode
+> for AppendBufferResult {
+    /// Basically unwrap and consume the `AppendBufferResult`, converting it into a
+    /// Result enum.
+    fn result(self) -> Result<
+        Option<ParsedSegmentInfo>,
+        (AppendBufferErrorCode, Option<String>)
+    > {
+        if let Some(err) = self.error {
+            Err(err)
+        } else {
+            Ok(self.success)
+        }
+    }
+}
+
+/// Errors that can arise when calling the `jsAppendBuffer` JavaScript function.
+#[wasm_bindgen]
+pub enum AppendBufferErrorCode {
+    /// The operation failed because the resource to append was not found.
+    ///
+    /// This error is only returned for cases where the data to push resides in JavaScript's
+    /// memory (as opposed to given by the WebAssembly code).
+    NoResource,
+    /// The operation failed because the SourceBuffer instance linked to the
+    /// given `SourceBufferId` was not found.
+    NoSourceBuffer,
+    /// The operation failed at the transmuxing stage.
+    TransmuxerError,
+    /// The operation failed because of an unknown error.
+    UnknownError,
+}
+
+/// Current playback information associated to the `HTMLMediaElement` displayed
+/// on the page.
+/// `PlaybackObservation` should be regularly sent on various events.
+#[wasm_bindgen]
 pub struct PlaybackObservation {
+    /// The reason that triggered the `PlaybackObservation` struct to be
+    /// created.
     reason : PlaybackObservationReason,
+    /// The value of the `currentTime` attribute of the HTMLMediaElement.
     current_time: f64,
+    /// The value of the `playbackRate` attribute of the HTMLMediaElement.
     playback_rate: f64,
+    /// The value of the `duration` attribute of the HTMLMediaElement.
     duration: f64,
 }
 
+/// Reason that triggered a `PlaybackObservation`
 #[wasm_bindgen]
-// TODO
 pub enum PlaybackObservationReason {
+    /// First observation given initially, not linked to any particular event.
     Init,
+    /// Observation sent right after a "seeked" event has been received on the
+    /// HTMLMediaElement.
     Seeked,
+    /// Observation sent right after a "seeking" event has been received on the
+    /// HTMLMediaElement.
     Seeking,
+    /// Observation sent right after an "ended" event has been received on the
+    /// HTMLMediaElement.
+    Ended,
+    /// Observation sent right after a the HTMLMediaElement's `readyState`
+    /// attribute changed
     ReadyStateChanged,
+    /// Observation sent regularly, at a set interval without any event.
     RegularInterval,
+    /// Observation sent as an error has been received on the HTMLMediaElement.
     Error,
 }
 
+/// "Reason" associated to a timer started by the WaspHlsPlayer.
+///
+/// This can then help to identify what the timer was for once resolved.
 #[wasm_bindgen]
 pub enum TimerReason {
+    /// The timer is linked to the MediaPlaylistRefresh's mechanism, meaning
+    /// that the wanted MediaPlaylist may have to be reloaded.
     MediaPlaylistRefresh = 0,
 }
 
@@ -623,16 +675,16 @@ pub enum LogLevel {
 ///
 /// Special care of those id should be taken to avoid memory leaks: you should always call
 /// `jsFreeResource` as soon as the resource is not needed anymore.
-pub type ResourceId = u32;
+pub type ResourceId = f64;
 
 /// Identify a pending request.
-pub type RequestId = u32;
+pub type RequestId = f64;
 
 /// Identify a pending timer.
-pub type TimerId = u32;
+pub type TimerId = f64;
 
 /// Identify a SourceBuffer.
-pub type SourceBufferId = u32;
+pub type SourceBufferId = f64;
 
 #[wasm_bindgen]
 #[derive(Clone, Copy, Debug, PartialEq)]
