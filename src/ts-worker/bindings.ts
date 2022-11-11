@@ -252,14 +252,10 @@ export function removeMediaSource(): void {
   if (contentInfo === null) {
     // TODO
     return;
-    // return RemoveMediaSourceResult
-    //   .error(RemoveMediaSourceErrorCode.PlayerInstanceNotFound);
   }
   if (contentInfo.mediaSourceObj === null) {
     // TODO
     return;
-    // return RemoveMediaSourceResult
-    //   .error(RemoveMediaSourceErrorCode.NoMediaSourceAttached);
   }
 
   if (contentInfo.mediaSourceObj.type === "worker") {

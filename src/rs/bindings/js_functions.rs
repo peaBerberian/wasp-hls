@@ -6,8 +6,6 @@ use crate::wasm_bindgen;
 /// This file lists all JavaScript functions that are callable from Rust as well as
 /// struct and enumeration used by those functions.
 
-// XXX TODO remove PlayerId mentions
-
 #[wasm_bindgen]
 extern "C" {
     // Log the given text in the JavaScript console, with the log level given.
@@ -140,10 +138,9 @@ extern "C" {
 
     pub fn jsEndOfStream();
 
-    // After this method is called, the `WaspHlsPlayer` instance associated
-    // with the given `PlayerId` will regularly receive `PlaybackObservation`
-    // objects, describing the current playback conditions through its
-    // `on_playback_tick` method.
+    // After this method is called, this `WaspHlsPlayer` instance will regularly receive
+    // `PlaybackObservation` objects, describing the current playback conditions through
+    // its `on_playback_tick` method.
     // The first event will be sent "almost" synchronously (queued as a
     // JavaScript microtask).
     //
@@ -192,16 +189,12 @@ extern "C" {
 /// to a media element.
 #[wasm_bindgen]
 pub enum RemoveMediaSourceErrorCode {
-    /// Could not remove MediaSource from the media element because the `WaspHlsPlayer`
-    /// linked to the given `PlayerId` was not known by the JavaScript-side.
-    PlayerInstanceNotFound = 1,
-
-    /// Could not remove MediaSource from the media element because the `WaspHlsPlayer`
-    /// linked to the given `PlayerId` had no MediaSource attached to its media element.
-    NoMediaSourceAttached = 2,
+    /// Could not remove MediaSource from the media element because this `WaspHlsPlayer`
+    /// had no MediaSource attached to its media element.
+    NoMediaSourceAttached,
 
     /// Could not remove MediaSource from the media element because of an unknown error.
-    UnknownError = 3,
+    UnknownError,
 }
 
 /// Result of calling the `jsRemoveMediaSource` JavaScript function.
@@ -252,15 +245,11 @@ pub(crate) trait JsResult<T, E> {
 /// TODO defined errors when the MediaSource is closed and so on?
 #[wasm_bindgen]
 pub enum MediaSourceDurationUpdateErrorCode {
-    /// The `WaspHlsPlayer` linked to the given `PlayerId` was not known by the JavaScript-side.
-    PlayerInstanceNotFound = 1,
-
-    /// The `WaspHlsPlayer` linked to the given `PlayerId` had no MediaSource attached to its media
-    /// element.
-    NoMediaSourceAttached = 2,
+    /// The `WaspHlsPlayer` had no MediaSource attached to its media element.
+    NoMediaSourceAttached,
 
     /// An unknown error arised
-    UnknownError = 3,
+    UnknownError,
 }
 
 /// Result of calling the `jsSetMediaSourceDuration` JavaScript function.
@@ -306,23 +295,19 @@ impl JsResult<(), MediaSourceDurationUpdateErrorCode> for MediaSourceDurationUpd
 /// element.
 #[wasm_bindgen]
 pub enum AttachMediaSourceErrorCode {
-    /// Could not attach MediaSource to the media element because the `WaspHlsPlayer`
-    /// linked to the given `PlayerId` was not known by the JavaScript-side.
-    PlayerInstanceNotFound = 1,
-
     /// Could not attach MediaSource to the media element because of an unknown error.
-    UnknownError = 2,
+    UnknownError,
 }
 
 /// Errors that can arise when calling the `jsRemoveBuffer` JavaScript function.
 #[wasm_bindgen]
 pub enum RemoveBufferErrorCode {
-    /// The operation failed because the `WaspHlsPlayer` linked to the given `PlayerId`
-    /// and/or the SourceBuffer instance linked to the given `SourceBufferId` was not found.
-    PlayerOrSourceBufferInstanceNotFound = 1,
+    /// The operation failed because the SourceBuffer instance linked to the given
+    /// `SourceBufferId` was not found.
+    SourceBufferNotFound,
 
     /// The operation failed because of an unknown error.
-    UnknownError = 2,
+    UnknownError,
 }
 
 /// Result of calling the `jsRemoveBuffer` JavaScript function.
@@ -368,12 +353,8 @@ impl JsResult<(), RemoveBufferErrorCode> for RemoveBufferResult {
 /// Errors that can arise when calling the `jsEndOfStream` JavaScript function.
 #[wasm_bindgen]
 pub enum EndOfStreamErrorCode {
-    /// The operation failed because the `WaspHlsPlayer` linked to the given `PlayerId`
-    /// was not found.
-    PlayerInstanceNotFound = 1,
-
     /// The operation failed because of an unknown error.
-    UnknownError = 2,
+    UnknownError,
 }
 
 /// Result of calling the `jsEndOfStream` JavaScript function.
@@ -429,10 +410,7 @@ pub struct AddSourceBufferResult {
 /// Error that might arise when adding a SourceBuffer through a MediaSource instance.
 #[wasm_bindgen]
 pub enum AddSourceBufferErrorCode {
-    /// The `WaspHlsPlayer` linked to the given `PlayerId` was not known by the JavaScript-side.
-    PlayerInstanceNotFound,
-
-    /// The `WaspHlsPlayer` linked to the given `PlayerId` had no MediaSource attached to its media
+    /// The `WaspHlsPlayer` linked to it had no MediaSource attached to its media
     /// element.
     NoMediaSourceAttached,
 
