@@ -1,15 +1,8954 @@
-(()=>{var qa=Object.create;var hi=Object.defineProperty;var Ha=Object.getOwnPropertyDescriptor;var $a=Object.getOwnPropertyNames;var Ya=Object.getPrototypeOf,Xa=Object.prototype.hasOwnProperty;var mi=(p,c)=>()=>(c||p((c={exports:{}}).exports,c),c.exports);var Ka=(p,c,g,S)=>{if(c&&typeof c=="object"||typeof c=="function")for(let m of $a(c))!Xa.call(p,m)&&m!==g&&hi(p,m,{get:()=>c[m],enumerable:!(S=Ha(c,m))||S.enumerable});return p};var Ja=(p,c,g)=>(g=p!=null?qa(Ya(p)):{},Ka(c||!p||!p.__esModule?hi(g,"default",{value:p,enumerable:!0}):g,p));var Ti=mi((Vs,_i)=>{var Pe;typeof window<"u"?Pe=window:typeof global<"u"?Pe=global:typeof self<"u"?Pe=self:Pe={};_i.exports=Pe});var wi=mi((Nt,jt)=>{(function(p,c){typeof Nt=="object"&&typeof jt<"u"?jt.exports=c(Ti()):typeof define=="function"&&define.amd?define(["global/window"],c):(p=typeof globalThis<"u"?globalThis:p||self,p.muxjs=c(p.window))})(Nt,function(p){"use strict";function c(s){return s&&typeof s=="object"&&"default"in s?s:{default:s}}var g=c(p),S=function(){this.init=function(){var e={};this.on=function(t,r){e[t]||(e[t]=[]),e[t]=e[t].concat(r)},this.off=function(t,r){var i;return e[t]?(i=e[t].indexOf(r),e[t]=e[t].slice(),e[t].splice(i,1),i>-1):!1},this.trigger=function(t){var r,i,n,a;if(r=e[t],!!r)if(arguments.length===2)for(n=r.length,i=0;i<n;++i)r[i].call(this,arguments[1]);else{for(a=[],i=arguments.length,i=1;i<arguments.length;++i)a.push(arguments[i]);for(n=r.length,i=0;i<n;++i)r[i].apply(this,a)}},this.dispose=function(){e={}}}};S.prototype.pipe=function(s){return this.on("data",function(e){s.push(e)}),this.on("done",function(e){s.flush(e)}),this.on("partialdone",function(e){s.partialFlush(e)}),this.on("endedtimeline",function(e){s.endTimeline(e)}),this.on("reset",function(e){s.reset(e)}),s},S.prototype.push=function(s){this.trigger("data",s)},S.prototype.flush=function(s){this.trigger("done",s)},S.prototype.partialFlush=function(s){this.trigger("partialdone",s)},S.prototype.endTimeline=function(s){this.trigger("endedtimeline",s)},S.prototype.reset=function(s){this.trigger("reset",s)};var m=S,v=9e4,_,A,L,ne,$t,Yt,Xt;_=function(e){return e*v},A=function(e,t){return e*t},L=function(e){return e/v},ne=function(e,t){return e/t},$t=function(e,t){return _(ne(e,t))},Yt=function(e,t){return A(L(e),t)},Xt=function(e,t,r){return L(r?e:e-t)};var V={ONE_SECOND_IN_TS:v,secondsToVideoTs:_,secondsToAudioTs:A,videoTsToSeconds:L,audioTsToSeconds:ne,audioTsToVideoTs:$t,videoTsToAudioTs:Yt,metadataTsToSeconds:Xt},Oi=V.ONE_SECOND_IN_TS,ke,Kt=[96e3,88200,64e3,48e3,44100,32e3,24e3,22050,16e3,12e3,11025,8e3,7350];ke=function(e){var t,r=0;ke.prototype.init.call(this),this.skipWarn_=function(i,n){this.trigger("log",{level:"warn",message:"adts skiping bytes "+i+" to "+n+" in frame "+r+" outside syncword"})},this.push=function(i){var n=0,a,o,u,d,f;if(e||(r=0),i.type==="audio"){t&&t.length?(u=t,t=new Uint8Array(u.byteLength+i.data.byteLength),t.set(u),t.set(i.data,u.byteLength)):t=i.data;for(var l;n+7<t.length;){if(t[n]!==255||(t[n+1]&246)!==240){typeof l!="number"&&(l=n),n++;continue}if(typeof l=="number"&&(this.skipWarn_(l,n),l=null),o=(~t[n+1]&1)*2,a=(t[n+3]&3)<<11|t[n+4]<<3|(t[n+5]&224)>>5,d=((t[n+6]&3)+1)*1024,f=d*Oi/Kt[(t[n+2]&60)>>>2],t.byteLength-n<a)break;this.trigger("data",{pts:i.pts+r*f,dts:i.dts+r*f,sampleCount:d,audioobjecttype:(t[n+2]>>>6&3)+1,channelcount:(t[n+2]&1)<<2|(t[n+3]&192)>>>6,samplerate:Kt[(t[n+2]&60)>>>2],samplingfrequencyindex:(t[n+2]&60)>>>2,samplesize:16,data:t.subarray(n+7+o,n+a)}),r++,n+=a}typeof l=="number"&&(this.skipWarn_(l,n),l=null),t=t.subarray(n)}},this.flush=function(){r=0,this.trigger("done")},this.reset=function(){t=void 0,this.trigger("reset")},this.endTimeline=function(){t=void 0,this.trigger("endedtimeline")}},ke.prototype=new m;var _e=ke,Jt;Jt=function(e){var t=e.byteLength,r=0,i=0;this.length=function(){return 8*t},this.bitsAvailable=function(){return 8*t+i},this.loadWord=function(){var n=e.byteLength-t,a=new Uint8Array(4),o=Math.min(4,t);if(o===0)throw new Error("no bytes available");a.set(e.subarray(n,n+o)),r=new DataView(a.buffer).getUint32(0),i=o*8,t-=o},this.skipBits=function(n){var a;i>n?(r<<=n,i-=n):(n-=i,a=Math.floor(n/8),n-=a*8,t-=a,this.loadWord(),r<<=n,i-=n)},this.readBits=function(n){var a=Math.min(i,n),o=r>>>32-a;return i-=a,i>0?r<<=a:t>0&&this.loadWord(),a=n-a,a>0?o<<a|this.readBits(a):o},this.skipLeadingZeros=function(){var n;for(n=0;n<i;++n)if((r&2147483648>>>n)!==0)return r<<=n,i-=n,n;return this.loadWord(),n+this.skipLeadingZeros()},this.skipUnsignedExpGolomb=function(){this.skipBits(1+this.skipLeadingZeros())},this.skipExpGolomb=function(){this.skipBits(1+this.skipLeadingZeros())},this.readUnsignedExpGolomb=function(){var n=this.skipLeadingZeros();return this.readBits(n+1)-1},this.readExpGolomb=function(){var n=this.readUnsignedExpGolomb();return 1&n?1+n>>>1:-1*(n>>>1)},this.readBoolean=function(){return this.readBits(1)===1},this.readUnsignedByte=function(){return this.readBits(8)},this.loadWord()};var ki=Jt,Le,Te,Zt;Te=function(){var e=0,t,r;Te.prototype.init.call(this),this.push=function(i){var n;r?(n=new Uint8Array(r.byteLength+i.data.byteLength),n.set(r),n.set(i.data,r.byteLength),r=n):r=i.data;for(var a=r.byteLength;e<a-3;e++)if(r[e+2]===1){t=e+5;break}for(;t<a;)switch(r[t]){case 0:if(r[t-1]!==0){t+=2;break}else if(r[t-2]!==0){t++;break}e+3!==t-2&&this.trigger("data",r.subarray(e+3,t-2));do t++;while(r[t]!==1&&t<a);e=t-2,t+=3;break;case 1:if(r[t-1]!==0||r[t-2]!==0){t+=3;break}this.trigger("data",r.subarray(e+3,t-2)),e=t-2,t+=3;break;default:t+=3;break}r=r.subarray(e),t-=e,e=0},this.reset=function(){r=null,e=0,this.trigger("reset")},this.flush=function(){r&&r.byteLength>3&&this.trigger("data",r.subarray(e+3)),r=null,e=0,this.trigger("done")},this.endTimeline=function(){this.flush(),this.trigger("endedtimeline")}},Te.prototype=new m,Zt={100:!0,110:!0,122:!0,244:!0,44:!0,83:!0,86:!0,118:!0,128:!0,138:!0,139:!0,134:!0},Le=function(){var e=new Te,t,r,i,n,a,o,u;Le.prototype.init.call(this),t=this,this.push=function(d){d.type==="video"&&(r=d.trackId,i=d.pts,n=d.dts,e.push(d))},e.on("data",function(d){var f={trackId:r,pts:i,dts:n,data:d,nalUnitTypeCode:d[0]&31};switch(f.nalUnitTypeCode){case 5:f.nalUnitType="slice_layer_without_partitioning_rbsp_idr";break;case 6:f.nalUnitType="sei_rbsp",f.escapedRBSP=a(d.subarray(1));break;case 7:f.nalUnitType="seq_parameter_set_rbsp",f.escapedRBSP=a(d.subarray(1)),f.config=o(f.escapedRBSP);break;case 8:f.nalUnitType="pic_parameter_set_rbsp";break;case 9:f.nalUnitType="access_unit_delimiter_rbsp";break}t.trigger("data",f)}),e.on("done",function(){t.trigger("done")}),e.on("partialdone",function(){t.trigger("partialdone")}),e.on("reset",function(){t.trigger("reset")}),e.on("endedtimeline",function(){t.trigger("endedtimeline")}),this.flush=function(){e.flush()},this.partialFlush=function(){e.partialFlush()},this.reset=function(){e.reset()},this.endTimeline=function(){e.endTimeline()},u=function(f,l){var h=8,y=8,b,x;for(b=0;b<f;b++)y!==0&&(x=l.readExpGolomb(),y=(h+x+256)%256),h=y===0?h:y},a=function(f){for(var l=f.byteLength,h=[],y=1,b,x;y<l-2;)f[y]===0&&f[y+1]===0&&f[y+2]===3?(h.push(y+2),y+=2):y++;if(h.length===0)return f;b=l-h.length,x=new Uint8Array(b);var T=0;for(y=0;y<b;T++,y++)T===h[0]&&(T++,h.shift()),x[y]=f[T];return x},o=function(f){var l=0,h=0,y=0,b=0,x,T,E,B,pe,kt,fi,di,li,Lt,ci,j=[1,1],pi,he;if(x=new ki(f),T=x.readUnsignedByte(),B=x.readUnsignedByte(),E=x.readUnsignedByte(),x.skipUnsignedExpGolomb(),Zt[T]&&(pe=x.readUnsignedExpGolomb(),pe===3&&x.skipBits(1),x.skipUnsignedExpGolomb(),x.skipUnsignedExpGolomb(),x.skipBits(1),x.readBoolean()))for(ci=pe!==3?8:12,he=0;he<ci;he++)x.readBoolean()&&(he<6?u(16,x):u(64,x));if(x.skipUnsignedExpGolomb(),kt=x.readUnsignedExpGolomb(),kt===0)x.readUnsignedExpGolomb();else if(kt===1)for(x.skipBits(1),x.skipExpGolomb(),x.skipExpGolomb(),fi=x.readUnsignedExpGolomb(),he=0;he<fi;he++)x.skipExpGolomb();if(x.skipUnsignedExpGolomb(),x.skipBits(1),di=x.readUnsignedExpGolomb(),li=x.readUnsignedExpGolomb(),Lt=x.readBits(1),Lt===0&&x.skipBits(1),x.skipBits(1),x.readBoolean()&&(l=x.readUnsignedExpGolomb(),h=x.readUnsignedExpGolomb(),y=x.readUnsignedExpGolomb(),b=x.readUnsignedExpGolomb()),x.readBoolean()&&x.readBoolean()){switch(pi=x.readUnsignedByte(),pi){case 1:j=[1,1];break;case 2:j=[12,11];break;case 3:j=[10,11];break;case 4:j=[16,11];break;case 5:j=[40,33];break;case 6:j=[24,11];break;case 7:j=[20,11];break;case 8:j=[32,11];break;case 9:j=[80,33];break;case 10:j=[18,11];break;case 11:j=[15,11];break;case 12:j=[64,33];break;case 13:j=[160,99];break;case 14:j=[4,3];break;case 15:j=[3,2];break;case 16:j=[2,1];break;case 255:{j=[x.readUnsignedByte()<<8|x.readUnsignedByte(),x.readUnsignedByte()<<8|x.readUnsignedByte()];break}}j&&j[0]/j[1]}return{profileIdc:T,levelIdc:E,profileCompatibility:B,width:(di+1)*16-l*2-h*2,height:(2-Lt)*(li+1)*16-y*2-b*2,sarRatio:j}}},Le.prototype=new m;var pt={H264Stream:Le,NalByteStream:Te},ht={Adts:_e,h264:pt},Qt=Math.pow(2,32),Li=function(e){var t=new DataView(e.buffer,e.byteOffset,e.byteLength),r;return t.getBigUint64?(r=t.getBigUint64(0),r<Number.MAX_SAFE_INTEGER?Number(r):r):t.getUint32(0)*Qt+t.getUint32(4)},we={getUint64:Li,MAX_UINT32:Qt},er=we.MAX_UINT32,I,tr,rr,mt,ir,nr,ar,sr,gt,or,ur,fr,dr,lr,cr,pr,hr,mr,gr,xr,yr,xt,w,yt,br,vr,Sr,_r,Tr,wr,Ir,Fr,Re,Ar,Dr,Ur;(function(){var s;if(w={avc1:[],avcC:[],btrt:[],dinf:[],dref:[],esds:[],ftyp:[],hdlr:[],mdat:[],mdhd:[],mdia:[],mfhd:[],minf:[],moof:[],moov:[],mp4a:[],mvex:[],mvhd:[],pasp:[],sdtp:[],smhd:[],stbl:[],stco:[],stsc:[],stsd:[],stsz:[],stts:[],styp:[],tfdt:[],tfhd:[],traf:[],trak:[],trun:[],trex:[],tkhd:[],vmhd:[]},!(typeof Uint8Array>"u")){for(s in w)w.hasOwnProperty(s)&&(w[s]=[s.charCodeAt(0),s.charCodeAt(1),s.charCodeAt(2),s.charCodeAt(3)]);yt=new Uint8Array(["i".charCodeAt(0),"s".charCodeAt(0),"o".charCodeAt(0),"m".charCodeAt(0)]),vr=new Uint8Array(["a".charCodeAt(0),"v".charCodeAt(0),"c".charCodeAt(0),"1".charCodeAt(0)]),br=new Uint8Array([0,0,0,1]),Sr=new Uint8Array([0,0,0,0,0,0,0,0,118,105,100,101,0,0,0,0,0,0,0,0,0,0,0,0,86,105,100,101,111,72,97,110,100,108,101,114,0]),_r=new Uint8Array([0,0,0,0,0,0,0,0,115,111,117,110,0,0,0,0,0,0,0,0,0,0,0,0,83,111,117,110,100,72,97,110,100,108,101,114,0]),Tr={video:Sr,audio:_r},Fr=new Uint8Array([0,0,0,0,0,0,0,1,0,0,0,12,117,114,108,32,0,0,0,1]),Ir=new Uint8Array([0,0,0,0,0,0,0,0]),Re=new Uint8Array([0,0,0,0,0,0,0,0]),Ar=Re,Dr=new Uint8Array([0,0,0,0,0,0,0,0,0,0,0,0]),Ur=Re,wr=new Uint8Array([0,0,0,1,0,0,0,0,0,0,0,0])}})(),I=function(e){var t=[],r=0,i,n,a;for(i=1;i<arguments.length;i++)t.push(arguments[i]);for(i=t.length;i--;)r+=t[i].byteLength;for(n=new Uint8Array(r+8),a=new DataView(n.buffer,n.byteOffset,n.byteLength),a.setUint32(0,n.byteLength),n.set(e,4),i=0,r=8;i<t.length;i++)n.set(t[i],r),r+=t[i].byteLength;return n},tr=function(){return I(w.dinf,I(w.dref,Fr))},rr=function(e){return I(w.esds,new Uint8Array([0,0,0,0,3,25,0,0,0,4,17,64,21,0,6,0,0,0,218,192,0,0,218,192,5,2,e.audioobjecttype<<3|e.samplingfrequencyindex>>>1,e.samplingfrequencyindex<<7|e.channelcount<<3,6,1,2]))},mt=function(){return I(w.ftyp,yt,br,yt,vr)},pr=function(e){return I(w.hdlr,Tr[e])},ir=function(e){return I(w.mdat,e)},cr=function(e){var t=new Uint8Array([0,0,0,0,0,0,0,2,0,0,0,3,0,1,95,144,e.duration>>>24&255,e.duration>>>16&255,e.duration>>>8&255,e.duration&255,85,196,0,0]);return e.samplerate&&(t[12]=e.samplerate>>>24&255,t[13]=e.samplerate>>>16&255,t[14]=e.samplerate>>>8&255,t[15]=e.samplerate&255),I(w.mdhd,t)},lr=function(e){return I(w.mdia,cr(e),pr(e.type),ar(e))},nr=function(e){return I(w.mfhd,new Uint8Array([0,0,0,0,(e&4278190080)>>24,(e&16711680)>>16,(e&65280)>>8,e&255]))},ar=function(e){return I(w.minf,e.type==="video"?I(w.vmhd,wr):I(w.smhd,Ir),tr(),mr(e))},sr=function(e,t){for(var r=[],i=t.length;i--;)r[i]=xr(t[i]);return I.apply(null,[w.moof,nr(e)].concat(r))},gt=function(e){for(var t=e.length,r=[];t--;)r[t]=fr(e[t]);return I.apply(null,[w.moov,ur(4294967295)].concat(r).concat(or(e)))},or=function(e){for(var t=e.length,r=[];t--;)r[t]=yr(e[t]);return I.apply(null,[w.mvex].concat(r))},ur=function(e){var t=new Uint8Array([0,0,0,0,0,0,0,1,0,0,0,2,0,1,95,144,(e&4278190080)>>24,(e&16711680)>>16,(e&65280)>>8,e&255,0,1,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,64,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,255,255,255,255]);return I(w.mvhd,t)},hr=function(e){var t=e.samples||[],r=new Uint8Array(4+t.length),i,n;for(n=0;n<t.length;n++)i=t[n].flags,r[n+4]=i.dependsOn<<4|i.isDependedOn<<2|i.hasRedundancy;return I(w.sdtp,r)},mr=function(e){return I(w.stbl,gr(e),I(w.stts,Ur),I(w.stsc,Ar),I(w.stsz,Dr),I(w.stco,Re))},function(){var s,e;gr=function(r){return I(w.stsd,new Uint8Array([0,0,0,0,0,0,0,1]),r.type==="video"?s(r):e(r))},s=function(r){var i=r.sps||[],n=r.pps||[],a=[],o=[],u,d;for(u=0;u<i.length;u++)a.push((i[u].byteLength&65280)>>>8),a.push(i[u].byteLength&255),a=a.concat(Array.prototype.slice.call(i[u]));for(u=0;u<n.length;u++)o.push((n[u].byteLength&65280)>>>8),o.push(n[u].byteLength&255),o=o.concat(Array.prototype.slice.call(n[u]));if(d=[w.avc1,new Uint8Array([0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,(r.width&65280)>>8,r.width&255,(r.height&65280)>>8,r.height&255,0,72,0,0,0,72,0,0,0,0,0,0,0,1,19,118,105,100,101,111,106,115,45,99,111,110,116,114,105,98,45,104,108,115,0,0,0,0,0,0,0,0,0,0,0,0,0,24,17,17]),I(w.avcC,new Uint8Array([1,r.profileIdc,r.profileCompatibility,r.levelIdc,255].concat([i.length],a,[n.length],o))),I(w.btrt,new Uint8Array([0,28,156,128,0,45,198,192,0,45,198,192]))],r.sarRatio){var f=r.sarRatio[0],l=r.sarRatio[1];d.push(I(w.pasp,new Uint8Array([(f&4278190080)>>24,(f&16711680)>>16,(f&65280)>>8,f&255,(l&4278190080)>>24,(l&16711680)>>16,(l&65280)>>8,l&255])))}return I.apply(null,d)},e=function(r){return I(w.mp4a,new Uint8Array([0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,(r.channelcount&65280)>>8,r.channelcount&255,(r.samplesize&65280)>>8,r.samplesize&255,0,0,0,0,(r.samplerate&65280)>>8,r.samplerate&255,0,0]),rr(r))}}(),dr=function(e){var t=new Uint8Array([0,0,0,7,0,0,0,0,0,0,0,0,(e.id&4278190080)>>24,(e.id&16711680)>>16,(e.id&65280)>>8,e.id&255,0,0,0,0,(e.duration&4278190080)>>24,(e.duration&16711680)>>16,(e.duration&65280)>>8,e.duration&255,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,64,0,0,0,(e.width&65280)>>8,e.width&255,0,0,(e.height&65280)>>8,e.height&255,0,0]);return I(w.tkhd,t)},xr=function(e){var t,r,i,n,a,o,u;return t=I(w.tfhd,new Uint8Array([0,0,0,58,(e.id&4278190080)>>24,(e.id&16711680)>>16,(e.id&65280)>>8,e.id&255,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0])),o=Math.floor(e.baseMediaDecodeTime/er),u=Math.floor(e.baseMediaDecodeTime%er),r=I(w.tfdt,new Uint8Array([1,0,0,0,o>>>24&255,o>>>16&255,o>>>8&255,o&255,u>>>24&255,u>>>16&255,u>>>8&255,u&255])),a=32+20+8+16+8+8,e.type==="audio"?(i=xt(e,a),I(w.traf,t,r,i)):(n=hr(e),i=xt(e,n.length+a),I(w.traf,t,r,i,n))},fr=function(e){return e.duration=e.duration||4294967295,I(w.trak,dr(e),lr(e))},yr=function(e){var t=new Uint8Array([0,0,0,0,(e.id&4278190080)>>24,(e.id&16711680)>>16,(e.id&65280)>>8,e.id&255,0,0,0,1,0,0,0,0,0,0,0,0,0,1,0,1]);return e.type!=="video"&&(t[t.length-1]=0),I(w.trex,t)},function(){var s,e,t;t=function(i,n){var a=0,o=0,u=0,d=0;return i.length&&(i[0].duration!==void 0&&(a=1),i[0].size!==void 0&&(o=2),i[0].flags!==void 0&&(u=4),i[0].compositionTimeOffset!==void 0&&(d=8)),[0,0,a|o|u|d,1,(i.length&4278190080)>>>24,(i.length&16711680)>>>16,(i.length&65280)>>>8,i.length&255,(n&4278190080)>>>24,(n&16711680)>>>16,(n&65280)>>>8,n&255]},e=function(i,n){var a,o,u,d,f,l;for(d=i.samples||[],n+=8+12+16*d.length,u=t(d,n),o=new Uint8Array(u.length+d.length*16),o.set(u),a=u.length,l=0;l<d.length;l++)f=d[l],o[a++]=(f.duration&4278190080)>>>24,o[a++]=(f.duration&16711680)>>>16,o[a++]=(f.duration&65280)>>>8,o[a++]=f.duration&255,o[a++]=(f.size&4278190080)>>>24,o[a++]=(f.size&16711680)>>>16,o[a++]=(f.size&65280)>>>8,o[a++]=f.size&255,o[a++]=f.flags.isLeading<<2|f.flags.dependsOn,o[a++]=f.flags.isDependedOn<<6|f.flags.hasRedundancy<<4|f.flags.paddingValue<<1|f.flags.isNonSyncSample,o[a++]=f.flags.degradationPriority&240<<8,o[a++]=f.flags.degradationPriority&15,o[a++]=(f.compositionTimeOffset&4278190080)>>>24,o[a++]=(f.compositionTimeOffset&16711680)>>>16,o[a++]=(f.compositionTimeOffset&65280)>>>8,o[a++]=f.compositionTimeOffset&255;return I(w.trun,o)},s=function(i,n){var a,o,u,d,f,l;for(d=i.samples||[],n+=8+12+8*d.length,u=t(d,n),a=new Uint8Array(u.length+d.length*8),a.set(u),o=u.length,l=0;l<d.length;l++)f=d[l],a[o++]=(f.duration&4278190080)>>>24,a[o++]=(f.duration&16711680)>>>16,a[o++]=(f.duration&65280)>>>8,a[o++]=f.duration&255,a[o++]=(f.size&4278190080)>>>24,a[o++]=(f.size&16711680)>>>16,a[o++]=(f.size&65280)>>>8,a[o++]=f.size&255;return I(w.trun,a)},xt=function(i,n){return i.type==="audio"?s(i,n):e(i,n)}}();var X={ftyp:mt,mdat:ir,moof:sr,moov:gt,initSegment:function(e){var t=mt(),r=gt(e),i;return i=new Uint8Array(t.byteLength+r.byteLength),i.set(t),i.set(r,t.byteLength),i}},Ri=function(e){return e>>>0},Bi=function(e){return("00"+e.toString(16)).slice(-2)},Be={toUnsigned:Ri,toHexString:Bi},Ni=function(e){var t="";return t+=String.fromCharCode(e[0]),t+=String.fromCharCode(e[1]),t+=String.fromCharCode(e[2]),t+=String.fromCharCode(e[3]),t},K=Ni,ji=Be.toUnsigned,Wi=function s(e,t){var r=[],i,n,a,o,u;if(!t.length)return null;for(i=0;i<e.byteLength;)n=ji(e[i]<<24|e[i+1]<<16|e[i+2]<<8|e[i+3]),a=K(e.subarray(i+4,i+8)),o=n>1?i+n:e.byteLength,a===t[0]&&(t.length===1?r.push(e.subarray(i+8,o)):(u=s(e.subarray(i+8,o),t.slice(1)),u.length&&(r=r.concat(u)))),i=o;return r},O=Wi,zi=function(e){var t=new DataView(e.buffer,e.byteOffset,e.byteLength),r={version:e[0],flags:new Uint8Array(e.subarray(1,4)),trackId:t.getUint32(4)},i=r.flags[2]&1,n=r.flags[2]&2,a=r.flags[2]&8,o=r.flags[2]&16,u=r.flags[2]&32,d=r.flags[0]&65536,f=r.flags[0]&131072,l;return l=8,i&&(l+=4,r.baseDataOffset=t.getUint32(12),l+=4),n&&(r.sampleDescriptionIndex=t.getUint32(l),l+=4),a&&(r.defaultSampleDuration=t.getUint32(l),l+=4),o&&(r.defaultSampleSize=t.getUint32(l),l+=4),u&&(r.defaultSampleFlags=t.getUint32(l)),d&&(r.durationIsEmpty=!0),!i&&f&&(r.baseDataOffsetIsMoof=!0),r},bt=zi,Vi=function(e){return{isLeading:(e[0]&12)>>>2,dependsOn:e[0]&3,isDependedOn:(e[1]&192)>>>6,hasRedundancy:(e[1]&48)>>>4,paddingValue:(e[1]&14)>>>1,isNonSyncSample:e[1]&1,degradationPriority:e[2]<<8|e[3]}},Cr=Vi,Gi=function(e){var t={version:e[0],flags:new Uint8Array(e.subarray(1,4)),samples:[]},r=new DataView(e.buffer,e.byteOffset,e.byteLength),i=t.flags[2]&1,n=t.flags[2]&4,a=t.flags[1]&1,o=t.flags[1]&2,u=t.flags[1]&4,d=t.flags[1]&8,f=r.getUint32(4),l=8,h;for(i&&(t.dataOffset=r.getInt32(l),l+=4),n&&f&&(h={flags:Cr(e.subarray(l,l+4))},l+=4,a&&(h.duration=r.getUint32(l),l+=4),o&&(h.size=r.getUint32(l),l+=4),d&&(t.version===1?h.compositionTimeOffset=r.getInt32(l):h.compositionTimeOffset=r.getUint32(l),l+=4),t.samples.push(h),f--);f--;)h={},a&&(h.duration=r.getUint32(l),l+=4),o&&(h.size=r.getUint32(l),l+=4),u&&(h.flags=Cr(e.subarray(l,l+4)),l+=4),d&&(t.version===1?h.compositionTimeOffset=r.getInt32(l):h.compositionTimeOffset=r.getUint32(l),l+=4),t.samples.push(h);return t},vt=Gi,qi=Be.toUnsigned,Hi=we.getUint64,$i=function(e){var t={version:e[0],flags:new Uint8Array(e.subarray(1,4))};return t.version===1?t.baseMediaDecodeTime=Hi(e.subarray(4)):t.baseMediaDecodeTime=qi(e[4]<<24|e[5]<<16|e[6]<<8|e[7]),t},St=$i,Ne=Be.toUnsigned,Ie=Be.toHexString,Yi=we.getUint64,Mr,Pr,Er,Or,kr,_t;Mr=function(e){var t={},r=O(e,["moov","trak"]);return r.reduce(function(i,n){var a,o,u,d,f;return a=O(n,["tkhd"])[0],!a||(o=a[0],u=o===0?12:20,d=Ne(a[u]<<24|a[u+1]<<16|a[u+2]<<8|a[u+3]),f=O(n,["mdia","mdhd"])[0],!f)?null:(o=f[0],u=o===0?12:20,i[d]=Ne(f[u]<<24|f[u+1]<<16|f[u+2]<<8|f[u+3]),i)},t)},Pr=function(e,t){var r;r=O(t,["moof","traf"]);var i=r.reduce(function(n,a){var o=O(a,["tfhd"])[0],u=Ne(o[4]<<24|o[5]<<16|o[6]<<8|o[7]),d=e[u]||9e4,f=O(a,["tfdt"])[0],l=new DataView(f.buffer,f.byteOffset,f.byteLength),h;f[0]===1?h=Yi(f.subarray(4,12)):h=l.getUint32(4);var y;return typeof h=="bigint"?y=h/g.default.BigInt(d):typeof h=="number"&&!isNaN(h)&&(y=h/d),y<Number.MAX_SAFE_INTEGER&&(y=Number(y)),y<n&&(n=y),n},1/0);return typeof i=="bigint"||isFinite(i)?i:0},Er=function(e,t){var r=O(t,["moof","traf"]),i=0,n=0,a;if(r&&r.length){var o=O(r[0],["tfhd"])[0],u=O(r[0],["trun"])[0],d=O(r[0],["tfdt"])[0];if(o){var f=bt(o);a=f.trackId}if(d){var l=St(d);i=l.baseMediaDecodeTime}if(u){var h=vt(u);h.samples&&h.samples.length&&(n=h.samples[0].compositionTimeOffset||0)}}var y=e[a]||9e4;typeof i=="bigint"&&(n=g.default.BigInt(n),y=g.default.BigInt(y));var b=(i+n)/y;return typeof b=="bigint"&&b<Number.MAX_SAFE_INTEGER&&(b=Number(b)),b},Or=function(e){var t=O(e,["moov","trak"]),r=[];return t.forEach(function(i){var n=O(i,["mdia","hdlr"]),a=O(i,["tkhd"]);n.forEach(function(o,u){var d=K(o.subarray(8,12)),f=a[u],l,h,y;d==="vide"&&(l=new DataView(f.buffer,f.byteOffset,f.byteLength),h=l.getUint8(0),y=h===0?l.getUint32(12):l.getUint32(20),r.push(y))})}),r},_t=function(e){var t=e[0],r=t===0?12:20;return Ne(e[r]<<24|e[r+1]<<16|e[r+2]<<8|e[r+3])},kr=function(e){var t=O(e,["moov","trak"]),r=[];return t.forEach(function(i){var n={},a=O(i,["tkhd"])[0],o,u;a&&(o=new DataView(a.buffer,a.byteOffset,a.byteLength),u=o.getUint8(0),n.id=u===0?o.getUint32(12):o.getUint32(20));var d=O(i,["mdia","hdlr"])[0];if(d){var f=K(d.subarray(8,12));f==="vide"?n.type="video":f==="soun"?n.type="audio":n.type=f}var l=O(i,["mdia","minf","stbl","stsd"])[0];if(l){var h=l.subarray(8);n.codec=K(h.subarray(4,8));var y=O(h,[n.codec])[0],b,x;y&&(/^[asm]vc[1-9]$/i.test(n.codec)?(b=y.subarray(78),x=K(b.subarray(4,8)),x==="avcC"&&b.length>11?(n.codec+=".",n.codec+=Ie(b[9]),n.codec+=Ie(b[10]),n.codec+=Ie(b[11])):n.codec="avc1.4d400d"):/^mp4[a,v]$/i.test(n.codec)?(b=y.subarray(28),x=K(b.subarray(4,8)),x==="esds"&&b.length>20&&b[19]!==0?(n.codec+="."+Ie(b[19]),n.codec+="."+Ie(b[20]>>>2&63).replace(/^0/,"")):n.codec="mp4a.40.2"):n.codec=n.codec.toLowerCase())}var T=O(i,["mdia","mdhd"])[0];T&&(n.timescale=_t(T)),r.push(n)}),r};var Xi={findBox:O,parseType:K,timescale:Mr,startTime:Pr,compositionStartTime:Er,videoTrackIds:Or,tracks:kr,getTimescaleFromMediaHeader:_t},Ki=function(e){var t,r,i=[],n=[];for(n.byteLength=0,n.nalCount=0,n.duration=0,i.byteLength=0,t=0;t<e.length;t++)r=e[t],r.nalUnitType==="access_unit_delimiter_rbsp"?(i.length&&(i.duration=r.dts-i.dts,n.byteLength+=i.byteLength,n.nalCount+=i.length,n.duration+=i.duration,n.push(i)),i=[r],i.byteLength=r.data.byteLength,i.pts=r.pts,i.dts=r.dts):(r.nalUnitType==="slice_layer_without_partitioning_rbsp_idr"&&(i.keyFrame=!0),i.duration=r.dts-i.dts,i.byteLength+=r.data.byteLength,i.push(r));return n.length&&(!i.duration||i.duration<=0)&&(i.duration=n[n.length-1].duration),n.byteLength+=i.byteLength,n.nalCount+=i.length,n.duration+=i.duration,n.push(i),n},Ji=function(e){var t,r,i=[],n=[];for(i.byteLength=0,i.nalCount=0,i.duration=0,i.pts=e[0].pts,i.dts=e[0].dts,n.byteLength=0,n.nalCount=0,n.duration=0,n.pts=e[0].pts,n.dts=e[0].dts,t=0;t<e.length;t++)r=e[t],r.keyFrame?(i.length&&(n.push(i),n.byteLength+=i.byteLength,n.nalCount+=i.nalCount,n.duration+=i.duration),i=[r],i.nalCount=r.length,i.byteLength=r.byteLength,i.pts=r.pts,i.dts=r.dts,i.duration=r.duration):(i.duration+=r.duration,i.nalCount+=r.length,i.byteLength+=r.byteLength,i.push(r));return n.length&&i.duration<=0&&(i.duration=n[n.length-1].duration),n.byteLength+=i.byteLength,n.nalCount+=i.nalCount,n.duration+=i.duration,n.push(i),n},Zi=function(e){var t;return!e[0][0].keyFrame&&e.length>1&&(t=e.shift(),e.byteLength-=t.byteLength,e.nalCount-=t.nalCount,e[0][0].dts=t.dts,e[0][0].pts=t.pts,e[0][0].duration+=t.duration),e},Qi=function(){return{size:0,flags:{isLeading:0,dependsOn:1,isDependedOn:0,hasRedundancy:0,degradationPriority:0,isNonSyncSample:1}}},Lr=function(e,t){var r=Qi();return r.dataOffset=t,r.compositionTimeOffset=e.pts-e.dts,r.duration=e.duration,r.size=4*e.length,r.size+=e.byteLength,e.keyFrame&&(r.flags.dependsOn=2,r.flags.isNonSyncSample=0),r},en=function(e,t){var r,i,n,a,o,u=t||0,d=[];for(r=0;r<e.length;r++)for(a=e[r],i=0;i<a.length;i++)o=a[i],n=Lr(o,u),u+=n.size,d.push(n);return d},tn=function(e){var t,r,i,n,a,o,u=0,d=e.byteLength,f=e.nalCount,l=d+4*f,h=new Uint8Array(l),y=new DataView(h.buffer);for(t=0;t<e.length;t++)for(n=e[t],r=0;r<n.length;r++)for(a=n[r],i=0;i<a.length;i++)o=a[i],y.setUint32(u,o.data.byteLength),u+=4,h.set(o.data,u),u+=o.data.byteLength;return h},rn=function(e,t){var r,i=t||0,n=[];return r=Lr(e,i),n.push(r),n},nn=function(e){var t,r,i=0,n=e.byteLength,a=e.length,o=n+4*a,u=new Uint8Array(o),d=new DataView(u.buffer);for(t=0;t<e.length;t++)r=e[t],d.setUint32(i,r.data.byteLength),i+=4,u.set(r.data,i),i+=r.data.byteLength;return u},Q={groupNalsIntoFrames:Ki,groupFramesIntoGops:Ji,extendFirstKeyFrame:Zi,generateSampleTable:en,concatenateNalData:tn,generateSampleTableForFrame:rn,concatenateNalDataForFrame:nn},ae=[33,16,5,32,164,27],Tt=[33,65,108,84,1,2,4,8,168,2,4,8,17,191,252],C=function(e){for(var t=[];e--;)t.push(0);return t},an=function(e){return Object.keys(e).reduce(function(t,r){return t[r]=new Uint8Array(e[r].reduce(function(i,n){return i.concat(n)},[])),t},{})},wt,sn=function(){if(!wt){var e={96e3:[ae,[227,64],C(154),[56]],88200:[ae,[231],C(170),[56]],64e3:[ae,[248,192],C(240),[56]],48e3:[ae,[255,192],C(268),[55,148,128],C(54),[112]],44100:[ae,[255,192],C(268),[55,163,128],C(84),[112]],32e3:[ae,[255,192],C(268),[55,234],C(226),[112]],24e3:[ae,[255,192],C(268),[55,255,128],C(268),[111,112],C(126),[224]],16e3:[ae,[255,192],C(268),[55,255,128],C(268),[111,255],C(269),[223,108],C(195),[1,192]],12e3:[Tt,C(268),[3,127,248],C(268),[6,255,240],C(268),[13,255,224],C(268),[27,253,128],C(259),[56]],11025:[Tt,C(268),[3,127,248],C(268),[6,255,240],C(268),[13,255,224],C(268),[27,255,192],C(268),[55,175,128],C(108),[112]],8e3:[Tt,C(268),[3,121,16],C(47),[7]]};wt=an(e)}return wt},on=function(e){var t,r,i=0;for(t=0;t<e.length;t++)r=e[t],i+=r.data.byteLength;return i},un=function(e,t,r,i){var n,a=0,o=0,u=0,d=0,f,l,h;if(!!t.length&&(n=V.audioTsToVideoTs(e.baseMediaDecodeTime,e.samplerate),a=Math.ceil(V.ONE_SECOND_IN_TS/(e.samplerate/1024)),r&&i&&(o=n-Math.max(r,i),u=Math.floor(o/a),d=u*a),!(u<1||d>V.ONE_SECOND_IN_TS/2))){for(f=sn()[e.samplerate],f||(f=t[0].data),l=0;l<u;l++)h=t[0],t.splice(0,0,{data:f,dts:h.dts-a,pts:h.pts-a});return e.baseMediaDecodeTime-=Math.floor(V.videoTsToAudioTs(d,e.samplerate)),d}},fn=function(e,t,r){return t.minSegmentDts>=r?e:(t.minSegmentDts=1/0,e.filter(function(i){return i.dts>=r?(t.minSegmentDts=Math.min(t.minSegmentDts,i.dts),t.minSegmentPts=t.minSegmentDts,!0):!1}))},dn=function(e){var t,r,i=[];for(t=0;t<e.length;t++)r=e[t],i.push({size:r.data.byteLength,duration:1024});return i},ln=function(e){var t,r,i=0,n=new Uint8Array(on(e));for(t=0;t<e.length;t++)r=e[t],n.set(r.data,i),i+=r.data.byteLength;return n},se={prefixWithSilence:un,trimAdtsFramesByEarliestDts:fn,generateSampleTable:dn,concatenateFrameData:ln},cn=V.ONE_SECOND_IN_TS,pn=function(e,t){typeof t.pts=="number"&&(e.timelineStartInfo.pts===void 0&&(e.timelineStartInfo.pts=t.pts),e.minSegmentPts===void 0?e.minSegmentPts=t.pts:e.minSegmentPts=Math.min(e.minSegmentPts,t.pts),e.maxSegmentPts===void 0?e.maxSegmentPts=t.pts:e.maxSegmentPts=Math.max(e.maxSegmentPts,t.pts)),typeof t.dts=="number"&&(e.timelineStartInfo.dts===void 0&&(e.timelineStartInfo.dts=t.dts),e.minSegmentDts===void 0?e.minSegmentDts=t.dts:e.minSegmentDts=Math.min(e.minSegmentDts,t.dts),e.maxSegmentDts===void 0?e.maxSegmentDts=t.dts:e.maxSegmentDts=Math.max(e.maxSegmentDts,t.dts))},hn=function(e){delete e.minSegmentDts,delete e.maxSegmentDts,delete e.minSegmentPts,delete e.maxSegmentPts},mn=function(e,t){var r,i,n=e.minSegmentDts;return t||(n-=e.timelineStartInfo.dts),r=e.timelineStartInfo.baseMediaDecodeTime,r+=n,r=Math.max(0,r),e.type==="audio"&&(i=e.samplerate/cn,r*=i,r=Math.floor(r)),r},N={clearDtsInfo:hn,calculateTrackBaseMediaDecodeTime:mn,collectDtsInfo:pn},Rr=4,gn=128,xn=function(e){for(var t=0,r={payloadType:-1,payloadSize:0},i=0,n=0;t<e.byteLength&&e[t]!==gn;){for(;e[t]===255;)i+=255,t++;for(i+=e[t++];e[t]===255;)n+=255,t++;if(n+=e[t++],!r.payload&&i===Rr){var a=String.fromCharCode(e[t+3],e[t+4],e[t+5],e[t+6]);if(a==="GA94"){r.payloadType=i,r.payloadSize=n,r.payload=e.subarray(t,t+n);break}else r.payload=void 0}t+=n,i=0,n=0}return r},yn=function(e){return e.payload[0]!==181||(e.payload[1]<<8|e.payload[2])!==49||String.fromCharCode(e.payload[3],e.payload[4],e.payload[5],e.payload[6])!=="GA94"||e.payload[7]!==3?null:e.payload.subarray(8,e.payload.length-1)},bn=function(e,t){var r=[],i,n,a,o;if(!(t[0]&64))return r;for(n=t[0]&31,i=0;i<n;i++)a=i*3,o={type:t[a+2]&3,pts:e},t[a+2]&4&&(o.ccData=t[a+3]<<8|t[a+4],r.push(o));return r},vn=function(e){for(var t=e.byteLength,r=[],i=1,n,a;i<t-2;)e[i]===0&&e[i+1]===0&&e[i+2]===3?(r.push(i+2),i+=2):i++;if(r.length===0)return e;n=t-r.length,a=new Uint8Array(n);var o=0;for(i=0;i<n;o++,i++)o===r[0]&&(o++,r.shift()),a[i]=e[o];return a},Fe={parseSei:xn,parseUserData:yn,parseCaptionPackets:bn,discardEmulationPreventionBytes:vn,USER_DATA_REGISTERED_ITU_T_T35:Rr},Y=function s(e){e=e||{},s.prototype.init.call(this),this.parse708captions_=typeof e.parse708captions=="boolean"?e.parse708captions:!0,this.captionPackets_=[],this.ccStreams_=[new R(0,0),new R(0,1),new R(1,0),new R(1,1)],this.parse708captions_&&(this.cc708Stream_=new k({captionServices:e.captionServices})),this.reset(),this.ccStreams_.forEach(function(t){t.on("data",this.trigger.bind(this,"data")),t.on("partialdone",this.trigger.bind(this,"partialdone")),t.on("done",this.trigger.bind(this,"done"))},this),this.parse708captions_&&(this.cc708Stream_.on("data",this.trigger.bind(this,"data")),this.cc708Stream_.on("partialdone",this.trigger.bind(this,"partialdone")),this.cc708Stream_.on("done",this.trigger.bind(this,"done")))};Y.prototype=new m,Y.prototype.push=function(s){var e,t,r;if(s.nalUnitType==="sei_rbsp"&&(e=Fe.parseSei(s.escapedRBSP),!!e.payload&&e.payloadType===Fe.USER_DATA_REGISTERED_ITU_T_T35&&(t=Fe.parseUserData(e),!!t))){if(s.dts<this.latestDts_){this.ignoreNextEqualDts_=!0;return}else if(s.dts===this.latestDts_&&this.ignoreNextEqualDts_){this.numSameDts_--,this.numSameDts_||(this.ignoreNextEqualDts_=!1);return}r=Fe.parseCaptionPackets(s.pts,t),this.captionPackets_=this.captionPackets_.concat(r),this.latestDts_!==s.dts&&(this.numSameDts_=0),this.numSameDts_++,this.latestDts_=s.dts}},Y.prototype.flushCCStreams=function(s){this.ccStreams_.forEach(function(e){return s==="flush"?e.flush():e.partialFlush()},this)},Y.prototype.flushStream=function(s){if(!this.captionPackets_.length){this.flushCCStreams(s);return}this.captionPackets_.forEach(function(e,t){e.presortIndex=t}),this.captionPackets_.sort(function(e,t){return e.pts===t.pts?e.presortIndex-t.presortIndex:e.pts-t.pts}),this.captionPackets_.forEach(function(e){e.type<2?this.dispatchCea608Packet(e):this.dispatchCea708Packet(e)},this),this.captionPackets_.length=0,this.flushCCStreams(s)},Y.prototype.flush=function(){return this.flushStream("flush")},Y.prototype.partialFlush=function(){return this.flushStream("partialFlush")},Y.prototype.reset=function(){this.latestDts_=null,this.ignoreNextEqualDts_=!1,this.numSameDts_=0,this.activeCea608Channel_=[null,null],this.ccStreams_.forEach(function(s){s.reset()})},Y.prototype.dispatchCea608Packet=function(s){this.setsTextOrXDSActive(s)?this.activeCea608Channel_[s.type]=null:this.setsChannel1Active(s)?this.activeCea608Channel_[s.type]=0:this.setsChannel2Active(s)&&(this.activeCea608Channel_[s.type]=1),this.activeCea608Channel_[s.type]!==null&&this.ccStreams_[(s.type<<1)+this.activeCea608Channel_[s.type]].push(s)},Y.prototype.setsChannel1Active=function(s){return(s.ccData&30720)===4096},Y.prototype.setsChannel2Active=function(s){return(s.ccData&30720)===6144},Y.prototype.setsTextOrXDSActive=function(s){return(s.ccData&28928)===256||(s.ccData&30974)===4138||(s.ccData&30974)===6186},Y.prototype.dispatchCea708Packet=function(s){this.parse708captions_&&this.cc708Stream_.push(s)};var Sn={127:9834,4128:32,4129:160,4133:8230,4138:352,4140:338,4144:9608,4145:8216,4146:8217,4147:8220,4148:8221,4149:8226,4153:8482,4154:353,4156:339,4157:8480,4159:376,4214:8539,4215:8540,4216:8541,4217:8542,4218:9168,4219:9124,4220:9123,4221:9135,4222:9126,4223:9121,4256:12600},_n=function(e){var t=Sn[e]||e;return e&4096&&e===t?"":String.fromCharCode(t)},je=function(e){return 32<=e&&e<=127||160<=e&&e<=255},re=function(e){this.windowNum=e,this.reset()};re.prototype.reset=function(){this.clearText(),this.pendingNewLine=!1,this.winAttr={},this.penAttr={},this.penLoc={},this.penColor={},this.visible=0,this.rowLock=0,this.columnLock=0,this.priority=0,this.relativePositioning=0,this.anchorVertical=0,this.anchorHorizontal=0,this.anchorPoint=0,this.rowCount=1,this.virtualRowCount=this.rowCount+1,this.columnCount=41,this.windowStyle=0,this.penStyle=0},re.prototype.getText=function(){return this.rows.join(`
-`)},re.prototype.clearText=function(){this.rows=[""],this.rowIdx=0},re.prototype.newLine=function(s){for(this.rows.length>=this.virtualRowCount&&typeof this.beforeRowOverflow=="function"&&this.beforeRowOverflow(s),this.rows.length>0&&(this.rows.push(""),this.rowIdx++);this.rows.length>this.virtualRowCount;)this.rows.shift(),this.rowIdx--},re.prototype.isEmpty=function(){return this.rows.length===0?!0:this.rows.length===1?this.rows[0]==="":!1},re.prototype.addText=function(s){this.rows[this.rowIdx]+=s},re.prototype.backspace=function(){if(!this.isEmpty()){var s=this.rows[this.rowIdx];this.rows[this.rowIdx]=s.substr(0,s.length-1)}};var We=function(e,t,r){this.serviceNum=e,this.text="",this.currentWindow=new re(-1),this.windows=[],this.stream=r,typeof t=="string"&&this.createTextDecoder(t)};We.prototype.init=function(s,e){this.startPts=s;for(var t=0;t<8;t++)this.windows[t]=new re(t),typeof e=="function"&&(this.windows[t].beforeRowOverflow=e)},We.prototype.setCurrentWindow=function(s){this.currentWindow=this.windows[s]},We.prototype.createTextDecoder=function(s){if(typeof TextDecoder>"u")this.stream.trigger("log",{level:"warn",message:"The `encoding` option is unsupported without TextDecoder support"});else try{this.textDecoder_=new TextDecoder(s)}catch(e){this.stream.trigger("log",{level:"warn",message:"TextDecoder could not be created with "+s+" encoding. "+e})}};var k=function s(e){e=e||{},s.prototype.init.call(this);var t=this,r=e.captionServices||{},i={},n;Object.keys(r).forEach(function(a){n=r[a],/^SERVICE/.test(a)&&(i[a]=n.encoding)}),this.serviceEncodings=i,this.current708Packet=null,this.services={},this.push=function(a){a.type===3?(t.new708Packet(),t.add708Bytes(a)):(t.current708Packet===null&&t.new708Packet(),t.add708Bytes(a))}};k.prototype=new m,k.prototype.new708Packet=function(){this.current708Packet!==null&&this.push708Packet(),this.current708Packet={data:[],ptsVals:[]}},k.prototype.add708Bytes=function(s){var e=s.ccData,t=e>>>8,r=e&255;this.current708Packet.ptsVals.push(s.pts),this.current708Packet.data.push(t),this.current708Packet.data.push(r)},k.prototype.push708Packet=function(){var s=this.current708Packet,e=s.data,t=null,r=null,i=0,n=e[i++];for(s.seq=n>>6,s.sizeCode=n&63;i<e.length;i++)n=e[i++],t=n>>5,r=n&31,t===7&&r>0&&(n=e[i++],t=n),this.pushServiceBlock(t,i,r),r>0&&(i+=r-1)},k.prototype.pushServiceBlock=function(s,e,t){var r,i=e,n=this.current708Packet.data,a=this.services[s];for(a||(a=this.initService(s,i));i<e+t&&i<n.length;i++)r=n[i],je(r)?i=this.handleText(i,a):r===24?i=this.multiByteCharacter(i,a):r===16?i=this.extendedCommands(i,a):128<=r&&r<=135?i=this.setCurrentWindow(i,a):152<=r&&r<=159?i=this.defineWindow(i,a):r===136?i=this.clearWindows(i,a):r===140?i=this.deleteWindows(i,a):r===137?i=this.displayWindows(i,a):r===138?i=this.hideWindows(i,a):r===139?i=this.toggleWindows(i,a):r===151?i=this.setWindowAttributes(i,a):r===144?i=this.setPenAttributes(i,a):r===145?i=this.setPenColor(i,a):r===146?i=this.setPenLocation(i,a):r===143?a=this.reset(i,a):r===8?a.currentWindow.backspace():r===12?a.currentWindow.clearText():r===13?a.currentWindow.pendingNewLine=!0:r===14?a.currentWindow.clearText():r===141&&i++},k.prototype.extendedCommands=function(s,e){var t=this.current708Packet.data,r=t[++s];return je(r)&&(s=this.handleText(s,e,{isExtended:!0})),s},k.prototype.getPts=function(s){return this.current708Packet.ptsVals[Math.floor(s/2)]},k.prototype.initService=function(s,e){var r="SERVICE"+s,t=this,r,i;return r in this.serviceEncodings&&(i=this.serviceEncodings[r]),this.services[s]=new We(s,i,t),this.services[s].init(this.getPts(e),function(n){t.flushDisplayed(n,t.services[s])}),this.services[s]},k.prototype.handleText=function(s,e,t){var r=t&&t.isExtended,i=t&&t.isMultiByte,n=this.current708Packet.data,a=r?4096:0,o=n[s],u=n[s+1],d=e.currentWindow,f,l;return e.textDecoder_&&!r?(i?(l=[o,u],s++):l=[o],f=e.textDecoder_.decode(new Uint8Array(l))):f=_n(a|o),d.pendingNewLine&&!d.isEmpty()&&d.newLine(this.getPts(s)),d.pendingNewLine=!1,d.addText(f),s},k.prototype.multiByteCharacter=function(s,e){var t=this.current708Packet.data,r=t[s+1],i=t[s+2];return je(r)&&je(i)&&(s=this.handleText(++s,e,{isMultiByte:!0})),s},k.prototype.setCurrentWindow=function(s,e){var t=this.current708Packet.data,r=t[s],i=r&7;return e.setCurrentWindow(i),s},k.prototype.defineWindow=function(s,e){var t=this.current708Packet.data,r=t[s],i=r&7;e.setCurrentWindow(i);var n=e.currentWindow;return r=t[++s],n.visible=(r&32)>>5,n.rowLock=(r&16)>>4,n.columnLock=(r&8)>>3,n.priority=r&7,r=t[++s],n.relativePositioning=(r&128)>>7,n.anchorVertical=r&127,r=t[++s],n.anchorHorizontal=r,r=t[++s],n.anchorPoint=(r&240)>>4,n.rowCount=r&15,r=t[++s],n.columnCount=r&63,r=t[++s],n.windowStyle=(r&56)>>3,n.penStyle=r&7,n.virtualRowCount=n.rowCount+1,s},k.prototype.setWindowAttributes=function(s,e){var t=this.current708Packet.data,r=t[s],i=e.currentWindow.winAttr;return r=t[++s],i.fillOpacity=(r&192)>>6,i.fillRed=(r&48)>>4,i.fillGreen=(r&12)>>2,i.fillBlue=r&3,r=t[++s],i.borderType=(r&192)>>6,i.borderRed=(r&48)>>4,i.borderGreen=(r&12)>>2,i.borderBlue=r&3,r=t[++s],i.borderType+=(r&128)>>5,i.wordWrap=(r&64)>>6,i.printDirection=(r&48)>>4,i.scrollDirection=(r&12)>>2,i.justify=r&3,r=t[++s],i.effectSpeed=(r&240)>>4,i.effectDirection=(r&12)>>2,i.displayEffect=r&3,s},k.prototype.flushDisplayed=function(s,e){for(var t=[],r=0;r<8;r++)e.windows[r].visible&&!e.windows[r].isEmpty()&&t.push(e.windows[r].getText());e.endPts=s,e.text=t.join(`
+(() => {
+  var __create = Object.create;
+  var __defProp = Object.defineProperty;
+  var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
+  var __getOwnPropNames = Object.getOwnPropertyNames;
+  var __getProtoOf = Object.getPrototypeOf;
+  var __hasOwnProp = Object.prototype.hasOwnProperty;
+  var __commonJS = (cb, mod) => function __require() {
+    return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
+  };
+  var __copyProps = (to, from, except, desc) => {
+    if (from && typeof from === "object" || typeof from === "function") {
+      for (let key of __getOwnPropNames(from))
+        if (!__hasOwnProp.call(to, key) && key !== except)
+          __defProp(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc(from, key)) || desc.enumerable });
+    }
+    return to;
+  };
+  var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__getProtoOf(mod)) : {}, __copyProps(isNodeMode || !mod || !mod.__esModule ? __defProp(target, "default", { value: mod, enumerable: true }) : target, mod));
 
-`),this.pushCaption(e),e.startPts=s},k.prototype.pushCaption=function(s){s.text!==""&&(this.trigger("data",{startPts:s.startPts,endPts:s.endPts,text:s.text,stream:"cc708_"+s.serviceNum}),s.text="",s.startPts=s.endPts)},k.prototype.displayWindows=function(s,e){var t=this.current708Packet.data,r=t[++s],i=this.getPts(s);this.flushDisplayed(i,e);for(var n=0;n<8;n++)r&1<<n&&(e.windows[n].visible=1);return s},k.prototype.hideWindows=function(s,e){var t=this.current708Packet.data,r=t[++s],i=this.getPts(s);this.flushDisplayed(i,e);for(var n=0;n<8;n++)r&1<<n&&(e.windows[n].visible=0);return s},k.prototype.toggleWindows=function(s,e){var t=this.current708Packet.data,r=t[++s],i=this.getPts(s);this.flushDisplayed(i,e);for(var n=0;n<8;n++)r&1<<n&&(e.windows[n].visible^=1);return s},k.prototype.clearWindows=function(s,e){var t=this.current708Packet.data,r=t[++s],i=this.getPts(s);this.flushDisplayed(i,e);for(var n=0;n<8;n++)r&1<<n&&e.windows[n].clearText();return s},k.prototype.deleteWindows=function(s,e){var t=this.current708Packet.data,r=t[++s],i=this.getPts(s);this.flushDisplayed(i,e);for(var n=0;n<8;n++)r&1<<n&&e.windows[n].reset();return s},k.prototype.setPenAttributes=function(s,e){var t=this.current708Packet.data,r=t[s],i=e.currentWindow.penAttr;return r=t[++s],i.textTag=(r&240)>>4,i.offset=(r&12)>>2,i.penSize=r&3,r=t[++s],i.italics=(r&128)>>7,i.underline=(r&64)>>6,i.edgeType=(r&56)>>3,i.fontStyle=r&7,s},k.prototype.setPenColor=function(s,e){var t=this.current708Packet.data,r=t[s],i=e.currentWindow.penColor;return r=t[++s],i.fgOpacity=(r&192)>>6,i.fgRed=(r&48)>>4,i.fgGreen=(r&12)>>2,i.fgBlue=r&3,r=t[++s],i.bgOpacity=(r&192)>>6,i.bgRed=(r&48)>>4,i.bgGreen=(r&12)>>2,i.bgBlue=r&3,r=t[++s],i.edgeRed=(r&48)>>4,i.edgeGreen=(r&12)>>2,i.edgeBlue=r&3,s},k.prototype.setPenLocation=function(s,e){var t=this.current708Packet.data,r=t[s],i=e.currentWindow.penLoc;return e.currentWindow.pendingNewLine=!0,r=t[++s],i.row=r&15,r=t[++s],i.column=r&63,s},k.prototype.reset=function(s,e){var t=this.getPts(s);return this.flushDisplayed(t,e),this.initService(e.serviceNum,s)};var Tn={42:225,92:233,94:237,95:243,96:250,123:231,124:247,125:209,126:241,127:9608,304:174,305:176,306:189,307:191,308:8482,309:162,310:163,311:9834,312:224,313:160,314:232,315:226,316:234,317:238,318:244,319:251,544:193,545:201,546:211,547:218,548:220,549:252,550:8216,551:161,552:42,553:39,554:8212,555:169,556:8480,557:8226,558:8220,559:8221,560:192,561:194,562:199,563:200,564:202,565:203,566:235,567:206,568:207,569:239,570:212,571:217,572:249,573:219,574:171,575:187,800:195,801:227,802:205,803:204,804:236,805:210,806:242,807:213,808:245,809:123,810:125,811:92,812:94,813:95,814:124,815:126,816:196,817:228,818:214,819:246,820:223,821:165,822:164,823:9474,824:197,825:229,826:216,827:248,828:9484,829:9488,830:9492,831:9496},ze=function(e){return e===null?"":(e=Tn[e]||e,String.fromCharCode(e))},Ve=14,wn=[4352,4384,4608,4640,5376,5408,5632,5664,5888,5920,4096,4864,4896,5120,5152],de=function(){for(var e=[],t=Ve+1;t--;)e.push("");return e},R=function s(e,t){s.prototype.init.call(this),this.field_=e||0,this.dataChannel_=t||0,this.name_="CC"+((this.field_<<1|this.dataChannel_)+1),this.setConstants(),this.reset(),this.push=function(r){var i,n,a,o,u;if(i=r.ccData&32639,i===this.lastControlCode_){this.lastControlCode_=null;return}if((i&61440)===4096?this.lastControlCode_=i:i!==this.PADDING_&&(this.lastControlCode_=null),a=i>>>8,o=i&255,i!==this.PADDING_)if(i===this.RESUME_CAPTION_LOADING_)this.mode_="popOn";else if(i===this.END_OF_CAPTION_)this.mode_="popOn",this.clearFormatting(r.pts),this.flushDisplayed(r.pts),n=this.displayed_,this.displayed_=this.nonDisplayed_,this.nonDisplayed_=n,this.startPts_=r.pts;else if(i===this.ROLL_UP_2_ROWS_)this.rollUpRows_=2,this.setRollUp(r.pts);else if(i===this.ROLL_UP_3_ROWS_)this.rollUpRows_=3,this.setRollUp(r.pts);else if(i===this.ROLL_UP_4_ROWS_)this.rollUpRows_=4,this.setRollUp(r.pts);else if(i===this.CARRIAGE_RETURN_)this.clearFormatting(r.pts),this.flushDisplayed(r.pts),this.shiftRowsUp_(),this.startPts_=r.pts;else if(i===this.BACKSPACE_)this.mode_==="popOn"?this.nonDisplayed_[this.row_]=this.nonDisplayed_[this.row_].slice(0,-1):this.displayed_[this.row_]=this.displayed_[this.row_].slice(0,-1);else if(i===this.ERASE_DISPLAYED_MEMORY_)this.flushDisplayed(r.pts),this.displayed_=de();else if(i===this.ERASE_NON_DISPLAYED_MEMORY_)this.nonDisplayed_=de();else if(i===this.RESUME_DIRECT_CAPTIONING_)this.mode_!=="paintOn"&&(this.flushDisplayed(r.pts),this.displayed_=de()),this.mode_="paintOn",this.startPts_=r.pts;else if(this.isSpecialCharacter(a,o))a=(a&3)<<8,u=ze(a|o),this[this.mode_](r.pts,u),this.column_++;else if(this.isExtCharacter(a,o))this.mode_==="popOn"?this.nonDisplayed_[this.row_]=this.nonDisplayed_[this.row_].slice(0,-1):this.displayed_[this.row_]=this.displayed_[this.row_].slice(0,-1),a=(a&3)<<8,u=ze(a|o),this[this.mode_](r.pts,u),this.column_++;else if(this.isMidRowCode(a,o))this.clearFormatting(r.pts),this[this.mode_](r.pts," "),this.column_++,(o&14)===14&&this.addFormatting(r.pts,["i"]),(o&1)===1&&this.addFormatting(r.pts,["u"]);else if(this.isOffsetControlCode(a,o))this.column_+=o&3;else if(this.isPAC(a,o)){var d=wn.indexOf(i&7968);this.mode_==="rollUp"&&(d-this.rollUpRows_+1<0&&(d=this.rollUpRows_-1),this.setRollUp(r.pts,d)),d!==this.row_&&(this.clearFormatting(r.pts),this.row_=d),o&1&&this.formatting_.indexOf("u")===-1&&this.addFormatting(r.pts,["u"]),(i&16)===16&&(this.column_=((i&14)>>1)*4),this.isColorPAC(o)&&(o&14)===14&&this.addFormatting(r.pts,["i"])}else this.isNormalChar(a)&&(o===0&&(o=null),u=ze(a),u+=ze(o),this[this.mode_](r.pts,u),this.column_+=u.length)}};R.prototype=new m,R.prototype.flushDisplayed=function(s){var e=this.displayed_.map(function(t,r){try{return t.trim()}catch{return this.trigger("log",{level:"warn",message:"Skipping a malformed 608 caption at index "+r+"."}),""}},this).join(`
-`).replace(/^\n+|\n+$/g,"");e.length&&this.trigger("data",{startPts:this.startPts_,endPts:s,text:e,stream:this.name_})},R.prototype.reset=function(){this.mode_="popOn",this.topRow_=0,this.startPts_=0,this.displayed_=de(),this.nonDisplayed_=de(),this.lastControlCode_=null,this.column_=0,this.row_=Ve,this.rollUpRows_=2,this.formatting_=[]},R.prototype.setConstants=function(){this.dataChannel_===0?(this.BASE_=16,this.EXT_=17,this.CONTROL_=(20|this.field_)<<8,this.OFFSET_=23):this.dataChannel_===1&&(this.BASE_=24,this.EXT_=25,this.CONTROL_=(28|this.field_)<<8,this.OFFSET_=31),this.PADDING_=0,this.RESUME_CAPTION_LOADING_=this.CONTROL_|32,this.END_OF_CAPTION_=this.CONTROL_|47,this.ROLL_UP_2_ROWS_=this.CONTROL_|37,this.ROLL_UP_3_ROWS_=this.CONTROL_|38,this.ROLL_UP_4_ROWS_=this.CONTROL_|39,this.CARRIAGE_RETURN_=this.CONTROL_|45,this.RESUME_DIRECT_CAPTIONING_=this.CONTROL_|41,this.BACKSPACE_=this.CONTROL_|33,this.ERASE_DISPLAYED_MEMORY_=this.CONTROL_|44,this.ERASE_NON_DISPLAYED_MEMORY_=this.CONTROL_|46},R.prototype.isSpecialCharacter=function(s,e){return s===this.EXT_&&e>=48&&e<=63},R.prototype.isExtCharacter=function(s,e){return(s===this.EXT_+1||s===this.EXT_+2)&&e>=32&&e<=63},R.prototype.isMidRowCode=function(s,e){return s===this.EXT_&&e>=32&&e<=47},R.prototype.isOffsetControlCode=function(s,e){return s===this.OFFSET_&&e>=33&&e<=35},R.prototype.isPAC=function(s,e){return s>=this.BASE_&&s<this.BASE_+8&&e>=64&&e<=127},R.prototype.isColorPAC=function(s){return s>=64&&s<=79||s>=96&&s<=127},R.prototype.isNormalChar=function(s){return s>=32&&s<=127},R.prototype.setRollUp=function(s,e){if(this.mode_!=="rollUp"&&(this.row_=Ve,this.mode_="rollUp",this.flushDisplayed(s),this.nonDisplayed_=de(),this.displayed_=de()),e!==void 0&&e!==this.row_)for(var t=0;t<this.rollUpRows_;t++)this.displayed_[e-t]=this.displayed_[this.row_-t],this.displayed_[this.row_-t]="";e===void 0&&(e=this.row_),this.topRow_=e-this.rollUpRows_+1},R.prototype.addFormatting=function(s,e){this.formatting_=this.formatting_.concat(e);var t=e.reduce(function(r,i){return r+"<"+i+">"},"");this[this.mode_](s,t)},R.prototype.clearFormatting=function(s){if(!!this.formatting_.length){var e=this.formatting_.reverse().reduce(function(t,r){return t+"</"+r+">"},"");this.formatting_=[],this[this.mode_](s,e)}},R.prototype.popOn=function(s,e){var t=this.nonDisplayed_[this.row_];t+=e,this.nonDisplayed_[this.row_]=t},R.prototype.rollUp=function(s,e){var t=this.displayed_[this.row_];t+=e,this.displayed_[this.row_]=t},R.prototype.shiftRowsUp_=function(){var s;for(s=0;s<this.topRow_;s++)this.displayed_[s]="";for(s=this.row_+1;s<Ve+1;s++)this.displayed_[s]="";for(s=this.topRow_;s<this.row_;s++)this.displayed_[s]=this.displayed_[s+1];this.displayed_[this.row_]=""},R.prototype.paintOn=function(s,e){var t=this.displayed_[this.row_];t+=e,this.displayed_[this.row_]=t};var Ge={CaptionStream:Y,Cea608Stream:R,Cea708Stream:k},W={H264_STREAM_TYPE:27,ADTS_STREAM_TYPE:15,METADATA_STREAM_TYPE:21},In=8589934592,Fn=4294967296,Br="shared",It=function(e,t){var r=1;for(e>t&&(r=-1);Math.abs(t-e)>Fn;)e+=r*In;return e},Nr=function s(e){var t,r;s.prototype.init.call(this),this.type_=e||Br,this.push=function(i){this.type_!==Br&&i.type!==this.type_||(r===void 0&&(r=i.dts),i.dts=It(i.dts,r),i.pts=It(i.pts,r),t=i.dts,this.trigger("data",i))},this.flush=function(){r=t,this.trigger("done")},this.endTimeline=function(){this.flush(),this.trigger("endedtimeline")},this.discontinuity=function(){r=void 0,t=void 0},this.reset=function(){this.discontinuity(),this.trigger("reset")}};Nr.prototype=new m;var jr={TimestampRolloverStream:Nr,handleRollover:It},Wr=function(e,t,r){var i,n="";for(i=t;i<r;i++)n+="%"+("00"+e[i].toString(16)).slice(-2);return n},qe=function(e,t,r){return decodeURIComponent(Wr(e,t,r))},An=function(e,t,r){return unescape(Wr(e,t,r))},He=function(e){return e[0]<<21|e[1]<<14|e[2]<<7|e[3]},zr={TXXX:function(e){var t;if(e.data[0]===3){for(t=1;t<e.data.length;t++)if(e.data[t]===0){e.description=qe(e.data,1,t),e.value=qe(e.data,t+1,e.data.length).replace(/\0*$/,"");break}e.data=e.value}},WXXX:function(e){var t;if(e.data[0]===3){for(t=1;t<e.data.length;t++)if(e.data[t]===0){e.description=qe(e.data,1,t),e.url=qe(e.data,t+1,e.data.length);break}}},PRIV:function(e){var t;for(t=0;t<e.data.length;t++)if(e.data[t]===0){e.owner=An(e.data,0,t);break}e.privateData=e.data.subarray(t+1),e.data=e.privateData}},$e;$e=function(e){var t={descriptor:e&&e.descriptor},r=0,i=[],n=0,a;if($e.prototype.init.call(this),this.dispatchType=W.METADATA_STREAM_TYPE.toString(16),t.descriptor)for(a=0;a<t.descriptor.length;a++)this.dispatchType+=("00"+t.descriptor[a].toString(16)).slice(-2);this.push=function(o){var u,d,f,l,h,y;if(o.type==="timed-metadata"){if(o.dataAlignmentIndicator&&(n=0,i.length=0),i.length===0&&(o.data.length<10||o.data[0]!=="I".charCodeAt(0)||o.data[1]!=="D".charCodeAt(0)||o.data[2]!=="3".charCodeAt(0))){this.trigger("log",{level:"warn",message:"Skipping unrecognized metadata packet"});return}if(i.push(o),n+=o.data.byteLength,i.length===1&&(r=He(o.data.subarray(6,10)),r+=10),!(n<r)){for(u={data:new Uint8Array(r),frames:[],pts:i[0].pts,dts:i[0].dts},h=0;h<r;)u.data.set(i[0].data.subarray(0,r-h),h),h+=i[0].data.byteLength,n-=i[0].data.byteLength,i.shift();d=10,u.data[5]&64&&(d+=4,d+=He(u.data.subarray(10,14)),r-=He(u.data.subarray(16,20)));do{if(f=He(u.data.subarray(d+4,d+8)),f<1){this.trigger("log",{level:"warn",message:"Malformed ID3 frame encountered. Skipping remaining metadata parsing."});break}if(y=String.fromCharCode(u.data[d],u.data[d+1],u.data[d+2],u.data[d+3]),l={id:y,data:u.data.subarray(d+10,d+f+10)},l.key=l.id,zr[l.id]&&(zr[l.id](l),l.owner==="com.apple.streaming.transportStreamTimestamp")){var b=l.data,x=(b[3]&1)<<30|b[4]<<22|b[5]<<14|b[6]<<6|b[7]>>>2;x*=4,x+=b[7]&3,l.timeStamp=x,u.pts===void 0&&u.dts===void 0&&(u.pts=l.timeStamp,u.dts=l.timeStamp),this.trigger("timestamp",l)}u.frames.push(l),d+=10,d+=f}while(d<r);this.trigger("data",u)}}}},$e.prototype=new m;var Dn=$e,Un=jr.TimestampRolloverStream,Ye,Ae,Xe,ge=188,Ft=71;Ye=function(){var e=new Uint8Array(ge),t=0;Ye.prototype.init.call(this),this.push=function(r){var i=0,n=ge,a;for(t?(a=new Uint8Array(r.byteLength+t),a.set(e.subarray(0,t)),a.set(r,t),t=0):a=r;n<a.byteLength;){if(a[i]===Ft&&a[n]===Ft){this.trigger("data",a.subarray(i,n)),i+=ge,n+=ge;continue}i++,n++}i<a.byteLength&&(e.set(a.subarray(i),0),t=a.byteLength-i)},this.flush=function(){t===ge&&e[0]===Ft&&(this.trigger("data",e),t=0),this.trigger("done")},this.endTimeline=function(){this.flush(),this.trigger("endedtimeline")},this.reset=function(){t=0,this.trigger("reset")}},Ye.prototype=new m,Ae=function(){var e,t,r,i;Ae.prototype.init.call(this),i=this,this.packetsWaitingForPmt=[],this.programMapTable=void 0,e=function(a,o){var u=0;o.payloadUnitStartIndicator&&(u+=a[u]+1),o.type==="pat"?t(a.subarray(u),o):r(a.subarray(u),o)},t=function(a,o){o.section_number=a[7],o.last_section_number=a[8],i.pmtPid=(a[10]&31)<<8|a[11],o.pmtPid=i.pmtPid},r=function(a,o){var u,d,f,l;if(!!(a[5]&1)){for(i.programMapTable={video:null,audio:null,"timed-metadata":{}},u=(a[1]&15)<<8|a[2],d=3+u-4,f=(a[10]&15)<<8|a[11],l=12+f;l<d;){var h=a[l],y=(a[l+1]&31)<<8|a[l+2];h===W.H264_STREAM_TYPE&&i.programMapTable.video===null?i.programMapTable.video=y:h===W.ADTS_STREAM_TYPE&&i.programMapTable.audio===null?i.programMapTable.audio=y:h===W.METADATA_STREAM_TYPE&&(i.programMapTable["timed-metadata"][y]=h),l+=((a[l+3]&15)<<8|a[l+4])+5}o.programMapTable=i.programMapTable}},this.push=function(n){var a={},o=4;if(a.payloadUnitStartIndicator=!!(n[1]&64),a.pid=n[1]&31,a.pid<<=8,a.pid|=n[2],(n[3]&48)>>>4>1&&(o+=n[o]+1),a.pid===0)a.type="pat",e(n.subarray(o),a),this.trigger("data",a);else if(a.pid===this.pmtPid)for(a.type="pmt",e(n.subarray(o),a),this.trigger("data",a);this.packetsWaitingForPmt.length;)this.processPes_.apply(this,this.packetsWaitingForPmt.shift());else this.programMapTable===void 0?this.packetsWaitingForPmt.push([n,o,a]):this.processPes_(n,o,a)},this.processPes_=function(n,a,o){o.pid===this.programMapTable.video?o.streamType=W.H264_STREAM_TYPE:o.pid===this.programMapTable.audio?o.streamType=W.ADTS_STREAM_TYPE:o.streamType=this.programMapTable["timed-metadata"][o.pid],o.type="pes",o.data=n.subarray(a),this.trigger("data",o)}},Ae.prototype=new m,Ae.STREAM_TYPES={h264:27,adts:15},Xe=function(){var e=this,t=!1,r={data:[],size:0},i={data:[],size:0},n={data:[],size:0},a,o=function(f,l){var h,y=f[0]<<16|f[1]<<8|f[2];l.data=new Uint8Array,y===1&&(l.packetLength=6+(f[4]<<8|f[5]),l.dataAlignmentIndicator=(f[6]&4)!==0,h=f[7],h&192&&(l.pts=(f[9]&14)<<27|(f[10]&255)<<20|(f[11]&254)<<12|(f[12]&255)<<5|(f[13]&254)>>>3,l.pts*=4,l.pts+=(f[13]&6)>>>1,l.dts=l.pts,h&64&&(l.dts=(f[14]&14)<<27|(f[15]&255)<<20|(f[16]&254)<<12|(f[17]&255)<<5|(f[18]&254)>>>3,l.dts*=4,l.dts+=(f[18]&6)>>>1)),l.data=f.subarray(9+f[8]))},u=function(f,l,h){var y=new Uint8Array(f.size),b={type:l},x=0,T=0,E=!1,B;if(!(!f.data.length||f.size<9)){for(b.trackId=f.data[0].pid,x=0;x<f.data.length;x++)B=f.data[x],y.set(B.data,T),T+=B.data.byteLength;o(y,b),E=l==="video"||b.packetLength<=f.size,(h||E)&&(f.size=0,f.data.length=0),E&&e.trigger("data",b)}};Xe.prototype.init.call(this),this.push=function(d){({pat:function(){},pes:function(){var l,h;switch(d.streamType){case W.H264_STREAM_TYPE:l=r,h="video";break;case W.ADTS_STREAM_TYPE:l=i,h="audio";break;case W.METADATA_STREAM_TYPE:l=n,h="timed-metadata";break;default:return}d.payloadUnitStartIndicator&&u(l,h,!0),l.data.push(d),l.size+=d.data.byteLength},pmt:function(){var l={type:"metadata",tracks:[]};a=d.programMapTable,a.video!==null&&l.tracks.push({timelineStartInfo:{baseMediaDecodeTime:0},id:+a.video,codec:"avc",type:"video"}),a.audio!==null&&l.tracks.push({timelineStartInfo:{baseMediaDecodeTime:0},id:+a.audio,codec:"adts",type:"audio"}),t=!0,e.trigger("data",l)}})[d.type]()},this.reset=function(){r.size=0,r.data.length=0,i.size=0,i.data.length=0,this.trigger("reset")},this.flushStreams_=function(){u(r,"video"),u(i,"audio"),u(n,"timed-metadata")},this.flush=function(){if(!t&&a){var d={type:"metadata",tracks:[]};a.video!==null&&d.tracks.push({timelineStartInfo:{baseMediaDecodeTime:0},id:+a.video,codec:"avc",type:"video"}),a.audio!==null&&d.tracks.push({timelineStartInfo:{baseMediaDecodeTime:0},id:+a.audio,codec:"adts",type:"audio"}),e.trigger("data",d)}t=!1,this.flushStreams_(),this.trigger("done")}},Xe.prototype=new m;var Vr={PAT_PID:0,MP2T_PACKET_LENGTH:ge,TransportPacketStream:Ye,TransportParseStream:Ae,ElementaryStream:Xe,TimestampRolloverStream:Un,CaptionStream:Ge.CaptionStream,Cea608Stream:Ge.Cea608Stream,Cea708Stream:Ge.Cea708Stream,MetadataStream:Dn};for(var At in W)W.hasOwnProperty(At)&&(Vr[At]=W[At]);var P=Vr,Cn=[96e3,88200,64e3,48e3,44100,32e3,24e3,22050,16e3,12e3,11025,8e3,7350],Gr=function(e,t){var r=e[t+6]<<21|e[t+7]<<14|e[t+8]<<7|e[t+9],i=e[t+5],n=(i&16)>>4;return r=r>=0?r:0,n?r+20:r+10},Mn=function s(e,t){return e.length-t<10||e[t]!=="I".charCodeAt(0)||e[t+1]!=="D".charCodeAt(0)||e[t+2]!=="3".charCodeAt(0)?t:(t+=Gr(e,t),s(e,t))},Pn=function(e){var t=Mn(e,0);return e.length>=t+2&&(e[t]&255)===255&&(e[t+1]&240)===240&&(e[t+1]&22)===16},qr=function(e){return e[0]<<21|e[1]<<14|e[2]<<7|e[3]},En=function(e,t,r){var i,n="";for(i=t;i<r;i++)n+="%"+("00"+e[i].toString(16)).slice(-2);return n},On=function(e,t,r){return unescape(En(e,t,r))},kn=function(e,t){var r=(e[t+5]&224)>>5,i=e[t+4]<<3,n=e[t+3]&3<<11;return n|i|r},Ln=function(e,t){return e[t]==="I".charCodeAt(0)&&e[t+1]==="D".charCodeAt(0)&&e[t+2]==="3".charCodeAt(0)?"timed-metadata":e[t]&!0&&(e[t+1]&240)===240?"audio":null},Rn=function(e){for(var t=0;t+5<e.length;){if(e[t]!==255||(e[t+1]&246)!==240){t++;continue}return Cn[(e[t+2]&60)>>>2]}return null},Bn=function(e){var t,r,i,n;t=10,e[5]&64&&(t+=4,t+=qr(e.subarray(10,14)));do{if(r=qr(e.subarray(t+4,t+8)),r<1)return null;if(n=String.fromCharCode(e[t],e[t+1],e[t+2],e[t+3]),n==="PRIV"){i=e.subarray(t+10,t+r+10);for(var a=0;a<i.byteLength;a++)if(i[a]===0){var o=On(i,0,a);if(o==="com.apple.streaming.transportStreamTimestamp"){var u=i.subarray(a+1),d=(u[3]&1)<<30|u[4]<<22|u[5]<<14|u[6]<<6|u[7]>>>2;return d*=4,d+=u[7]&3,d}break}}t+=10,t+=r}while(t<e.byteLength);return null},De={isLikelyAacData:Pn,parseId3TagSize:Gr,parseAdtsSize:kn,parseType:Ln,parseSampleRate:Rn,parseAacTimestamp:Bn},Ke;Ke=function(){var e=new Uint8Array,t=0;Ke.prototype.init.call(this),this.setTimestamp=function(r){t=r},this.push=function(r){var i=0,n=0,a,o,u,d;for(e.length?(d=e.length,e=new Uint8Array(r.byteLength+d),e.set(e.subarray(0,d)),e.set(r,d)):e=r;e.length-n>=3;){if(e[n]==="I".charCodeAt(0)&&e[n+1]==="D".charCodeAt(0)&&e[n+2]==="3".charCodeAt(0)){if(e.length-n<10||(i=De.parseId3TagSize(e,n),n+i>e.length))break;o={type:"timed-metadata",data:e.subarray(n,n+i)},this.trigger("data",o),n+=i;continue}else if((e[n]&255)===255&&(e[n+1]&240)===240){if(e.length-n<7||(i=De.parseAdtsSize(e,n),n+i>e.length))break;u={type:"audio",data:e.subarray(n,n+i),pts:t,dts:t},this.trigger("data",u),n+=i;continue}n++}a=e.length-n,a>0?e=e.subarray(n):e=new Uint8Array},this.reset=function(){e=new Uint8Array,this.trigger("reset")},this.endTimeline=function(){e=new Uint8Array,this.trigger("endedtimeline")}},Ke.prototype=new m;var Hr=Ke,Nn=["audioobjecttype","channelcount","samplerate","samplingfrequencyindex","samplesize"],Je=Nn,jn=["width","height","profileIdc","levelIdc","profileCompatibility","sarRatio"],Ze=jn,Wn=pt.H264Stream,zn=De.isLikelyAacData,Vn=V.ONE_SECOND_IN_TS,Ue,xe,Qe,le,Gn=function(e,t){t.stream=e,this.trigger("log",t)},$r=function(e,t){for(var r=Object.keys(t),i=0;i<r.length;i++){var n=r[i];n==="headOfPipeline"||!t[n].on||t[n].on("log",Gn.bind(e,n))}},Yr=function(e,t){var r;if(e.length!==t.length)return!1;for(r=0;r<e.length;r++)if(e[r]!==t[r])return!1;return!0},Dt=function(e,t,r,i,n,a){var o=r-t,u=i-t,d=n-r;return{start:{dts:e,pts:e+o},end:{dts:e+u,pts:e+d},prependedContentDuration:a,baseMediaDecodeTime:e}};xe=function(e,t){var r=[],i,n=0,a=0,o=1/0;t=t||{},i=t.firstSequenceNumber||0,xe.prototype.init.call(this),this.push=function(u){N.collectDtsInfo(e,u),e&&Je.forEach(function(d){e[d]=u[d]}),r.push(u)},this.setEarliestDts=function(u){n=u},this.setVideoBaseMediaDecodeTime=function(u){o=u},this.setAudioAppendStart=function(u){a=u},this.flush=function(){var u,d,f,l,h,y,b;if(r.length===0){this.trigger("done","AudioSegmentStream");return}u=se.trimAdtsFramesByEarliestDts(r,e,n),e.baseMediaDecodeTime=N.calculateTrackBaseMediaDecodeTime(e,t.keepOriginalTimestamps),b=se.prefixWithSilence(e,u,a,o),e.samples=se.generateSampleTable(u),f=X.mdat(se.concatenateFrameData(u)),r=[],d=X.moof(i,[e]),l=new Uint8Array(d.byteLength+f.byteLength),i++,l.set(d),l.set(f,d.byteLength),N.clearDtsInfo(e),h=Math.ceil(Vn*1024/e.samplerate),u.length&&(y=u.length*h,this.trigger("segmentTimingInfo",Dt(V.audioTsToVideoTs(e.baseMediaDecodeTime,e.samplerate),u[0].dts,u[0].pts,u[0].dts+y,u[0].pts+y,b||0)),this.trigger("timingInfo",{start:u[0].pts,end:u[0].pts+y})),this.trigger("data",{track:e,boxes:l}),this.trigger("done","AudioSegmentStream")},this.reset=function(){N.clearDtsInfo(e),r=[],this.trigger("reset")}},xe.prototype=new m,Ue=function(e,t){var r,i=[],n=[],a,o;t=t||{},r=t.firstSequenceNumber||0,Ue.prototype.init.call(this),delete e.minPTS,this.gopCache_=[],this.push=function(u){N.collectDtsInfo(e,u),u.nalUnitType==="seq_parameter_set_rbsp"&&!a&&(a=u.config,e.sps=[u.data],Ze.forEach(function(d){e[d]=a[d]},this)),u.nalUnitType==="pic_parameter_set_rbsp"&&!o&&(o=u.data,e.pps=[u.data]),i.push(u)},this.flush=function(){for(var u,d,f,l,h,y,b=0,x,T;i.length&&i[0].nalUnitType!=="access_unit_delimiter_rbsp";)i.shift();if(i.length===0){this.resetStream_(),this.trigger("done","VideoSegmentStream");return}if(u=Q.groupNalsIntoFrames(i),f=Q.groupFramesIntoGops(u),f[0][0].keyFrame||(d=this.getGopForFusion_(i[0],e),d?(b=d.duration,f.unshift(d),f.byteLength+=d.byteLength,f.nalCount+=d.nalCount,f.pts=d.pts,f.dts=d.dts,f.duration+=d.duration):f=Q.extendFirstKeyFrame(f)),n.length){var E;if(t.alignGopsAtEnd?E=this.alignGopsAtEnd_(f):E=this.alignGopsAtStart_(f),!E){this.gopCache_.unshift({gop:f.pop(),pps:e.pps,sps:e.sps}),this.gopCache_.length=Math.min(6,this.gopCache_.length),i=[],this.resetStream_(),this.trigger("done","VideoSegmentStream");return}N.clearDtsInfo(e),f=E}N.collectDtsInfo(e,f),e.samples=Q.generateSampleTable(f),h=X.mdat(Q.concatenateNalData(f)),e.baseMediaDecodeTime=N.calculateTrackBaseMediaDecodeTime(e,t.keepOriginalTimestamps),this.trigger("processedGopsInfo",f.map(function(B){return{pts:B.pts,dts:B.dts,byteLength:B.byteLength}})),x=f[0],T=f[f.length-1],this.trigger("segmentTimingInfo",Dt(e.baseMediaDecodeTime,x.dts,x.pts,T.dts+T.duration,T.pts+T.duration,b)),this.trigger("timingInfo",{start:f[0].pts,end:f[f.length-1].pts+f[f.length-1].duration}),this.gopCache_.unshift({gop:f.pop(),pps:e.pps,sps:e.sps}),this.gopCache_.length=Math.min(6,this.gopCache_.length),i=[],this.trigger("baseMediaDecodeTime",e.baseMediaDecodeTime),this.trigger("timelineStartInfo",e.timelineStartInfo),l=X.moof(r,[e]),y=new Uint8Array(l.byteLength+h.byteLength),r++,y.set(l),y.set(h,l.byteLength),this.trigger("data",{track:e,boxes:y}),this.resetStream_(),this.trigger("done","VideoSegmentStream")},this.reset=function(){this.resetStream_(),i=[],this.gopCache_.length=0,n.length=0,this.trigger("reset")},this.resetStream_=function(){N.clearDtsInfo(e),a=void 0,o=void 0},this.getGopForFusion_=function(u){var d=45e3,f=1e4,l=1/0,h,y,b,x,T;for(T=0;T<this.gopCache_.length;T++)x=this.gopCache_[T],b=x.gop,!(!(e.pps&&Yr(e.pps[0],x.pps[0]))||!(e.sps&&Yr(e.sps[0],x.sps[0])))&&(b.dts<e.timelineStartInfo.dts||(h=u.dts-b.dts-b.duration,h>=-f&&h<=d&&(!y||l>h)&&(y=x,l=h)));return y?y.gop:null},this.alignGopsAtStart_=function(u){var d,f,l,h,y,b,x,T;for(y=u.byteLength,b=u.nalCount,x=u.duration,d=f=0;d<n.length&&f<u.length&&(l=n[d],h=u[f],l.pts!==h.pts);){if(h.pts>l.pts){d++;continue}f++,y-=h.byteLength,b-=h.nalCount,x-=h.duration}return f===0?u:f===u.length?null:(T=u.slice(f),T.byteLength=y,T.duration=x,T.nalCount=b,T.pts=T[0].pts,T.dts=T[0].dts,T)},this.alignGopsAtEnd_=function(u){var d,f,l,h,y,b;for(d=n.length-1,f=u.length-1,y=null,b=!1;d>=0&&f>=0;){if(l=n[d],h=u[f],l.pts===h.pts){b=!0;break}if(l.pts>h.pts){d--;continue}d===n.length-1&&(y=f),f--}if(!b&&y===null)return null;var x;if(b?x=f:x=y,x===0)return u;var T=u.slice(x),E=T.reduce(function(B,pe){return B.byteLength+=pe.byteLength,B.duration+=pe.duration,B.nalCount+=pe.nalCount,B},{byteLength:0,duration:0,nalCount:0});return T.byteLength=E.byteLength,T.duration=E.duration,T.nalCount=E.nalCount,T.pts=T[0].pts,T.dts=T[0].dts,T},this.alignGopsWith=function(u){n=u}},Ue.prototype=new m,le=function(e,t){this.numberOfTracks=0,this.metadataStream=t,e=e||{},typeof e.remux<"u"?this.remuxTracks=!!e.remux:this.remuxTracks=!0,typeof e.keepOriginalTimestamps=="boolean"?this.keepOriginalTimestamps=e.keepOriginalTimestamps:this.keepOriginalTimestamps=!1,this.pendingTracks=[],this.videoTrack=null,this.pendingBoxes=[],this.pendingCaptions=[],this.pendingMetadata=[],this.pendingBytes=0,this.emittedTracks=0,le.prototype.init.call(this),this.push=function(r){if(r.text)return this.pendingCaptions.push(r);if(r.frames)return this.pendingMetadata.push(r);this.pendingTracks.push(r.track),this.pendingBytes+=r.boxes.byteLength,r.track.type==="video"&&(this.videoTrack=r.track,this.pendingBoxes.push(r.boxes)),r.track.type==="audio"&&(this.audioTrack=r.track,this.pendingBoxes.unshift(r.boxes))}},le.prototype=new m,le.prototype.flush=function(s){var e=0,t={captions:[],captionStreams:{},metadata:[],info:{}},r,i,n,a=0,o;if(this.pendingTracks.length<this.numberOfTracks){if(s!=="VideoSegmentStream"&&s!=="AudioSegmentStream")return;if(this.remuxTracks)return;if(this.pendingTracks.length===0){this.emittedTracks++,this.emittedTracks>=this.numberOfTracks&&(this.trigger("done"),this.emittedTracks=0);return}}if(this.videoTrack?(a=this.videoTrack.timelineStartInfo.pts,Ze.forEach(function(u){t.info[u]=this.videoTrack[u]},this)):this.audioTrack&&(a=this.audioTrack.timelineStartInfo.pts,Je.forEach(function(u){t.info[u]=this.audioTrack[u]},this)),this.videoTrack||this.audioTrack){for(this.pendingTracks.length===1?t.type=this.pendingTracks[0].type:t.type="combined",this.emittedTracks+=this.pendingTracks.length,n=X.initSegment(this.pendingTracks),t.initSegment=new Uint8Array(n.byteLength),t.initSegment.set(n),t.data=new Uint8Array(this.pendingBytes),o=0;o<this.pendingBoxes.length;o++)t.data.set(this.pendingBoxes[o],e),e+=this.pendingBoxes[o].byteLength;for(o=0;o<this.pendingCaptions.length;o++)r=this.pendingCaptions[o],r.startTime=V.metadataTsToSeconds(r.startPts,a,this.keepOriginalTimestamps),r.endTime=V.metadataTsToSeconds(r.endPts,a,this.keepOriginalTimestamps),t.captionStreams[r.stream]=!0,t.captions.push(r);for(o=0;o<this.pendingMetadata.length;o++)i=this.pendingMetadata[o],i.cueTime=V.metadataTsToSeconds(i.pts,a,this.keepOriginalTimestamps),t.metadata.push(i);for(t.metadata.dispatchType=this.metadataStream.dispatchType,this.pendingTracks.length=0,this.videoTrack=null,this.pendingBoxes.length=0,this.pendingCaptions.length=0,this.pendingBytes=0,this.pendingMetadata.length=0,this.trigger("data",t),o=0;o<t.captions.length;o++)r=t.captions[o],this.trigger("caption",r);for(o=0;o<t.metadata.length;o++)i=t.metadata[o],this.trigger("id3Frame",i)}this.emittedTracks>=this.numberOfTracks&&(this.trigger("done"),this.emittedTracks=0)},le.prototype.setRemux=function(s){this.remuxTracks=s},Qe=function(e){var t=this,r=!0,i,n;Qe.prototype.init.call(this),e=e||{},this.baseMediaDecodeTime=e.baseMediaDecodeTime||0,this.transmuxPipeline_={},this.setupAacPipeline=function(){var a={};this.transmuxPipeline_=a,a.type="aac",a.metadataStream=new P.MetadataStream,a.aacStream=new Hr,a.audioTimestampRolloverStream=new P.TimestampRolloverStream("audio"),a.timedMetadataTimestampRolloverStream=new P.TimestampRolloverStream("timed-metadata"),a.adtsStream=new _e,a.coalesceStream=new le(e,a.metadataStream),a.headOfPipeline=a.aacStream,a.aacStream.pipe(a.audioTimestampRolloverStream).pipe(a.adtsStream),a.aacStream.pipe(a.timedMetadataTimestampRolloverStream).pipe(a.metadataStream).pipe(a.coalesceStream),a.metadataStream.on("timestamp",function(o){a.aacStream.setTimestamp(o.timeStamp)}),a.aacStream.on("data",function(o){o.type!=="timed-metadata"&&o.type!=="audio"||a.audioSegmentStream||(n=n||{timelineStartInfo:{baseMediaDecodeTime:t.baseMediaDecodeTime},codec:"adts",type:"audio"},a.coalesceStream.numberOfTracks++,a.audioSegmentStream=new xe(n,e),a.audioSegmentStream.on("log",t.getLogTrigger_("audioSegmentStream")),a.audioSegmentStream.on("timingInfo",t.trigger.bind(t,"audioTimingInfo")),a.adtsStream.pipe(a.audioSegmentStream).pipe(a.coalesceStream),t.trigger("trackinfo",{hasAudio:!!n,hasVideo:!!i}))}),a.coalesceStream.on("data",this.trigger.bind(this,"data")),a.coalesceStream.on("done",this.trigger.bind(this,"done")),$r(this,a)},this.setupTsPipeline=function(){var a={};this.transmuxPipeline_=a,a.type="ts",a.metadataStream=new P.MetadataStream,a.packetStream=new P.TransportPacketStream,a.parseStream=new P.TransportParseStream,a.elementaryStream=new P.ElementaryStream,a.timestampRolloverStream=new P.TimestampRolloverStream,a.adtsStream=new _e,a.h264Stream=new Wn,a.captionStream=new P.CaptionStream(e),a.coalesceStream=new le(e,a.metadataStream),a.headOfPipeline=a.packetStream,a.packetStream.pipe(a.parseStream).pipe(a.elementaryStream).pipe(a.timestampRolloverStream),a.timestampRolloverStream.pipe(a.h264Stream),a.timestampRolloverStream.pipe(a.adtsStream),a.timestampRolloverStream.pipe(a.metadataStream).pipe(a.coalesceStream),a.h264Stream.pipe(a.captionStream).pipe(a.coalesceStream),a.elementaryStream.on("data",function(o){var u;if(o.type==="metadata"){for(u=o.tracks.length;u--;)!i&&o.tracks[u].type==="video"?(i=o.tracks[u],i.timelineStartInfo.baseMediaDecodeTime=t.baseMediaDecodeTime):!n&&o.tracks[u].type==="audio"&&(n=o.tracks[u],n.timelineStartInfo.baseMediaDecodeTime=t.baseMediaDecodeTime);i&&!a.videoSegmentStream&&(a.coalesceStream.numberOfTracks++,a.videoSegmentStream=new Ue(i,e),a.videoSegmentStream.on("log",t.getLogTrigger_("videoSegmentStream")),a.videoSegmentStream.on("timelineStartInfo",function(d){n&&!e.keepOriginalTimestamps&&(n.timelineStartInfo=d,a.audioSegmentStream.setEarliestDts(d.dts-t.baseMediaDecodeTime))}),a.videoSegmentStream.on("processedGopsInfo",t.trigger.bind(t,"gopInfo")),a.videoSegmentStream.on("segmentTimingInfo",t.trigger.bind(t,"videoSegmentTimingInfo")),a.videoSegmentStream.on("baseMediaDecodeTime",function(d){n&&a.audioSegmentStream.setVideoBaseMediaDecodeTime(d)}),a.videoSegmentStream.on("timingInfo",t.trigger.bind(t,"videoTimingInfo")),a.h264Stream.pipe(a.videoSegmentStream).pipe(a.coalesceStream)),n&&!a.audioSegmentStream&&(a.coalesceStream.numberOfTracks++,a.audioSegmentStream=new xe(n,e),a.audioSegmentStream.on("log",t.getLogTrigger_("audioSegmentStream")),a.audioSegmentStream.on("timingInfo",t.trigger.bind(t,"audioTimingInfo")),a.audioSegmentStream.on("segmentTimingInfo",t.trigger.bind(t,"audioSegmentTimingInfo")),a.adtsStream.pipe(a.audioSegmentStream).pipe(a.coalesceStream)),t.trigger("trackinfo",{hasAudio:!!n,hasVideo:!!i})}}),a.coalesceStream.on("data",this.trigger.bind(this,"data")),a.coalesceStream.on("id3Frame",function(o){o.dispatchType=a.metadataStream.dispatchType,t.trigger("id3Frame",o)}),a.coalesceStream.on("caption",this.trigger.bind(this,"caption")),a.coalesceStream.on("done",this.trigger.bind(this,"done")),$r(this,a)},this.setBaseMediaDecodeTime=function(a){var o=this.transmuxPipeline_;e.keepOriginalTimestamps||(this.baseMediaDecodeTime=a),n&&(n.timelineStartInfo.dts=void 0,n.timelineStartInfo.pts=void 0,N.clearDtsInfo(n),o.audioTimestampRolloverStream&&o.audioTimestampRolloverStream.discontinuity()),i&&(o.videoSegmentStream&&(o.videoSegmentStream.gopCache_=[]),i.timelineStartInfo.dts=void 0,i.timelineStartInfo.pts=void 0,N.clearDtsInfo(i),o.captionStream.reset()),o.timestampRolloverStream&&o.timestampRolloverStream.discontinuity()},this.setAudioAppendStart=function(a){n&&this.transmuxPipeline_.audioSegmentStream.setAudioAppendStart(a)},this.setRemux=function(a){var o=this.transmuxPipeline_;e.remux=a,o&&o.coalesceStream&&o.coalesceStream.setRemux(a)},this.alignGopsWith=function(a){i&&this.transmuxPipeline_.videoSegmentStream&&this.transmuxPipeline_.videoSegmentStream.alignGopsWith(a)},this.getLogTrigger_=function(a){var o=this;return function(u){u.stream=a,o.trigger("log",u)}},this.push=function(a){if(r){var o=zn(a);o&&this.transmuxPipeline_.type!=="aac"?this.setupAacPipeline():!o&&this.transmuxPipeline_.type!=="ts"&&this.setupTsPipeline(),r=!1}this.transmuxPipeline_.headOfPipeline.push(a)},this.flush=function(){r=!0,this.transmuxPipeline_.headOfPipeline.flush()},this.endTimeline=function(){this.transmuxPipeline_.headOfPipeline.endTimeline()},this.reset=function(){this.transmuxPipeline_.headOfPipeline&&this.transmuxPipeline_.headOfPipeline.reset()},this.resetCaptions=function(){this.transmuxPipeline_.captionStream&&this.transmuxPipeline_.captionStream.reset()}},Qe.prototype=new m;var Ut={Transmuxer:Qe,VideoSegmentStream:Ue,AudioSegmentStream:xe,AUDIO_PROPERTIES:Je,VIDEO_PROPERTIES:Ze,generateSegmentTimingInfo:Dt},qn=Fe.discardEmulationPreventionBytes,Hn=Ge.CaptionStream,$n=function(e,t){for(var r=e,i=0;i<t.length;i++){var n=t[i];if(r<n.size)return n;r-=n.size}return null},Yn=function(e,t,r){var i=new DataView(e.buffer,e.byteOffset,e.byteLength),n={logs:[],seiNals:[]},a,o,u,d;for(o=0;o+4<e.length;o+=u)if(u=i.getUint32(o),o+=4,!(u<=0))switch(e[o]&31){case 6:var f=e.subarray(o+1,o+1+u),l=$n(o,t);if(a={nalUnitType:"sei_rbsp",size:u,data:f,escapedRBSP:qn(f),trackId:r},l)a.pts=l.pts,a.dts=l.dts,d=l;else if(d)a.pts=d.pts,a.dts=d.dts;else{n.logs.push({level:"warn",message:"We've encountered a nal unit without data at "+o+" for trackId "+r+". See mux.js#223."});break}n.seiNals.push(a);break}return n},Xn=function(e,t,r){var i=t,n=r.defaultSampleDuration||0,a=r.defaultSampleSize||0,o=r.trackId,u=[];return e.forEach(function(d){var f=vt(d),l=f.samples;l.forEach(function(h){h.duration===void 0&&(h.duration=n),h.size===void 0&&(h.size=a),h.trackId=o,h.dts=i,h.compositionTimeOffset===void 0&&(h.compositionTimeOffset=0),typeof i=="bigint"?(h.pts=i+g.default.BigInt(h.compositionTimeOffset),i+=g.default.BigInt(h.duration)):(h.pts=i+h.compositionTimeOffset,i+=h.duration)}),u=u.concat(l)}),u},Kn=function(e,t){var r=O(e,["moof","traf"]),i=O(e,["mdat"]),n={},a=[];return i.forEach(function(o,u){var d=r[u];a.push({mdat:o,traf:d})}),a.forEach(function(o){var u=o.mdat,d=o.traf,f=O(d,["tfhd"]),l=bt(f[0]),h=l.trackId,y=O(d,["tfdt"]),b=y.length>0?St(y[0]).baseMediaDecodeTime:0,x=O(d,["trun"]),T,E;t===h&&x.length>0&&(T=Xn(x,b,l),E=Yn(u,T,h),n[h]||(n[h]={seiNals:[],logs:[]}),n[h].seiNals=n[h].seiNals.concat(E.seiNals),n[h].logs=n[h].logs.concat(E.logs))}),n},Jn=function(e,t,r){var i;if(t===null)return null;i=Kn(e,t);var n=i[t]||{};return{seiNals:n.seiNals,logs:n.logs,timescale:r}},Zn=function(){var e=!1,t,r,i,n,a,o;this.isInitialized=function(){return e},this.init=function(u){t=new Hn,e=!0,o=u?u.isPartial:!1,t.on("data",function(d){d.startTime=d.startPts/n,d.endTime=d.endPts/n,a.captions.push(d),a.captionStreams[d.stream]=!0}),t.on("log",function(d){a.logs.push(d)})},this.isNewInit=function(u,d){return u&&u.length===0||d&&typeof d=="object"&&Object.keys(d).length===0?!1:i!==u[0]||n!==d[i]},this.parse=function(u,d,f){var l;if(this.isInitialized()){if(!d||!f)return null;if(this.isNewInit(d,f))i=d[0],n=f[i];else if(i===null||!n)return r.push(u),null}else return null;for(;r.length>0;){var h=r.shift();this.parse(h,d,f)}return l=Jn(u,i,n),l&&l.logs&&(a.logs=a.logs.concat(l.logs)),l===null||!l.seiNals?a.logs.length?{logs:a.logs,captions:[],captionStreams:[]}:null:(this.pushNals(l.seiNals),this.flushStream(),a)},this.pushNals=function(u){if(!this.isInitialized()||!u||u.length===0)return null;u.forEach(function(d){t.push(d)})},this.flushStream=function(){if(!this.isInitialized())return null;o?t.partialFlush():t.flush()},this.clearParsedCaptions=function(){a.captions=[],a.captionStreams={},a.logs=[]},this.resetCaptionStream=function(){if(!this.isInitialized())return null;t.reset()},this.clearAllCaptions=function(){this.clearParsedCaptions(),this.resetCaptionStream()},this.reset=function(){r=[],i=null,n=null,a?this.clearParsedCaptions():a={captions:[],captionStreams:{},logs:[]},this.resetCaptionStream()},this.reset()},Qn=Zn,ea={generator:X,probe:Xi,Transmuxer:Ut.Transmuxer,AudioSegmentStream:Ut.AudioSegmentStream,VideoSegmentStream:Ut.VideoSegmentStream,CaptionParser:Qn},U;U=function(e,t){var r=0,i=16384,n=function(l,h){var y,b=l.position+h;b<l.bytes.byteLength||(y=new Uint8Array(b*2),y.set(l.bytes.subarray(0,l.position),0),l.bytes=y,l.view=new DataView(l.bytes.buffer))},a=U.widthBytes||new Uint8Array(5),o=U.heightBytes||new Uint8Array(6),u=U.videocodecidBytes||new Uint8Array(12),d;if(!U.widthBytes){for(d=0;d<5;d++)a[d]="width".charCodeAt(d);for(d=0;d<6;d++)o[d]="height".charCodeAt(d);for(d=0;d<12;d++)u[d]="videocodecid".charCodeAt(d);U.widthBytes=a,U.heightBytes=o,U.videocodecidBytes=u}switch(this.keyFrame=!1,e){case U.VIDEO_TAG:this.length=16,i*=6;break;case U.AUDIO_TAG:this.length=13,this.keyFrame=!0;break;case U.METADATA_TAG:this.length=29,this.keyFrame=!0;break;default:throw new Error("Unknown FLV tag type")}this.bytes=new Uint8Array(i),this.view=new DataView(this.bytes.buffer),this.bytes[0]=e,this.position=this.length,this.keyFrame=t,this.pts=0,this.dts=0,this.writeBytes=function(f,l,h){var y=l||0,b;h=h||f.byteLength,b=y+h,n(this,h),this.bytes.set(f.subarray(y,b),this.position),this.position+=h,this.length=Math.max(this.length,this.position)},this.writeByte=function(f){n(this,1),this.bytes[this.position]=f,this.position++,this.length=Math.max(this.length,this.position)},this.writeShort=function(f){n(this,2),this.view.setUint16(this.position,f),this.position+=2,this.length=Math.max(this.length,this.position)},this.negIndex=function(f){return this.bytes[this.length-f]},this.nalUnitSize=function(){return r===0?0:this.length-(r+4)},this.startNalUnit=function(){if(r>0)throw new Error("Attempted to create new NAL wihout closing the old one");r=this.length,this.length+=4,this.position=this.length},this.endNalUnit=function(f){var l,h;this.length===r+4?this.length-=4:r>0&&(l=r+4,h=this.length-l,this.position=r,this.view.setUint32(this.position,h),this.position=this.length,f&&f.push(this.bytes.subarray(l,l+h))),r=0},this.writeMetaDataDouble=function(f,l){var h;if(n(this,2+f.length+9),this.view.setUint16(this.position,f.length),this.position+=2,f==="width")this.bytes.set(a,this.position),this.position+=5;else if(f==="height")this.bytes.set(o,this.position),this.position+=6;else if(f==="videocodecid")this.bytes.set(u,this.position),this.position+=12;else for(h=0;h<f.length;h++)this.bytes[this.position]=f.charCodeAt(h),this.position++;this.position++,this.view.setFloat64(this.position,l),this.position+=8,this.length=Math.max(this.length,this.position),++r},this.writeMetaDataBoolean=function(f,l){var h;for(n(this,2),this.view.setUint16(this.position,f.length),this.position+=2,h=0;h<f.length;h++)n(this,1),this.bytes[this.position]=f.charCodeAt(h),this.position++;n(this,2),this.view.setUint8(this.position,1),this.position++,this.view.setUint8(this.position,l?1:0),this.position++,this.length=Math.max(this.length,this.position),++r},this.finalize=function(){var f,l;switch(this.bytes[0]){case U.VIDEO_TAG:this.bytes[11]=(this.keyFrame||t?16:32)|7,this.bytes[12]=t?0:1,f=this.pts-this.dts,this.bytes[13]=(f&16711680)>>>16,this.bytes[14]=(f&65280)>>>8,this.bytes[15]=(f&255)>>>0;break;case U.AUDIO_TAG:this.bytes[11]=175,this.bytes[12]=t?0:1;break;case U.METADATA_TAG:this.position=11,this.view.setUint8(this.position,2),this.position++,this.view.setUint16(this.position,10),this.position+=2,this.bytes.set([111,110,77,101,116,97,68,97,116,97],this.position),this.position+=10,this.bytes[this.position]=8,this.position++,this.view.setUint32(this.position,r),this.position=this.length,this.bytes.set([0,0,9],this.position),this.position+=3,this.length=this.position;break}return l=this.length-11,this.bytes[1]=(l&16711680)>>>16,this.bytes[2]=(l&65280)>>>8,this.bytes[3]=(l&255)>>>0,this.bytes[4]=(this.dts&16711680)>>>16,this.bytes[5]=(this.dts&65280)>>>8,this.bytes[6]=(this.dts&255)>>>0,this.bytes[7]=(this.dts&4278190080)>>>24,this.bytes[8]=0,this.bytes[9]=0,this.bytes[10]=0,n(this,4),this.view.setUint32(this.length,this.length),this.length+=4,this.position+=4,this.bytes=this.bytes.subarray(0,this.length),this.frameTime=U.frameTime(this.bytes),this}},U.AUDIO_TAG=8,U.VIDEO_TAG=9,U.METADATA_TAG=18,U.isAudioFrame=function(s){return U.AUDIO_TAG===s[0]},U.isVideoFrame=function(s){return U.VIDEO_TAG===s[0]},U.isMetaData=function(s){return U.METADATA_TAG===s[0]},U.isKeyFrame=function(s){return U.isVideoFrame(s)?s[11]===23:!!(U.isAudioFrame(s)||U.isMetaData(s))},U.frameTime=function(s){var e=s[4]<<16;return e|=s[5]<<8,e|=s[6]<<0,e|=s[7]<<24,e};var H=U,Ct=function s(e){this.numberOfTracks=0,this.metadataStream=e.metadataStream,this.videoTags=[],this.audioTags=[],this.videoTrack=null,this.audioTrack=null,this.pendingCaptions=[],this.pendingMetadata=[],this.pendingTracks=0,this.processedTracks=0,s.prototype.init.call(this),this.push=function(t){if(t.text)return this.pendingCaptions.push(t);if(t.frames)return this.pendingMetadata.push(t);t.track.type==="video"&&(this.videoTrack=t.track,this.videoTags=t.tags,this.pendingTracks++),t.track.type==="audio"&&(this.audioTrack=t.track,this.audioTags=t.tags,this.pendingTracks++)}};Ct.prototype=new m,Ct.prototype.flush=function(s){var e,t,r,i,n={tags:{},captions:[],captionStreams:{},metadata:[]};if(this.pendingTracks<this.numberOfTracks){if(s!=="VideoSegmentStream"&&s!=="AudioSegmentStream")return;if(this.pendingTracks===0&&(this.processedTracks++,this.processedTracks<this.numberOfTracks))return}if(this.processedTracks+=this.pendingTracks,this.pendingTracks=0,!(this.processedTracks<this.numberOfTracks)){for(this.videoTrack?i=this.videoTrack.timelineStartInfo.pts:this.audioTrack&&(i=this.audioTrack.timelineStartInfo.pts),n.tags.videoTags=this.videoTags,n.tags.audioTags=this.audioTags,r=0;r<this.pendingCaptions.length;r++)t=this.pendingCaptions[r],t.startTime=t.startPts-i,t.startTime/=9e4,t.endTime=t.endPts-i,t.endTime/=9e4,n.captionStreams[t.stream]=!0,n.captions.push(t);for(r=0;r<this.pendingMetadata.length;r++)e=this.pendingMetadata[r],e.cueTime=e.pts-i,e.cueTime/=9e4,n.metadata.push(e);n.metadata.dispatchType=this.metadataStream.dispatchType,this.videoTrack=null,this.audioTrack=null,this.videoTags=[],this.audioTags=[],this.pendingCaptions.length=0,this.pendingMetadata.length=0,this.pendingTracks=0,this.processedTracks=0,this.trigger("data",n),this.trigger("done")}};var ta=Ct,ra=function(){var e=this;this.list=[],this.push=function(t){this.list.push({bytes:t.bytes,dts:t.dts,pts:t.pts,keyFrame:t.keyFrame,metaDataTag:t.metaDataTag})},Object.defineProperty(this,"length",{get:function(){return e.list.length}})},Xr=ra,ia=pt.H264Stream,et,tt,rt,Mt,Kr,Jr;Mt=function(e,t){typeof t.pts=="number"&&(e.timelineStartInfo.pts===void 0?e.timelineStartInfo.pts=t.pts:e.timelineStartInfo.pts=Math.min(e.timelineStartInfo.pts,t.pts)),typeof t.dts=="number"&&(e.timelineStartInfo.dts===void 0?e.timelineStartInfo.dts=t.dts:e.timelineStartInfo.dts=Math.min(e.timelineStartInfo.dts,t.dts))},Kr=function(e,t){var r=new H(H.METADATA_TAG);return r.dts=t,r.pts=t,r.writeMetaDataDouble("videocodecid",7),r.writeMetaDataDouble("width",e.width),r.writeMetaDataDouble("height",e.height),r},Jr=function(e,t){var r,i=new H(H.VIDEO_TAG,!0);for(i.dts=t,i.pts=t,i.writeByte(1),i.writeByte(e.profileIdc),i.writeByte(e.profileCompatibility),i.writeByte(e.levelIdc),i.writeByte(255),i.writeByte(225),i.writeShort(e.sps[0].length),i.writeBytes(e.sps[0]),i.writeByte(e.pps.length),r=0;r<e.pps.length;++r)i.writeShort(e.pps[r].length),i.writeBytes(e.pps[r]);return i},rt=function(e){var t=[],r=[],i;rt.prototype.init.call(this),this.push=function(n){Mt(e,n),e&&(e.audioobjecttype=n.audioobjecttype,e.channelcount=n.channelcount,e.samplerate=n.samplerate,e.samplingfrequencyindex=n.samplingfrequencyindex,e.samplesize=n.samplesize,e.extraData=e.audioobjecttype<<11|e.samplingfrequencyindex<<7|e.channelcount<<3),n.pts=Math.round(n.pts/90),n.dts=Math.round(n.dts/90),t.push(n)},this.flush=function(){var n,a,o,u=new Xr;if(t.length===0){this.trigger("done","AudioSegmentStream");return}for(o=-1/0;t.length;)n=t.shift(),r.length&&n.pts>=r[0]&&(o=r.shift(),this.writeMetaDataTags(u,o)),(e.extraData!==i||n.pts-o>=1e3)&&(this.writeMetaDataTags(u,n.pts),i=e.extraData,o=n.pts),a=new H(H.AUDIO_TAG),a.pts=n.pts,a.dts=n.dts,a.writeBytes(n.data),u.push(a.finalize());r.length=0,i=null,this.trigger("data",{track:e,tags:u.list}),this.trigger("done","AudioSegmentStream")},this.writeMetaDataTags=function(n,a){var o;o=new H(H.METADATA_TAG),o.pts=a,o.dts=a,o.writeMetaDataDouble("audiocodecid",10),o.writeMetaDataBoolean("stereo",e.channelcount===2),o.writeMetaDataDouble("audiosamplerate",e.samplerate),o.writeMetaDataDouble("audiosamplesize",16),n.push(o.finalize()),o=new H(H.AUDIO_TAG,!0),o.pts=a,o.dts=a,o.view.setUint16(o.position,e.extraData),o.position+=2,o.length=Math.max(o.length,o.position),n.push(o.finalize())},this.onVideoKeyFrame=function(n){r.push(n)}},rt.prototype=new m,tt=function(e){var t=[],r,i;tt.prototype.init.call(this),this.finishFrame=function(n,a){if(!!a){if(r&&e&&e.newMetadata&&(a.keyFrame||n.length===0)){var o=Kr(r,a.dts).finalize(),u=Jr(e,a.dts).finalize();o.metaDataTag=u.metaDataTag=!0,n.push(o),n.push(u),e.newMetadata=!1,this.trigger("keyframe",a.dts)}a.endNalUnit(),n.push(a.finalize()),i=null}},this.push=function(n){Mt(e,n),n.pts=Math.round(n.pts/90),n.dts=Math.round(n.dts/90),t.push(n)},this.flush=function(){for(var n,a=new Xr;t.length&&t[0].nalUnitType!=="access_unit_delimiter_rbsp";)t.shift();if(t.length===0){this.trigger("done","VideoSegmentStream");return}for(;t.length;)n=t.shift(),n.nalUnitType==="seq_parameter_set_rbsp"?(e.newMetadata=!0,r=n.config,e.width=r.width,e.height=r.height,e.sps=[n.data],e.profileIdc=r.profileIdc,e.levelIdc=r.levelIdc,e.profileCompatibility=r.profileCompatibility,i.endNalUnit()):n.nalUnitType==="pic_parameter_set_rbsp"?(e.newMetadata=!0,e.pps=[n.data],i.endNalUnit()):n.nalUnitType==="access_unit_delimiter_rbsp"?(i&&this.finishFrame(a,i),i=new H(H.VIDEO_TAG),i.pts=n.pts,i.dts=n.dts):(n.nalUnitType==="slice_layer_without_partitioning_rbsp_idr"&&(i.keyFrame=!0),i.endNalUnit()),i.startNalUnit(),i.writeBytes(n.data);i&&this.finishFrame(a,i),this.trigger("data",{track:e,tags:a.list}),this.trigger("done","VideoSegmentStream")}},tt.prototype=new m,et=function(e){var t=this,r,i,n,a,o,u,d,f,l,h,y,b;et.prototype.init.call(this),e=e||{},this.metadataStream=new P.MetadataStream,e.metadataStream=this.metadataStream,r=new P.TransportPacketStream,i=new P.TransportParseStream,n=new P.ElementaryStream,a=new P.TimestampRolloverStream("video"),o=new P.TimestampRolloverStream("audio"),u=new P.TimestampRolloverStream("timed-metadata"),d=new _e,f=new ia,b=new ta(e),r.pipe(i).pipe(n),n.pipe(a).pipe(f),n.pipe(o).pipe(d),n.pipe(u).pipe(this.metadataStream).pipe(b),y=new P.CaptionStream(e),f.pipe(y).pipe(b),n.on("data",function(x){var T,E,B;if(x.type==="metadata"){for(T=x.tracks.length;T--;)x.tracks[T].type==="video"?E=x.tracks[T]:x.tracks[T].type==="audio"&&(B=x.tracks[T]);E&&!l&&(b.numberOfTracks++,l=new tt(E),f.pipe(l).pipe(b)),B&&!h&&(b.numberOfTracks++,h=new rt(B),d.pipe(h).pipe(b),l&&l.on("keyframe",h.onVideoKeyFrame))}}),this.push=function(x){r.push(x)},this.flush=function(){r.flush()},this.resetCaptions=function(){y.reset()},b.on("data",function(x){t.trigger("data",x)}),b.on("done",function(){t.trigger("done")})},et.prototype=new m;var na=et,aa=function(e,t,r){var i=new Uint8Array(9),n=new DataView(i.buffer),a,o,u;return e=e||0,t=t===void 0?!0:t,r=r===void 0?!0:r,n.setUint8(0,70),n.setUint8(1,76),n.setUint8(2,86),n.setUint8(3,1),n.setUint8(4,(t?4:0)|(r?1:0)),n.setUint32(5,i.byteLength),e<=0?(o=new Uint8Array(i.byteLength+4),o.set(i),o.set([0,0,0,0],i.byteLength),o):(a=new H(H.METADATA_TAG),a.pts=a.dts=0,a.writeMetaDataDouble("duration",e),u=a.finalize().length,o=new Uint8Array(i.byteLength+u),o.set(i),o.set(n.byteLength,u),o)},sa=aa,oa={tag:H,Transmuxer:na,getFlvHeader:sa},ua=P,fa=V.ONE_SECOND_IN_TS,Zr=function s(e,t){var r=[],i=0,n=0,a=0,o=1/0,u=null,d=null;t=t||{},s.prototype.init.call(this),this.push=function(f){N.collectDtsInfo(e,f),e&&Je.forEach(function(l){e[l]=f[l]}),r.push(f)},this.setEarliestDts=function(f){n=f},this.setVideoBaseMediaDecodeTime=function(f){o=f},this.setAudioAppendStart=function(f){a=f},this.processFrames_=function(){var f,l,h,y,b;r.length!==0&&(f=se.trimAdtsFramesByEarliestDts(r,e,n),f.length!==0&&(e.baseMediaDecodeTime=N.calculateTrackBaseMediaDecodeTime(e,t.keepOriginalTimestamps),se.prefixWithSilence(e,f,a,o),e.samples=se.generateSampleTable(f),h=X.mdat(se.concatenateFrameData(f)),r=[],l=X.moof(i,[e]),i++,e.initSegment=X.initSegment([e]),y=new Uint8Array(l.byteLength+h.byteLength),y.set(l),y.set(h,l.byteLength),N.clearDtsInfo(e),u===null&&(d=u=f[0].pts),d+=f.length*(fa*1024/e.samplerate),b={start:u},this.trigger("timingInfo",b),this.trigger("data",{track:e,boxes:y})))},this.flush=function(){this.processFrames_(),this.trigger("timingInfo",{start:u,end:d}),this.resetTiming_(),this.trigger("done","AudioSegmentStream")},this.partialFlush=function(){this.processFrames_(),this.trigger("partialdone","AudioSegmentStream")},this.endTimeline=function(){this.flush(),this.trigger("endedtimeline","AudioSegmentStream")},this.resetTiming_=function(){N.clearDtsInfo(e),u=null,d=null},this.reset=function(){this.resetTiming_(),r=[],this.trigger("reset")}};Zr.prototype=new m;var Qr=Zr,ei=function s(e,t){var r=0,i=[],n=[],a,o,u=null,d=null,f,l=!0;t=t||{},s.prototype.init.call(this),this.push=function(h){N.collectDtsInfo(e,h),typeof e.timelineStartInfo.dts>"u"&&(e.timelineStartInfo.dts=h.dts),h.nalUnitType==="seq_parameter_set_rbsp"&&!a&&(a=h.config,e.sps=[h.data],Ze.forEach(function(y){e[y]=a[y]},this)),h.nalUnitType==="pic_parameter_set_rbsp"&&!o&&(o=h.data,e.pps=[h.data]),i.push(h)},this.processNals_=function(h){var y;for(i=n.concat(i);i.length&&i[0].nalUnitType!=="access_unit_delimiter_rbsp";)i.shift();if(i.length!==0){var b=Q.groupNalsIntoFrames(i);if(!!b.length){if(n=b[b.length-1],h&&(b.pop(),b.duration-=n.duration,b.nalCount-=n.length,b.byteLength-=n.byteLength),!b.length){i=[];return}if(this.trigger("timelineStartInfo",e.timelineStartInfo),l){if(f=Q.groupFramesIntoGops(b),!f[0][0].keyFrame){if(f=Q.extendFirstKeyFrame(f),!f[0][0].keyFrame){i=[].concat.apply([],b).concat(n),n=[];return}b=[].concat.apply([],f),b.duration=f.duration}l=!1}for(u===null&&(u=b[0].pts,d=u),d+=b.duration,this.trigger("timingInfo",{start:u,end:d}),y=0;y<b.length;y++){var x=b[y];e.samples=Q.generateSampleTableForFrame(x);var T=X.mdat(Q.concatenateNalDataForFrame(x));N.clearDtsInfo(e),N.collectDtsInfo(e,x),e.baseMediaDecodeTime=N.calculateTrackBaseMediaDecodeTime(e,t.keepOriginalTimestamps);var E=X.moof(r,[e]);r++,e.initSegment=X.initSegment([e]);var B=new Uint8Array(E.byteLength+T.byteLength);B.set(E),B.set(T,E.byteLength),this.trigger("data",{track:e,boxes:B,sequence:r,videoFrameDts:x.dts,videoFramePts:x.pts})}i=[]}}},this.resetTimingAndConfig_=function(){a=void 0,o=void 0,u=null,d=null},this.partialFlush=function(){this.processNals_(!0),this.trigger("partialdone","VideoSegmentStream")},this.flush=function(){this.processNals_(!1),this.resetTimingAndConfig_(),this.trigger("done","VideoSegmentStream")},this.endTimeline=function(){this.flush(),this.trigger("endedtimeline","VideoSegmentStream")},this.reset=function(){this.resetTimingAndConfig_(),n=[],i=[],l=!0,this.trigger("reset")}};ei.prototype=new m;var da=ei,la=De.isLikelyAacData,ti=function(e){return e.prototype=new m,e.prototype.init.call(e),e},ca=function(e){var t={type:"ts",tracks:{audio:null,video:null},packet:new P.TransportPacketStream,parse:new P.TransportParseStream,elementary:new P.ElementaryStream,timestampRollover:new P.TimestampRolloverStream,adts:new ht.Adts,h264:new ht.h264.H264Stream,captionStream:new P.CaptionStream(e),metadataStream:new P.MetadataStream};return t.headOfPipeline=t.packet,t.packet.pipe(t.parse).pipe(t.elementary).pipe(t.timestampRollover),t.timestampRollover.pipe(t.h264),t.h264.pipe(t.captionStream),t.timestampRollover.pipe(t.metadataStream),t.timestampRollover.pipe(t.adts),t.elementary.on("data",function(r){if(r.type==="metadata"){for(var i=0;i<r.tracks.length;i++)t.tracks[r.tracks[i].type]||(t.tracks[r.tracks[i].type]=r.tracks[i],t.tracks[r.tracks[i].type].timelineStartInfo.baseMediaDecodeTime=e.baseMediaDecodeTime);t.tracks.video&&!t.videoSegmentStream&&(t.videoSegmentStream=new da(t.tracks.video,e),t.videoSegmentStream.on("timelineStartInfo",function(n){t.tracks.audio&&!e.keepOriginalTimestamps&&t.audioSegmentStream.setEarliestDts(n.dts-e.baseMediaDecodeTime)}),t.videoSegmentStream.on("timingInfo",t.trigger.bind(t,"videoTimingInfo")),t.videoSegmentStream.on("data",function(n){t.trigger("data",{type:"video",data:n})}),t.videoSegmentStream.on("done",t.trigger.bind(t,"done")),t.videoSegmentStream.on("partialdone",t.trigger.bind(t,"partialdone")),t.videoSegmentStream.on("endedtimeline",t.trigger.bind(t,"endedtimeline")),t.h264.pipe(t.videoSegmentStream)),t.tracks.audio&&!t.audioSegmentStream&&(t.audioSegmentStream=new Qr(t.tracks.audio,e),t.audioSegmentStream.on("data",function(n){t.trigger("data",{type:"audio",data:n})}),t.audioSegmentStream.on("done",t.trigger.bind(t,"done")),t.audioSegmentStream.on("partialdone",t.trigger.bind(t,"partialdone")),t.audioSegmentStream.on("endedtimeline",t.trigger.bind(t,"endedtimeline")),t.audioSegmentStream.on("timingInfo",t.trigger.bind(t,"audioTimingInfo")),t.adts.pipe(t.audioSegmentStream)),t.trigger("trackinfo",{hasAudio:!!t.tracks.audio,hasVideo:!!t.tracks.video})}}),t.captionStream.on("data",function(r){var i;t.tracks.video?i=t.tracks.video.timelineStartInfo.pts||0:i=0,r.startTime=V.metadataTsToSeconds(r.startPts,i,e.keepOriginalTimestamps),r.endTime=V.metadataTsToSeconds(r.endPts,i,e.keepOriginalTimestamps),t.trigger("caption",r)}),t=ti(t),t.metadataStream.on("data",t.trigger.bind(t,"id3Frame")),t},pa=function(e){var t={type:"aac",tracks:{audio:null},metadataStream:new P.MetadataStream,aacStream:new Hr,audioRollover:new P.TimestampRolloverStream("audio"),timedMetadataRollover:new P.TimestampRolloverStream("timed-metadata"),adtsStream:new _e(!0)};return t.headOfPipeline=t.aacStream,t.aacStream.pipe(t.audioRollover).pipe(t.adtsStream),t.aacStream.pipe(t.timedMetadataRollover).pipe(t.metadataStream),t.metadataStream.on("timestamp",function(r){t.aacStream.setTimestamp(r.timeStamp)}),t.aacStream.on("data",function(r){r.type!=="timed-metadata"&&r.type!=="audio"||t.audioSegmentStream||(t.tracks.audio=t.tracks.audio||{timelineStartInfo:{baseMediaDecodeTime:e.baseMediaDecodeTime},codec:"adts",type:"audio"},t.audioSegmentStream=new Qr(t.tracks.audio,e),t.audioSegmentStream.on("data",function(i){t.trigger("data",{type:"audio",data:i})}),t.audioSegmentStream.on("partialdone",t.trigger.bind(t,"partialdone")),t.audioSegmentStream.on("done",t.trigger.bind(t,"done")),t.audioSegmentStream.on("endedtimeline",t.trigger.bind(t,"endedtimeline")),t.audioSegmentStream.on("timingInfo",t.trigger.bind(t,"audioTimingInfo")),t.adtsStream.pipe(t.audioSegmentStream),t.trigger("trackinfo",{hasAudio:!!t.tracks.audio,hasVideo:!!t.tracks.video}))}),t=ti(t),t.metadataStream.on("data",t.trigger.bind(t,"id3Frame")),t},ri=function(e,t){e.on("data",t.trigger.bind(t,"data")),e.on("done",t.trigger.bind(t,"done")),e.on("partialdone",t.trigger.bind(t,"partialdone")),e.on("endedtimeline",t.trigger.bind(t,"endedtimeline")),e.on("audioTimingInfo",t.trigger.bind(t,"audioTimingInfo")),e.on("videoTimingInfo",t.trigger.bind(t,"videoTimingInfo")),e.on("trackinfo",t.trigger.bind(t,"trackinfo")),e.on("id3Frame",function(r){r.dispatchType=e.metadataStream.dispatchType,r.cueTime=V.videoTsToSeconds(r.pts),t.trigger("id3Frame",r)}),e.on("caption",function(r){t.trigger("caption",r)})},ii=function s(e){var t=null,r=!0;e=e||{},s.prototype.init.call(this),e.baseMediaDecodeTime=e.baseMediaDecodeTime||0,this.push=function(i){if(r){var n=la(i);n&&(!t||t.type!=="aac")?(t=pa(e),ri(t,this)):!n&&(!t||t.type!=="ts")&&(t=ca(e),ri(t,this)),r=!1}t.headOfPipeline.push(i)},this.flush=function(){!t||(r=!0,t.headOfPipeline.flush())},this.partialFlush=function(){!t||t.headOfPipeline.partialFlush()},this.endTimeline=function(){!t||t.headOfPipeline.endTimeline()},this.reset=function(){!t||t.headOfPipeline.reset()},this.setBaseMediaDecodeTime=function(i){e.keepOriginalTimestamps||(e.baseMediaDecodeTime=i),t&&(t.tracks.audio&&(t.tracks.audio.timelineStartInfo.dts=void 0,t.tracks.audio.timelineStartInfo.pts=void 0,N.clearDtsInfo(t.tracks.audio),t.audioRollover&&t.audioRollover.discontinuity()),t.tracks.video&&(t.videoSegmentStream&&(t.videoSegmentStream.gopCache_=[]),t.tracks.video.timelineStartInfo.dts=void 0,t.tracks.video.timelineStartInfo.pts=void 0,N.clearDtsInfo(t.tracks.video)),t.timestampRollover&&t.timestampRollover.discontinuity())},this.setRemux=function(i){e.remux=i,t&&t.coalesceStream&&t.coalesceStream.setRemux(i)},this.setAudioAppendStart=function(i){!t||!t.tracks.audio||!t.audioSegmentStream||t.audioSegmentStream.setAudioAppendStart(i)},this.alignGopsWith=function(i){}};ii.prototype=new m;var ha=ii,ma={Transmuxer:ha},ni=we.getUint64,ga=function(e){var t=new DataView(e.buffer,e.byteOffset,e.byteLength),r={version:e[0],flags:new Uint8Array(e.subarray(1,4)),references:[],referenceId:t.getUint32(4),timescale:t.getUint32(8)},i=12;r.version===0?(r.earliestPresentationTime=t.getUint32(i),r.firstOffset=t.getUint32(i+4),i+=8):(r.earliestPresentationTime=ni(e.subarray(i)),r.firstOffset=ni(e.subarray(i+8)),i+=16),i+=2;var n=t.getUint16(i);for(i+=2;n>0;i+=12,n--)r.references.push({referenceType:(e[i]&128)>>>7,referencedSize:t.getUint32(i)&2147483647,subsegmentDuration:t.getUint32(i+4),startsWithSap:!!(e[i+8]&128),sapType:(e[i+8]&112)>>>4,sapDeltaTime:t.getUint32(i+8)&268435455});return r},xa=ga,ai=we.getUint64,G,Pt,J=function(e){return new Date(e*1e3-20828448e5)},ya=function(e){var t=new DataView(e.buffer,e.byteOffset,e.byteLength),r=[],i,n;for(i=0;i+4<e.length;i+=n){if(n=t.getUint32(i),i+=4,n<=0){r.push("<span style='color:red;'>MALFORMED DATA</span>");continue}switch(e[i]&31){case 1:r.push("slice_layer_without_partitioning_rbsp");break;case 5:r.push("slice_layer_without_partitioning_rbsp_idr");break;case 6:r.push("sei_rbsp");break;case 7:r.push("seq_parameter_set_rbsp");break;case 8:r.push("pic_parameter_set_rbsp");break;case 9:r.push("access_unit_delimiter_rbsp");break;default:r.push("UNKNOWN NAL - "+e[i]&31);break}}return r},oe={avc1:function(e){var t=new DataView(e.buffer,e.byteOffset,e.byteLength);return{dataReferenceIndex:t.getUint16(6),width:t.getUint16(24),height:t.getUint16(26),horizresolution:t.getUint16(28)+t.getUint16(30)/16,vertresolution:t.getUint16(32)+t.getUint16(34)/16,frameCount:t.getUint16(40),depth:t.getUint16(74),config:G(e.subarray(78,e.byteLength))}},avcC:function(e){var t=new DataView(e.buffer,e.byteOffset,e.byteLength),r={configurationVersion:e[0],avcProfileIndication:e[1],profileCompatibility:e[2],avcLevelIndication:e[3],lengthSizeMinusOne:e[4]&3,sps:[],pps:[]},i=e[5]&31,n,a,o,u;for(o=6,u=0;u<i;u++)a=t.getUint16(o),o+=2,r.sps.push(new Uint8Array(e.subarray(o,o+a))),o+=a;for(n=e[o],o++,u=0;u<n;u++)a=t.getUint16(o),o+=2,r.pps.push(new Uint8Array(e.subarray(o,o+a))),o+=a;return r},btrt:function(e){var t=new DataView(e.buffer,e.byteOffset,e.byteLength);return{bufferSizeDB:t.getUint32(0),maxBitrate:t.getUint32(4),avgBitrate:t.getUint32(8)}},edts:function(e){return{boxes:G(e)}},elst:function(e){var t=new DataView(e.buffer,e.byteOffset,e.byteLength),r={version:t.getUint8(0),flags:new Uint8Array(e.subarray(1,4)),edits:[]},i=t.getUint32(4),n;for(n=8;i;i--)r.version===0?(r.edits.push({segmentDuration:t.getUint32(n),mediaTime:t.getInt32(n+4),mediaRate:t.getUint16(n+8)+t.getUint16(n+10)/(256*256)}),n+=12):(r.edits.push({segmentDuration:ai(e.subarray(n)),mediaTime:ai(e.subarray(n+8)),mediaRate:t.getUint16(n+16)+t.getUint16(n+18)/(256*256)}),n+=20);return r},esds:function(e){return{version:e[0],flags:new Uint8Array(e.subarray(1,4)),esId:e[6]<<8|e[7],streamPriority:e[8]&31,decoderConfig:{objectProfileIndication:e[11],streamType:e[12]>>>2&63,bufferSize:e[13]<<16|e[14]<<8|e[15],maxBitrate:e[16]<<24|e[17]<<16|e[18]<<8|e[19],avgBitrate:e[20]<<24|e[21]<<16|e[22]<<8|e[23],decoderConfigDescriptor:{tag:e[24],length:e[25],audioObjectType:e[26]>>>3&31,samplingFrequencyIndex:(e[26]&7)<<1|e[27]>>>7&1,channelConfiguration:e[27]>>>3&15}}}},ftyp:function(e){for(var t=new DataView(e.buffer,e.byteOffset,e.byteLength),r={majorBrand:K(e.subarray(0,4)),minorVersion:t.getUint32(4),compatibleBrands:[]},i=8;i<e.byteLength;)r.compatibleBrands.push(K(e.subarray(i,i+4))),i+=4;return r},dinf:function(e){return{boxes:G(e)}},dref:function(e){return{version:e[0],flags:new Uint8Array(e.subarray(1,4)),dataReferences:G(e.subarray(8))}},hdlr:function(e){var t=new DataView(e.buffer,e.byteOffset,e.byteLength),r={version:t.getUint8(0),flags:new Uint8Array(e.subarray(1,4)),handlerType:K(e.subarray(8,12)),name:""},i=8;for(i=24;i<e.byteLength;i++){if(e[i]===0){i++;break}r.name+=String.fromCharCode(e[i])}return r.name=decodeURIComponent(escape(r.name)),r},mdat:function(e){return{byteLength:e.byteLength,nals:ya(e)}},mdhd:function(e){var t=new DataView(e.buffer,e.byteOffset,e.byteLength),r=4,i,n={version:t.getUint8(0),flags:new Uint8Array(e.subarray(1,4)),language:""};return n.version===1?(r+=4,n.creationTime=J(t.getUint32(r)),r+=8,n.modificationTime=J(t.getUint32(r)),r+=4,n.timescale=t.getUint32(r),r+=8,n.duration=t.getUint32(r)):(n.creationTime=J(t.getUint32(r)),r+=4,n.modificationTime=J(t.getUint32(r)),r+=4,n.timescale=t.getUint32(r),r+=4,n.duration=t.getUint32(r)),r+=4,i=t.getUint16(r),n.language+=String.fromCharCode((i>>10)+96),n.language+=String.fromCharCode(((i&992)>>5)+96),n.language+=String.fromCharCode((i&31)+96),n},mdia:function(e){return{boxes:G(e)}},mfhd:function(e){return{version:e[0],flags:new Uint8Array(e.subarray(1,4)),sequenceNumber:e[4]<<24|e[5]<<16|e[6]<<8|e[7]}},minf:function(e){return{boxes:G(e)}},mp4a:function(e){var t=new DataView(e.buffer,e.byteOffset,e.byteLength),r={dataReferenceIndex:t.getUint16(6),channelcount:t.getUint16(16),samplesize:t.getUint16(18),samplerate:t.getUint16(24)+t.getUint16(26)/65536};return e.byteLength>28&&(r.streamDescriptor=G(e.subarray(28))[0]),r},moof:function(e){return{boxes:G(e)}},moov:function(e){return{boxes:G(e)}},mvex:function(e){return{boxes:G(e)}},mvhd:function(e){var t=new DataView(e.buffer,e.byteOffset,e.byteLength),r=4,i={version:t.getUint8(0),flags:new Uint8Array(e.subarray(1,4))};return i.version===1?(r+=4,i.creationTime=J(t.getUint32(r)),r+=8,i.modificationTime=J(t.getUint32(r)),r+=4,i.timescale=t.getUint32(r),r+=8,i.duration=t.getUint32(r)):(i.creationTime=J(t.getUint32(r)),r+=4,i.modificationTime=J(t.getUint32(r)),r+=4,i.timescale=t.getUint32(r),r+=4,i.duration=t.getUint32(r)),r+=4,i.rate=t.getUint16(r)+t.getUint16(r+2)/16,r+=4,i.volume=t.getUint8(r)+t.getUint8(r+1)/8,r+=2,r+=2,r+=2*4,i.matrix=new Uint32Array(e.subarray(r,r+9*4)),r+=9*4,r+=6*4,i.nextTrackId=t.getUint32(r),i},pdin:function(e){var t=new DataView(e.buffer,e.byteOffset,e.byteLength);return{version:t.getUint8(0),flags:new Uint8Array(e.subarray(1,4)),rate:t.getUint32(4),initialDelay:t.getUint32(8)}},sdtp:function(e){var t={version:e[0],flags:new Uint8Array(e.subarray(1,4)),samples:[]},r;for(r=4;r<e.byteLength;r++)t.samples.push({dependsOn:(e[r]&48)>>4,isDependedOn:(e[r]&12)>>2,hasRedundancy:e[r]&3});return t},sidx:xa,smhd:function(e){return{version:e[0],flags:new Uint8Array(e.subarray(1,4)),balance:e[4]+e[5]/256}},stbl:function(e){return{boxes:G(e)}},ctts:function(e){var t=new DataView(e.buffer,e.byteOffset,e.byteLength),r={version:t.getUint8(0),flags:new Uint8Array(e.subarray(1,4)),compositionOffsets:[]},i=t.getUint32(4),n;for(n=8;i;n+=8,i--)r.compositionOffsets.push({sampleCount:t.getUint32(n),sampleOffset:t[r.version===0?"getUint32":"getInt32"](n+4)});return r},stss:function(e){var t=new DataView(e.buffer,e.byteOffset,e.byteLength),r={version:t.getUint8(0),flags:new Uint8Array(e.subarray(1,4)),syncSamples:[]},i=t.getUint32(4),n;for(n=8;i;n+=4,i--)r.syncSamples.push(t.getUint32(n));return r},stco:function(e){var t=new DataView(e.buffer,e.byteOffset,e.byteLength),r={version:e[0],flags:new Uint8Array(e.subarray(1,4)),chunkOffsets:[]},i=t.getUint32(4),n;for(n=8;i;n+=4,i--)r.chunkOffsets.push(t.getUint32(n));return r},stsc:function(e){var t=new DataView(e.buffer,e.byteOffset,e.byteLength),r=t.getUint32(4),i={version:e[0],flags:new Uint8Array(e.subarray(1,4)),sampleToChunks:[]},n;for(n=8;r;n+=12,r--)i.sampleToChunks.push({firstChunk:t.getUint32(n),samplesPerChunk:t.getUint32(n+4),sampleDescriptionIndex:t.getUint32(n+8)});return i},stsd:function(e){return{version:e[0],flags:new Uint8Array(e.subarray(1,4)),sampleDescriptions:G(e.subarray(8))}},stsz:function(e){var t=new DataView(e.buffer,e.byteOffset,e.byteLength),r={version:e[0],flags:new Uint8Array(e.subarray(1,4)),sampleSize:t.getUint32(4),entries:[]},i;for(i=12;i<e.byteLength;i+=4)r.entries.push(t.getUint32(i));return r},stts:function(e){var t=new DataView(e.buffer,e.byteOffset,e.byteLength),r={version:e[0],flags:new Uint8Array(e.subarray(1,4)),timeToSamples:[]},i=t.getUint32(4),n;for(n=8;i;n+=8,i--)r.timeToSamples.push({sampleCount:t.getUint32(n),sampleDelta:t.getUint32(n+4)});return r},styp:function(e){return oe.ftyp(e)},tfdt:St,tfhd:bt,tkhd:function(e){var t=new DataView(e.buffer,e.byteOffset,e.byteLength),r=4,i={version:t.getUint8(0),flags:new Uint8Array(e.subarray(1,4))};return i.version===1?(r+=4,i.creationTime=J(t.getUint32(r)),r+=8,i.modificationTime=J(t.getUint32(r)),r+=4,i.trackId=t.getUint32(r),r+=4,r+=8,i.duration=t.getUint32(r)):(i.creationTime=J(t.getUint32(r)),r+=4,i.modificationTime=J(t.getUint32(r)),r+=4,i.trackId=t.getUint32(r),r+=4,r+=4,i.duration=t.getUint32(r)),r+=4,r+=2*4,i.layer=t.getUint16(r),r+=2,i.alternateGroup=t.getUint16(r),r+=2,i.volume=t.getUint8(r)+t.getUint8(r+1)/8,r+=2,r+=2,i.matrix=new Uint32Array(e.subarray(r,r+9*4)),r+=9*4,i.width=t.getUint16(r)+t.getUint16(r+2)/65536,r+=4,i.height=t.getUint16(r)+t.getUint16(r+2)/65536,i},traf:function(e){return{boxes:G(e)}},trak:function(e){return{boxes:G(e)}},trex:function(e){var t=new DataView(e.buffer,e.byteOffset,e.byteLength);return{version:e[0],flags:new Uint8Array(e.subarray(1,4)),trackId:t.getUint32(4),defaultSampleDescriptionIndex:t.getUint32(8),defaultSampleDuration:t.getUint32(12),defaultSampleSize:t.getUint32(16),sampleDependsOn:e[20]&3,sampleIsDependedOn:(e[21]&192)>>6,sampleHasRedundancy:(e[21]&48)>>4,samplePaddingValue:(e[21]&14)>>1,sampleIsDifferenceSample:!!(e[21]&1),sampleDegradationPriority:t.getUint16(22)}},trun:vt,"url ":function(e){return{version:e[0],flags:new Uint8Array(e.subarray(1,4))}},vmhd:function(e){var t=new DataView(e.buffer,e.byteOffset,e.byteLength);return{version:e[0],flags:new Uint8Array(e.subarray(1,4)),graphicsmode:t.getUint16(4),opcolor:new Uint16Array([t.getUint16(6),t.getUint16(8),t.getUint16(10)])}}};G=function(e){for(var t=0,r=[],i,n,a,o,u,d=new ArrayBuffer(e.length),f=new Uint8Array(d),l=0;l<e.length;++l)f[l]=e[l];for(i=new DataView(d);t<e.byteLength;)n=i.getUint32(t),a=K(e.subarray(t+4,t+8)),o=n>1?t+n:e.byteLength,u=(oe[a]||function(h){return{data:h}})(e.subarray(t+8,o)),u.size=n,u.type=a,r.push(u),t=o;return r},Pt=function(e,t){var r;return t=t||0,r=new Array(t*2+1).join(" "),e.map(function(i,n){return r+i.type+`
-`+Object.keys(i).filter(function(a){return a!=="type"&&a!=="boxes"}).map(function(a){var o=r+"  "+a+": ",u=i[a];if(u instanceof Uint8Array||u instanceof Uint32Array){var d=Array.prototype.slice.call(new Uint8Array(u.buffer,u.byteOffset,u.byteLength)).map(function(f){return" "+("00"+f.toString(16)).slice(-2)}).join("").match(/.{1,24}/g);return d?d.length===1?o+"<"+d.join("").slice(1)+">":o+`<
-`+d.map(function(f){return r+"  "+f}).join(`
-`)+`
-`+r+"  >":o+"<>"}return o+JSON.stringify(u,null,2).split(`
-`).map(function(f,l){return l===0?f:r+"  "+f}).join(`
-`)}).join(`
-`)+(i.boxes?`
-`+Pt(i.boxes,t+1):"")}).join(`
-`)};var ba={inspect:G,textify:Pt,parseType:K,findBox:O,parseTraf:oe.traf,parseTfdt:oe.tfdt,parseHdlr:oe.hdlr,parseTfhd:oe.tfhd,parseTrun:oe.trun,parseSidx:oe.sidx},va={8:"audio",9:"video",18:"metadata"},Sa=function(e){return"0x"+("00"+e.toString(16)).slice(-2).toUpperCase()},Et=function(e){for(var t=[],r;e.byteLength>0;)r=0,t.push(Sa(e[r++])),e=e.subarray(r);return t.join(" ")},_a=function(e,t){var r=["AVC Sequence Header","AVC NALU","AVC End-of-Sequence"],i=e[1]&parseInt("01111111",2)<<16|e[2]<<8|e[3];return t=t||{},t.avcPacketType=r[e[0]],t.CompositionTime=e[1]&parseInt("10000000",2)?-i:i,e[0]===1?t.nalUnitTypeRaw=Et(e.subarray(4,100)):t.data=Et(e.subarray(4)),t},Ta=function(e,t){var r=["Unknown","Keyframe (for AVC, a seekable frame)","Inter frame (for AVC, a nonseekable frame)","Disposable inter frame (H.263 only)","Generated keyframe (reserved for server use only)","Video info/command frame"],i=e[0]&parseInt("00001111",2);return t=t||{},t.frameType=r[(e[0]&parseInt("11110000",2))>>>4],t.codecID=i,i===7?_a(e.subarray(1),t):t},wa=function(e,t){var r=["AAC Sequence Header","AAC Raw"];return t=t||{},t.aacPacketType=r[e[0]],t.data=Et(e.subarray(1)),t},Ia=function(e,t){var r=["Linear PCM, platform endian","ADPCM","MP3","Linear PCM, little endian","Nellymoser 16-kHz mono","Nellymoser 8-kHz mono","Nellymoser","G.711 A-law logarithmic PCM","G.711 mu-law logarithmic PCM","reserved","AAC","Speex","MP3 8-Khz","Device-specific sound"],i=["5.5-kHz","11-kHz","22-kHz","44-kHz"],n=(e[0]&parseInt("11110000",2))>>>4;return t=t||{},t.soundFormat=r[n],t.soundRate=i[(e[0]&parseInt("00001100",2))>>>2],t.soundSize=(e[0]&parseInt("00000010",2))>>>1?"16-bit":"8-bit",t.soundType=e[0]&parseInt("00000001",2)?"Stereo":"Mono",n===10?wa(e.subarray(1),t):t},Fa=function(e){return{tagType:va[e[0]],dataSize:e[1]<<16|e[2]<<8|e[3],timestamp:e[7]<<24|e[4]<<16|e[5]<<8|e[6],streamID:e[8]<<16|e[9]<<8|e[10]}},si=function(e){var t=Fa(e);switch(e[0]){case 8:Ia(e.subarray(11),t);break;case 9:Ta(e.subarray(11),t);break}return t},Aa=function(e){var t=9,r,i=[],n;for(t+=4;t<e.byteLength;)r=e[t+1]<<16,r|=e[t+2]<<8,r|=e[t+3],r+=11,n=e.subarray(t,t+r),i.push(si(n)),t+=r+4;return i},Da=function(e){return JSON.stringify(e,null,2)},Ua={inspectTag:si,inspect:Aa,textify:Da},oi=function(e){var t=e[1]&31;return t<<=8,t|=e[2],t},it=function(e){return!!(e[1]&64)},nt=function(e){var t=0;return(e[3]&48)>>>4>1&&(t+=e[4]+1),t},Ca=function(e,t){var r=oi(e);return r===0?"pat":r===t?"pmt":t?"pes":null},Ma=function(e){var t=it(e),r=4+nt(e);return t&&(r+=e[r]+1),(e[r+10]&31)<<8|e[r+11]},Pa=function(e){var t={},r=it(e),i=4+nt(e);if(r&&(i+=e[i]+1),!!(e[i+5]&1)){var n,a,o;n=(e[i+1]&15)<<8|e[i+2],a=3+n-4,o=(e[i+10]&15)<<8|e[i+11];for(var u=12+o;u<a;){var d=i+u;t[(e[d+1]&31)<<8|e[d+2]]=e[d],u+=((e[d+3]&15)<<8|e[d+4])+5}return t}},Ea=function(e,t){var r=oi(e),i=t[r];switch(i){case W.H264_STREAM_TYPE:return"video";case W.ADTS_STREAM_TYPE:return"audio";case W.METADATA_STREAM_TYPE:return"timed-metadata";default:return null}},Oa=function(e){var t=it(e);if(!t)return null;var r=4+nt(e);if(r>=e.byteLength)return null;var i=null,n;return n=e[r+7],n&192&&(i={},i.pts=(e[r+9]&14)<<27|(e[r+10]&255)<<20|(e[r+11]&254)<<12|(e[r+12]&255)<<5|(e[r+13]&254)>>>3,i.pts*=4,i.pts+=(e[r+13]&6)>>>1,i.dts=i.pts,n&64&&(i.dts=(e[r+14]&14)<<27|(e[r+15]&255)<<20|(e[r+16]&254)<<12|(e[r+17]&255)<<5|(e[r+18]&254)>>>3,i.dts*=4,i.dts+=(e[r+18]&6)>>>1)),i},Ot=function(e){switch(e){case 5:return"slice_layer_without_partitioning_rbsp_idr";case 6:return"sei_rbsp";case 7:return"seq_parameter_set_rbsp";case 8:return"pic_parameter_set_rbsp";case 9:return"access_unit_delimiter_rbsp";default:return null}},ka=function(e){for(var t=4+nt(e),r=e.subarray(t),i=0,n=0,a=!1,o;n<r.byteLength-3;n++)if(r[n+2]===1){i=n+5;break}for(;i<r.byteLength;)switch(r[i]){case 0:if(r[i-1]!==0){i+=2;break}else if(r[i-2]!==0){i++;break}n+3!==i-2&&(o=Ot(r[n+3]&31),o==="slice_layer_without_partitioning_rbsp_idr"&&(a=!0));do i++;while(r[i]!==1&&i<r.length);n=i-2,i+=3;break;case 1:if(r[i-1]!==0||r[i-2]!==0){i+=3;break}o=Ot(r[n+3]&31),o==="slice_layer_without_partitioning_rbsp_idr"&&(a=!0),n=i-2,i+=3;break;default:i+=3;break}return r=r.subarray(n),i-=n,n=0,r&&r.byteLength>3&&(o=Ot(r[n+3]&31),o==="slice_layer_without_partitioning_rbsp_idr"&&(a=!0)),a},La={parseType:Ca,parsePat:Ma,parsePmt:Pa,parsePayloadUnitStartIndicator:it,parsePesType:Ea,parsePesTime:Oa,videoPacketContainsKeyFrame:ka},ye=jr.handleRollover,M={};M.ts=La,M.aac=De;var ce=V.ONE_SECOND_IN_TS,$=188,ee=71,Ra=function(e,t){for(var r=0,i=$,n,a;i<e.byteLength;){if(e[r]===ee&&e[i]===ee){switch(n=e.subarray(r,i),a=M.ts.parseType(n,t.pid),a){case"pat":t.pid=M.ts.parsePat(n);break;case"pmt":var o=M.ts.parsePmt(n);t.table=t.table||{},Object.keys(o).forEach(function(u){t.table[u]=o[u]});break}r+=$,i+=$;continue}r++,i++}},ui=function(e,t,r){for(var i=0,n=$,a,o,u,d,f,l=!1;n<=e.byteLength;){if(e[i]===ee&&(e[n]===ee||n===e.byteLength)){switch(a=e.subarray(i,n),o=M.ts.parseType(a,t.pid),o){case"pes":u=M.ts.parsePesType(a,t.table),d=M.ts.parsePayloadUnitStartIndicator(a),u==="audio"&&d&&(f=M.ts.parsePesTime(a),f&&(f.type="audio",r.audio.push(f),l=!0));break}if(l)break;i+=$,n+=$;continue}i++,n++}for(n=e.byteLength,i=n-$,l=!1;i>=0;){if(e[i]===ee&&(e[n]===ee||n===e.byteLength)){switch(a=e.subarray(i,n),o=M.ts.parseType(a,t.pid),o){case"pes":u=M.ts.parsePesType(a,t.table),d=M.ts.parsePayloadUnitStartIndicator(a),u==="audio"&&d&&(f=M.ts.parsePesTime(a),f&&(f.type="audio",r.audio.push(f),l=!0));break}if(l)break;i-=$,n-=$;continue}i--,n--}},Ba=function(e,t,r){for(var i=0,n=$,a,o,u,d,f,l,h,y,b=!1,x={data:[],size:0};n<e.byteLength;){if(e[i]===ee&&e[n]===ee){switch(a=e.subarray(i,n),o=M.ts.parseType(a,t.pid),o){case"pes":if(u=M.ts.parsePesType(a,t.table),d=M.ts.parsePayloadUnitStartIndicator(a),u==="video"&&(d&&!b&&(f=M.ts.parsePesTime(a),f&&(f.type="video",r.video.push(f),b=!0)),!r.firstKeyFrame)){if(d&&x.size!==0){for(l=new Uint8Array(x.size),h=0;x.data.length;)y=x.data.shift(),l.set(y,h),h+=y.byteLength;if(M.ts.videoPacketContainsKeyFrame(l)){var T=M.ts.parsePesTime(l);T?(r.firstKeyFrame=T,r.firstKeyFrame.type="video"):console.warn("Failed to extract PTS/DTS from PES at first keyframe. This could be an unusual TS segment, or else mux.js did not parse your TS segment correctly. If you know your TS segments do contain PTS/DTS on keyframes please file a bug report! You can try ffprobe to double check for yourself.")}x.size=0}x.data.push(a),x.size+=a.byteLength}break}if(b&&r.firstKeyFrame)break;i+=$,n+=$;continue}i++,n++}for(n=e.byteLength,i=n-$,b=!1;i>=0;){if(e[i]===ee&&e[n]===ee){switch(a=e.subarray(i,n),o=M.ts.parseType(a,t.pid),o){case"pes":u=M.ts.parsePesType(a,t.table),d=M.ts.parsePayloadUnitStartIndicator(a),u==="video"&&d&&(f=M.ts.parsePesTime(a),f&&(f.type="video",r.video.push(f),b=!0));break}if(b)break;i-=$,n-=$;continue}i--,n--}},Na=function(e,t){if(e.audio&&e.audio.length){var r=t;(typeof r>"u"||isNaN(r))&&(r=e.audio[0].dts),e.audio.forEach(function(a){a.dts=ye(a.dts,r),a.pts=ye(a.pts,r),a.dtsTime=a.dts/ce,a.ptsTime=a.pts/ce})}if(e.video&&e.video.length){var i=t;if((typeof i>"u"||isNaN(i))&&(i=e.video[0].dts),e.video.forEach(function(a){a.dts=ye(a.dts,i),a.pts=ye(a.pts,i),a.dtsTime=a.dts/ce,a.ptsTime=a.pts/ce}),e.firstKeyFrame){var n=e.firstKeyFrame;n.dts=ye(n.dts,i),n.pts=ye(n.pts,i),n.dtsTime=n.dts/ce,n.ptsTime=n.pts/ce}}},ja=function(e){for(var t=!1,r=0,i=null,n=null,a=0,o=0,u;e.length-o>=3;){var d=M.aac.parseType(e,o);switch(d){case"timed-metadata":if(e.length-o<10){t=!0;break}if(a=M.aac.parseId3TagSize(e,o),a>e.length){t=!0;break}n===null&&(u=e.subarray(o,o+a),n=M.aac.parseAacTimestamp(u)),o+=a;break;case"audio":if(e.length-o<7){t=!0;break}if(a=M.aac.parseAdtsSize(e,o),a>e.length){t=!0;break}i===null&&(u=e.subarray(o,o+a),i=M.aac.parseSampleRate(u)),r++,o+=a;break;default:o++;break}if(t)return null}if(i===null||n===null)return null;var f=ce/i,l={audio:[{type:"audio",dts:n,pts:n},{type:"audio",dts:n+r*1024*f,pts:n+r*1024*f}]};return l},Wa=function(e){var t={pid:null,table:null},r={};Ra(e,t);for(var i in t.table)if(t.table.hasOwnProperty(i)){var n=t.table[i];switch(n){case W.H264_STREAM_TYPE:r.video=[],Ba(e,t,r),r.video.length===0&&delete r.video;break;case W.ADTS_STREAM_TYPE:r.audio=[],ui(e,t,r),r.audio.length===0&&delete r.audio;break}}return r},za=function(e,t){var r=M.aac.isLikelyAacData(e),i;return r?i=ja(e):i=Wa(e),!i||!i.audio&&!i.video?null:(Na(i,t),i)},Va={inspect:za,parseAudioPes_:ui},at={codecs:ht,mp4:ea,flv:oa,mp2t:ua,partial:ma};at.mp4.tools=ba,at.flv.tools=Ua,at.mp2t.tools=Va;var Ga=at;return Ga})});var as={},F,xi=new TextDecoder("utf-8",{ignoreBOM:!0,fatal:!0});xi.decode();var st=null;function be(){return(st===null||st.buffer!==F.memory.buffer)&&(st=new Uint8Array(F.memory.buffer)),st}function Ce(p,c){return xi.decode(be().subarray(p,p+c))}function me(p){return()=>{throw new Error(`${p} is not defined`)}}function yi(p,c){return be().subarray(p/1,p/1+c)}var te=0,dt=new TextEncoder("utf-8"),Za=typeof dt.encodeInto=="function"?function(p,c){return dt.encodeInto(p,c)}:function(p,c){let g=dt.encode(p);return c.set(g),{read:p.length,written:g.length}};function ot(p,c,g){if(g===void 0){let A=dt.encode(p),L=c(A.length);return be().subarray(L,L+A.length).set(A),te=A.length,L}let S=p.length,m=c(S),v=be(),_=0;for(;_<S;_++){let A=p.charCodeAt(_);if(A>127)break;v[m+_]=A}if(_!==S){_!==0&&(p=p.slice(_)),m=g(m,S,S=_+p.length*3);let A=be().subarray(m+_,m+S);_+=Za(p,A).written}return te=_,m}var ut=null;function gi(){return(ut===null||ut.buffer!==F.memory.buffer)&&(ut=new Int32Array(F.memory.buffer)),ut}function Qa(p,c){let g=c(p.length*1);return be().set(p,g/1),te=p.length,g}function es(p,c){if(!(p instanceof c))throw new Error(`expected instance of ${c.name}`);return p.ptr}var ft=null;function ts(){return(ft===null||ft.buffer!==F.memory.buffer)&&(ft=new Float64Array(F.memory.buffer)),ft}function rs(p,c){let g=c(p.length*8);return ts().set(p,g/8),te=p.length,g}var Ds=Object.freeze({PlayerInstanceNotFound:1,1:"PlayerInstanceNotFound",NoMediaSourceAttached:2,2:"NoMediaSourceAttached",UnknownError:3,3:"UnknownError"}),Us=Object.freeze({PlayerInstanceNotFound:1,1:"PlayerInstanceNotFound",NoMediaSourceAttached:2,2:"NoMediaSourceAttached",UnknownError:3,3:"UnknownError"}),Cs=Object.freeze({PlayerInstanceNotFound:1,1:"PlayerInstanceNotFound",UnknownError:2,2:"UnknownError"}),Ms=Object.freeze({PlayerOrSourceBufferInstanceNotFound:1,1:"PlayerOrSourceBufferInstanceNotFound",GivenResourceNotFound:2,2:"GivenResourceNotFound",UnknownError:3,3:"UnknownError"}),Ps=Object.freeze({PlayerOrSourceBufferInstanceNotFound:1,1:"PlayerOrSourceBufferInstanceNotFound",UnknownError:2,2:"UnknownError"}),Es=Object.freeze({PlayerInstanceNotFound:1,1:"PlayerInstanceNotFound",UnknownError:2,2:"UnknownError"}),Os=Object.freeze({PlayerInstanceNotFound:0,0:"PlayerInstanceNotFound",NoMediaSourceAttached:1,1:"NoMediaSourceAttached",MediaSourceIsClosed:2,2:"MediaSourceIsClosed",QuotaExceededError:3,3:"QuotaExceededError",TypeNotSupportedError:4,4:"TypeNotSupportedError",EmptyMimeType:5,5:"EmptyMimeType",UnknownError:6,6:"UnknownError"}),ks=Object.freeze({Init:0,0:"Init",Seeked:1,1:"Seeked",Seeking:2,2:"Seeking",ReadyStateChanged:3,3:"ReadyStateChanged",RegularInterval:4,4:"RegularInterval",Error:5,5:"Error"}),ve=Object.freeze({Error:0,0:"Error",Warn:1,1:"Warn",Info:2,2:"Info",Debug:3,3:"Debug"}),bi=Object.freeze({Audio:0,0:"Audio",Video:1,1:"Video"}),Me=Object.freeze({Closed:0,0:"Closed",Ended:1,1:"Ended",Open:2,2:"Open"}),is=Object.freeze({Init:0,0:"Init",Seeking:1,1:"Seeking",Seeked:2,2:"Seeked",RegularInterval:3,3:"RegularInterval",LoadedData:4,4:"LoadedData",LoadedMetadata:5,5:"LoadedMetadata",CanPlay:6,6:"CanPlay",CanPlayThrough:7,7:"CanPlayThrough",Ended:8,8:"Ended",Pause:9,9:"Pause",Play:10,10:"Play",RateChange:11,11:"RateChange",Stalled:12,12:"Stalled"});var ie=class{static __wrap(c){let g=Object.create(ie.prototype);return g.ptr=c,g}__destroy_into_raw(){let c=this.ptr;return this.ptr=0,c}free(){let c=this.__destroy_into_raw();F.__wbg_dispatcher_free(c)}constructor(){let c=F.dispatcher_new();return ie.__wrap(c)}load_content(c){let g=ot(c,F.__wbindgen_malloc,F.__wbindgen_realloc),S=te;F.dispatcher_load_content(this.ptr,g,S)}get_available_audio_tracks(){try{let m=F.__wbindgen_add_to_stack_pointer(-16);F.dispatcher_get_available_audio_tracks(m,this.ptr);var c=gi()[m/4+0],g=gi()[m/4+1],S=yi(c,g).slice();return F.__wbindgen_free(c,g*1),S}finally{F.__wbindgen_add_to_stack_pointer(16)}}stop(){F.dispatcher_stop(this.ptr)}static log(c,g){let S=ot(g,F.__wbindgen_malloc,F.__wbindgen_realloc),m=te;F.dispatcher_log(c,S,m)}test_seg_back_and_forth(){F.dispatcher_test_seg_back_and_forth(this.ptr)}on_u8_request_finished(c,g,S,m){let v=Qa(g,F.__wbindgen_malloc),_=te,A=ot(S,F.__wbindgen_malloc,F.__wbindgen_realloc),L=te;F.dispatcher_on_u8_request_finished(this.ptr,c,v,_,A,L,m)}on_u8_no_copy_request_finished(c,g,S,m,v){let _=ot(m,F.__wbindgen_malloc,F.__wbindgen_realloc),A=te;F.dispatcher_on_u8_no_copy_request_finished(this.ptr,c,g,S,_,A,v)}on_u8_request_failed(c){F.dispatcher_on_u8_request_failed(this.ptr,c)}on_media_source_state_change(c){F.dispatcher_on_media_source_state_change(this.ptr,c)}on_source_buffer_update(c){F.dispatcher_on_source_buffer_update(this.ptr,c)}on_source_buffer_error(c){F.dispatcher_on_source_buffer_error(this.ptr,c)}on_playback_tick(c){es(c,ue);var g=c.ptr;c.ptr=0,F.dispatcher_on_playback_tick(this.ptr,g)}};var ue=class{static __wrap(c){let g=Object.create(ue.prototype);return g.ptr=c,g}__destroy_into_raw(){let c=this.ptr;return this.ptr=0,c}free(){let c=this.__destroy_into_raw();F.__wbg_mediaobservation_free(c)}constructor(c,g,S,m,v,_){let A=rs(m,F.__wbindgen_malloc),L=te,ne=F.mediaobservation_new(c,g,S,A,L,v,_);return ue.__wrap(ne)}};async function ns(p,c){if(typeof Response=="function"&&p instanceof Response){if(typeof WebAssembly.instantiateStreaming=="function")try{return await WebAssembly.instantiateStreaming(p,c)}catch(S){if(p.headers.get("Content-Type")!="application/wasm")console.warn("`WebAssembly.instantiateStreaming` failed because your server does not serve wasm with `application/wasm` MIME type. Falling back to `WebAssembly.instantiate` which is slower. Original error:\n",S);else throw S}let g=await p.arrayBuffer();return await WebAssembly.instantiate(g,c)}else{let g=await WebAssembly.instantiate(p,c);return g instanceof WebAssembly.Instance?{instance:g,module:p}:g}}async function vi(p){typeof p>"u"&&(p=new URL("wasp_hls_bg.wasm",as.url));let c={};c.wbg={},c.wbg.__wbg_jsLog_b982096ce6212ef6=function(m,v,_){jsLog(m>>>0,Ce(v,_))},c.wbg.__wbg_jsFetchU8_19c8118d4199e71f=function(m,v){return jsFetchU8(Ce(m,v))},c.wbg.__wbg_jsFetchU8NoCopy_01edc4d5da20aca4=function(m,v){return jsFetchU8NoCopy(Ce(m,v))},c.wbg.__wbg_jsAbortRequest_b9336d1bf2ce02d5=function(m){return jsAbortRequest(m>>>0)},c.wbg.__wbg_jsAttachMediaSource_50a98125dd499139=typeof jsAttachMediaSource=="function"?jsAttachMediaSource:me("jsAttachMediaSource"),c.wbg.__wbg_jsRemoveMediaSource_fec8a1a09443f64c=typeof jsRemoveMediaSource=="function"?jsRemoveMediaSource:me("jsRemoveMediaSource"),c.wbg.__wbg_jsSetMediaSourceDuration_c194e62f9dc9fb33=typeof jsSetMediaSourceDuration=="function"?jsSetMediaSourceDuration:me("jsSetMediaSourceDuration"),c.wbg.__wbg_jsAddSourceBuffer_aa67c440e03875c2=function(m,v,_){return jsAddSourceBuffer(m>>>0,Ce(v,_))},c.wbg.__wbg_jsAppendBuffer_14b90fd497e03b43=function(m,v,_){jsAppendBuffer(m>>>0,yi(v,_))},c.wbg.__wbg_jsAppendBufferJsBlob_9853a8438040ab70=function(m,v){jsAppendBufferJsBlob(m>>>0,v>>>0)},c.wbg.__wbg_jsRemoveBuffer_4dd3e2b0ac5a7f1a=function(m,v,_){jsRemoveBuffer(m>>>0,v,_)},c.wbg.__wbg_jsEndOfStream_76ccdd8f5263e4db=typeof jsEndOfStream=="function"?jsEndOfStream:me("jsEndOfStream"),c.wbg.__wbg_jsStartObservingPlayback_ab5372c33304ab7d=typeof jsStartObservingPlayback=="function"?jsStartObservingPlayback:me("jsStartObservingPlayback"),c.wbg.__wbg_jsStopObservingPlayback_34eeba33aa0222d7=typeof jsStopObservingPlayback=="function"?jsStopObservingPlayback:me("jsStopObservingPlayback"),c.wbg.__wbg_jsFreeResource_573da66ecc5f1012=function(m){return jsFreeResource(m>>>0)},c.wbg.__wbg_jsSeek_d05072154c53a5dd=typeof jsSeek=="function"?jsSeek:me("jsSeek"),c.wbg.__wbindgen_throw=function(m,v){throw new Error(Ce(m,v))},(typeof p=="string"||typeof Request=="function"&&p instanceof Request||typeof URL=="function"&&p instanceof URL)&&(p=fetch(p));let{instance:g,module:S}=await ns(await p,c);return F=g.exports,vi.__wbindgen_wasm_module=S,F}var Si=vi;function Rt(){let p="",c=-1;return function(){return c++,c>=Number.MAX_SAFE_INTEGER&&(p+="0",c=0),p+String(c)}}var Bt=class{constructor(){this._instanceInfo=null,this.hasWorkerMse=void 0}start(c){this.hasWorkerMse=c,this._instanceInfo={dispatcher:new ie,content:null}}dispose(){this._instanceInfo?.dispatcher.free(),fe.freeEverything(),Z.freeEverything()}changeContent(c){if(this._instanceInfo===null){console.error();return}fe.freeEverything(),Z.freeEverything(),this._instanceInfo.content=c}getDispatcher(){return this._instanceInfo===null?null:this._instanceInfo.dispatcher}getContentInfo(){return this._instanceInfo===null?null:this._instanceInfo.content}},lt=class{constructor(){this._store={}}create(c,g){this._store[c]=g}delete(c){delete this._store[c]}get(c){return this._store[c]}freeEverything(){this._store={}}},D=new Bt,fe=new lt,Z=new lt;function z(p,c){console.debug("<-- sending to main:",p.type),c===void 0?postMessage(p):postMessage(p,c)}var Ii=Ja(wi());var Ee,ss=/^[a-z]+\/mp2t;/i;function os(p){return ss.test(p)}function Wt(p){return Fi(p)&&!MediaSource.isTypeSupported(p)}function Fi(p){return os(p)}function zt(p,c){if(!Fi(p))return p;let g=p.replace(/mp2t/i,"mp4");c===bi.Audio&&(g=p.replace(/video/i,"audio"));let S=/avc1\.(66|77|100)\.(\d+)/.exec(g);if(S){let m=S[1],v;m==="66"?v="4200":m==="77"?v="4d00":(m!=="100"&&console.error("Impossible regex catch"),v="6400");let _=Number(S[2]);_>=256&&console.error("Invalid legacy avc1 level number.");let A=(_>>4).toString(16)+(_&15).toString(16);g=`avc1.${v}${A}`}return g}function Vt(p){Ee===void 0&&(Ee=new Ii.default.mp4.Transmuxer);let c=[];if(Ee.on("data",function(g){let S=new Uint8Array(g.initSegment.byteLength+g.data.byteLength);S.set(g.initSegment,0),S.set(g.data,g.initSegment.byteLength),c.push(S)}),Ee.push(p),Ee.flush(),c.length===0)return null;if(c.length===1)return c[0];{let g=c.reduce((v,_)=>v+_.byteLength,0),S=new Uint8Array(g),m=0;for(let v of c)S.set(v,m),m+=v.byteLength;return S}}var Ai=Rt(),Di=Math.pow(2,32)-1,Se=0,Oe=0;function us(p,c){let g=performance.now().toFixed(2);switch(p){case ve.Error:console.error(g,c);break;case ve.Warn:console.warn(g,c);break;case ve.Info:console.info(g,c);break;case ve.Debug:console.debug(g,c);break}}function fs(p){let c=Se;Ci();let g=new AbortController;Z.create(c,{abortController:g});let S=performance.now();return fetch(p,{signal:g.signal}).then(async m=>{if(g.signal.aborted)return;let v=await m.arrayBuffer(),_=performance.now()-S;Z.delete(c);let A=D.getDispatcher();A!==null&&A.on_u8_request_finished(c,new Uint8Array(v),m.url,_)}).catch(m=>{g.signal.aborted||(Z.delete(c),m instanceof Error&&m.name)}),c}function ds(p){let c=Se;Ci();let g=new AbortController;Z.create(c,{abortController:g});let S=performance.now();return fetch(p,{signal:g.signal}).then(async m=>{let v=await m.arrayBuffer(),_=performance.now()-S;Z.delete(c);let A=D.getDispatcher();if(A!==null){let L=Oe;ws();let ne=new Uint8Array(v);fe.create(L,ne),A.on_u8_no_copy_request_finished(c,L,ne.byteLength,m.url,_)}}).catch(m=>{Z.delete(c),m instanceof Error&&m.name}),c}function ls(p){let c=Z.get(p);return c!==void 0?(c.abortController.abort(),Promise.resolve().then(()=>{Z.delete(p)}),!0):!1}function cs(p){let c=D.getContentInfo();if(c===null||c.mediaSourceObj===null){console.error("Attempting to seek when no MediaSource is created");return}z({type:"seek",value:{mediaSourceId:c.mediaSourceObj.mediaSourceId,position:p}})}function ps(){let p=D.getContentInfo();if(p!==null)try{let c=function(){D.getDispatcher()?.on_media_source_state_change(Me.Ended)},g=function(){D.getDispatcher()?.on_media_source_state_change(Me.Open)},S=function(){D.getDispatcher()?.on_media_source_state_change(Me.Closed)};if(D.hasWorkerMse!==!0){let m=Ai();p.mediaSourceObj={nextSourceBufferId:0,sourceBuffers:[],type:"main",mediaSourceId:m},z({type:"create-media-source",value:{contentId:p.contentId,mediaSourceId:m}})}else{let m=new MediaSource;m.addEventListener("sourceclose",S),m.addEventListener("sourceended",c),m.addEventListener("sourceopen",g);let v=()=>{m.removeEventListener("sourceclose",S),m.removeEventListener("sourceended",c),m.removeEventListener("sourceopen",g)},_=m.handle,A;_==null&&(A=URL.createObjectURL(m));let L=Ai();p.mediaSourceObj={type:"worker",mediaSourceId:L,mediaSource:m,removeEventListeners:v,sourceBuffers:[],nextSourceBufferId:0},z({type:"attach-media-source",value:{contentId:p.contentId,handle:_,src:A,mediaSourceId:L}},_!==void 0?[_]:[])}}catch{hs(()=>{})}}function hs(p){typeof queueMicrotask=="function"?queueMicrotask(p):Promise.resolve().then(p).catch(()=>{})}function ms(){let p=D.getContentInfo();if(p!==null&&p.mediaSourceObj!==null){if(p.mediaSourceObj.type==="worker"){let{mediaSource:c,removeEventListeners:g}=p.mediaSourceObj;if(g(),c!==null&&c.readyState!=="closed"){let{readyState:S,sourceBuffers:m}=c;for(let v=m.length-1;v>=0;v--){let _=m[v];if(!_.updating)try{S==="open"&&_.abort(),c.removeSourceBuffer(_)}catch(A){let L=Ts(A,"Unknown error while removing SourceBuffer");ie.log(ve.Error,"Could not remove SourceBuffer: "+L)}}}}z({type:"clear-media-source",value:{mediaSourceId:p.mediaSourceObj.mediaSourceId}})}}function gs(p){let c=D.getContentInfo();if(c!==null&&c.mediaSourceObj!==null)if(c.mediaSourceObj.type==="worker")try{c.mediaSourceObj.mediaSource.duration=p}catch{}else z({type:"update-media-source-duration",value:{mediaSourceId:c.mediaSourceObj.mediaSourceId,duration:p}})}function xs(p,c){let g=D.getContentInfo();if(g===null)throw new Error("Error 1");if(g.mediaSourceObj===null)throw new Error("Error 2");if(g.mediaSourceObj.type==="main"){let{sourceBuffers:S,nextSourceBufferId:m}=g.mediaSourceObj;try{let v=c;Wt(c)&&(v=zt(c,p));let _=m;return S.push({id:_,transmuxer:v===c?null:Vt,sourceBuffer:null}),g.mediaSourceObj.nextSourceBufferId++,z({type:"create-source-buffer",value:{mediaSourceId:g.mediaSourceObj.mediaSourceId,sourceBufferId:_,contentType:v}}),_}catch(v){throw v}}else{let{mediaSource:S,sourceBuffers:m,nextSourceBufferId:v}=g.mediaSourceObj;if(S.readyState==="closed")throw new Error("A");if(c==="")throw new Error("B");try{let _=c;Wt(c)&&(_=zt(c,p));let A=S.addSourceBuffer(_),L=v;return m.push({id:L,sourceBuffer:A,transmuxer:_===c?null:Vt}),g.mediaSourceObj.nextSourceBufferId++,A.addEventListener("updateend",function(){D.getDispatcher()?.on_source_buffer_update(L)}),L}catch{throw new Error("C")}}}function Ui(p,c){try{let g=qt();if(g===void 0)return;let S=g.sourceBuffers.findIndex(({id:_})=>_===p);if(S<0)return;let m=g.sourceBuffers[S],v=c;if(m.transmuxer!==null){let _=m.transmuxer(c);_!==null&&(v=_)}if(m.sourceBuffer!==null)m.sourceBuffer.appendBuffer(v);else{let _=v.buffer;z({type:"append-buffer",value:{mediaSourceId:g.mediaSourceId,sourceBufferId:p,data:_}},[_])}}catch{return}}function ys(p,c){let g=fe.get(c);if(g!==void 0)return Ui(p,g)}function bs(p,c,g){try{let S=qt();if(S===void 0)return;if(S.type==="worker"){let m=S.sourceBuffers.find(({id:v})=>v===p);if(m===void 0)return;m.sourceBuffer.remove(c,g)}else z({type:"remove-buffer",value:{mediaSourceId:S.mediaSourceId,sourceBufferId:p,start:c,end:g}})}catch{return}}function vs(){try{let p=qt();if(p===void 0)return;p.type==="worker"?p.mediaSource.endOfStream():z({type:"end-of-stream",value:{mediaSourceId:p.mediaSourceId}})}catch{return}}function Ss(){let p=D.getContentInfo();p!==null&&p.mediaSourceObj!==null&&z({type:"start-playback-observation",value:{mediaSourceId:p.mediaSourceObj.mediaSourceId}})}function Gt(){let p=D.getContentInfo();p!==null&&p.mediaSourceObj!==null&&z({type:"stop-playback-observation",value:{mediaSourceId:p.mediaSourceObj.mediaSourceId}})}function _s(p){return fe.get(p)===void 0?!1:(fe.delete(p),!0)}function Ts(p,c){return p instanceof Error?p.name+": "+p.message:c}function qt(){let p=D.getContentInfo();if(p===null)return;let{mediaSourceObj:c}=p;if(c!==null)return c}var ct=1e6;function ws(){let p=0;do Oe=Oe>=Di?0:Oe+1,p++;while(fe.get(Oe)!==void 0||p>=ct);if(p>=ct)throw new Error("Too many resources reserved. Is it normal?")}function Ci(){let p=0;do Se=Se>=Di?0:Se+1,p++;while(Z.get(Se)!==void 0||p>=ct);if(p>=ct)throw new Error("Too many pending requests. Is it normal?")}var q=self;q.jsLog=us;q.jsFetchU8=fs;q.jsFetchU8NoCopy=ds;q.jsAbortRequest=ls;q.jsAttachMediaSource=ps;q.jsRemoveMediaSource=ms;q.jsSetMediaSourceDuration=gs;q.jsAddSourceBuffer=xs;q.jsAppendBuffer=Ui;q.jsAppendBufferJsBlob=ys;q.jsRemoveBuffer=bs;q.jsEndOfStream=vs;q.jsStartObservingPlayback=Ss;q.jsStopObservingPlayback=Gt;q.jsFreeResource=_s;q.jsSeek=cs;var Mi=!1;function Ht(){onmessage=function(p){if(p.origin!==""){console.error("Unexpected trans-origin message");return}let{data:c}=p;if(typeof c!="object"||c===null||typeof c.type!="string"){console.error("unexpected main message");return}switch(c.type){case"init":if(Mi)return Ei("Worker initialization already done",0);Mi=!0;let{wasmUrl:g,hasWorkerMse:S}=c.value;Is(g,S);break;case"dispose":Fs();break;case"load":{let m=D.getDispatcher();if(m===null)return Pi(c.value.contentId);let v={contentId:c.value.contentId,mediaSourceObj:null,observationsObj:null};D.changeContent(v),m.load_content(c.value.url);break}case"stop":{let m=D.getDispatcher();if(m===null)return Pi(c.value.contentId);m.stop();break}case"media-source-state-changed":{let m=D.getDispatcher(),v=D.getContentInfo();if(m===null||v===null||v.mediaSourceObj?.mediaSourceId!==c.value.mediaSourceId)return;m.on_media_source_state_change(c.value.state);break}case"source-buffer-updated":{let m=D.getDispatcher(),v=D.getContentInfo();if(m===null||v===null||v.mediaSourceObj?.mediaSourceId!==c.value.mediaSourceId)return;m.on_source_buffer_update(c.value.sourceBufferId);break}case"observation":{let m=D.getDispatcher(),v=D.getContentInfo();if(m===null||v===null||v.mediaSourceObj?.mediaSourceId!==c.value.mediaSourceId)return;let _=new ue(c.value.reason,c.value.currentTime,c.value.readyState,c.value.buffered,c.value.paused,c.value.seeking);m.on_playback_tick(_);break}case"create-media-source-error":{let m=D.getDispatcher(),v=D.getContentInfo();if(m===null||v===null||v.mediaSourceObj?.mediaSourceId!==c.value.mediaSourceId)return;m.stop();break}case"update-media-source-duration-error":{let m=D.getDispatcher(),v=D.getContentInfo();if(m===null||v===null||v.mediaSourceObj?.mediaSourceId!==c.value.mediaSourceId)return;console.error("Error: when setting the MediaSource's duration");break}case"create-source-buffer-error":{let m=D.getDispatcher(),v=D.getContentInfo();if(m===null||v===null||v.mediaSourceObj?.mediaSourceId!==c.value.mediaSourceId)return;m.stop();break}}}}function Ei(p,c){let g;typeof p=="string"?g=p:p instanceof Error&&(g=p.message),z({type:"initialization-error",value:{code:c,message:g}})}function Pi(p){z({type:"content-error",value:{contentId:p,message:"Error: Worker not initialized.",code:0}})}function Is(p,c){Si(fetch(p)).then(()=>{D.start(c),z({type:"initialized",value:null})}).catch(g=>{Ei(g,1)})}function Fs(){Gt(),D.dispose()}Ht();})();
+  // node_modules/global/window.js
+  var require_window = __commonJS({
+    "node_modules/global/window.js"(exports, module) {
+      var win;
+      if (typeof window !== "undefined") {
+        win = window;
+      } else if (typeof global !== "undefined") {
+        win = global;
+      } else if (typeof self !== "undefined") {
+        win = self;
+      } else {
+        win = {};
+      }
+      module.exports = win;
+    }
+  });
+
+  // node_modules/mux.js/dist/mux.js
+  var require_mux = __commonJS({
+    "node_modules/mux.js/dist/mux.js"(exports, module) {
+      (function(global3, factory) {
+        typeof exports === "object" && typeof module !== "undefined" ? module.exports = factory(require_window()) : typeof define === "function" && define.amd ? define(["global/window"], factory) : (global3 = typeof globalThis !== "undefined" ? globalThis : global3 || self, global3.muxjs = factory(global3.window));
+      })(exports, function(window2) {
+        "use strict";
+        function _interopDefaultLegacy(e) {
+          return e && typeof e === "object" && "default" in e ? e : { "default": e };
+        }
+        var window__default = /* @__PURE__ */ _interopDefaultLegacy(window2);
+        var Stream = function Stream2() {
+          this.init = function() {
+            var listeners = {};
+            this.on = function(type2, listener) {
+              if (!listeners[type2]) {
+                listeners[type2] = [];
+              }
+              listeners[type2] = listeners[type2].concat(listener);
+            };
+            this.off = function(type2, listener) {
+              var index;
+              if (!listeners[type2]) {
+                return false;
+              }
+              index = listeners[type2].indexOf(listener);
+              listeners[type2] = listeners[type2].slice();
+              listeners[type2].splice(index, 1);
+              return index > -1;
+            };
+            this.trigger = function(type2) {
+              var callbacks, i, length, args;
+              callbacks = listeners[type2];
+              if (!callbacks) {
+                return;
+              }
+              if (arguments.length === 2) {
+                length = callbacks.length;
+                for (i = 0; i < length; ++i) {
+                  callbacks[i].call(this, arguments[1]);
+                }
+              } else {
+                args = [];
+                i = arguments.length;
+                for (i = 1; i < arguments.length; ++i) {
+                  args.push(arguments[i]);
+                }
+                length = callbacks.length;
+                for (i = 0; i < length; ++i) {
+                  callbacks[i].apply(this, args);
+                }
+              }
+            };
+            this.dispose = function() {
+              listeners = {};
+            };
+          };
+        };
+        Stream.prototype.pipe = function(destination) {
+          this.on("data", function(data) {
+            destination.push(data);
+          });
+          this.on("done", function(flushSource) {
+            destination.flush(flushSource);
+          });
+          this.on("partialdone", function(flushSource) {
+            destination.partialFlush(flushSource);
+          });
+          this.on("endedtimeline", function(flushSource) {
+            destination.endTimeline(flushSource);
+          });
+          this.on("reset", function(flushSource) {
+            destination.reset(flushSource);
+          });
+          return destination;
+        };
+        Stream.prototype.push = function(data) {
+          this.trigger("data", data);
+        };
+        Stream.prototype.flush = function(flushSource) {
+          this.trigger("done", flushSource);
+        };
+        Stream.prototype.partialFlush = function(flushSource) {
+          this.trigger("partialdone", flushSource);
+        };
+        Stream.prototype.endTimeline = function(flushSource) {
+          this.trigger("endedtimeline", flushSource);
+        };
+        Stream.prototype.reset = function(flushSource) {
+          this.trigger("reset", flushSource);
+        };
+        var stream = Stream;
+        var ONE_SECOND_IN_TS$5 = 9e4, secondsToVideoTs, secondsToAudioTs, videoTsToSeconds, audioTsToSeconds, audioTsToVideoTs, videoTsToAudioTs, metadataTsToSeconds;
+        secondsToVideoTs = function secondsToVideoTs2(seconds) {
+          return seconds * ONE_SECOND_IN_TS$5;
+        };
+        secondsToAudioTs = function secondsToAudioTs2(seconds, sampleRate) {
+          return seconds * sampleRate;
+        };
+        videoTsToSeconds = function videoTsToSeconds2(timestamp) {
+          return timestamp / ONE_SECOND_IN_TS$5;
+        };
+        audioTsToSeconds = function audioTsToSeconds2(timestamp, sampleRate) {
+          return timestamp / sampleRate;
+        };
+        audioTsToVideoTs = function audioTsToVideoTs2(timestamp, sampleRate) {
+          return secondsToVideoTs(audioTsToSeconds(timestamp, sampleRate));
+        };
+        videoTsToAudioTs = function videoTsToAudioTs2(timestamp, sampleRate) {
+          return secondsToAudioTs(videoTsToSeconds(timestamp), sampleRate);
+        };
+        metadataTsToSeconds = function metadataTsToSeconds2(timestamp, timelineStartPts, keepOriginalTimestamps) {
+          return videoTsToSeconds(keepOriginalTimestamps ? timestamp : timestamp - timelineStartPts);
+        };
+        var clock = {
+          ONE_SECOND_IN_TS: ONE_SECOND_IN_TS$5,
+          secondsToVideoTs,
+          secondsToAudioTs,
+          videoTsToSeconds,
+          audioTsToSeconds,
+          audioTsToVideoTs,
+          videoTsToAudioTs,
+          metadataTsToSeconds
+        };
+        var ONE_SECOND_IN_TS$4 = clock.ONE_SECOND_IN_TS;
+        var _AdtsStream;
+        var ADTS_SAMPLING_FREQUENCIES$1 = [96e3, 88200, 64e3, 48e3, 44100, 32e3, 24e3, 22050, 16e3, 12e3, 11025, 8e3, 7350];
+        _AdtsStream = function AdtsStream(handlePartialSegments) {
+          var buffer, frameNum = 0;
+          _AdtsStream.prototype.init.call(this);
+          this.skipWarn_ = function(start, end) {
+            this.trigger("log", {
+              level: "warn",
+              message: "adts skiping bytes " + start + " to " + end + " in frame " + frameNum + " outside syncword"
+            });
+          };
+          this.push = function(packet) {
+            var i = 0, frameLength, protectionSkipBytes, oldBuffer, sampleCount, adtsFrameDuration;
+            if (!handlePartialSegments) {
+              frameNum = 0;
+            }
+            if (packet.type !== "audio") {
+              return;
+            }
+            if (buffer && buffer.length) {
+              oldBuffer = buffer;
+              buffer = new Uint8Array(oldBuffer.byteLength + packet.data.byteLength);
+              buffer.set(oldBuffer);
+              buffer.set(packet.data, oldBuffer.byteLength);
+            } else {
+              buffer = packet.data;
+            }
+            var skip;
+            while (i + 7 < buffer.length) {
+              if (buffer[i] !== 255 || (buffer[i + 1] & 246) !== 240) {
+                if (typeof skip !== "number") {
+                  skip = i;
+                }
+                i++;
+                continue;
+              }
+              if (typeof skip === "number") {
+                this.skipWarn_(skip, i);
+                skip = null;
+              }
+              protectionSkipBytes = (~buffer[i + 1] & 1) * 2;
+              frameLength = (buffer[i + 3] & 3) << 11 | buffer[i + 4] << 3 | (buffer[i + 5] & 224) >> 5;
+              sampleCount = ((buffer[i + 6] & 3) + 1) * 1024;
+              adtsFrameDuration = sampleCount * ONE_SECOND_IN_TS$4 / ADTS_SAMPLING_FREQUENCIES$1[(buffer[i + 2] & 60) >>> 2];
+              if (buffer.byteLength - i < frameLength) {
+                break;
+              }
+              this.trigger("data", {
+                pts: packet.pts + frameNum * adtsFrameDuration,
+                dts: packet.dts + frameNum * adtsFrameDuration,
+                sampleCount,
+                audioobjecttype: (buffer[i + 2] >>> 6 & 3) + 1,
+                channelcount: (buffer[i + 2] & 1) << 2 | (buffer[i + 3] & 192) >>> 6,
+                samplerate: ADTS_SAMPLING_FREQUENCIES$1[(buffer[i + 2] & 60) >>> 2],
+                samplingfrequencyindex: (buffer[i + 2] & 60) >>> 2,
+                samplesize: 16,
+                data: buffer.subarray(i + 7 + protectionSkipBytes, i + frameLength)
+              });
+              frameNum++;
+              i += frameLength;
+            }
+            if (typeof skip === "number") {
+              this.skipWarn_(skip, i);
+              skip = null;
+            }
+            buffer = buffer.subarray(i);
+          };
+          this.flush = function() {
+            frameNum = 0;
+            this.trigger("done");
+          };
+          this.reset = function() {
+            buffer = void 0;
+            this.trigger("reset");
+          };
+          this.endTimeline = function() {
+            buffer = void 0;
+            this.trigger("endedtimeline");
+          };
+        };
+        _AdtsStream.prototype = new stream();
+        var adts = _AdtsStream;
+        var ExpGolomb;
+        ExpGolomb = function ExpGolomb2(workingData) {
+          var workingBytesAvailable = workingData.byteLength, workingWord = 0, workingBitsAvailable = 0;
+          this.length = function() {
+            return 8 * workingBytesAvailable;
+          };
+          this.bitsAvailable = function() {
+            return 8 * workingBytesAvailable + workingBitsAvailable;
+          };
+          this.loadWord = function() {
+            var position = workingData.byteLength - workingBytesAvailable, workingBytes = new Uint8Array(4), availableBytes = Math.min(4, workingBytesAvailable);
+            if (availableBytes === 0) {
+              throw new Error("no bytes available");
+            }
+            workingBytes.set(workingData.subarray(position, position + availableBytes));
+            workingWord = new DataView(workingBytes.buffer).getUint32(0);
+            workingBitsAvailable = availableBytes * 8;
+            workingBytesAvailable -= availableBytes;
+          };
+          this.skipBits = function(count) {
+            var skipBytes;
+            if (workingBitsAvailable > count) {
+              workingWord <<= count;
+              workingBitsAvailable -= count;
+            } else {
+              count -= workingBitsAvailable;
+              skipBytes = Math.floor(count / 8);
+              count -= skipBytes * 8;
+              workingBytesAvailable -= skipBytes;
+              this.loadWord();
+              workingWord <<= count;
+              workingBitsAvailable -= count;
+            }
+          };
+          this.readBits = function(size) {
+            var bits = Math.min(workingBitsAvailable, size), valu = workingWord >>> 32 - bits;
+            workingBitsAvailable -= bits;
+            if (workingBitsAvailable > 0) {
+              workingWord <<= bits;
+            } else if (workingBytesAvailable > 0) {
+              this.loadWord();
+            }
+            bits = size - bits;
+            if (bits > 0) {
+              return valu << bits | this.readBits(bits);
+            }
+            return valu;
+          };
+          this.skipLeadingZeros = function() {
+            var leadingZeroCount;
+            for (leadingZeroCount = 0; leadingZeroCount < workingBitsAvailable; ++leadingZeroCount) {
+              if ((workingWord & 2147483648 >>> leadingZeroCount) !== 0) {
+                workingWord <<= leadingZeroCount;
+                workingBitsAvailable -= leadingZeroCount;
+                return leadingZeroCount;
+              }
+            }
+            this.loadWord();
+            return leadingZeroCount + this.skipLeadingZeros();
+          };
+          this.skipUnsignedExpGolomb = function() {
+            this.skipBits(1 + this.skipLeadingZeros());
+          };
+          this.skipExpGolomb = function() {
+            this.skipBits(1 + this.skipLeadingZeros());
+          };
+          this.readUnsignedExpGolomb = function() {
+            var clz = this.skipLeadingZeros();
+            return this.readBits(clz + 1) - 1;
+          };
+          this.readExpGolomb = function() {
+            var valu = this.readUnsignedExpGolomb();
+            if (1 & valu) {
+              return 1 + valu >>> 1;
+            }
+            return -1 * (valu >>> 1);
+          };
+          this.readBoolean = function() {
+            return this.readBits(1) === 1;
+          };
+          this.readUnsignedByte = function() {
+            return this.readBits(8);
+          };
+          this.loadWord();
+        };
+        var expGolomb = ExpGolomb;
+        var _H264Stream, _NalByteStream;
+        var PROFILES_WITH_OPTIONAL_SPS_DATA;
+        _NalByteStream = function NalByteStream() {
+          var syncPoint = 0, i, buffer;
+          _NalByteStream.prototype.init.call(this);
+          this.push = function(data) {
+            var swapBuffer;
+            if (!buffer) {
+              buffer = data.data;
+            } else {
+              swapBuffer = new Uint8Array(buffer.byteLength + data.data.byteLength);
+              swapBuffer.set(buffer);
+              swapBuffer.set(data.data, buffer.byteLength);
+              buffer = swapBuffer;
+            }
+            var len = buffer.byteLength;
+            for (; syncPoint < len - 3; syncPoint++) {
+              if (buffer[syncPoint + 2] === 1) {
+                i = syncPoint + 5;
+                break;
+              }
+            }
+            while (i < len) {
+              switch (buffer[i]) {
+                case 0:
+                  if (buffer[i - 1] !== 0) {
+                    i += 2;
+                    break;
+                  } else if (buffer[i - 2] !== 0) {
+                    i++;
+                    break;
+                  }
+                  if (syncPoint + 3 !== i - 2) {
+                    this.trigger("data", buffer.subarray(syncPoint + 3, i - 2));
+                  }
+                  do {
+                    i++;
+                  } while (buffer[i] !== 1 && i < len);
+                  syncPoint = i - 2;
+                  i += 3;
+                  break;
+                case 1:
+                  if (buffer[i - 1] !== 0 || buffer[i - 2] !== 0) {
+                    i += 3;
+                    break;
+                  }
+                  this.trigger("data", buffer.subarray(syncPoint + 3, i - 2));
+                  syncPoint = i - 2;
+                  i += 3;
+                  break;
+                default:
+                  i += 3;
+                  break;
+              }
+            }
+            buffer = buffer.subarray(syncPoint);
+            i -= syncPoint;
+            syncPoint = 0;
+          };
+          this.reset = function() {
+            buffer = null;
+            syncPoint = 0;
+            this.trigger("reset");
+          };
+          this.flush = function() {
+            if (buffer && buffer.byteLength > 3) {
+              this.trigger("data", buffer.subarray(syncPoint + 3));
+            }
+            buffer = null;
+            syncPoint = 0;
+            this.trigger("done");
+          };
+          this.endTimeline = function() {
+            this.flush();
+            this.trigger("endedtimeline");
+          };
+        };
+        _NalByteStream.prototype = new stream();
+        PROFILES_WITH_OPTIONAL_SPS_DATA = {
+          100: true,
+          110: true,
+          122: true,
+          244: true,
+          44: true,
+          83: true,
+          86: true,
+          118: true,
+          128: true,
+          138: true,
+          139: true,
+          134: true
+        };
+        _H264Stream = function H264Stream2() {
+          var nalByteStream = new _NalByteStream(), self2, trackId, currentPts, currentDts, discardEmulationPreventionBytes2, readSequenceParameterSet, skipScalingList;
+          _H264Stream.prototype.init.call(this);
+          self2 = this;
+          this.push = function(packet) {
+            if (packet.type !== "video") {
+              return;
+            }
+            trackId = packet.trackId;
+            currentPts = packet.pts;
+            currentDts = packet.dts;
+            nalByteStream.push(packet);
+          };
+          nalByteStream.on("data", function(data) {
+            var event = {
+              trackId,
+              pts: currentPts,
+              dts: currentDts,
+              data,
+              nalUnitTypeCode: data[0] & 31
+            };
+            switch (event.nalUnitTypeCode) {
+              case 5:
+                event.nalUnitType = "slice_layer_without_partitioning_rbsp_idr";
+                break;
+              case 6:
+                event.nalUnitType = "sei_rbsp";
+                event.escapedRBSP = discardEmulationPreventionBytes2(data.subarray(1));
+                break;
+              case 7:
+                event.nalUnitType = "seq_parameter_set_rbsp";
+                event.escapedRBSP = discardEmulationPreventionBytes2(data.subarray(1));
+                event.config = readSequenceParameterSet(event.escapedRBSP);
+                break;
+              case 8:
+                event.nalUnitType = "pic_parameter_set_rbsp";
+                break;
+              case 9:
+                event.nalUnitType = "access_unit_delimiter_rbsp";
+                break;
+            }
+            self2.trigger("data", event);
+          });
+          nalByteStream.on("done", function() {
+            self2.trigger("done");
+          });
+          nalByteStream.on("partialdone", function() {
+            self2.trigger("partialdone");
+          });
+          nalByteStream.on("reset", function() {
+            self2.trigger("reset");
+          });
+          nalByteStream.on("endedtimeline", function() {
+            self2.trigger("endedtimeline");
+          });
+          this.flush = function() {
+            nalByteStream.flush();
+          };
+          this.partialFlush = function() {
+            nalByteStream.partialFlush();
+          };
+          this.reset = function() {
+            nalByteStream.reset();
+          };
+          this.endTimeline = function() {
+            nalByteStream.endTimeline();
+          };
+          skipScalingList = function skipScalingList2(count, expGolombDecoder) {
+            var lastScale = 8, nextScale = 8, j, deltaScale;
+            for (j = 0; j < count; j++) {
+              if (nextScale !== 0) {
+                deltaScale = expGolombDecoder.readExpGolomb();
+                nextScale = (lastScale + deltaScale + 256) % 256;
+              }
+              lastScale = nextScale === 0 ? lastScale : nextScale;
+            }
+          };
+          discardEmulationPreventionBytes2 = function discardEmulationPreventionBytes3(data) {
+            var length = data.byteLength, emulationPreventionBytesPositions = [], i = 1, newLength, newData;
+            while (i < length - 2) {
+              if (data[i] === 0 && data[i + 1] === 0 && data[i + 2] === 3) {
+                emulationPreventionBytesPositions.push(i + 2);
+                i += 2;
+              } else {
+                i++;
+              }
+            }
+            if (emulationPreventionBytesPositions.length === 0) {
+              return data;
+            }
+            newLength = length - emulationPreventionBytesPositions.length;
+            newData = new Uint8Array(newLength);
+            var sourceIndex = 0;
+            for (i = 0; i < newLength; sourceIndex++, i++) {
+              if (sourceIndex === emulationPreventionBytesPositions[0]) {
+                sourceIndex++;
+                emulationPreventionBytesPositions.shift();
+              }
+              newData[i] = data[sourceIndex];
+            }
+            return newData;
+          };
+          readSequenceParameterSet = function readSequenceParameterSet2(data) {
+            var frameCropLeftOffset = 0, frameCropRightOffset = 0, frameCropTopOffset = 0, frameCropBottomOffset = 0, expGolombDecoder, profileIdc, levelIdc, profileCompatibility, chromaFormatIdc, picOrderCntType, numRefFramesInPicOrderCntCycle, picWidthInMbsMinus1, picHeightInMapUnitsMinus1, frameMbsOnlyFlag, scalingListCount, sarRatio = [1, 1], aspectRatioIdc, i;
+            expGolombDecoder = new expGolomb(data);
+            profileIdc = expGolombDecoder.readUnsignedByte();
+            profileCompatibility = expGolombDecoder.readUnsignedByte();
+            levelIdc = expGolombDecoder.readUnsignedByte();
+            expGolombDecoder.skipUnsignedExpGolomb();
+            if (PROFILES_WITH_OPTIONAL_SPS_DATA[profileIdc]) {
+              chromaFormatIdc = expGolombDecoder.readUnsignedExpGolomb();
+              if (chromaFormatIdc === 3) {
+                expGolombDecoder.skipBits(1);
+              }
+              expGolombDecoder.skipUnsignedExpGolomb();
+              expGolombDecoder.skipUnsignedExpGolomb();
+              expGolombDecoder.skipBits(1);
+              if (expGolombDecoder.readBoolean()) {
+                scalingListCount = chromaFormatIdc !== 3 ? 8 : 12;
+                for (i = 0; i < scalingListCount; i++) {
+                  if (expGolombDecoder.readBoolean()) {
+                    if (i < 6) {
+                      skipScalingList(16, expGolombDecoder);
+                    } else {
+                      skipScalingList(64, expGolombDecoder);
+                    }
+                  }
+                }
+              }
+            }
+            expGolombDecoder.skipUnsignedExpGolomb();
+            picOrderCntType = expGolombDecoder.readUnsignedExpGolomb();
+            if (picOrderCntType === 0) {
+              expGolombDecoder.readUnsignedExpGolomb();
+            } else if (picOrderCntType === 1) {
+              expGolombDecoder.skipBits(1);
+              expGolombDecoder.skipExpGolomb();
+              expGolombDecoder.skipExpGolomb();
+              numRefFramesInPicOrderCntCycle = expGolombDecoder.readUnsignedExpGolomb();
+              for (i = 0; i < numRefFramesInPicOrderCntCycle; i++) {
+                expGolombDecoder.skipExpGolomb();
+              }
+            }
+            expGolombDecoder.skipUnsignedExpGolomb();
+            expGolombDecoder.skipBits(1);
+            picWidthInMbsMinus1 = expGolombDecoder.readUnsignedExpGolomb();
+            picHeightInMapUnitsMinus1 = expGolombDecoder.readUnsignedExpGolomb();
+            frameMbsOnlyFlag = expGolombDecoder.readBits(1);
+            if (frameMbsOnlyFlag === 0) {
+              expGolombDecoder.skipBits(1);
+            }
+            expGolombDecoder.skipBits(1);
+            if (expGolombDecoder.readBoolean()) {
+              frameCropLeftOffset = expGolombDecoder.readUnsignedExpGolomb();
+              frameCropRightOffset = expGolombDecoder.readUnsignedExpGolomb();
+              frameCropTopOffset = expGolombDecoder.readUnsignedExpGolomb();
+              frameCropBottomOffset = expGolombDecoder.readUnsignedExpGolomb();
+            }
+            if (expGolombDecoder.readBoolean()) {
+              if (expGolombDecoder.readBoolean()) {
+                aspectRatioIdc = expGolombDecoder.readUnsignedByte();
+                switch (aspectRatioIdc) {
+                  case 1:
+                    sarRatio = [1, 1];
+                    break;
+                  case 2:
+                    sarRatio = [12, 11];
+                    break;
+                  case 3:
+                    sarRatio = [10, 11];
+                    break;
+                  case 4:
+                    sarRatio = [16, 11];
+                    break;
+                  case 5:
+                    sarRatio = [40, 33];
+                    break;
+                  case 6:
+                    sarRatio = [24, 11];
+                    break;
+                  case 7:
+                    sarRatio = [20, 11];
+                    break;
+                  case 8:
+                    sarRatio = [32, 11];
+                    break;
+                  case 9:
+                    sarRatio = [80, 33];
+                    break;
+                  case 10:
+                    sarRatio = [18, 11];
+                    break;
+                  case 11:
+                    sarRatio = [15, 11];
+                    break;
+                  case 12:
+                    sarRatio = [64, 33];
+                    break;
+                  case 13:
+                    sarRatio = [160, 99];
+                    break;
+                  case 14:
+                    sarRatio = [4, 3];
+                    break;
+                  case 15:
+                    sarRatio = [3, 2];
+                    break;
+                  case 16:
+                    sarRatio = [2, 1];
+                    break;
+                  case 255: {
+                    sarRatio = [expGolombDecoder.readUnsignedByte() << 8 | expGolombDecoder.readUnsignedByte(), expGolombDecoder.readUnsignedByte() << 8 | expGolombDecoder.readUnsignedByte()];
+                    break;
+                  }
+                }
+                if (sarRatio) {
+                  sarRatio[0] / sarRatio[1];
+                }
+              }
+            }
+            return {
+              profileIdc,
+              levelIdc,
+              profileCompatibility,
+              width: (picWidthInMbsMinus1 + 1) * 16 - frameCropLeftOffset * 2 - frameCropRightOffset * 2,
+              height: (2 - frameMbsOnlyFlag) * (picHeightInMapUnitsMinus1 + 1) * 16 - frameCropTopOffset * 2 - frameCropBottomOffset * 2,
+              sarRatio
+            };
+          };
+        };
+        _H264Stream.prototype = new stream();
+        var h264 = {
+          H264Stream: _H264Stream,
+          NalByteStream: _NalByteStream
+        };
+        var codecs = {
+          Adts: adts,
+          h264
+        };
+        var MAX_UINT32$1 = Math.pow(2, 32);
+        var getUint64$4 = function getUint642(uint8) {
+          var dv = new DataView(uint8.buffer, uint8.byteOffset, uint8.byteLength);
+          var value;
+          if (dv.getBigUint64) {
+            value = dv.getBigUint64(0);
+            if (value < Number.MAX_SAFE_INTEGER) {
+              return Number(value);
+            }
+            return value;
+          }
+          return dv.getUint32(0) * MAX_UINT32$1 + dv.getUint32(4);
+        };
+        var numbers = {
+          getUint64: getUint64$4,
+          MAX_UINT32: MAX_UINT32$1
+        };
+        var MAX_UINT32 = numbers.MAX_UINT32;
+        var box, dinf, esds, ftyp, mdat, mfhd, minf, moof, moov, mvex, mvhd, trak, tkhd, mdia, mdhd, hdlr, sdtp, stbl, stsd, traf, trex, trun$1, types, MAJOR_BRAND, MINOR_VERSION, AVC1_BRAND, VIDEO_HDLR, AUDIO_HDLR, HDLR_TYPES, VMHD, SMHD, DREF, STCO, STSC, STSZ, STTS;
+        (function() {
+          var i;
+          types = {
+            avc1: [],
+            avcC: [],
+            btrt: [],
+            dinf: [],
+            dref: [],
+            esds: [],
+            ftyp: [],
+            hdlr: [],
+            mdat: [],
+            mdhd: [],
+            mdia: [],
+            mfhd: [],
+            minf: [],
+            moof: [],
+            moov: [],
+            mp4a: [],
+            mvex: [],
+            mvhd: [],
+            pasp: [],
+            sdtp: [],
+            smhd: [],
+            stbl: [],
+            stco: [],
+            stsc: [],
+            stsd: [],
+            stsz: [],
+            stts: [],
+            styp: [],
+            tfdt: [],
+            tfhd: [],
+            traf: [],
+            trak: [],
+            trun: [],
+            trex: [],
+            tkhd: [],
+            vmhd: []
+          };
+          if (typeof Uint8Array === "undefined") {
+            return;
+          }
+          for (i in types) {
+            if (types.hasOwnProperty(i)) {
+              types[i] = [i.charCodeAt(0), i.charCodeAt(1), i.charCodeAt(2), i.charCodeAt(3)];
+            }
+          }
+          MAJOR_BRAND = new Uint8Array(["i".charCodeAt(0), "s".charCodeAt(0), "o".charCodeAt(0), "m".charCodeAt(0)]);
+          AVC1_BRAND = new Uint8Array(["a".charCodeAt(0), "v".charCodeAt(0), "c".charCodeAt(0), "1".charCodeAt(0)]);
+          MINOR_VERSION = new Uint8Array([0, 0, 0, 1]);
+          VIDEO_HDLR = new Uint8Array([
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            118,
+            105,
+            100,
+            101,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            86,
+            105,
+            100,
+            101,
+            111,
+            72,
+            97,
+            110,
+            100,
+            108,
+            101,
+            114,
+            0
+          ]);
+          AUDIO_HDLR = new Uint8Array([
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            115,
+            111,
+            117,
+            110,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            83,
+            111,
+            117,
+            110,
+            100,
+            72,
+            97,
+            110,
+            100,
+            108,
+            101,
+            114,
+            0
+          ]);
+          HDLR_TYPES = {
+            video: VIDEO_HDLR,
+            audio: AUDIO_HDLR
+          };
+          DREF = new Uint8Array([
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            12,
+            117,
+            114,
+            108,
+            32,
+            0,
+            0,
+            0,
+            1
+          ]);
+          SMHD = new Uint8Array([
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]);
+          STCO = new Uint8Array([
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]);
+          STSC = STCO;
+          STSZ = new Uint8Array([
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]);
+          STTS = STCO;
+          VMHD = new Uint8Array([
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]);
+        })();
+        box = function box2(type2) {
+          var payload = [], size = 0, i, result, view;
+          for (i = 1; i < arguments.length; i++) {
+            payload.push(arguments[i]);
+          }
+          i = payload.length;
+          while (i--) {
+            size += payload[i].byteLength;
+          }
+          result = new Uint8Array(size + 8);
+          view = new DataView(result.buffer, result.byteOffset, result.byteLength);
+          view.setUint32(0, result.byteLength);
+          result.set(type2, 4);
+          for (i = 0, size = 8; i < payload.length; i++) {
+            result.set(payload[i], size);
+            size += payload[i].byteLength;
+          }
+          return result;
+        };
+        dinf = function dinf2() {
+          return box(types.dinf, box(types.dref, DREF));
+        };
+        esds = function esds2(track) {
+          return box(types.esds, new Uint8Array([
+            0,
+            0,
+            0,
+            0,
+            3,
+            25,
+            0,
+            0,
+            0,
+            4,
+            17,
+            64,
+            21,
+            0,
+            6,
+            0,
+            0,
+            0,
+            218,
+            192,
+            0,
+            0,
+            218,
+            192,
+            5,
+            2,
+            track.audioobjecttype << 3 | track.samplingfrequencyindex >>> 1,
+            track.samplingfrequencyindex << 7 | track.channelcount << 3,
+            6,
+            1,
+            2
+          ]));
+        };
+        ftyp = function ftyp2() {
+          return box(types.ftyp, MAJOR_BRAND, MINOR_VERSION, MAJOR_BRAND, AVC1_BRAND);
+        };
+        hdlr = function hdlr2(type2) {
+          return box(types.hdlr, HDLR_TYPES[type2]);
+        };
+        mdat = function mdat2(data) {
+          return box(types.mdat, data);
+        };
+        mdhd = function mdhd2(track) {
+          var result = new Uint8Array([
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            2,
+            0,
+            0,
+            0,
+            3,
+            0,
+            1,
+            95,
+            144,
+            track.duration >>> 24 & 255,
+            track.duration >>> 16 & 255,
+            track.duration >>> 8 & 255,
+            track.duration & 255,
+            85,
+            196,
+            0,
+            0
+          ]);
+          if (track.samplerate) {
+            result[12] = track.samplerate >>> 24 & 255;
+            result[13] = track.samplerate >>> 16 & 255;
+            result[14] = track.samplerate >>> 8 & 255;
+            result[15] = track.samplerate & 255;
+          }
+          return box(types.mdhd, result);
+        };
+        mdia = function mdia2(track) {
+          return box(types.mdia, mdhd(track), hdlr(track.type), minf(track));
+        };
+        mfhd = function mfhd2(sequenceNumber) {
+          return box(types.mfhd, new Uint8Array([
+            0,
+            0,
+            0,
+            0,
+            (sequenceNumber & 4278190080) >> 24,
+            (sequenceNumber & 16711680) >> 16,
+            (sequenceNumber & 65280) >> 8,
+            sequenceNumber & 255
+          ]));
+        };
+        minf = function minf2(track) {
+          return box(types.minf, track.type === "video" ? box(types.vmhd, VMHD) : box(types.smhd, SMHD), dinf(), stbl(track));
+        };
+        moof = function moof2(sequenceNumber, tracks) {
+          var trackFragments = [], i = tracks.length;
+          while (i--) {
+            trackFragments[i] = traf(tracks[i]);
+          }
+          return box.apply(null, [types.moof, mfhd(sequenceNumber)].concat(trackFragments));
+        };
+        moov = function moov2(tracks) {
+          var i = tracks.length, boxes = [];
+          while (i--) {
+            boxes[i] = trak(tracks[i]);
+          }
+          return box.apply(null, [types.moov, mvhd(4294967295)].concat(boxes).concat(mvex(tracks)));
+        };
+        mvex = function mvex2(tracks) {
+          var i = tracks.length, boxes = [];
+          while (i--) {
+            boxes[i] = trex(tracks[i]);
+          }
+          return box.apply(null, [types.mvex].concat(boxes));
+        };
+        mvhd = function mvhd2(duration) {
+          var bytes = new Uint8Array([
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            2,
+            0,
+            1,
+            95,
+            144,
+            (duration & 4278190080) >> 24,
+            (duration & 16711680) >> 16,
+            (duration & 65280) >> 8,
+            duration & 255,
+            0,
+            1,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            64,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            255,
+            255,
+            255,
+            255
+          ]);
+          return box(types.mvhd, bytes);
+        };
+        sdtp = function sdtp2(track) {
+          var samples = track.samples || [], bytes = new Uint8Array(4 + samples.length), flags, i;
+          for (i = 0; i < samples.length; i++) {
+            flags = samples[i].flags;
+            bytes[i + 4] = flags.dependsOn << 4 | flags.isDependedOn << 2 | flags.hasRedundancy;
+          }
+          return box(types.sdtp, bytes);
+        };
+        stbl = function stbl2(track) {
+          return box(types.stbl, stsd(track), box(types.stts, STTS), box(types.stsc, STSC), box(types.stsz, STSZ), box(types.stco, STCO));
+        };
+        (function() {
+          var videoSample, audioSample;
+          stsd = function stsd2(track) {
+            return box(types.stsd, new Uint8Array([
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              1
+            ]), track.type === "video" ? videoSample(track) : audioSample(track));
+          };
+          videoSample = function videoSample2(track) {
+            var sps = track.sps || [], pps = track.pps || [], sequenceParameterSets = [], pictureParameterSets = [], i, avc1Box;
+            for (i = 0; i < sps.length; i++) {
+              sequenceParameterSets.push((sps[i].byteLength & 65280) >>> 8);
+              sequenceParameterSets.push(sps[i].byteLength & 255);
+              sequenceParameterSets = sequenceParameterSets.concat(Array.prototype.slice.call(sps[i]));
+            }
+            for (i = 0; i < pps.length; i++) {
+              pictureParameterSets.push((pps[i].byteLength & 65280) >>> 8);
+              pictureParameterSets.push(pps[i].byteLength & 255);
+              pictureParameterSets = pictureParameterSets.concat(Array.prototype.slice.call(pps[i]));
+            }
+            avc1Box = [types.avc1, new Uint8Array([
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              1,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              (track.width & 65280) >> 8,
+              track.width & 255,
+              (track.height & 65280) >> 8,
+              track.height & 255,
+              0,
+              72,
+              0,
+              0,
+              0,
+              72,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              1,
+              19,
+              118,
+              105,
+              100,
+              101,
+              111,
+              106,
+              115,
+              45,
+              99,
+              111,
+              110,
+              116,
+              114,
+              105,
+              98,
+              45,
+              104,
+              108,
+              115,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              24,
+              17,
+              17
+            ]), box(types.avcC, new Uint8Array([
+              1,
+              track.profileIdc,
+              track.profileCompatibility,
+              track.levelIdc,
+              255
+            ].concat([sps.length], sequenceParameterSets, [pps.length], pictureParameterSets))), box(types.btrt, new Uint8Array([
+              0,
+              28,
+              156,
+              128,
+              0,
+              45,
+              198,
+              192,
+              0,
+              45,
+              198,
+              192
+            ]))];
+            if (track.sarRatio) {
+              var hSpacing = track.sarRatio[0], vSpacing = track.sarRatio[1];
+              avc1Box.push(box(types.pasp, new Uint8Array([(hSpacing & 4278190080) >> 24, (hSpacing & 16711680) >> 16, (hSpacing & 65280) >> 8, hSpacing & 255, (vSpacing & 4278190080) >> 24, (vSpacing & 16711680) >> 16, (vSpacing & 65280) >> 8, vSpacing & 255])));
+            }
+            return box.apply(null, avc1Box);
+          };
+          audioSample = function audioSample2(track) {
+            return box(types.mp4a, new Uint8Array([
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              1,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              (track.channelcount & 65280) >> 8,
+              track.channelcount & 255,
+              (track.samplesize & 65280) >> 8,
+              track.samplesize & 255,
+              0,
+              0,
+              0,
+              0,
+              (track.samplerate & 65280) >> 8,
+              track.samplerate & 255,
+              0,
+              0
+            ]), esds(track));
+          };
+        })();
+        tkhd = function tkhd2(track) {
+          var result = new Uint8Array([
+            0,
+            0,
+            0,
+            7,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            (track.id & 4278190080) >> 24,
+            (track.id & 16711680) >> 16,
+            (track.id & 65280) >> 8,
+            track.id & 255,
+            0,
+            0,
+            0,
+            0,
+            (track.duration & 4278190080) >> 24,
+            (track.duration & 16711680) >> 16,
+            (track.duration & 65280) >> 8,
+            track.duration & 255,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            64,
+            0,
+            0,
+            0,
+            (track.width & 65280) >> 8,
+            track.width & 255,
+            0,
+            0,
+            (track.height & 65280) >> 8,
+            track.height & 255,
+            0,
+            0
+          ]);
+          return box(types.tkhd, result);
+        };
+        traf = function traf2(track) {
+          var trackFragmentHeader, trackFragmentDecodeTime, trackFragmentRun, sampleDependencyTable, dataOffset, upperWordBaseMediaDecodeTime, lowerWordBaseMediaDecodeTime;
+          trackFragmentHeader = box(types.tfhd, new Uint8Array([
+            0,
+            0,
+            0,
+            58,
+            (track.id & 4278190080) >> 24,
+            (track.id & 16711680) >> 16,
+            (track.id & 65280) >> 8,
+            track.id & 255,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]));
+          upperWordBaseMediaDecodeTime = Math.floor(track.baseMediaDecodeTime / MAX_UINT32);
+          lowerWordBaseMediaDecodeTime = Math.floor(track.baseMediaDecodeTime % MAX_UINT32);
+          trackFragmentDecodeTime = box(types.tfdt, new Uint8Array([
+            1,
+            0,
+            0,
+            0,
+            upperWordBaseMediaDecodeTime >>> 24 & 255,
+            upperWordBaseMediaDecodeTime >>> 16 & 255,
+            upperWordBaseMediaDecodeTime >>> 8 & 255,
+            upperWordBaseMediaDecodeTime & 255,
+            lowerWordBaseMediaDecodeTime >>> 24 & 255,
+            lowerWordBaseMediaDecodeTime >>> 16 & 255,
+            lowerWordBaseMediaDecodeTime >>> 8 & 255,
+            lowerWordBaseMediaDecodeTime & 255
+          ]));
+          dataOffset = 32 + 20 + 8 + 16 + 8 + 8;
+          if (track.type === "audio") {
+            trackFragmentRun = trun$1(track, dataOffset);
+            return box(types.traf, trackFragmentHeader, trackFragmentDecodeTime, trackFragmentRun);
+          }
+          sampleDependencyTable = sdtp(track);
+          trackFragmentRun = trun$1(track, sampleDependencyTable.length + dataOffset);
+          return box(types.traf, trackFragmentHeader, trackFragmentDecodeTime, trackFragmentRun, sampleDependencyTable);
+        };
+        trak = function trak2(track) {
+          track.duration = track.duration || 4294967295;
+          return box(types.trak, tkhd(track), mdia(track));
+        };
+        trex = function trex2(track) {
+          var result = new Uint8Array([
+            0,
+            0,
+            0,
+            0,
+            (track.id & 4278190080) >> 24,
+            (track.id & 16711680) >> 16,
+            (track.id & 65280) >> 8,
+            track.id & 255,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            1
+          ]);
+          if (track.type !== "video") {
+            result[result.length - 1] = 0;
+          }
+          return box(types.trex, result);
+        };
+        (function() {
+          var audioTrun, videoTrun, trunHeader;
+          trunHeader = function trunHeader2(samples, offset) {
+            var durationPresent = 0, sizePresent = 0, flagsPresent = 0, compositionTimeOffset = 0;
+            if (samples.length) {
+              if (samples[0].duration !== void 0) {
+                durationPresent = 1;
+              }
+              if (samples[0].size !== void 0) {
+                sizePresent = 2;
+              }
+              if (samples[0].flags !== void 0) {
+                flagsPresent = 4;
+              }
+              if (samples[0].compositionTimeOffset !== void 0) {
+                compositionTimeOffset = 8;
+              }
+            }
+            return [
+              0,
+              0,
+              durationPresent | sizePresent | flagsPresent | compositionTimeOffset,
+              1,
+              (samples.length & 4278190080) >>> 24,
+              (samples.length & 16711680) >>> 16,
+              (samples.length & 65280) >>> 8,
+              samples.length & 255,
+              (offset & 4278190080) >>> 24,
+              (offset & 16711680) >>> 16,
+              (offset & 65280) >>> 8,
+              offset & 255
+            ];
+          };
+          videoTrun = function videoTrun2(track, offset) {
+            var bytesOffest, bytes, header, samples, sample, i;
+            samples = track.samples || [];
+            offset += 8 + 12 + 16 * samples.length;
+            header = trunHeader(samples, offset);
+            bytes = new Uint8Array(header.length + samples.length * 16);
+            bytes.set(header);
+            bytesOffest = header.length;
+            for (i = 0; i < samples.length; i++) {
+              sample = samples[i];
+              bytes[bytesOffest++] = (sample.duration & 4278190080) >>> 24;
+              bytes[bytesOffest++] = (sample.duration & 16711680) >>> 16;
+              bytes[bytesOffest++] = (sample.duration & 65280) >>> 8;
+              bytes[bytesOffest++] = sample.duration & 255;
+              bytes[bytesOffest++] = (sample.size & 4278190080) >>> 24;
+              bytes[bytesOffest++] = (sample.size & 16711680) >>> 16;
+              bytes[bytesOffest++] = (sample.size & 65280) >>> 8;
+              bytes[bytesOffest++] = sample.size & 255;
+              bytes[bytesOffest++] = sample.flags.isLeading << 2 | sample.flags.dependsOn;
+              bytes[bytesOffest++] = sample.flags.isDependedOn << 6 | sample.flags.hasRedundancy << 4 | sample.flags.paddingValue << 1 | sample.flags.isNonSyncSample;
+              bytes[bytesOffest++] = sample.flags.degradationPriority & 240 << 8;
+              bytes[bytesOffest++] = sample.flags.degradationPriority & 15;
+              bytes[bytesOffest++] = (sample.compositionTimeOffset & 4278190080) >>> 24;
+              bytes[bytesOffest++] = (sample.compositionTimeOffset & 16711680) >>> 16;
+              bytes[bytesOffest++] = (sample.compositionTimeOffset & 65280) >>> 8;
+              bytes[bytesOffest++] = sample.compositionTimeOffset & 255;
+            }
+            return box(types.trun, bytes);
+          };
+          audioTrun = function audioTrun2(track, offset) {
+            var bytes, bytesOffest, header, samples, sample, i;
+            samples = track.samples || [];
+            offset += 8 + 12 + 8 * samples.length;
+            header = trunHeader(samples, offset);
+            bytes = new Uint8Array(header.length + samples.length * 8);
+            bytes.set(header);
+            bytesOffest = header.length;
+            for (i = 0; i < samples.length; i++) {
+              sample = samples[i];
+              bytes[bytesOffest++] = (sample.duration & 4278190080) >>> 24;
+              bytes[bytesOffest++] = (sample.duration & 16711680) >>> 16;
+              bytes[bytesOffest++] = (sample.duration & 65280) >>> 8;
+              bytes[bytesOffest++] = sample.duration & 255;
+              bytes[bytesOffest++] = (sample.size & 4278190080) >>> 24;
+              bytes[bytesOffest++] = (sample.size & 16711680) >>> 16;
+              bytes[bytesOffest++] = (sample.size & 65280) >>> 8;
+              bytes[bytesOffest++] = sample.size & 255;
+            }
+            return box(types.trun, bytes);
+          };
+          trun$1 = function trun2(track, offset) {
+            if (track.type === "audio") {
+              return audioTrun(track, offset);
+            }
+            return videoTrun(track, offset);
+          };
+        })();
+        var mp4Generator = {
+          ftyp,
+          mdat,
+          moof,
+          moov,
+          initSegment: function initSegment(tracks) {
+            var fileType = ftyp(), movie = moov(tracks), result;
+            result = new Uint8Array(fileType.byteLength + movie.byteLength);
+            result.set(fileType);
+            result.set(movie, fileType.byteLength);
+            return result;
+          }
+        };
+        var toUnsigned$3 = function toUnsigned2(value) {
+          return value >>> 0;
+        };
+        var toHexString$1 = function toHexString2(value) {
+          return ("00" + value.toString(16)).slice(-2);
+        };
+        var bin = {
+          toUnsigned: toUnsigned$3,
+          toHexString: toHexString$1
+        };
+        var parseType$2 = function parseType2(buffer) {
+          var result = "";
+          result += String.fromCharCode(buffer[0]);
+          result += String.fromCharCode(buffer[1]);
+          result += String.fromCharCode(buffer[2]);
+          result += String.fromCharCode(buffer[3]);
+          return result;
+        };
+        var parseType_1 = parseType$2;
+        var toUnsigned$2 = bin.toUnsigned;
+        var findBox = function findBox2(data, path) {
+          var results = [], i, size, type2, end, subresults;
+          if (!path.length) {
+            return null;
+          }
+          for (i = 0; i < data.byteLength; ) {
+            size = toUnsigned$2(data[i] << 24 | data[i + 1] << 16 | data[i + 2] << 8 | data[i + 3]);
+            type2 = parseType_1(data.subarray(i + 4, i + 8));
+            end = size > 1 ? i + size : data.byteLength;
+            if (type2 === path[0]) {
+              if (path.length === 1) {
+                results.push(data.subarray(i + 8, end));
+              } else {
+                subresults = findBox2(data.subarray(i + 8, end), path.slice(1));
+                if (subresults.length) {
+                  results = results.concat(subresults);
+                }
+              }
+            }
+            i = end;
+          }
+          return results;
+        };
+        var findBox_1 = findBox;
+        var tfhd = function tfhd2(data) {
+          var view = new DataView(data.buffer, data.byteOffset, data.byteLength), result = {
+            version: data[0],
+            flags: new Uint8Array(data.subarray(1, 4)),
+            trackId: view.getUint32(4)
+          }, baseDataOffsetPresent = result.flags[2] & 1, sampleDescriptionIndexPresent = result.flags[2] & 2, defaultSampleDurationPresent = result.flags[2] & 8, defaultSampleSizePresent = result.flags[2] & 16, defaultSampleFlagsPresent = result.flags[2] & 32, durationIsEmpty = result.flags[0] & 65536, defaultBaseIsMoof = result.flags[0] & 131072, i;
+          i = 8;
+          if (baseDataOffsetPresent) {
+            i += 4;
+            result.baseDataOffset = view.getUint32(12);
+            i += 4;
+          }
+          if (sampleDescriptionIndexPresent) {
+            result.sampleDescriptionIndex = view.getUint32(i);
+            i += 4;
+          }
+          if (defaultSampleDurationPresent) {
+            result.defaultSampleDuration = view.getUint32(i);
+            i += 4;
+          }
+          if (defaultSampleSizePresent) {
+            result.defaultSampleSize = view.getUint32(i);
+            i += 4;
+          }
+          if (defaultSampleFlagsPresent) {
+            result.defaultSampleFlags = view.getUint32(i);
+          }
+          if (durationIsEmpty) {
+            result.durationIsEmpty = true;
+          }
+          if (!baseDataOffsetPresent && defaultBaseIsMoof) {
+            result.baseDataOffsetIsMoof = true;
+          }
+          return result;
+        };
+        var parseTfhd = tfhd;
+        var parseSampleFlags = function parseSampleFlags2(flags) {
+          return {
+            isLeading: (flags[0] & 12) >>> 2,
+            dependsOn: flags[0] & 3,
+            isDependedOn: (flags[1] & 192) >>> 6,
+            hasRedundancy: (flags[1] & 48) >>> 4,
+            paddingValue: (flags[1] & 14) >>> 1,
+            isNonSyncSample: flags[1] & 1,
+            degradationPriority: flags[2] << 8 | flags[3]
+          };
+        };
+        var parseSampleFlags_1 = parseSampleFlags;
+        var trun = function trun2(data) {
+          var result = {
+            version: data[0],
+            flags: new Uint8Array(data.subarray(1, 4)),
+            samples: []
+          }, view = new DataView(data.buffer, data.byteOffset, data.byteLength), dataOffsetPresent = result.flags[2] & 1, firstSampleFlagsPresent = result.flags[2] & 4, sampleDurationPresent = result.flags[1] & 1, sampleSizePresent = result.flags[1] & 2, sampleFlagsPresent = result.flags[1] & 4, sampleCompositionTimeOffsetPresent = result.flags[1] & 8, sampleCount = view.getUint32(4), offset = 8, sample;
+          if (dataOffsetPresent) {
+            result.dataOffset = view.getInt32(offset);
+            offset += 4;
+          }
+          if (firstSampleFlagsPresent && sampleCount) {
+            sample = {
+              flags: parseSampleFlags_1(data.subarray(offset, offset + 4))
+            };
+            offset += 4;
+            if (sampleDurationPresent) {
+              sample.duration = view.getUint32(offset);
+              offset += 4;
+            }
+            if (sampleSizePresent) {
+              sample.size = view.getUint32(offset);
+              offset += 4;
+            }
+            if (sampleCompositionTimeOffsetPresent) {
+              if (result.version === 1) {
+                sample.compositionTimeOffset = view.getInt32(offset);
+              } else {
+                sample.compositionTimeOffset = view.getUint32(offset);
+              }
+              offset += 4;
+            }
+            result.samples.push(sample);
+            sampleCount--;
+          }
+          while (sampleCount--) {
+            sample = {};
+            if (sampleDurationPresent) {
+              sample.duration = view.getUint32(offset);
+              offset += 4;
+            }
+            if (sampleSizePresent) {
+              sample.size = view.getUint32(offset);
+              offset += 4;
+            }
+            if (sampleFlagsPresent) {
+              sample.flags = parseSampleFlags_1(data.subarray(offset, offset + 4));
+              offset += 4;
+            }
+            if (sampleCompositionTimeOffsetPresent) {
+              if (result.version === 1) {
+                sample.compositionTimeOffset = view.getInt32(offset);
+              } else {
+                sample.compositionTimeOffset = view.getUint32(offset);
+              }
+              offset += 4;
+            }
+            result.samples.push(sample);
+          }
+          return result;
+        };
+        var parseTrun = trun;
+        var toUnsigned$1 = bin.toUnsigned;
+        var getUint64$3 = numbers.getUint64;
+        var tfdt = function tfdt2(data) {
+          var result = {
+            version: data[0],
+            flags: new Uint8Array(data.subarray(1, 4))
+          };
+          if (result.version === 1) {
+            result.baseMediaDecodeTime = getUint64$3(data.subarray(4));
+          } else {
+            result.baseMediaDecodeTime = toUnsigned$1(data[4] << 24 | data[5] << 16 | data[6] << 8 | data[7]);
+          }
+          return result;
+        };
+        var parseTfdt = tfdt;
+        var toUnsigned = bin.toUnsigned;
+        var toHexString = bin.toHexString;
+        var getUint64$2 = numbers.getUint64;
+        var timescale, startTime, compositionStartTime, getVideoTrackIds, getTracks, getTimescaleFromMediaHeader;
+        timescale = function timescale2(init2) {
+          var result = {}, traks = findBox_1(init2, ["moov", "trak"]);
+          return traks.reduce(function(result2, trak2) {
+            var tkhd2, version, index, id, mdhd2;
+            tkhd2 = findBox_1(trak2, ["tkhd"])[0];
+            if (!tkhd2) {
+              return null;
+            }
+            version = tkhd2[0];
+            index = version === 0 ? 12 : 20;
+            id = toUnsigned(tkhd2[index] << 24 | tkhd2[index + 1] << 16 | tkhd2[index + 2] << 8 | tkhd2[index + 3]);
+            mdhd2 = findBox_1(trak2, ["mdia", "mdhd"])[0];
+            if (!mdhd2) {
+              return null;
+            }
+            version = mdhd2[0];
+            index = version === 0 ? 12 : 20;
+            result2[id] = toUnsigned(mdhd2[index] << 24 | mdhd2[index + 1] << 16 | mdhd2[index + 2] << 8 | mdhd2[index + 3]);
+            return result2;
+          }, result);
+        };
+        startTime = function startTime2(timescale2, fragment) {
+          var trafs;
+          trafs = findBox_1(fragment, ["moof", "traf"]);
+          var lowestTime = trafs.reduce(function(acc, traf2) {
+            var tfhd2 = findBox_1(traf2, ["tfhd"])[0];
+            var id = toUnsigned(tfhd2[4] << 24 | tfhd2[5] << 16 | tfhd2[6] << 8 | tfhd2[7]);
+            var scale = timescale2[id] || 9e4;
+            var tfdt2 = findBox_1(traf2, ["tfdt"])[0];
+            var dv = new DataView(tfdt2.buffer, tfdt2.byteOffset, tfdt2.byteLength);
+            var baseTime;
+            if (tfdt2[0] === 1) {
+              baseTime = getUint64$2(tfdt2.subarray(4, 12));
+            } else {
+              baseTime = dv.getUint32(4);
+            }
+            var seconds;
+            if (typeof baseTime === "bigint") {
+              seconds = baseTime / window__default["default"].BigInt(scale);
+            } else if (typeof baseTime === "number" && !isNaN(baseTime)) {
+              seconds = baseTime / scale;
+            }
+            if (seconds < Number.MAX_SAFE_INTEGER) {
+              seconds = Number(seconds);
+            }
+            if (seconds < acc) {
+              acc = seconds;
+            }
+            return acc;
+          }, Infinity);
+          return typeof lowestTime === "bigint" || isFinite(lowestTime) ? lowestTime : 0;
+        };
+        compositionStartTime = function compositionStartTime2(timescales, fragment) {
+          var trafBoxes = findBox_1(fragment, ["moof", "traf"]);
+          var baseMediaDecodeTime = 0;
+          var compositionTimeOffset = 0;
+          var trackId;
+          if (trafBoxes && trafBoxes.length) {
+            var tfhd2 = findBox_1(trafBoxes[0], ["tfhd"])[0];
+            var trun2 = findBox_1(trafBoxes[0], ["trun"])[0];
+            var tfdt2 = findBox_1(trafBoxes[0], ["tfdt"])[0];
+            if (tfhd2) {
+              var parsedTfhd = parseTfhd(tfhd2);
+              trackId = parsedTfhd.trackId;
+            }
+            if (tfdt2) {
+              var parsedTfdt = parseTfdt(tfdt2);
+              baseMediaDecodeTime = parsedTfdt.baseMediaDecodeTime;
+            }
+            if (trun2) {
+              var parsedTrun = parseTrun(trun2);
+              if (parsedTrun.samples && parsedTrun.samples.length) {
+                compositionTimeOffset = parsedTrun.samples[0].compositionTimeOffset || 0;
+              }
+            }
+          }
+          var timescale2 = timescales[trackId] || 9e4;
+          if (typeof baseMediaDecodeTime === "bigint") {
+            compositionTimeOffset = window__default["default"].BigInt(compositionTimeOffset);
+            timescale2 = window__default["default"].BigInt(timescale2);
+          }
+          var result = (baseMediaDecodeTime + compositionTimeOffset) / timescale2;
+          if (typeof result === "bigint" && result < Number.MAX_SAFE_INTEGER) {
+            result = Number(result);
+          }
+          return result;
+        };
+        getVideoTrackIds = function getVideoTrackIds2(init2) {
+          var traks = findBox_1(init2, ["moov", "trak"]);
+          var videoTrackIds = [];
+          traks.forEach(function(trak2) {
+            var hdlrs = findBox_1(trak2, ["mdia", "hdlr"]);
+            var tkhds = findBox_1(trak2, ["tkhd"]);
+            hdlrs.forEach(function(hdlr2, index) {
+              var handlerType = parseType_1(hdlr2.subarray(8, 12));
+              var tkhd2 = tkhds[index];
+              var view;
+              var version;
+              var trackId;
+              if (handlerType === "vide") {
+                view = new DataView(tkhd2.buffer, tkhd2.byteOffset, tkhd2.byteLength);
+                version = view.getUint8(0);
+                trackId = version === 0 ? view.getUint32(12) : view.getUint32(20);
+                videoTrackIds.push(trackId);
+              }
+            });
+          });
+          return videoTrackIds;
+        };
+        getTimescaleFromMediaHeader = function getTimescaleFromMediaHeader2(mdhd2) {
+          var version = mdhd2[0];
+          var index = version === 0 ? 12 : 20;
+          return toUnsigned(mdhd2[index] << 24 | mdhd2[index + 1] << 16 | mdhd2[index + 2] << 8 | mdhd2[index + 3]);
+        };
+        getTracks = function getTracks2(init2) {
+          var traks = findBox_1(init2, ["moov", "trak"]);
+          var tracks = [];
+          traks.forEach(function(trak2) {
+            var track = {};
+            var tkhd2 = findBox_1(trak2, ["tkhd"])[0];
+            var view, tkhdVersion;
+            if (tkhd2) {
+              view = new DataView(tkhd2.buffer, tkhd2.byteOffset, tkhd2.byteLength);
+              tkhdVersion = view.getUint8(0);
+              track.id = tkhdVersion === 0 ? view.getUint32(12) : view.getUint32(20);
+            }
+            var hdlr2 = findBox_1(trak2, ["mdia", "hdlr"])[0];
+            if (hdlr2) {
+              var type2 = parseType_1(hdlr2.subarray(8, 12));
+              if (type2 === "vide") {
+                track.type = "video";
+              } else if (type2 === "soun") {
+                track.type = "audio";
+              } else {
+                track.type = type2;
+              }
+            }
+            var stsd2 = findBox_1(trak2, ["mdia", "minf", "stbl", "stsd"])[0];
+            if (stsd2) {
+              var sampleDescriptions = stsd2.subarray(8);
+              track.codec = parseType_1(sampleDescriptions.subarray(4, 8));
+              var codecBox = findBox_1(sampleDescriptions, [track.codec])[0];
+              var codecConfig, codecConfigType;
+              if (codecBox) {
+                if (/^[asm]vc[1-9]$/i.test(track.codec)) {
+                  codecConfig = codecBox.subarray(78);
+                  codecConfigType = parseType_1(codecConfig.subarray(4, 8));
+                  if (codecConfigType === "avcC" && codecConfig.length > 11) {
+                    track.codec += ".";
+                    track.codec += toHexString(codecConfig[9]);
+                    track.codec += toHexString(codecConfig[10]);
+                    track.codec += toHexString(codecConfig[11]);
+                  } else {
+                    track.codec = "avc1.4d400d";
+                  }
+                } else if (/^mp4[a,v]$/i.test(track.codec)) {
+                  codecConfig = codecBox.subarray(28);
+                  codecConfigType = parseType_1(codecConfig.subarray(4, 8));
+                  if (codecConfigType === "esds" && codecConfig.length > 20 && codecConfig[19] !== 0) {
+                    track.codec += "." + toHexString(codecConfig[19]);
+                    track.codec += "." + toHexString(codecConfig[20] >>> 2 & 63).replace(/^0/, "");
+                  } else {
+                    track.codec = "mp4a.40.2";
+                  }
+                } else {
+                  track.codec = track.codec.toLowerCase();
+                }
+              }
+            }
+            var mdhd2 = findBox_1(trak2, ["mdia", "mdhd"])[0];
+            if (mdhd2) {
+              track.timescale = getTimescaleFromMediaHeader(mdhd2);
+            }
+            tracks.push(track);
+          });
+          return tracks;
+        };
+        var probe$2 = {
+          findBox: findBox_1,
+          parseType: parseType_1,
+          timescale,
+          startTime,
+          compositionStartTime,
+          videoTrackIds: getVideoTrackIds,
+          tracks: getTracks,
+          getTimescaleFromMediaHeader
+        };
+        var groupNalsIntoFrames = function groupNalsIntoFrames2(nalUnits) {
+          var i, currentNal, currentFrame = [], frames = [];
+          frames.byteLength = 0;
+          frames.nalCount = 0;
+          frames.duration = 0;
+          currentFrame.byteLength = 0;
+          for (i = 0; i < nalUnits.length; i++) {
+            currentNal = nalUnits[i];
+            if (currentNal.nalUnitType === "access_unit_delimiter_rbsp") {
+              if (currentFrame.length) {
+                currentFrame.duration = currentNal.dts - currentFrame.dts;
+                frames.byteLength += currentFrame.byteLength;
+                frames.nalCount += currentFrame.length;
+                frames.duration += currentFrame.duration;
+                frames.push(currentFrame);
+              }
+              currentFrame = [currentNal];
+              currentFrame.byteLength = currentNal.data.byteLength;
+              currentFrame.pts = currentNal.pts;
+              currentFrame.dts = currentNal.dts;
+            } else {
+              if (currentNal.nalUnitType === "slice_layer_without_partitioning_rbsp_idr") {
+                currentFrame.keyFrame = true;
+              }
+              currentFrame.duration = currentNal.dts - currentFrame.dts;
+              currentFrame.byteLength += currentNal.data.byteLength;
+              currentFrame.push(currentNal);
+            }
+          }
+          if (frames.length && (!currentFrame.duration || currentFrame.duration <= 0)) {
+            currentFrame.duration = frames[frames.length - 1].duration;
+          }
+          frames.byteLength += currentFrame.byteLength;
+          frames.nalCount += currentFrame.length;
+          frames.duration += currentFrame.duration;
+          frames.push(currentFrame);
+          return frames;
+        };
+        var groupFramesIntoGops = function groupFramesIntoGops2(frames) {
+          var i, currentFrame, currentGop = [], gops = [];
+          currentGop.byteLength = 0;
+          currentGop.nalCount = 0;
+          currentGop.duration = 0;
+          currentGop.pts = frames[0].pts;
+          currentGop.dts = frames[0].dts;
+          gops.byteLength = 0;
+          gops.nalCount = 0;
+          gops.duration = 0;
+          gops.pts = frames[0].pts;
+          gops.dts = frames[0].dts;
+          for (i = 0; i < frames.length; i++) {
+            currentFrame = frames[i];
+            if (currentFrame.keyFrame) {
+              if (currentGop.length) {
+                gops.push(currentGop);
+                gops.byteLength += currentGop.byteLength;
+                gops.nalCount += currentGop.nalCount;
+                gops.duration += currentGop.duration;
+              }
+              currentGop = [currentFrame];
+              currentGop.nalCount = currentFrame.length;
+              currentGop.byteLength = currentFrame.byteLength;
+              currentGop.pts = currentFrame.pts;
+              currentGop.dts = currentFrame.dts;
+              currentGop.duration = currentFrame.duration;
+            } else {
+              currentGop.duration += currentFrame.duration;
+              currentGop.nalCount += currentFrame.length;
+              currentGop.byteLength += currentFrame.byteLength;
+              currentGop.push(currentFrame);
+            }
+          }
+          if (gops.length && currentGop.duration <= 0) {
+            currentGop.duration = gops[gops.length - 1].duration;
+          }
+          gops.byteLength += currentGop.byteLength;
+          gops.nalCount += currentGop.nalCount;
+          gops.duration += currentGop.duration;
+          gops.push(currentGop);
+          return gops;
+        };
+        var extendFirstKeyFrame = function extendFirstKeyFrame2(gops) {
+          var currentGop;
+          if (!gops[0][0].keyFrame && gops.length > 1) {
+            currentGop = gops.shift();
+            gops.byteLength -= currentGop.byteLength;
+            gops.nalCount -= currentGop.nalCount;
+            gops[0][0].dts = currentGop.dts;
+            gops[0][0].pts = currentGop.pts;
+            gops[0][0].duration += currentGop.duration;
+          }
+          return gops;
+        };
+        var createDefaultSample = function createDefaultSample2() {
+          return {
+            size: 0,
+            flags: {
+              isLeading: 0,
+              dependsOn: 1,
+              isDependedOn: 0,
+              hasRedundancy: 0,
+              degradationPriority: 0,
+              isNonSyncSample: 1
+            }
+          };
+        };
+        var sampleForFrame = function sampleForFrame2(frame, dataOffset) {
+          var sample = createDefaultSample();
+          sample.dataOffset = dataOffset;
+          sample.compositionTimeOffset = frame.pts - frame.dts;
+          sample.duration = frame.duration;
+          sample.size = 4 * frame.length;
+          sample.size += frame.byteLength;
+          if (frame.keyFrame) {
+            sample.flags.dependsOn = 2;
+            sample.flags.isNonSyncSample = 0;
+          }
+          return sample;
+        };
+        var generateSampleTable$1 = function generateSampleTable2(gops, baseDataOffset) {
+          var h, i, sample, currentGop, currentFrame, dataOffset = baseDataOffset || 0, samples = [];
+          for (h = 0; h < gops.length; h++) {
+            currentGop = gops[h];
+            for (i = 0; i < currentGop.length; i++) {
+              currentFrame = currentGop[i];
+              sample = sampleForFrame(currentFrame, dataOffset);
+              dataOffset += sample.size;
+              samples.push(sample);
+            }
+          }
+          return samples;
+        };
+        var concatenateNalData = function concatenateNalData2(gops) {
+          var h, i, j, currentGop, currentFrame, currentNal, dataOffset = 0, nalsByteLength = gops.byteLength, numberOfNals = gops.nalCount, totalByteLength = nalsByteLength + 4 * numberOfNals, data = new Uint8Array(totalByteLength), view = new DataView(data.buffer);
+          for (h = 0; h < gops.length; h++) {
+            currentGop = gops[h];
+            for (i = 0; i < currentGop.length; i++) {
+              currentFrame = currentGop[i];
+              for (j = 0; j < currentFrame.length; j++) {
+                currentNal = currentFrame[j];
+                view.setUint32(dataOffset, currentNal.data.byteLength);
+                dataOffset += 4;
+                data.set(currentNal.data, dataOffset);
+                dataOffset += currentNal.data.byteLength;
+              }
+            }
+          }
+          return data;
+        };
+        var generateSampleTableForFrame = function generateSampleTableForFrame2(frame, baseDataOffset) {
+          var sample, dataOffset = baseDataOffset || 0, samples = [];
+          sample = sampleForFrame(frame, dataOffset);
+          samples.push(sample);
+          return samples;
+        };
+        var concatenateNalDataForFrame = function concatenateNalDataForFrame2(frame) {
+          var i, currentNal, dataOffset = 0, nalsByteLength = frame.byteLength, numberOfNals = frame.length, totalByteLength = nalsByteLength + 4 * numberOfNals, data = new Uint8Array(totalByteLength), view = new DataView(data.buffer);
+          for (i = 0; i < frame.length; i++) {
+            currentNal = frame[i];
+            view.setUint32(dataOffset, currentNal.data.byteLength);
+            dataOffset += 4;
+            data.set(currentNal.data, dataOffset);
+            dataOffset += currentNal.data.byteLength;
+          }
+          return data;
+        };
+        var frameUtils = {
+          groupNalsIntoFrames,
+          groupFramesIntoGops,
+          extendFirstKeyFrame,
+          generateSampleTable: generateSampleTable$1,
+          concatenateNalData,
+          generateSampleTableForFrame,
+          concatenateNalDataForFrame
+        };
+        var highPrefix = [33, 16, 5, 32, 164, 27];
+        var lowPrefix = [33, 65, 108, 84, 1, 2, 4, 8, 168, 2, 4, 8, 17, 191, 252];
+        var zeroFill = function zeroFill2(count) {
+          var a = [];
+          while (count--) {
+            a.push(0);
+          }
+          return a;
+        };
+        var makeTable = function makeTable2(metaTable) {
+          return Object.keys(metaTable).reduce(function(obj, key) {
+            obj[key] = new Uint8Array(metaTable[key].reduce(function(arr, part) {
+              return arr.concat(part);
+            }, []));
+            return obj;
+          }, {});
+        };
+        var silence;
+        var silence_1 = function silence_12() {
+          if (!silence) {
+            var coneOfSilence = {
+              96e3: [highPrefix, [227, 64], zeroFill(154), [56]],
+              88200: [highPrefix, [231], zeroFill(170), [56]],
+              64e3: [highPrefix, [248, 192], zeroFill(240), [56]],
+              48e3: [highPrefix, [255, 192], zeroFill(268), [55, 148, 128], zeroFill(54), [112]],
+              44100: [highPrefix, [255, 192], zeroFill(268), [55, 163, 128], zeroFill(84), [112]],
+              32e3: [highPrefix, [255, 192], zeroFill(268), [55, 234], zeroFill(226), [112]],
+              24e3: [highPrefix, [255, 192], zeroFill(268), [55, 255, 128], zeroFill(268), [111, 112], zeroFill(126), [224]],
+              16e3: [highPrefix, [255, 192], zeroFill(268), [55, 255, 128], zeroFill(268), [111, 255], zeroFill(269), [223, 108], zeroFill(195), [1, 192]],
+              12e3: [lowPrefix, zeroFill(268), [3, 127, 248], zeroFill(268), [6, 255, 240], zeroFill(268), [13, 255, 224], zeroFill(268), [27, 253, 128], zeroFill(259), [56]],
+              11025: [lowPrefix, zeroFill(268), [3, 127, 248], zeroFill(268), [6, 255, 240], zeroFill(268), [13, 255, 224], zeroFill(268), [27, 255, 192], zeroFill(268), [55, 175, 128], zeroFill(108), [112]],
+              8e3: [lowPrefix, zeroFill(268), [3, 121, 16], zeroFill(47), [7]]
+            };
+            silence = makeTable(coneOfSilence);
+          }
+          return silence;
+        };
+        var sumFrameByteLengths = function sumFrameByteLengths2(array) {
+          var i, currentObj, sum = 0;
+          for (i = 0; i < array.length; i++) {
+            currentObj = array[i];
+            sum += currentObj.data.byteLength;
+          }
+          return sum;
+        };
+        var prefixWithSilence = function prefixWithSilence2(track, frames, audioAppendStartTs, videoBaseMediaDecodeTime) {
+          var baseMediaDecodeTimeTs, frameDuration = 0, audioGapDuration = 0, audioFillFrameCount = 0, audioFillDuration = 0, silentFrame, i, firstFrame;
+          if (!frames.length) {
+            return;
+          }
+          baseMediaDecodeTimeTs = clock.audioTsToVideoTs(track.baseMediaDecodeTime, track.samplerate);
+          frameDuration = Math.ceil(clock.ONE_SECOND_IN_TS / (track.samplerate / 1024));
+          if (audioAppendStartTs && videoBaseMediaDecodeTime) {
+            audioGapDuration = baseMediaDecodeTimeTs - Math.max(audioAppendStartTs, videoBaseMediaDecodeTime);
+            audioFillFrameCount = Math.floor(audioGapDuration / frameDuration);
+            audioFillDuration = audioFillFrameCount * frameDuration;
+          }
+          if (audioFillFrameCount < 1 || audioFillDuration > clock.ONE_SECOND_IN_TS / 2) {
+            return;
+          }
+          silentFrame = silence_1()[track.samplerate];
+          if (!silentFrame) {
+            silentFrame = frames[0].data;
+          }
+          for (i = 0; i < audioFillFrameCount; i++) {
+            firstFrame = frames[0];
+            frames.splice(0, 0, {
+              data: silentFrame,
+              dts: firstFrame.dts - frameDuration,
+              pts: firstFrame.pts - frameDuration
+            });
+          }
+          track.baseMediaDecodeTime -= Math.floor(clock.videoTsToAudioTs(audioFillDuration, track.samplerate));
+          return audioFillDuration;
+        };
+        var trimAdtsFramesByEarliestDts = function trimAdtsFramesByEarliestDts2(adtsFrames, track, earliestAllowedDts) {
+          if (track.minSegmentDts >= earliestAllowedDts) {
+            return adtsFrames;
+          }
+          track.minSegmentDts = Infinity;
+          return adtsFrames.filter(function(currentFrame) {
+            if (currentFrame.dts >= earliestAllowedDts) {
+              track.minSegmentDts = Math.min(track.minSegmentDts, currentFrame.dts);
+              track.minSegmentPts = track.minSegmentDts;
+              return true;
+            }
+            return false;
+          });
+        };
+        var generateSampleTable = function generateSampleTable2(frames) {
+          var i, currentFrame, samples = [];
+          for (i = 0; i < frames.length; i++) {
+            currentFrame = frames[i];
+            samples.push({
+              size: currentFrame.data.byteLength,
+              duration: 1024
+            });
+          }
+          return samples;
+        };
+        var concatenateFrameData = function concatenateFrameData2(frames) {
+          var i, currentFrame, dataOffset = 0, data = new Uint8Array(sumFrameByteLengths(frames));
+          for (i = 0; i < frames.length; i++) {
+            currentFrame = frames[i];
+            data.set(currentFrame.data, dataOffset);
+            dataOffset += currentFrame.data.byteLength;
+          }
+          return data;
+        };
+        var audioFrameUtils = {
+          prefixWithSilence,
+          trimAdtsFramesByEarliestDts,
+          generateSampleTable,
+          concatenateFrameData
+        };
+        var ONE_SECOND_IN_TS$3 = clock.ONE_SECOND_IN_TS;
+        var collectDtsInfo = function collectDtsInfo2(track, data) {
+          if (typeof data.pts === "number") {
+            if (track.timelineStartInfo.pts === void 0) {
+              track.timelineStartInfo.pts = data.pts;
+            }
+            if (track.minSegmentPts === void 0) {
+              track.minSegmentPts = data.pts;
+            } else {
+              track.minSegmentPts = Math.min(track.minSegmentPts, data.pts);
+            }
+            if (track.maxSegmentPts === void 0) {
+              track.maxSegmentPts = data.pts;
+            } else {
+              track.maxSegmentPts = Math.max(track.maxSegmentPts, data.pts);
+            }
+          }
+          if (typeof data.dts === "number") {
+            if (track.timelineStartInfo.dts === void 0) {
+              track.timelineStartInfo.dts = data.dts;
+            }
+            if (track.minSegmentDts === void 0) {
+              track.minSegmentDts = data.dts;
+            } else {
+              track.minSegmentDts = Math.min(track.minSegmentDts, data.dts);
+            }
+            if (track.maxSegmentDts === void 0) {
+              track.maxSegmentDts = data.dts;
+            } else {
+              track.maxSegmentDts = Math.max(track.maxSegmentDts, data.dts);
+            }
+          }
+        };
+        var clearDtsInfo = function clearDtsInfo2(track) {
+          delete track.minSegmentDts;
+          delete track.maxSegmentDts;
+          delete track.minSegmentPts;
+          delete track.maxSegmentPts;
+        };
+        var calculateTrackBaseMediaDecodeTime = function calculateTrackBaseMediaDecodeTime2(track, keepOriginalTimestamps) {
+          var baseMediaDecodeTime, scale, minSegmentDts = track.minSegmentDts;
+          if (!keepOriginalTimestamps) {
+            minSegmentDts -= track.timelineStartInfo.dts;
+          }
+          baseMediaDecodeTime = track.timelineStartInfo.baseMediaDecodeTime;
+          baseMediaDecodeTime += minSegmentDts;
+          baseMediaDecodeTime = Math.max(0, baseMediaDecodeTime);
+          if (track.type === "audio") {
+            scale = track.samplerate / ONE_SECOND_IN_TS$3;
+            baseMediaDecodeTime *= scale;
+            baseMediaDecodeTime = Math.floor(baseMediaDecodeTime);
+          }
+          return baseMediaDecodeTime;
+        };
+        var trackDecodeInfo = {
+          clearDtsInfo,
+          calculateTrackBaseMediaDecodeTime,
+          collectDtsInfo
+        };
+        var USER_DATA_REGISTERED_ITU_T_T35 = 4, RBSP_TRAILING_BITS = 128;
+        var parseSei = function parseSei2(bytes) {
+          var i = 0, result = {
+            payloadType: -1,
+            payloadSize: 0
+          }, payloadType = 0, payloadSize = 0;
+          while (i < bytes.byteLength) {
+            if (bytes[i] === RBSP_TRAILING_BITS) {
+              break;
+            }
+            while (bytes[i] === 255) {
+              payloadType += 255;
+              i++;
+            }
+            payloadType += bytes[i++];
+            while (bytes[i] === 255) {
+              payloadSize += 255;
+              i++;
+            }
+            payloadSize += bytes[i++];
+            if (!result.payload && payloadType === USER_DATA_REGISTERED_ITU_T_T35) {
+              var userIdentifier = String.fromCharCode(bytes[i + 3], bytes[i + 4], bytes[i + 5], bytes[i + 6]);
+              if (userIdentifier === "GA94") {
+                result.payloadType = payloadType;
+                result.payloadSize = payloadSize;
+                result.payload = bytes.subarray(i, i + payloadSize);
+                break;
+              } else {
+                result.payload = void 0;
+              }
+            }
+            i += payloadSize;
+            payloadType = 0;
+            payloadSize = 0;
+          }
+          return result;
+        };
+        var parseUserData = function parseUserData2(sei) {
+          if (sei.payload[0] !== 181) {
+            return null;
+          }
+          if ((sei.payload[1] << 8 | sei.payload[2]) !== 49) {
+            return null;
+          }
+          if (String.fromCharCode(sei.payload[3], sei.payload[4], sei.payload[5], sei.payload[6]) !== "GA94") {
+            return null;
+          }
+          if (sei.payload[7] !== 3) {
+            return null;
+          }
+          return sei.payload.subarray(8, sei.payload.length - 1);
+        };
+        var parseCaptionPackets = function parseCaptionPackets2(pts, userData) {
+          var results = [], i, count, offset, data;
+          if (!(userData[0] & 64)) {
+            return results;
+          }
+          count = userData[0] & 31;
+          for (i = 0; i < count; i++) {
+            offset = i * 3;
+            data = {
+              type: userData[offset + 2] & 3,
+              pts
+            };
+            if (userData[offset + 2] & 4) {
+              data.ccData = userData[offset + 3] << 8 | userData[offset + 4];
+              results.push(data);
+            }
+          }
+          return results;
+        };
+        var discardEmulationPreventionBytes$1 = function discardEmulationPreventionBytes2(data) {
+          var length = data.byteLength, emulationPreventionBytesPositions = [], i = 1, newLength, newData;
+          while (i < length - 2) {
+            if (data[i] === 0 && data[i + 1] === 0 && data[i + 2] === 3) {
+              emulationPreventionBytesPositions.push(i + 2);
+              i += 2;
+            } else {
+              i++;
+            }
+          }
+          if (emulationPreventionBytesPositions.length === 0) {
+            return data;
+          }
+          newLength = length - emulationPreventionBytesPositions.length;
+          newData = new Uint8Array(newLength);
+          var sourceIndex = 0;
+          for (i = 0; i < newLength; sourceIndex++, i++) {
+            if (sourceIndex === emulationPreventionBytesPositions[0]) {
+              sourceIndex++;
+              emulationPreventionBytesPositions.shift();
+            }
+            newData[i] = data[sourceIndex];
+          }
+          return newData;
+        };
+        var captionPacketParser = {
+          parseSei,
+          parseUserData,
+          parseCaptionPackets,
+          discardEmulationPreventionBytes: discardEmulationPreventionBytes$1,
+          USER_DATA_REGISTERED_ITU_T_T35
+        };
+        var CaptionStream$1 = function CaptionStream2(options) {
+          options = options || {};
+          CaptionStream2.prototype.init.call(this);
+          this.parse708captions_ = typeof options.parse708captions === "boolean" ? options.parse708captions : true;
+          this.captionPackets_ = [];
+          this.ccStreams_ = [
+            new Cea608Stream(0, 0),
+            new Cea608Stream(0, 1),
+            new Cea608Stream(1, 0),
+            new Cea608Stream(1, 1)
+          ];
+          if (this.parse708captions_) {
+            this.cc708Stream_ = new Cea708Stream({
+              captionServices: options.captionServices
+            });
+          }
+          this.reset();
+          this.ccStreams_.forEach(function(cc) {
+            cc.on("data", this.trigger.bind(this, "data"));
+            cc.on("partialdone", this.trigger.bind(this, "partialdone"));
+            cc.on("done", this.trigger.bind(this, "done"));
+          }, this);
+          if (this.parse708captions_) {
+            this.cc708Stream_.on("data", this.trigger.bind(this, "data"));
+            this.cc708Stream_.on("partialdone", this.trigger.bind(this, "partialdone"));
+            this.cc708Stream_.on("done", this.trigger.bind(this, "done"));
+          }
+        };
+        CaptionStream$1.prototype = new stream();
+        CaptionStream$1.prototype.push = function(event) {
+          var sei, userData, newCaptionPackets;
+          if (event.nalUnitType !== "sei_rbsp") {
+            return;
+          }
+          sei = captionPacketParser.parseSei(event.escapedRBSP);
+          if (!sei.payload) {
+            return;
+          }
+          if (sei.payloadType !== captionPacketParser.USER_DATA_REGISTERED_ITU_T_T35) {
+            return;
+          }
+          userData = captionPacketParser.parseUserData(sei);
+          if (!userData) {
+            return;
+          }
+          if (event.dts < this.latestDts_) {
+            this.ignoreNextEqualDts_ = true;
+            return;
+          } else if (event.dts === this.latestDts_ && this.ignoreNextEqualDts_) {
+            this.numSameDts_--;
+            if (!this.numSameDts_) {
+              this.ignoreNextEqualDts_ = false;
+            }
+            return;
+          }
+          newCaptionPackets = captionPacketParser.parseCaptionPackets(event.pts, userData);
+          this.captionPackets_ = this.captionPackets_.concat(newCaptionPackets);
+          if (this.latestDts_ !== event.dts) {
+            this.numSameDts_ = 0;
+          }
+          this.numSameDts_++;
+          this.latestDts_ = event.dts;
+        };
+        CaptionStream$1.prototype.flushCCStreams = function(flushType) {
+          this.ccStreams_.forEach(function(cc) {
+            return flushType === "flush" ? cc.flush() : cc.partialFlush();
+          }, this);
+        };
+        CaptionStream$1.prototype.flushStream = function(flushType) {
+          if (!this.captionPackets_.length) {
+            this.flushCCStreams(flushType);
+            return;
+          }
+          this.captionPackets_.forEach(function(elem, idx) {
+            elem.presortIndex = idx;
+          });
+          this.captionPackets_.sort(function(a, b) {
+            if (a.pts === b.pts) {
+              return a.presortIndex - b.presortIndex;
+            }
+            return a.pts - b.pts;
+          });
+          this.captionPackets_.forEach(function(packet) {
+            if (packet.type < 2) {
+              this.dispatchCea608Packet(packet);
+            } else {
+              this.dispatchCea708Packet(packet);
+            }
+          }, this);
+          this.captionPackets_.length = 0;
+          this.flushCCStreams(flushType);
+        };
+        CaptionStream$1.prototype.flush = function() {
+          return this.flushStream("flush");
+        };
+        CaptionStream$1.prototype.partialFlush = function() {
+          return this.flushStream("partialFlush");
+        };
+        CaptionStream$1.prototype.reset = function() {
+          this.latestDts_ = null;
+          this.ignoreNextEqualDts_ = false;
+          this.numSameDts_ = 0;
+          this.activeCea608Channel_ = [null, null];
+          this.ccStreams_.forEach(function(ccStream) {
+            ccStream.reset();
+          });
+        };
+        CaptionStream$1.prototype.dispatchCea608Packet = function(packet) {
+          if (this.setsTextOrXDSActive(packet)) {
+            this.activeCea608Channel_[packet.type] = null;
+          } else if (this.setsChannel1Active(packet)) {
+            this.activeCea608Channel_[packet.type] = 0;
+          } else if (this.setsChannel2Active(packet)) {
+            this.activeCea608Channel_[packet.type] = 1;
+          }
+          if (this.activeCea608Channel_[packet.type] === null) {
+            return;
+          }
+          this.ccStreams_[(packet.type << 1) + this.activeCea608Channel_[packet.type]].push(packet);
+        };
+        CaptionStream$1.prototype.setsChannel1Active = function(packet) {
+          return (packet.ccData & 30720) === 4096;
+        };
+        CaptionStream$1.prototype.setsChannel2Active = function(packet) {
+          return (packet.ccData & 30720) === 6144;
+        };
+        CaptionStream$1.prototype.setsTextOrXDSActive = function(packet) {
+          return (packet.ccData & 28928) === 256 || (packet.ccData & 30974) === 4138 || (packet.ccData & 30974) === 6186;
+        };
+        CaptionStream$1.prototype.dispatchCea708Packet = function(packet) {
+          if (this.parse708captions_) {
+            this.cc708Stream_.push(packet);
+          }
+        };
+        var CHARACTER_TRANSLATION_708 = {
+          127: 9834,
+          4128: 32,
+          4129: 160,
+          4133: 8230,
+          4138: 352,
+          4140: 338,
+          4144: 9608,
+          4145: 8216,
+          4146: 8217,
+          4147: 8220,
+          4148: 8221,
+          4149: 8226,
+          4153: 8482,
+          4154: 353,
+          4156: 339,
+          4157: 8480,
+          4159: 376,
+          4214: 8539,
+          4215: 8540,
+          4216: 8541,
+          4217: 8542,
+          4218: 9168,
+          4219: 9124,
+          4220: 9123,
+          4221: 9135,
+          4222: 9126,
+          4223: 9121,
+          4256: 12600
+        };
+        var get708CharFromCode = function get708CharFromCode2(code) {
+          var newCode = CHARACTER_TRANSLATION_708[code] || code;
+          if (code & 4096 && code === newCode) {
+            return "";
+          }
+          return String.fromCharCode(newCode);
+        };
+        var within708TextBlock = function within708TextBlock2(b) {
+          return 32 <= b && b <= 127 || 160 <= b && b <= 255;
+        };
+        var Cea708Window = function Cea708Window2(windowNum) {
+          this.windowNum = windowNum;
+          this.reset();
+        };
+        Cea708Window.prototype.reset = function() {
+          this.clearText();
+          this.pendingNewLine = false;
+          this.winAttr = {};
+          this.penAttr = {};
+          this.penLoc = {};
+          this.penColor = {};
+          this.visible = 0;
+          this.rowLock = 0;
+          this.columnLock = 0;
+          this.priority = 0;
+          this.relativePositioning = 0;
+          this.anchorVertical = 0;
+          this.anchorHorizontal = 0;
+          this.anchorPoint = 0;
+          this.rowCount = 1;
+          this.virtualRowCount = this.rowCount + 1;
+          this.columnCount = 41;
+          this.windowStyle = 0;
+          this.penStyle = 0;
+        };
+        Cea708Window.prototype.getText = function() {
+          return this.rows.join("\n");
+        };
+        Cea708Window.prototype.clearText = function() {
+          this.rows = [""];
+          this.rowIdx = 0;
+        };
+        Cea708Window.prototype.newLine = function(pts) {
+          if (this.rows.length >= this.virtualRowCount && typeof this.beforeRowOverflow === "function") {
+            this.beforeRowOverflow(pts);
+          }
+          if (this.rows.length > 0) {
+            this.rows.push("");
+            this.rowIdx++;
+          }
+          while (this.rows.length > this.virtualRowCount) {
+            this.rows.shift();
+            this.rowIdx--;
+          }
+        };
+        Cea708Window.prototype.isEmpty = function() {
+          if (this.rows.length === 0) {
+            return true;
+          } else if (this.rows.length === 1) {
+            return this.rows[0] === "";
+          }
+          return false;
+        };
+        Cea708Window.prototype.addText = function(text) {
+          this.rows[this.rowIdx] += text;
+        };
+        Cea708Window.prototype.backspace = function() {
+          if (!this.isEmpty()) {
+            var row = this.rows[this.rowIdx];
+            this.rows[this.rowIdx] = row.substr(0, row.length - 1);
+          }
+        };
+        var Cea708Service = function Cea708Service2(serviceNum, encoding, stream2) {
+          this.serviceNum = serviceNum;
+          this.text = "";
+          this.currentWindow = new Cea708Window(-1);
+          this.windows = [];
+          this.stream = stream2;
+          if (typeof encoding === "string") {
+            this.createTextDecoder(encoding);
+          }
+        };
+        Cea708Service.prototype.init = function(pts, beforeRowOverflow) {
+          this.startPts = pts;
+          for (var win = 0; win < 8; win++) {
+            this.windows[win] = new Cea708Window(win);
+            if (typeof beforeRowOverflow === "function") {
+              this.windows[win].beforeRowOverflow = beforeRowOverflow;
+            }
+          }
+        };
+        Cea708Service.prototype.setCurrentWindow = function(windowNum) {
+          this.currentWindow = this.windows[windowNum];
+        };
+        Cea708Service.prototype.createTextDecoder = function(encoding) {
+          if (typeof TextDecoder === "undefined") {
+            this.stream.trigger("log", {
+              level: "warn",
+              message: "The `encoding` option is unsupported without TextDecoder support"
+            });
+          } else {
+            try {
+              this.textDecoder_ = new TextDecoder(encoding);
+            } catch (error) {
+              this.stream.trigger("log", {
+                level: "warn",
+                message: "TextDecoder could not be created with " + encoding + " encoding. " + error
+              });
+            }
+          }
+        };
+        var Cea708Stream = function Cea708Stream2(options) {
+          options = options || {};
+          Cea708Stream2.prototype.init.call(this);
+          var self2 = this;
+          var captionServices = options.captionServices || {};
+          var captionServiceEncodings = {};
+          var serviceProps;
+          Object.keys(captionServices).forEach(function(serviceName) {
+            serviceProps = captionServices[serviceName];
+            if (/^SERVICE/.test(serviceName)) {
+              captionServiceEncodings[serviceName] = serviceProps.encoding;
+            }
+          });
+          this.serviceEncodings = captionServiceEncodings;
+          this.current708Packet = null;
+          this.services = {};
+          this.push = function(packet) {
+            if (packet.type === 3) {
+              self2.new708Packet();
+              self2.add708Bytes(packet);
+            } else {
+              if (self2.current708Packet === null) {
+                self2.new708Packet();
+              }
+              self2.add708Bytes(packet);
+            }
+          };
+        };
+        Cea708Stream.prototype = new stream();
+        Cea708Stream.prototype.new708Packet = function() {
+          if (this.current708Packet !== null) {
+            this.push708Packet();
+          }
+          this.current708Packet = {
+            data: [],
+            ptsVals: []
+          };
+        };
+        Cea708Stream.prototype.add708Bytes = function(packet) {
+          var data = packet.ccData;
+          var byte0 = data >>> 8;
+          var byte1 = data & 255;
+          this.current708Packet.ptsVals.push(packet.pts);
+          this.current708Packet.data.push(byte0);
+          this.current708Packet.data.push(byte1);
+        };
+        Cea708Stream.prototype.push708Packet = function() {
+          var packet708 = this.current708Packet;
+          var packetData = packet708.data;
+          var serviceNum = null;
+          var blockSize = null;
+          var i = 0;
+          var b = packetData[i++];
+          packet708.seq = b >> 6;
+          packet708.sizeCode = b & 63;
+          for (; i < packetData.length; i++) {
+            b = packetData[i++];
+            serviceNum = b >> 5;
+            blockSize = b & 31;
+            if (serviceNum === 7 && blockSize > 0) {
+              b = packetData[i++];
+              serviceNum = b;
+            }
+            this.pushServiceBlock(serviceNum, i, blockSize);
+            if (blockSize > 0) {
+              i += blockSize - 1;
+            }
+          }
+        };
+        Cea708Stream.prototype.pushServiceBlock = function(serviceNum, start, size) {
+          var b;
+          var i = start;
+          var packetData = this.current708Packet.data;
+          var service = this.services[serviceNum];
+          if (!service) {
+            service = this.initService(serviceNum, i);
+          }
+          for (; i < start + size && i < packetData.length; i++) {
+            b = packetData[i];
+            if (within708TextBlock(b)) {
+              i = this.handleText(i, service);
+            } else if (b === 24) {
+              i = this.multiByteCharacter(i, service);
+            } else if (b === 16) {
+              i = this.extendedCommands(i, service);
+            } else if (128 <= b && b <= 135) {
+              i = this.setCurrentWindow(i, service);
+            } else if (152 <= b && b <= 159) {
+              i = this.defineWindow(i, service);
+            } else if (b === 136) {
+              i = this.clearWindows(i, service);
+            } else if (b === 140) {
+              i = this.deleteWindows(i, service);
+            } else if (b === 137) {
+              i = this.displayWindows(i, service);
+            } else if (b === 138) {
+              i = this.hideWindows(i, service);
+            } else if (b === 139) {
+              i = this.toggleWindows(i, service);
+            } else if (b === 151) {
+              i = this.setWindowAttributes(i, service);
+            } else if (b === 144) {
+              i = this.setPenAttributes(i, service);
+            } else if (b === 145) {
+              i = this.setPenColor(i, service);
+            } else if (b === 146) {
+              i = this.setPenLocation(i, service);
+            } else if (b === 143) {
+              service = this.reset(i, service);
+            } else if (b === 8) {
+              service.currentWindow.backspace();
+            } else if (b === 12) {
+              service.currentWindow.clearText();
+            } else if (b === 13) {
+              service.currentWindow.pendingNewLine = true;
+            } else if (b === 14) {
+              service.currentWindow.clearText();
+            } else if (b === 141) {
+              i++;
+            } else
+              ;
+          }
+        };
+        Cea708Stream.prototype.extendedCommands = function(i, service) {
+          var packetData = this.current708Packet.data;
+          var b = packetData[++i];
+          if (within708TextBlock(b)) {
+            i = this.handleText(i, service, {
+              isExtended: true
+            });
+          }
+          return i;
+        };
+        Cea708Stream.prototype.getPts = function(byteIndex) {
+          return this.current708Packet.ptsVals[Math.floor(byteIndex / 2)];
+        };
+        Cea708Stream.prototype.initService = function(serviceNum, i) {
+          var serviceName = "SERVICE" + serviceNum;
+          var self2 = this;
+          var serviceName;
+          var encoding;
+          if (serviceName in this.serviceEncodings) {
+            encoding = this.serviceEncodings[serviceName];
+          }
+          this.services[serviceNum] = new Cea708Service(serviceNum, encoding, self2);
+          this.services[serviceNum].init(this.getPts(i), function(pts) {
+            self2.flushDisplayed(pts, self2.services[serviceNum]);
+          });
+          return this.services[serviceNum];
+        };
+        Cea708Stream.prototype.handleText = function(i, service, options) {
+          var isExtended = options && options.isExtended;
+          var isMultiByte = options && options.isMultiByte;
+          var packetData = this.current708Packet.data;
+          var extended = isExtended ? 4096 : 0;
+          var currentByte = packetData[i];
+          var nextByte = packetData[i + 1];
+          var win = service.currentWindow;
+          var char;
+          var charCodeArray;
+          if (service.textDecoder_ && !isExtended) {
+            if (isMultiByte) {
+              charCodeArray = [currentByte, nextByte];
+              i++;
+            } else {
+              charCodeArray = [currentByte];
+            }
+            char = service.textDecoder_.decode(new Uint8Array(charCodeArray));
+          } else {
+            char = get708CharFromCode(extended | currentByte);
+          }
+          if (win.pendingNewLine && !win.isEmpty()) {
+            win.newLine(this.getPts(i));
+          }
+          win.pendingNewLine = false;
+          win.addText(char);
+          return i;
+        };
+        Cea708Stream.prototype.multiByteCharacter = function(i, service) {
+          var packetData = this.current708Packet.data;
+          var firstByte = packetData[i + 1];
+          var secondByte = packetData[i + 2];
+          if (within708TextBlock(firstByte) && within708TextBlock(secondByte)) {
+            i = this.handleText(++i, service, {
+              isMultiByte: true
+            });
+          }
+          return i;
+        };
+        Cea708Stream.prototype.setCurrentWindow = function(i, service) {
+          var packetData = this.current708Packet.data;
+          var b = packetData[i];
+          var windowNum = b & 7;
+          service.setCurrentWindow(windowNum);
+          return i;
+        };
+        Cea708Stream.prototype.defineWindow = function(i, service) {
+          var packetData = this.current708Packet.data;
+          var b = packetData[i];
+          var windowNum = b & 7;
+          service.setCurrentWindow(windowNum);
+          var win = service.currentWindow;
+          b = packetData[++i];
+          win.visible = (b & 32) >> 5;
+          win.rowLock = (b & 16) >> 4;
+          win.columnLock = (b & 8) >> 3;
+          win.priority = b & 7;
+          b = packetData[++i];
+          win.relativePositioning = (b & 128) >> 7;
+          win.anchorVertical = b & 127;
+          b = packetData[++i];
+          win.anchorHorizontal = b;
+          b = packetData[++i];
+          win.anchorPoint = (b & 240) >> 4;
+          win.rowCount = b & 15;
+          b = packetData[++i];
+          win.columnCount = b & 63;
+          b = packetData[++i];
+          win.windowStyle = (b & 56) >> 3;
+          win.penStyle = b & 7;
+          win.virtualRowCount = win.rowCount + 1;
+          return i;
+        };
+        Cea708Stream.prototype.setWindowAttributes = function(i, service) {
+          var packetData = this.current708Packet.data;
+          var b = packetData[i];
+          var winAttr = service.currentWindow.winAttr;
+          b = packetData[++i];
+          winAttr.fillOpacity = (b & 192) >> 6;
+          winAttr.fillRed = (b & 48) >> 4;
+          winAttr.fillGreen = (b & 12) >> 2;
+          winAttr.fillBlue = b & 3;
+          b = packetData[++i];
+          winAttr.borderType = (b & 192) >> 6;
+          winAttr.borderRed = (b & 48) >> 4;
+          winAttr.borderGreen = (b & 12) >> 2;
+          winAttr.borderBlue = b & 3;
+          b = packetData[++i];
+          winAttr.borderType += (b & 128) >> 5;
+          winAttr.wordWrap = (b & 64) >> 6;
+          winAttr.printDirection = (b & 48) >> 4;
+          winAttr.scrollDirection = (b & 12) >> 2;
+          winAttr.justify = b & 3;
+          b = packetData[++i];
+          winAttr.effectSpeed = (b & 240) >> 4;
+          winAttr.effectDirection = (b & 12) >> 2;
+          winAttr.displayEffect = b & 3;
+          return i;
+        };
+        Cea708Stream.prototype.flushDisplayed = function(pts, service) {
+          var displayedText = [];
+          for (var winId = 0; winId < 8; winId++) {
+            if (service.windows[winId].visible && !service.windows[winId].isEmpty()) {
+              displayedText.push(service.windows[winId].getText());
+            }
+          }
+          service.endPts = pts;
+          service.text = displayedText.join("\n\n");
+          this.pushCaption(service);
+          service.startPts = pts;
+        };
+        Cea708Stream.prototype.pushCaption = function(service) {
+          if (service.text !== "") {
+            this.trigger("data", {
+              startPts: service.startPts,
+              endPts: service.endPts,
+              text: service.text,
+              stream: "cc708_" + service.serviceNum
+            });
+            service.text = "";
+            service.startPts = service.endPts;
+          }
+        };
+        Cea708Stream.prototype.displayWindows = function(i, service) {
+          var packetData = this.current708Packet.data;
+          var b = packetData[++i];
+          var pts = this.getPts(i);
+          this.flushDisplayed(pts, service);
+          for (var winId = 0; winId < 8; winId++) {
+            if (b & 1 << winId) {
+              service.windows[winId].visible = 1;
+            }
+          }
+          return i;
+        };
+        Cea708Stream.prototype.hideWindows = function(i, service) {
+          var packetData = this.current708Packet.data;
+          var b = packetData[++i];
+          var pts = this.getPts(i);
+          this.flushDisplayed(pts, service);
+          for (var winId = 0; winId < 8; winId++) {
+            if (b & 1 << winId) {
+              service.windows[winId].visible = 0;
+            }
+          }
+          return i;
+        };
+        Cea708Stream.prototype.toggleWindows = function(i, service) {
+          var packetData = this.current708Packet.data;
+          var b = packetData[++i];
+          var pts = this.getPts(i);
+          this.flushDisplayed(pts, service);
+          for (var winId = 0; winId < 8; winId++) {
+            if (b & 1 << winId) {
+              service.windows[winId].visible ^= 1;
+            }
+          }
+          return i;
+        };
+        Cea708Stream.prototype.clearWindows = function(i, service) {
+          var packetData = this.current708Packet.data;
+          var b = packetData[++i];
+          var pts = this.getPts(i);
+          this.flushDisplayed(pts, service);
+          for (var winId = 0; winId < 8; winId++) {
+            if (b & 1 << winId) {
+              service.windows[winId].clearText();
+            }
+          }
+          return i;
+        };
+        Cea708Stream.prototype.deleteWindows = function(i, service) {
+          var packetData = this.current708Packet.data;
+          var b = packetData[++i];
+          var pts = this.getPts(i);
+          this.flushDisplayed(pts, service);
+          for (var winId = 0; winId < 8; winId++) {
+            if (b & 1 << winId) {
+              service.windows[winId].reset();
+            }
+          }
+          return i;
+        };
+        Cea708Stream.prototype.setPenAttributes = function(i, service) {
+          var packetData = this.current708Packet.data;
+          var b = packetData[i];
+          var penAttr = service.currentWindow.penAttr;
+          b = packetData[++i];
+          penAttr.textTag = (b & 240) >> 4;
+          penAttr.offset = (b & 12) >> 2;
+          penAttr.penSize = b & 3;
+          b = packetData[++i];
+          penAttr.italics = (b & 128) >> 7;
+          penAttr.underline = (b & 64) >> 6;
+          penAttr.edgeType = (b & 56) >> 3;
+          penAttr.fontStyle = b & 7;
+          return i;
+        };
+        Cea708Stream.prototype.setPenColor = function(i, service) {
+          var packetData = this.current708Packet.data;
+          var b = packetData[i];
+          var penColor = service.currentWindow.penColor;
+          b = packetData[++i];
+          penColor.fgOpacity = (b & 192) >> 6;
+          penColor.fgRed = (b & 48) >> 4;
+          penColor.fgGreen = (b & 12) >> 2;
+          penColor.fgBlue = b & 3;
+          b = packetData[++i];
+          penColor.bgOpacity = (b & 192) >> 6;
+          penColor.bgRed = (b & 48) >> 4;
+          penColor.bgGreen = (b & 12) >> 2;
+          penColor.bgBlue = b & 3;
+          b = packetData[++i];
+          penColor.edgeRed = (b & 48) >> 4;
+          penColor.edgeGreen = (b & 12) >> 2;
+          penColor.edgeBlue = b & 3;
+          return i;
+        };
+        Cea708Stream.prototype.setPenLocation = function(i, service) {
+          var packetData = this.current708Packet.data;
+          var b = packetData[i];
+          var penLoc = service.currentWindow.penLoc;
+          service.currentWindow.pendingNewLine = true;
+          b = packetData[++i];
+          penLoc.row = b & 15;
+          b = packetData[++i];
+          penLoc.column = b & 63;
+          return i;
+        };
+        Cea708Stream.prototype.reset = function(i, service) {
+          var pts = this.getPts(i);
+          this.flushDisplayed(pts, service);
+          return this.initService(service.serviceNum, i);
+        };
+        var CHARACTER_TRANSLATION = {
+          42: 225,
+          92: 233,
+          94: 237,
+          95: 243,
+          96: 250,
+          123: 231,
+          124: 247,
+          125: 209,
+          126: 241,
+          127: 9608,
+          304: 174,
+          305: 176,
+          306: 189,
+          307: 191,
+          308: 8482,
+          309: 162,
+          310: 163,
+          311: 9834,
+          312: 224,
+          313: 160,
+          314: 232,
+          315: 226,
+          316: 234,
+          317: 238,
+          318: 244,
+          319: 251,
+          544: 193,
+          545: 201,
+          546: 211,
+          547: 218,
+          548: 220,
+          549: 252,
+          550: 8216,
+          551: 161,
+          552: 42,
+          553: 39,
+          554: 8212,
+          555: 169,
+          556: 8480,
+          557: 8226,
+          558: 8220,
+          559: 8221,
+          560: 192,
+          561: 194,
+          562: 199,
+          563: 200,
+          564: 202,
+          565: 203,
+          566: 235,
+          567: 206,
+          568: 207,
+          569: 239,
+          570: 212,
+          571: 217,
+          572: 249,
+          573: 219,
+          574: 171,
+          575: 187,
+          800: 195,
+          801: 227,
+          802: 205,
+          803: 204,
+          804: 236,
+          805: 210,
+          806: 242,
+          807: 213,
+          808: 245,
+          809: 123,
+          810: 125,
+          811: 92,
+          812: 94,
+          813: 95,
+          814: 124,
+          815: 126,
+          816: 196,
+          817: 228,
+          818: 214,
+          819: 246,
+          820: 223,
+          821: 165,
+          822: 164,
+          823: 9474,
+          824: 197,
+          825: 229,
+          826: 216,
+          827: 248,
+          828: 9484,
+          829: 9488,
+          830: 9492,
+          831: 9496
+        };
+        var getCharFromCode = function getCharFromCode2(code) {
+          if (code === null) {
+            return "";
+          }
+          code = CHARACTER_TRANSLATION[code] || code;
+          return String.fromCharCode(code);
+        };
+        var BOTTOM_ROW = 14;
+        var ROWS = [4352, 4384, 4608, 4640, 5376, 5408, 5632, 5664, 5888, 5920, 4096, 4864, 4896, 5120, 5152];
+        var createDisplayBuffer = function createDisplayBuffer2() {
+          var result = [], i = BOTTOM_ROW + 1;
+          while (i--) {
+            result.push("");
+          }
+          return result;
+        };
+        var Cea608Stream = function Cea608Stream2(field, dataChannel) {
+          Cea608Stream2.prototype.init.call(this);
+          this.field_ = field || 0;
+          this.dataChannel_ = dataChannel || 0;
+          this.name_ = "CC" + ((this.field_ << 1 | this.dataChannel_) + 1);
+          this.setConstants();
+          this.reset();
+          this.push = function(packet) {
+            var data, swap, char0, char1, text;
+            data = packet.ccData & 32639;
+            if (data === this.lastControlCode_) {
+              this.lastControlCode_ = null;
+              return;
+            }
+            if ((data & 61440) === 4096) {
+              this.lastControlCode_ = data;
+            } else if (data !== this.PADDING_) {
+              this.lastControlCode_ = null;
+            }
+            char0 = data >>> 8;
+            char1 = data & 255;
+            if (data === this.PADDING_) {
+              return;
+            } else if (data === this.RESUME_CAPTION_LOADING_) {
+              this.mode_ = "popOn";
+            } else if (data === this.END_OF_CAPTION_) {
+              this.mode_ = "popOn";
+              this.clearFormatting(packet.pts);
+              this.flushDisplayed(packet.pts);
+              swap = this.displayed_;
+              this.displayed_ = this.nonDisplayed_;
+              this.nonDisplayed_ = swap;
+              this.startPts_ = packet.pts;
+            } else if (data === this.ROLL_UP_2_ROWS_) {
+              this.rollUpRows_ = 2;
+              this.setRollUp(packet.pts);
+            } else if (data === this.ROLL_UP_3_ROWS_) {
+              this.rollUpRows_ = 3;
+              this.setRollUp(packet.pts);
+            } else if (data === this.ROLL_UP_4_ROWS_) {
+              this.rollUpRows_ = 4;
+              this.setRollUp(packet.pts);
+            } else if (data === this.CARRIAGE_RETURN_) {
+              this.clearFormatting(packet.pts);
+              this.flushDisplayed(packet.pts);
+              this.shiftRowsUp_();
+              this.startPts_ = packet.pts;
+            } else if (data === this.BACKSPACE_) {
+              if (this.mode_ === "popOn") {
+                this.nonDisplayed_[this.row_] = this.nonDisplayed_[this.row_].slice(0, -1);
+              } else {
+                this.displayed_[this.row_] = this.displayed_[this.row_].slice(0, -1);
+              }
+            } else if (data === this.ERASE_DISPLAYED_MEMORY_) {
+              this.flushDisplayed(packet.pts);
+              this.displayed_ = createDisplayBuffer();
+            } else if (data === this.ERASE_NON_DISPLAYED_MEMORY_) {
+              this.nonDisplayed_ = createDisplayBuffer();
+            } else if (data === this.RESUME_DIRECT_CAPTIONING_) {
+              if (this.mode_ !== "paintOn") {
+                this.flushDisplayed(packet.pts);
+                this.displayed_ = createDisplayBuffer();
+              }
+              this.mode_ = "paintOn";
+              this.startPts_ = packet.pts;
+            } else if (this.isSpecialCharacter(char0, char1)) {
+              char0 = (char0 & 3) << 8;
+              text = getCharFromCode(char0 | char1);
+              this[this.mode_](packet.pts, text);
+              this.column_++;
+            } else if (this.isExtCharacter(char0, char1)) {
+              if (this.mode_ === "popOn") {
+                this.nonDisplayed_[this.row_] = this.nonDisplayed_[this.row_].slice(0, -1);
+              } else {
+                this.displayed_[this.row_] = this.displayed_[this.row_].slice(0, -1);
+              }
+              char0 = (char0 & 3) << 8;
+              text = getCharFromCode(char0 | char1);
+              this[this.mode_](packet.pts, text);
+              this.column_++;
+            } else if (this.isMidRowCode(char0, char1)) {
+              this.clearFormatting(packet.pts);
+              this[this.mode_](packet.pts, " ");
+              this.column_++;
+              if ((char1 & 14) === 14) {
+                this.addFormatting(packet.pts, ["i"]);
+              }
+              if ((char1 & 1) === 1) {
+                this.addFormatting(packet.pts, ["u"]);
+              }
+            } else if (this.isOffsetControlCode(char0, char1)) {
+              this.column_ += char1 & 3;
+            } else if (this.isPAC(char0, char1)) {
+              var row = ROWS.indexOf(data & 7968);
+              if (this.mode_ === "rollUp") {
+                if (row - this.rollUpRows_ + 1 < 0) {
+                  row = this.rollUpRows_ - 1;
+                }
+                this.setRollUp(packet.pts, row);
+              }
+              if (row !== this.row_) {
+                this.clearFormatting(packet.pts);
+                this.row_ = row;
+              }
+              if (char1 & 1 && this.formatting_.indexOf("u") === -1) {
+                this.addFormatting(packet.pts, ["u"]);
+              }
+              if ((data & 16) === 16) {
+                this.column_ = ((data & 14) >> 1) * 4;
+              }
+              if (this.isColorPAC(char1)) {
+                if ((char1 & 14) === 14) {
+                  this.addFormatting(packet.pts, ["i"]);
+                }
+              }
+            } else if (this.isNormalChar(char0)) {
+              if (char1 === 0) {
+                char1 = null;
+              }
+              text = getCharFromCode(char0);
+              text += getCharFromCode(char1);
+              this[this.mode_](packet.pts, text);
+              this.column_ += text.length;
+            }
+          };
+        };
+        Cea608Stream.prototype = new stream();
+        Cea608Stream.prototype.flushDisplayed = function(pts) {
+          var content = this.displayed_.map(function(row, index) {
+            try {
+              return row.trim();
+            } catch (e) {
+              this.trigger("log", {
+                level: "warn",
+                message: "Skipping a malformed 608 caption at index " + index + "."
+              });
+              return "";
+            }
+          }, this).join("\n").replace(/^\n+|\n+$/g, "");
+          if (content.length) {
+            this.trigger("data", {
+              startPts: this.startPts_,
+              endPts: pts,
+              text: content,
+              stream: this.name_
+            });
+          }
+        };
+        Cea608Stream.prototype.reset = function() {
+          this.mode_ = "popOn";
+          this.topRow_ = 0;
+          this.startPts_ = 0;
+          this.displayed_ = createDisplayBuffer();
+          this.nonDisplayed_ = createDisplayBuffer();
+          this.lastControlCode_ = null;
+          this.column_ = 0;
+          this.row_ = BOTTOM_ROW;
+          this.rollUpRows_ = 2;
+          this.formatting_ = [];
+        };
+        Cea608Stream.prototype.setConstants = function() {
+          if (this.dataChannel_ === 0) {
+            this.BASE_ = 16;
+            this.EXT_ = 17;
+            this.CONTROL_ = (20 | this.field_) << 8;
+            this.OFFSET_ = 23;
+          } else if (this.dataChannel_ === 1) {
+            this.BASE_ = 24;
+            this.EXT_ = 25;
+            this.CONTROL_ = (28 | this.field_) << 8;
+            this.OFFSET_ = 31;
+          }
+          this.PADDING_ = 0;
+          this.RESUME_CAPTION_LOADING_ = this.CONTROL_ | 32;
+          this.END_OF_CAPTION_ = this.CONTROL_ | 47;
+          this.ROLL_UP_2_ROWS_ = this.CONTROL_ | 37;
+          this.ROLL_UP_3_ROWS_ = this.CONTROL_ | 38;
+          this.ROLL_UP_4_ROWS_ = this.CONTROL_ | 39;
+          this.CARRIAGE_RETURN_ = this.CONTROL_ | 45;
+          this.RESUME_DIRECT_CAPTIONING_ = this.CONTROL_ | 41;
+          this.BACKSPACE_ = this.CONTROL_ | 33;
+          this.ERASE_DISPLAYED_MEMORY_ = this.CONTROL_ | 44;
+          this.ERASE_NON_DISPLAYED_MEMORY_ = this.CONTROL_ | 46;
+        };
+        Cea608Stream.prototype.isSpecialCharacter = function(char0, char1) {
+          return char0 === this.EXT_ && char1 >= 48 && char1 <= 63;
+        };
+        Cea608Stream.prototype.isExtCharacter = function(char0, char1) {
+          return (char0 === this.EXT_ + 1 || char0 === this.EXT_ + 2) && char1 >= 32 && char1 <= 63;
+        };
+        Cea608Stream.prototype.isMidRowCode = function(char0, char1) {
+          return char0 === this.EXT_ && char1 >= 32 && char1 <= 47;
+        };
+        Cea608Stream.prototype.isOffsetControlCode = function(char0, char1) {
+          return char0 === this.OFFSET_ && char1 >= 33 && char1 <= 35;
+        };
+        Cea608Stream.prototype.isPAC = function(char0, char1) {
+          return char0 >= this.BASE_ && char0 < this.BASE_ + 8 && char1 >= 64 && char1 <= 127;
+        };
+        Cea608Stream.prototype.isColorPAC = function(char1) {
+          return char1 >= 64 && char1 <= 79 || char1 >= 96 && char1 <= 127;
+        };
+        Cea608Stream.prototype.isNormalChar = function(char) {
+          return char >= 32 && char <= 127;
+        };
+        Cea608Stream.prototype.setRollUp = function(pts, newBaseRow) {
+          if (this.mode_ !== "rollUp") {
+            this.row_ = BOTTOM_ROW;
+            this.mode_ = "rollUp";
+            this.flushDisplayed(pts);
+            this.nonDisplayed_ = createDisplayBuffer();
+            this.displayed_ = createDisplayBuffer();
+          }
+          if (newBaseRow !== void 0 && newBaseRow !== this.row_) {
+            for (var i = 0; i < this.rollUpRows_; i++) {
+              this.displayed_[newBaseRow - i] = this.displayed_[this.row_ - i];
+              this.displayed_[this.row_ - i] = "";
+            }
+          }
+          if (newBaseRow === void 0) {
+            newBaseRow = this.row_;
+          }
+          this.topRow_ = newBaseRow - this.rollUpRows_ + 1;
+        };
+        Cea608Stream.prototype.addFormatting = function(pts, format) {
+          this.formatting_ = this.formatting_.concat(format);
+          var text = format.reduce(function(text2, format2) {
+            return text2 + "<" + format2 + ">";
+          }, "");
+          this[this.mode_](pts, text);
+        };
+        Cea608Stream.prototype.clearFormatting = function(pts) {
+          if (!this.formatting_.length) {
+            return;
+          }
+          var text = this.formatting_.reverse().reduce(function(text2, format) {
+            return text2 + "</" + format + ">";
+          }, "");
+          this.formatting_ = [];
+          this[this.mode_](pts, text);
+        };
+        Cea608Stream.prototype.popOn = function(pts, text) {
+          var baseRow = this.nonDisplayed_[this.row_];
+          baseRow += text;
+          this.nonDisplayed_[this.row_] = baseRow;
+        };
+        Cea608Stream.prototype.rollUp = function(pts, text) {
+          var baseRow = this.displayed_[this.row_];
+          baseRow += text;
+          this.displayed_[this.row_] = baseRow;
+        };
+        Cea608Stream.prototype.shiftRowsUp_ = function() {
+          var i;
+          for (i = 0; i < this.topRow_; i++) {
+            this.displayed_[i] = "";
+          }
+          for (i = this.row_ + 1; i < BOTTOM_ROW + 1; i++) {
+            this.displayed_[i] = "";
+          }
+          for (i = this.topRow_; i < this.row_; i++) {
+            this.displayed_[i] = this.displayed_[i + 1];
+          }
+          this.displayed_[this.row_] = "";
+        };
+        Cea608Stream.prototype.paintOn = function(pts, text) {
+          var baseRow = this.displayed_[this.row_];
+          baseRow += text;
+          this.displayed_[this.row_] = baseRow;
+        };
+        var captionStream = {
+          CaptionStream: CaptionStream$1,
+          Cea608Stream,
+          Cea708Stream
+        };
+        var streamTypes = {
+          H264_STREAM_TYPE: 27,
+          ADTS_STREAM_TYPE: 15,
+          METADATA_STREAM_TYPE: 21
+        };
+        var MAX_TS = 8589934592;
+        var RO_THRESH = 4294967296;
+        var TYPE_SHARED = "shared";
+        var handleRollover$1 = function handleRollover2(value, reference) {
+          var direction = 1;
+          if (value > reference) {
+            direction = -1;
+          }
+          while (Math.abs(reference - value) > RO_THRESH) {
+            value += direction * MAX_TS;
+          }
+          return value;
+        };
+        var TimestampRolloverStream$1 = function TimestampRolloverStream2(type2) {
+          var lastDTS, referenceDTS;
+          TimestampRolloverStream2.prototype.init.call(this);
+          this.type_ = type2 || TYPE_SHARED;
+          this.push = function(data) {
+            if (this.type_ !== TYPE_SHARED && data.type !== this.type_) {
+              return;
+            }
+            if (referenceDTS === void 0) {
+              referenceDTS = data.dts;
+            }
+            data.dts = handleRollover$1(data.dts, referenceDTS);
+            data.pts = handleRollover$1(data.pts, referenceDTS);
+            lastDTS = data.dts;
+            this.trigger("data", data);
+          };
+          this.flush = function() {
+            referenceDTS = lastDTS;
+            this.trigger("done");
+          };
+          this.endTimeline = function() {
+            this.flush();
+            this.trigger("endedtimeline");
+          };
+          this.discontinuity = function() {
+            referenceDTS = void 0;
+            lastDTS = void 0;
+          };
+          this.reset = function() {
+            this.discontinuity();
+            this.trigger("reset");
+          };
+        };
+        TimestampRolloverStream$1.prototype = new stream();
+        var timestampRolloverStream = {
+          TimestampRolloverStream: TimestampRolloverStream$1,
+          handleRollover: handleRollover$1
+        };
+        var percentEncode$1 = function percentEncode2(bytes, start, end) {
+          var i, result = "";
+          for (i = start; i < end; i++) {
+            result += "%" + ("00" + bytes[i].toString(16)).slice(-2);
+          }
+          return result;
+        }, parseUtf8 = function parseUtf82(bytes, start, end) {
+          return decodeURIComponent(percentEncode$1(bytes, start, end));
+        }, parseIso88591$1 = function parseIso885912(bytes, start, end) {
+          return unescape(percentEncode$1(bytes, start, end));
+        }, parseSyncSafeInteger$1 = function parseSyncSafeInteger2(data) {
+          return data[0] << 21 | data[1] << 14 | data[2] << 7 | data[3];
+        }, tagParsers = {
+          TXXX: function TXXX(tag) {
+            var i;
+            if (tag.data[0] !== 3) {
+              return;
+            }
+            for (i = 1; i < tag.data.length; i++) {
+              if (tag.data[i] === 0) {
+                tag.description = parseUtf8(tag.data, 1, i);
+                tag.value = parseUtf8(tag.data, i + 1, tag.data.length).replace(/\0*$/, "");
+                break;
+              }
+            }
+            tag.data = tag.value;
+          },
+          WXXX: function WXXX(tag) {
+            var i;
+            if (tag.data[0] !== 3) {
+              return;
+            }
+            for (i = 1; i < tag.data.length; i++) {
+              if (tag.data[i] === 0) {
+                tag.description = parseUtf8(tag.data, 1, i);
+                tag.url = parseUtf8(tag.data, i + 1, tag.data.length);
+                break;
+              }
+            }
+          },
+          PRIV: function PRIV(tag) {
+            var i;
+            for (i = 0; i < tag.data.length; i++) {
+              if (tag.data[i] === 0) {
+                tag.owner = parseIso88591$1(tag.data, 0, i);
+                break;
+              }
+            }
+            tag.privateData = tag.data.subarray(i + 1);
+            tag.data = tag.privateData;
+          }
+        }, _MetadataStream;
+        _MetadataStream = function MetadataStream(options) {
+          var settings = {
+            descriptor: options && options.descriptor
+          }, tagSize = 0, buffer = [], bufferSize = 0, i;
+          _MetadataStream.prototype.init.call(this);
+          this.dispatchType = streamTypes.METADATA_STREAM_TYPE.toString(16);
+          if (settings.descriptor) {
+            for (i = 0; i < settings.descriptor.length; i++) {
+              this.dispatchType += ("00" + settings.descriptor[i].toString(16)).slice(-2);
+            }
+          }
+          this.push = function(chunk) {
+            var tag, frameStart, frameSize, frame, i2, frameHeader;
+            if (chunk.type !== "timed-metadata") {
+              return;
+            }
+            if (chunk.dataAlignmentIndicator) {
+              bufferSize = 0;
+              buffer.length = 0;
+            }
+            if (buffer.length === 0 && (chunk.data.length < 10 || chunk.data[0] !== "I".charCodeAt(0) || chunk.data[1] !== "D".charCodeAt(0) || chunk.data[2] !== "3".charCodeAt(0))) {
+              this.trigger("log", {
+                level: "warn",
+                message: "Skipping unrecognized metadata packet"
+              });
+              return;
+            }
+            buffer.push(chunk);
+            bufferSize += chunk.data.byteLength;
+            if (buffer.length === 1) {
+              tagSize = parseSyncSafeInteger$1(chunk.data.subarray(6, 10));
+              tagSize += 10;
+            }
+            if (bufferSize < tagSize) {
+              return;
+            }
+            tag = {
+              data: new Uint8Array(tagSize),
+              frames: [],
+              pts: buffer[0].pts,
+              dts: buffer[0].dts
+            };
+            for (i2 = 0; i2 < tagSize; ) {
+              tag.data.set(buffer[0].data.subarray(0, tagSize - i2), i2);
+              i2 += buffer[0].data.byteLength;
+              bufferSize -= buffer[0].data.byteLength;
+              buffer.shift();
+            }
+            frameStart = 10;
+            if (tag.data[5] & 64) {
+              frameStart += 4;
+              frameStart += parseSyncSafeInteger$1(tag.data.subarray(10, 14));
+              tagSize -= parseSyncSafeInteger$1(tag.data.subarray(16, 20));
+            }
+            do {
+              frameSize = parseSyncSafeInteger$1(tag.data.subarray(frameStart + 4, frameStart + 8));
+              if (frameSize < 1) {
+                this.trigger("log", {
+                  level: "warn",
+                  message: "Malformed ID3 frame encountered. Skipping remaining metadata parsing."
+                });
+                break;
+              }
+              frameHeader = String.fromCharCode(tag.data[frameStart], tag.data[frameStart + 1], tag.data[frameStart + 2], tag.data[frameStart + 3]);
+              frame = {
+                id: frameHeader,
+                data: tag.data.subarray(frameStart + 10, frameStart + frameSize + 10)
+              };
+              frame.key = frame.id;
+              if (tagParsers[frame.id]) {
+                tagParsers[frame.id](frame);
+                if (frame.owner === "com.apple.streaming.transportStreamTimestamp") {
+                  var d = frame.data, size = (d[3] & 1) << 30 | d[4] << 22 | d[5] << 14 | d[6] << 6 | d[7] >>> 2;
+                  size *= 4;
+                  size += d[7] & 3;
+                  frame.timeStamp = size;
+                  if (tag.pts === void 0 && tag.dts === void 0) {
+                    tag.pts = frame.timeStamp;
+                    tag.dts = frame.timeStamp;
+                  }
+                  this.trigger("timestamp", frame);
+                }
+              }
+              tag.frames.push(frame);
+              frameStart += 10;
+              frameStart += frameSize;
+            } while (frameStart < tagSize);
+            this.trigger("data", tag);
+          };
+        };
+        _MetadataStream.prototype = new stream();
+        var metadataStream = _MetadataStream;
+        var TimestampRolloverStream = timestampRolloverStream.TimestampRolloverStream;
+        var _TransportPacketStream, _TransportParseStream, _ElementaryStream;
+        var MP2T_PACKET_LENGTH$1 = 188, SYNC_BYTE$1 = 71;
+        _TransportPacketStream = function TransportPacketStream() {
+          var buffer = new Uint8Array(MP2T_PACKET_LENGTH$1), bytesInBuffer = 0;
+          _TransportPacketStream.prototype.init.call(this);
+          this.push = function(bytes) {
+            var startIndex = 0, endIndex = MP2T_PACKET_LENGTH$1, everything;
+            if (bytesInBuffer) {
+              everything = new Uint8Array(bytes.byteLength + bytesInBuffer);
+              everything.set(buffer.subarray(0, bytesInBuffer));
+              everything.set(bytes, bytesInBuffer);
+              bytesInBuffer = 0;
+            } else {
+              everything = bytes;
+            }
+            while (endIndex < everything.byteLength) {
+              if (everything[startIndex] === SYNC_BYTE$1 && everything[endIndex] === SYNC_BYTE$1) {
+                this.trigger("data", everything.subarray(startIndex, endIndex));
+                startIndex += MP2T_PACKET_LENGTH$1;
+                endIndex += MP2T_PACKET_LENGTH$1;
+                continue;
+              }
+              startIndex++;
+              endIndex++;
+            }
+            if (startIndex < everything.byteLength) {
+              buffer.set(everything.subarray(startIndex), 0);
+              bytesInBuffer = everything.byteLength - startIndex;
+            }
+          };
+          this.flush = function() {
+            if (bytesInBuffer === MP2T_PACKET_LENGTH$1 && buffer[0] === SYNC_BYTE$1) {
+              this.trigger("data", buffer);
+              bytesInBuffer = 0;
+            }
+            this.trigger("done");
+          };
+          this.endTimeline = function() {
+            this.flush();
+            this.trigger("endedtimeline");
+          };
+          this.reset = function() {
+            bytesInBuffer = 0;
+            this.trigger("reset");
+          };
+        };
+        _TransportPacketStream.prototype = new stream();
+        _TransportParseStream = function TransportParseStream() {
+          var parsePsi, parsePat2, parsePmt2, self2;
+          _TransportParseStream.prototype.init.call(this);
+          self2 = this;
+          this.packetsWaitingForPmt = [];
+          this.programMapTable = void 0;
+          parsePsi = function parsePsi2(payload, psi) {
+            var offset = 0;
+            if (psi.payloadUnitStartIndicator) {
+              offset += payload[offset] + 1;
+            }
+            if (psi.type === "pat") {
+              parsePat2(payload.subarray(offset), psi);
+            } else {
+              parsePmt2(payload.subarray(offset), psi);
+            }
+          };
+          parsePat2 = function parsePat3(payload, pat) {
+            pat.section_number = payload[7];
+            pat.last_section_number = payload[8];
+            self2.pmtPid = (payload[10] & 31) << 8 | payload[11];
+            pat.pmtPid = self2.pmtPid;
+          };
+          parsePmt2 = function parsePmt3(payload, pmt) {
+            var sectionLength, tableEnd, programInfoLength, offset;
+            if (!(payload[5] & 1)) {
+              return;
+            }
+            self2.programMapTable = {
+              video: null,
+              audio: null,
+              "timed-metadata": {}
+            };
+            sectionLength = (payload[1] & 15) << 8 | payload[2];
+            tableEnd = 3 + sectionLength - 4;
+            programInfoLength = (payload[10] & 15) << 8 | payload[11];
+            offset = 12 + programInfoLength;
+            while (offset < tableEnd) {
+              var streamType = payload[offset];
+              var pid = (payload[offset + 1] & 31) << 8 | payload[offset + 2];
+              if (streamType === streamTypes.H264_STREAM_TYPE && self2.programMapTable.video === null) {
+                self2.programMapTable.video = pid;
+              } else if (streamType === streamTypes.ADTS_STREAM_TYPE && self2.programMapTable.audio === null) {
+                self2.programMapTable.audio = pid;
+              } else if (streamType === streamTypes.METADATA_STREAM_TYPE) {
+                self2.programMapTable["timed-metadata"][pid] = streamType;
+              }
+              offset += ((payload[offset + 3] & 15) << 8 | payload[offset + 4]) + 5;
+            }
+            pmt.programMapTable = self2.programMapTable;
+          };
+          this.push = function(packet) {
+            var result = {}, offset = 4;
+            result.payloadUnitStartIndicator = !!(packet[1] & 64);
+            result.pid = packet[1] & 31;
+            result.pid <<= 8;
+            result.pid |= packet[2];
+            if ((packet[3] & 48) >>> 4 > 1) {
+              offset += packet[offset] + 1;
+            }
+            if (result.pid === 0) {
+              result.type = "pat";
+              parsePsi(packet.subarray(offset), result);
+              this.trigger("data", result);
+            } else if (result.pid === this.pmtPid) {
+              result.type = "pmt";
+              parsePsi(packet.subarray(offset), result);
+              this.trigger("data", result);
+              while (this.packetsWaitingForPmt.length) {
+                this.processPes_.apply(this, this.packetsWaitingForPmt.shift());
+              }
+            } else if (this.programMapTable === void 0) {
+              this.packetsWaitingForPmt.push([packet, offset, result]);
+            } else {
+              this.processPes_(packet, offset, result);
+            }
+          };
+          this.processPes_ = function(packet, offset, result) {
+            if (result.pid === this.programMapTable.video) {
+              result.streamType = streamTypes.H264_STREAM_TYPE;
+            } else if (result.pid === this.programMapTable.audio) {
+              result.streamType = streamTypes.ADTS_STREAM_TYPE;
+            } else {
+              result.streamType = this.programMapTable["timed-metadata"][result.pid];
+            }
+            result.type = "pes";
+            result.data = packet.subarray(offset);
+            this.trigger("data", result);
+          };
+        };
+        _TransportParseStream.prototype = new stream();
+        _TransportParseStream.STREAM_TYPES = {
+          h264: 27,
+          adts: 15
+        };
+        _ElementaryStream = function ElementaryStream() {
+          var self2 = this, segmentHadPmt = false, video = {
+            data: [],
+            size: 0
+          }, audio = {
+            data: [],
+            size: 0
+          }, timedMetadata = {
+            data: [],
+            size: 0
+          }, programMapTable, parsePes = function parsePes2(payload, pes) {
+            var ptsDtsFlags;
+            var startPrefix = payload[0] << 16 | payload[1] << 8 | payload[2];
+            pes.data = new Uint8Array();
+            if (startPrefix !== 1) {
+              return;
+            }
+            pes.packetLength = 6 + (payload[4] << 8 | payload[5]);
+            pes.dataAlignmentIndicator = (payload[6] & 4) !== 0;
+            ptsDtsFlags = payload[7];
+            if (ptsDtsFlags & 192) {
+              pes.pts = (payload[9] & 14) << 27 | (payload[10] & 255) << 20 | (payload[11] & 254) << 12 | (payload[12] & 255) << 5 | (payload[13] & 254) >>> 3;
+              pes.pts *= 4;
+              pes.pts += (payload[13] & 6) >>> 1;
+              pes.dts = pes.pts;
+              if (ptsDtsFlags & 64) {
+                pes.dts = (payload[14] & 14) << 27 | (payload[15] & 255) << 20 | (payload[16] & 254) << 12 | (payload[17] & 255) << 5 | (payload[18] & 254) >>> 3;
+                pes.dts *= 4;
+                pes.dts += (payload[18] & 6) >>> 1;
+              }
+            }
+            pes.data = payload.subarray(9 + payload[8]);
+          }, flushStream = function flushStream2(stream2, type2, forceFlush) {
+            var packetData = new Uint8Array(stream2.size), event = {
+              type: type2
+            }, i = 0, offset = 0, packetFlushable = false, fragment;
+            if (!stream2.data.length || stream2.size < 9) {
+              return;
+            }
+            event.trackId = stream2.data[0].pid;
+            for (i = 0; i < stream2.data.length; i++) {
+              fragment = stream2.data[i];
+              packetData.set(fragment.data, offset);
+              offset += fragment.data.byteLength;
+            }
+            parsePes(packetData, event);
+            packetFlushable = type2 === "video" || event.packetLength <= stream2.size;
+            if (forceFlush || packetFlushable) {
+              stream2.size = 0;
+              stream2.data.length = 0;
+            }
+            if (packetFlushable) {
+              self2.trigger("data", event);
+            }
+          };
+          _ElementaryStream.prototype.init.call(this);
+          this.push = function(data) {
+            ({
+              pat: function pat() {
+              },
+              pes: function pes() {
+                var stream2, streamType;
+                switch (data.streamType) {
+                  case streamTypes.H264_STREAM_TYPE:
+                    stream2 = video;
+                    streamType = "video";
+                    break;
+                  case streamTypes.ADTS_STREAM_TYPE:
+                    stream2 = audio;
+                    streamType = "audio";
+                    break;
+                  case streamTypes.METADATA_STREAM_TYPE:
+                    stream2 = timedMetadata;
+                    streamType = "timed-metadata";
+                    break;
+                  default:
+                    return;
+                }
+                if (data.payloadUnitStartIndicator) {
+                  flushStream(stream2, streamType, true);
+                }
+                stream2.data.push(data);
+                stream2.size += data.data.byteLength;
+              },
+              pmt: function pmt() {
+                var event = {
+                  type: "metadata",
+                  tracks: []
+                };
+                programMapTable = data.programMapTable;
+                if (programMapTable.video !== null) {
+                  event.tracks.push({
+                    timelineStartInfo: {
+                      baseMediaDecodeTime: 0
+                    },
+                    id: +programMapTable.video,
+                    codec: "avc",
+                    type: "video"
+                  });
+                }
+                if (programMapTable.audio !== null) {
+                  event.tracks.push({
+                    timelineStartInfo: {
+                      baseMediaDecodeTime: 0
+                    },
+                    id: +programMapTable.audio,
+                    codec: "adts",
+                    type: "audio"
+                  });
+                }
+                segmentHadPmt = true;
+                self2.trigger("data", event);
+              }
+            })[data.type]();
+          };
+          this.reset = function() {
+            video.size = 0;
+            video.data.length = 0;
+            audio.size = 0;
+            audio.data.length = 0;
+            this.trigger("reset");
+          };
+          this.flushStreams_ = function() {
+            flushStream(video, "video");
+            flushStream(audio, "audio");
+            flushStream(timedMetadata, "timed-metadata");
+          };
+          this.flush = function() {
+            if (!segmentHadPmt && programMapTable) {
+              var pmt = {
+                type: "metadata",
+                tracks: []
+              };
+              if (programMapTable.video !== null) {
+                pmt.tracks.push({
+                  timelineStartInfo: {
+                    baseMediaDecodeTime: 0
+                  },
+                  id: +programMapTable.video,
+                  codec: "avc",
+                  type: "video"
+                });
+              }
+              if (programMapTable.audio !== null) {
+                pmt.tracks.push({
+                  timelineStartInfo: {
+                    baseMediaDecodeTime: 0
+                  },
+                  id: +programMapTable.audio,
+                  codec: "adts",
+                  type: "audio"
+                });
+              }
+              self2.trigger("data", pmt);
+            }
+            segmentHadPmt = false;
+            this.flushStreams_();
+            this.trigger("done");
+          };
+        };
+        _ElementaryStream.prototype = new stream();
+        var m2ts$1 = {
+          PAT_PID: 0,
+          MP2T_PACKET_LENGTH: MP2T_PACKET_LENGTH$1,
+          TransportPacketStream: _TransportPacketStream,
+          TransportParseStream: _TransportParseStream,
+          ElementaryStream: _ElementaryStream,
+          TimestampRolloverStream,
+          CaptionStream: captionStream.CaptionStream,
+          Cea608Stream: captionStream.Cea608Stream,
+          Cea708Stream: captionStream.Cea708Stream,
+          MetadataStream: metadataStream
+        };
+        for (var type in streamTypes) {
+          if (streamTypes.hasOwnProperty(type)) {
+            m2ts$1[type] = streamTypes[type];
+          }
+        }
+        var m2ts_1 = m2ts$1;
+        var ADTS_SAMPLING_FREQUENCIES = [96e3, 88200, 64e3, 48e3, 44100, 32e3, 24e3, 22050, 16e3, 12e3, 11025, 8e3, 7350];
+        var parseId3TagSize = function parseId3TagSize2(header, byteIndex) {
+          var returnSize = header[byteIndex + 6] << 21 | header[byteIndex + 7] << 14 | header[byteIndex + 8] << 7 | header[byteIndex + 9], flags = header[byteIndex + 5], footerPresent = (flags & 16) >> 4;
+          returnSize = returnSize >= 0 ? returnSize : 0;
+          if (footerPresent) {
+            return returnSize + 20;
+          }
+          return returnSize + 10;
+        };
+        var getId3Offset = function getId3Offset2(data, offset) {
+          if (data.length - offset < 10 || data[offset] !== "I".charCodeAt(0) || data[offset + 1] !== "D".charCodeAt(0) || data[offset + 2] !== "3".charCodeAt(0)) {
+            return offset;
+          }
+          offset += parseId3TagSize(data, offset);
+          return getId3Offset2(data, offset);
+        };
+        var isLikelyAacData$2 = function isLikelyAacData2(data) {
+          var offset = getId3Offset(data, 0);
+          return data.length >= offset + 2 && (data[offset] & 255) === 255 && (data[offset + 1] & 240) === 240 && (data[offset + 1] & 22) === 16;
+        };
+        var parseSyncSafeInteger = function parseSyncSafeInteger2(data) {
+          return data[0] << 21 | data[1] << 14 | data[2] << 7 | data[3];
+        };
+        var percentEncode = function percentEncode2(bytes, start, end) {
+          var i, result = "";
+          for (i = start; i < end; i++) {
+            result += "%" + ("00" + bytes[i].toString(16)).slice(-2);
+          }
+          return result;
+        };
+        var parseIso88591 = function parseIso885912(bytes, start, end) {
+          return unescape(percentEncode(bytes, start, end));
+        };
+        var parseAdtsSize = function parseAdtsSize2(header, byteIndex) {
+          var lowThree = (header[byteIndex + 5] & 224) >> 5, middle = header[byteIndex + 4] << 3, highTwo = header[byteIndex + 3] & 3 << 11;
+          return highTwo | middle | lowThree;
+        };
+        var parseType$1 = function parseType2(header, byteIndex) {
+          if (header[byteIndex] === "I".charCodeAt(0) && header[byteIndex + 1] === "D".charCodeAt(0) && header[byteIndex + 2] === "3".charCodeAt(0)) {
+            return "timed-metadata";
+          } else if (header[byteIndex] & true && (header[byteIndex + 1] & 240) === 240) {
+            return "audio";
+          }
+          return null;
+        };
+        var parseSampleRate = function parseSampleRate2(packet) {
+          var i = 0;
+          while (i + 5 < packet.length) {
+            if (packet[i] !== 255 || (packet[i + 1] & 246) !== 240) {
+              i++;
+              continue;
+            }
+            return ADTS_SAMPLING_FREQUENCIES[(packet[i + 2] & 60) >>> 2];
+          }
+          return null;
+        };
+        var parseAacTimestamp = function parseAacTimestamp2(packet) {
+          var frameStart, frameSize, frame, frameHeader;
+          frameStart = 10;
+          if (packet[5] & 64) {
+            frameStart += 4;
+            frameStart += parseSyncSafeInteger(packet.subarray(10, 14));
+          }
+          do {
+            frameSize = parseSyncSafeInteger(packet.subarray(frameStart + 4, frameStart + 8));
+            if (frameSize < 1) {
+              return null;
+            }
+            frameHeader = String.fromCharCode(packet[frameStart], packet[frameStart + 1], packet[frameStart + 2], packet[frameStart + 3]);
+            if (frameHeader === "PRIV") {
+              frame = packet.subarray(frameStart + 10, frameStart + frameSize + 10);
+              for (var i = 0; i < frame.byteLength; i++) {
+                if (frame[i] === 0) {
+                  var owner = parseIso88591(frame, 0, i);
+                  if (owner === "com.apple.streaming.transportStreamTimestamp") {
+                    var d = frame.subarray(i + 1);
+                    var size = (d[3] & 1) << 30 | d[4] << 22 | d[5] << 14 | d[6] << 6 | d[7] >>> 2;
+                    size *= 4;
+                    size += d[7] & 3;
+                    return size;
+                  }
+                  break;
+                }
+              }
+            }
+            frameStart += 10;
+            frameStart += frameSize;
+          } while (frameStart < packet.byteLength);
+          return null;
+        };
+        var utils = {
+          isLikelyAacData: isLikelyAacData$2,
+          parseId3TagSize,
+          parseAdtsSize,
+          parseType: parseType$1,
+          parseSampleRate,
+          parseAacTimestamp
+        };
+        var _AacStream;
+        _AacStream = function AacStream() {
+          var everything = new Uint8Array(), timeStamp = 0;
+          _AacStream.prototype.init.call(this);
+          this.setTimestamp = function(timestamp) {
+            timeStamp = timestamp;
+          };
+          this.push = function(bytes) {
+            var frameSize = 0, byteIndex = 0, bytesLeft, chunk, packet, tempLength;
+            if (everything.length) {
+              tempLength = everything.length;
+              everything = new Uint8Array(bytes.byteLength + tempLength);
+              everything.set(everything.subarray(0, tempLength));
+              everything.set(bytes, tempLength);
+            } else {
+              everything = bytes;
+            }
+            while (everything.length - byteIndex >= 3) {
+              if (everything[byteIndex] === "I".charCodeAt(0) && everything[byteIndex + 1] === "D".charCodeAt(0) && everything[byteIndex + 2] === "3".charCodeAt(0)) {
+                if (everything.length - byteIndex < 10) {
+                  break;
+                }
+                frameSize = utils.parseId3TagSize(everything, byteIndex);
+                if (byteIndex + frameSize > everything.length) {
+                  break;
+                }
+                chunk = {
+                  type: "timed-metadata",
+                  data: everything.subarray(byteIndex, byteIndex + frameSize)
+                };
+                this.trigger("data", chunk);
+                byteIndex += frameSize;
+                continue;
+              } else if ((everything[byteIndex] & 255) === 255 && (everything[byteIndex + 1] & 240) === 240) {
+                if (everything.length - byteIndex < 7) {
+                  break;
+                }
+                frameSize = utils.parseAdtsSize(everything, byteIndex);
+                if (byteIndex + frameSize > everything.length) {
+                  break;
+                }
+                packet = {
+                  type: "audio",
+                  data: everything.subarray(byteIndex, byteIndex + frameSize),
+                  pts: timeStamp,
+                  dts: timeStamp
+                };
+                this.trigger("data", packet);
+                byteIndex += frameSize;
+                continue;
+              }
+              byteIndex++;
+            }
+            bytesLeft = everything.length - byteIndex;
+            if (bytesLeft > 0) {
+              everything = everything.subarray(byteIndex);
+            } else {
+              everything = new Uint8Array();
+            }
+          };
+          this.reset = function() {
+            everything = new Uint8Array();
+            this.trigger("reset");
+          };
+          this.endTimeline = function() {
+            everything = new Uint8Array();
+            this.trigger("endedtimeline");
+          };
+        };
+        _AacStream.prototype = new stream();
+        var aac = _AacStream;
+        var AUDIO_PROPERTIES = ["audioobjecttype", "channelcount", "samplerate", "samplingfrequencyindex", "samplesize"];
+        var audioProperties = AUDIO_PROPERTIES;
+        var VIDEO_PROPERTIES = ["width", "height", "profileIdc", "levelIdc", "profileCompatibility", "sarRatio"];
+        var videoProperties = VIDEO_PROPERTIES;
+        var H264Stream$1 = h264.H264Stream;
+        var isLikelyAacData$1 = utils.isLikelyAacData;
+        var ONE_SECOND_IN_TS$2 = clock.ONE_SECOND_IN_TS;
+        var _VideoSegmentStream$1, _AudioSegmentStream$1, _Transmuxer$1, _CoalesceStream;
+        var retriggerForStream = function retriggerForStream2(key, event) {
+          event.stream = key;
+          this.trigger("log", event);
+        };
+        var addPipelineLogRetriggers = function addPipelineLogRetriggers2(transmuxer3, pipeline) {
+          var keys = Object.keys(pipeline);
+          for (var i = 0; i < keys.length; i++) {
+            var key = keys[i];
+            if (key === "headOfPipeline" || !pipeline[key].on) {
+              continue;
+            }
+            pipeline[key].on("log", retriggerForStream.bind(transmuxer3, key));
+          }
+        };
+        var arrayEquals = function arrayEquals2(a, b) {
+          var i;
+          if (a.length !== b.length) {
+            return false;
+          }
+          for (i = 0; i < a.length; i++) {
+            if (a[i] !== b[i]) {
+              return false;
+            }
+          }
+          return true;
+        };
+        var generateSegmentTimingInfo = function generateSegmentTimingInfo2(baseMediaDecodeTime, startDts, startPts, endDts, endPts, prependedContentDuration) {
+          var ptsOffsetFromDts = startPts - startDts, decodeDuration = endDts - startDts, presentationDuration = endPts - startPts;
+          return {
+            start: {
+              dts: baseMediaDecodeTime,
+              pts: baseMediaDecodeTime + ptsOffsetFromDts
+            },
+            end: {
+              dts: baseMediaDecodeTime + decodeDuration,
+              pts: baseMediaDecodeTime + presentationDuration
+            },
+            prependedContentDuration,
+            baseMediaDecodeTime
+          };
+        };
+        _AudioSegmentStream$1 = function AudioSegmentStream2(track, options) {
+          var adtsFrames = [], sequenceNumber, earliestAllowedDts = 0, audioAppendStartTs = 0, videoBaseMediaDecodeTime = Infinity;
+          options = options || {};
+          sequenceNumber = options.firstSequenceNumber || 0;
+          _AudioSegmentStream$1.prototype.init.call(this);
+          this.push = function(data) {
+            trackDecodeInfo.collectDtsInfo(track, data);
+            if (track) {
+              audioProperties.forEach(function(prop) {
+                track[prop] = data[prop];
+              });
+            }
+            adtsFrames.push(data);
+          };
+          this.setEarliestDts = function(earliestDts) {
+            earliestAllowedDts = earliestDts;
+          };
+          this.setVideoBaseMediaDecodeTime = function(baseMediaDecodeTime) {
+            videoBaseMediaDecodeTime = baseMediaDecodeTime;
+          };
+          this.setAudioAppendStart = function(timestamp) {
+            audioAppendStartTs = timestamp;
+          };
+          this.flush = function() {
+            var frames, moof2, mdat2, boxes, frameDuration, segmentDuration, videoClockCyclesOfSilencePrefixed;
+            if (adtsFrames.length === 0) {
+              this.trigger("done", "AudioSegmentStream");
+              return;
+            }
+            frames = audioFrameUtils.trimAdtsFramesByEarliestDts(adtsFrames, track, earliestAllowedDts);
+            track.baseMediaDecodeTime = trackDecodeInfo.calculateTrackBaseMediaDecodeTime(track, options.keepOriginalTimestamps);
+            videoClockCyclesOfSilencePrefixed = audioFrameUtils.prefixWithSilence(track, frames, audioAppendStartTs, videoBaseMediaDecodeTime);
+            track.samples = audioFrameUtils.generateSampleTable(frames);
+            mdat2 = mp4Generator.mdat(audioFrameUtils.concatenateFrameData(frames));
+            adtsFrames = [];
+            moof2 = mp4Generator.moof(sequenceNumber, [track]);
+            boxes = new Uint8Array(moof2.byteLength + mdat2.byteLength);
+            sequenceNumber++;
+            boxes.set(moof2);
+            boxes.set(mdat2, moof2.byteLength);
+            trackDecodeInfo.clearDtsInfo(track);
+            frameDuration = Math.ceil(ONE_SECOND_IN_TS$2 * 1024 / track.samplerate);
+            if (frames.length) {
+              segmentDuration = frames.length * frameDuration;
+              this.trigger("segmentTimingInfo", generateSegmentTimingInfo(clock.audioTsToVideoTs(track.baseMediaDecodeTime, track.samplerate), frames[0].dts, frames[0].pts, frames[0].dts + segmentDuration, frames[0].pts + segmentDuration, videoClockCyclesOfSilencePrefixed || 0));
+              this.trigger("timingInfo", {
+                start: frames[0].pts,
+                end: frames[0].pts + segmentDuration
+              });
+            }
+            this.trigger("data", {
+              track,
+              boxes
+            });
+            this.trigger("done", "AudioSegmentStream");
+          };
+          this.reset = function() {
+            trackDecodeInfo.clearDtsInfo(track);
+            adtsFrames = [];
+            this.trigger("reset");
+          };
+        };
+        _AudioSegmentStream$1.prototype = new stream();
+        _VideoSegmentStream$1 = function VideoSegmentStream2(track, options) {
+          var sequenceNumber, nalUnits = [], gopsToAlignWith = [], config, pps;
+          options = options || {};
+          sequenceNumber = options.firstSequenceNumber || 0;
+          _VideoSegmentStream$1.prototype.init.call(this);
+          delete track.minPTS;
+          this.gopCache_ = [];
+          this.push = function(nalUnit) {
+            trackDecodeInfo.collectDtsInfo(track, nalUnit);
+            if (nalUnit.nalUnitType === "seq_parameter_set_rbsp" && !config) {
+              config = nalUnit.config;
+              track.sps = [nalUnit.data];
+              videoProperties.forEach(function(prop) {
+                track[prop] = config[prop];
+              }, this);
+            }
+            if (nalUnit.nalUnitType === "pic_parameter_set_rbsp" && !pps) {
+              pps = nalUnit.data;
+              track.pps = [nalUnit.data];
+            }
+            nalUnits.push(nalUnit);
+          };
+          this.flush = function() {
+            var frames, gopForFusion, gops, moof2, mdat2, boxes, prependedContentDuration = 0, firstGop, lastGop;
+            while (nalUnits.length) {
+              if (nalUnits[0].nalUnitType === "access_unit_delimiter_rbsp") {
+                break;
+              }
+              nalUnits.shift();
+            }
+            if (nalUnits.length === 0) {
+              this.resetStream_();
+              this.trigger("done", "VideoSegmentStream");
+              return;
+            }
+            frames = frameUtils.groupNalsIntoFrames(nalUnits);
+            gops = frameUtils.groupFramesIntoGops(frames);
+            if (!gops[0][0].keyFrame) {
+              gopForFusion = this.getGopForFusion_(nalUnits[0], track);
+              if (gopForFusion) {
+                prependedContentDuration = gopForFusion.duration;
+                gops.unshift(gopForFusion);
+                gops.byteLength += gopForFusion.byteLength;
+                gops.nalCount += gopForFusion.nalCount;
+                gops.pts = gopForFusion.pts;
+                gops.dts = gopForFusion.dts;
+                gops.duration += gopForFusion.duration;
+              } else {
+                gops = frameUtils.extendFirstKeyFrame(gops);
+              }
+            }
+            if (gopsToAlignWith.length) {
+              var alignedGops;
+              if (options.alignGopsAtEnd) {
+                alignedGops = this.alignGopsAtEnd_(gops);
+              } else {
+                alignedGops = this.alignGopsAtStart_(gops);
+              }
+              if (!alignedGops) {
+                this.gopCache_.unshift({
+                  gop: gops.pop(),
+                  pps: track.pps,
+                  sps: track.sps
+                });
+                this.gopCache_.length = Math.min(6, this.gopCache_.length);
+                nalUnits = [];
+                this.resetStream_();
+                this.trigger("done", "VideoSegmentStream");
+                return;
+              }
+              trackDecodeInfo.clearDtsInfo(track);
+              gops = alignedGops;
+            }
+            trackDecodeInfo.collectDtsInfo(track, gops);
+            track.samples = frameUtils.generateSampleTable(gops);
+            mdat2 = mp4Generator.mdat(frameUtils.concatenateNalData(gops));
+            track.baseMediaDecodeTime = trackDecodeInfo.calculateTrackBaseMediaDecodeTime(track, options.keepOriginalTimestamps);
+            this.trigger("processedGopsInfo", gops.map(function(gop) {
+              return {
+                pts: gop.pts,
+                dts: gop.dts,
+                byteLength: gop.byteLength
+              };
+            }));
+            firstGop = gops[0];
+            lastGop = gops[gops.length - 1];
+            this.trigger("segmentTimingInfo", generateSegmentTimingInfo(track.baseMediaDecodeTime, firstGop.dts, firstGop.pts, lastGop.dts + lastGop.duration, lastGop.pts + lastGop.duration, prependedContentDuration));
+            this.trigger("timingInfo", {
+              start: gops[0].pts,
+              end: gops[gops.length - 1].pts + gops[gops.length - 1].duration
+            });
+            this.gopCache_.unshift({
+              gop: gops.pop(),
+              pps: track.pps,
+              sps: track.sps
+            });
+            this.gopCache_.length = Math.min(6, this.gopCache_.length);
+            nalUnits = [];
+            this.trigger("baseMediaDecodeTime", track.baseMediaDecodeTime);
+            this.trigger("timelineStartInfo", track.timelineStartInfo);
+            moof2 = mp4Generator.moof(sequenceNumber, [track]);
+            boxes = new Uint8Array(moof2.byteLength + mdat2.byteLength);
+            sequenceNumber++;
+            boxes.set(moof2);
+            boxes.set(mdat2, moof2.byteLength);
+            this.trigger("data", {
+              track,
+              boxes
+            });
+            this.resetStream_();
+            this.trigger("done", "VideoSegmentStream");
+          };
+          this.reset = function() {
+            this.resetStream_();
+            nalUnits = [];
+            this.gopCache_.length = 0;
+            gopsToAlignWith.length = 0;
+            this.trigger("reset");
+          };
+          this.resetStream_ = function() {
+            trackDecodeInfo.clearDtsInfo(track);
+            config = void 0;
+            pps = void 0;
+          };
+          this.getGopForFusion_ = function(nalUnit) {
+            var halfSecond = 45e3, allowableOverlap = 1e4, nearestDistance = Infinity, dtsDistance, nearestGopObj, currentGop, currentGopObj, i;
+            for (i = 0; i < this.gopCache_.length; i++) {
+              currentGopObj = this.gopCache_[i];
+              currentGop = currentGopObj.gop;
+              if (!(track.pps && arrayEquals(track.pps[0], currentGopObj.pps[0])) || !(track.sps && arrayEquals(track.sps[0], currentGopObj.sps[0]))) {
+                continue;
+              }
+              if (currentGop.dts < track.timelineStartInfo.dts) {
+                continue;
+              }
+              dtsDistance = nalUnit.dts - currentGop.dts - currentGop.duration;
+              if (dtsDistance >= -allowableOverlap && dtsDistance <= halfSecond) {
+                if (!nearestGopObj || nearestDistance > dtsDistance) {
+                  nearestGopObj = currentGopObj;
+                  nearestDistance = dtsDistance;
+                }
+              }
+            }
+            if (nearestGopObj) {
+              return nearestGopObj.gop;
+            }
+            return null;
+          };
+          this.alignGopsAtStart_ = function(gops) {
+            var alignIndex, gopIndex, align, gop, byteLength, nalCount, duration, alignedGops;
+            byteLength = gops.byteLength;
+            nalCount = gops.nalCount;
+            duration = gops.duration;
+            alignIndex = gopIndex = 0;
+            while (alignIndex < gopsToAlignWith.length && gopIndex < gops.length) {
+              align = gopsToAlignWith[alignIndex];
+              gop = gops[gopIndex];
+              if (align.pts === gop.pts) {
+                break;
+              }
+              if (gop.pts > align.pts) {
+                alignIndex++;
+                continue;
+              }
+              gopIndex++;
+              byteLength -= gop.byteLength;
+              nalCount -= gop.nalCount;
+              duration -= gop.duration;
+            }
+            if (gopIndex === 0) {
+              return gops;
+            }
+            if (gopIndex === gops.length) {
+              return null;
+            }
+            alignedGops = gops.slice(gopIndex);
+            alignedGops.byteLength = byteLength;
+            alignedGops.duration = duration;
+            alignedGops.nalCount = nalCount;
+            alignedGops.pts = alignedGops[0].pts;
+            alignedGops.dts = alignedGops[0].dts;
+            return alignedGops;
+          };
+          this.alignGopsAtEnd_ = function(gops) {
+            var alignIndex, gopIndex, align, gop, alignEndIndex, matchFound;
+            alignIndex = gopsToAlignWith.length - 1;
+            gopIndex = gops.length - 1;
+            alignEndIndex = null;
+            matchFound = false;
+            while (alignIndex >= 0 && gopIndex >= 0) {
+              align = gopsToAlignWith[alignIndex];
+              gop = gops[gopIndex];
+              if (align.pts === gop.pts) {
+                matchFound = true;
+                break;
+              }
+              if (align.pts > gop.pts) {
+                alignIndex--;
+                continue;
+              }
+              if (alignIndex === gopsToAlignWith.length - 1) {
+                alignEndIndex = gopIndex;
+              }
+              gopIndex--;
+            }
+            if (!matchFound && alignEndIndex === null) {
+              return null;
+            }
+            var trimIndex;
+            if (matchFound) {
+              trimIndex = gopIndex;
+            } else {
+              trimIndex = alignEndIndex;
+            }
+            if (trimIndex === 0) {
+              return gops;
+            }
+            var alignedGops = gops.slice(trimIndex);
+            var metadata = alignedGops.reduce(function(total, gop2) {
+              total.byteLength += gop2.byteLength;
+              total.duration += gop2.duration;
+              total.nalCount += gop2.nalCount;
+              return total;
+            }, {
+              byteLength: 0,
+              duration: 0,
+              nalCount: 0
+            });
+            alignedGops.byteLength = metadata.byteLength;
+            alignedGops.duration = metadata.duration;
+            alignedGops.nalCount = metadata.nalCount;
+            alignedGops.pts = alignedGops[0].pts;
+            alignedGops.dts = alignedGops[0].dts;
+            return alignedGops;
+          };
+          this.alignGopsWith = function(newGopsToAlignWith) {
+            gopsToAlignWith = newGopsToAlignWith;
+          };
+        };
+        _VideoSegmentStream$1.prototype = new stream();
+        _CoalesceStream = function CoalesceStream2(options, metadataStream2) {
+          this.numberOfTracks = 0;
+          this.metadataStream = metadataStream2;
+          options = options || {};
+          if (typeof options.remux !== "undefined") {
+            this.remuxTracks = !!options.remux;
+          } else {
+            this.remuxTracks = true;
+          }
+          if (typeof options.keepOriginalTimestamps === "boolean") {
+            this.keepOriginalTimestamps = options.keepOriginalTimestamps;
+          } else {
+            this.keepOriginalTimestamps = false;
+          }
+          this.pendingTracks = [];
+          this.videoTrack = null;
+          this.pendingBoxes = [];
+          this.pendingCaptions = [];
+          this.pendingMetadata = [];
+          this.pendingBytes = 0;
+          this.emittedTracks = 0;
+          _CoalesceStream.prototype.init.call(this);
+          this.push = function(output) {
+            if (output.text) {
+              return this.pendingCaptions.push(output);
+            }
+            if (output.frames) {
+              return this.pendingMetadata.push(output);
+            }
+            this.pendingTracks.push(output.track);
+            this.pendingBytes += output.boxes.byteLength;
+            if (output.track.type === "video") {
+              this.videoTrack = output.track;
+              this.pendingBoxes.push(output.boxes);
+            }
+            if (output.track.type === "audio") {
+              this.audioTrack = output.track;
+              this.pendingBoxes.unshift(output.boxes);
+            }
+          };
+        };
+        _CoalesceStream.prototype = new stream();
+        _CoalesceStream.prototype.flush = function(flushSource) {
+          var offset = 0, event = {
+            captions: [],
+            captionStreams: {},
+            metadata: [],
+            info: {}
+          }, caption, id3, initSegment, timelineStartPts = 0, i;
+          if (this.pendingTracks.length < this.numberOfTracks) {
+            if (flushSource !== "VideoSegmentStream" && flushSource !== "AudioSegmentStream") {
+              return;
+            } else if (this.remuxTracks) {
+              return;
+            } else if (this.pendingTracks.length === 0) {
+              this.emittedTracks++;
+              if (this.emittedTracks >= this.numberOfTracks) {
+                this.trigger("done");
+                this.emittedTracks = 0;
+              }
+              return;
+            }
+          }
+          if (this.videoTrack) {
+            timelineStartPts = this.videoTrack.timelineStartInfo.pts;
+            videoProperties.forEach(function(prop) {
+              event.info[prop] = this.videoTrack[prop];
+            }, this);
+          } else if (this.audioTrack) {
+            timelineStartPts = this.audioTrack.timelineStartInfo.pts;
+            audioProperties.forEach(function(prop) {
+              event.info[prop] = this.audioTrack[prop];
+            }, this);
+          }
+          if (this.videoTrack || this.audioTrack) {
+            if (this.pendingTracks.length === 1) {
+              event.type = this.pendingTracks[0].type;
+            } else {
+              event.type = "combined";
+            }
+            this.emittedTracks += this.pendingTracks.length;
+            initSegment = mp4Generator.initSegment(this.pendingTracks);
+            event.initSegment = new Uint8Array(initSegment.byteLength);
+            event.initSegment.set(initSegment);
+            event.data = new Uint8Array(this.pendingBytes);
+            for (i = 0; i < this.pendingBoxes.length; i++) {
+              event.data.set(this.pendingBoxes[i], offset);
+              offset += this.pendingBoxes[i].byteLength;
+            }
+            for (i = 0; i < this.pendingCaptions.length; i++) {
+              caption = this.pendingCaptions[i];
+              caption.startTime = clock.metadataTsToSeconds(caption.startPts, timelineStartPts, this.keepOriginalTimestamps);
+              caption.endTime = clock.metadataTsToSeconds(caption.endPts, timelineStartPts, this.keepOriginalTimestamps);
+              event.captionStreams[caption.stream] = true;
+              event.captions.push(caption);
+            }
+            for (i = 0; i < this.pendingMetadata.length; i++) {
+              id3 = this.pendingMetadata[i];
+              id3.cueTime = clock.metadataTsToSeconds(id3.pts, timelineStartPts, this.keepOriginalTimestamps);
+              event.metadata.push(id3);
+            }
+            event.metadata.dispatchType = this.metadataStream.dispatchType;
+            this.pendingTracks.length = 0;
+            this.videoTrack = null;
+            this.pendingBoxes.length = 0;
+            this.pendingCaptions.length = 0;
+            this.pendingBytes = 0;
+            this.pendingMetadata.length = 0;
+            this.trigger("data", event);
+            for (i = 0; i < event.captions.length; i++) {
+              caption = event.captions[i];
+              this.trigger("caption", caption);
+            }
+            for (i = 0; i < event.metadata.length; i++) {
+              id3 = event.metadata[i];
+              this.trigger("id3Frame", id3);
+            }
+          }
+          if (this.emittedTracks >= this.numberOfTracks) {
+            this.trigger("done");
+            this.emittedTracks = 0;
+          }
+        };
+        _CoalesceStream.prototype.setRemux = function(val) {
+          this.remuxTracks = val;
+        };
+        _Transmuxer$1 = function Transmuxer2(options) {
+          var self2 = this, hasFlushed = true, videoTrack, audioTrack;
+          _Transmuxer$1.prototype.init.call(this);
+          options = options || {};
+          this.baseMediaDecodeTime = options.baseMediaDecodeTime || 0;
+          this.transmuxPipeline_ = {};
+          this.setupAacPipeline = function() {
+            var pipeline = {};
+            this.transmuxPipeline_ = pipeline;
+            pipeline.type = "aac";
+            pipeline.metadataStream = new m2ts_1.MetadataStream();
+            pipeline.aacStream = new aac();
+            pipeline.audioTimestampRolloverStream = new m2ts_1.TimestampRolloverStream("audio");
+            pipeline.timedMetadataTimestampRolloverStream = new m2ts_1.TimestampRolloverStream("timed-metadata");
+            pipeline.adtsStream = new adts();
+            pipeline.coalesceStream = new _CoalesceStream(options, pipeline.metadataStream);
+            pipeline.headOfPipeline = pipeline.aacStream;
+            pipeline.aacStream.pipe(pipeline.audioTimestampRolloverStream).pipe(pipeline.adtsStream);
+            pipeline.aacStream.pipe(pipeline.timedMetadataTimestampRolloverStream).pipe(pipeline.metadataStream).pipe(pipeline.coalesceStream);
+            pipeline.metadataStream.on("timestamp", function(frame) {
+              pipeline.aacStream.setTimestamp(frame.timeStamp);
+            });
+            pipeline.aacStream.on("data", function(data) {
+              if (data.type !== "timed-metadata" && data.type !== "audio" || pipeline.audioSegmentStream) {
+                return;
+              }
+              audioTrack = audioTrack || {
+                timelineStartInfo: {
+                  baseMediaDecodeTime: self2.baseMediaDecodeTime
+                },
+                codec: "adts",
+                type: "audio"
+              };
+              pipeline.coalesceStream.numberOfTracks++;
+              pipeline.audioSegmentStream = new _AudioSegmentStream$1(audioTrack, options);
+              pipeline.audioSegmentStream.on("log", self2.getLogTrigger_("audioSegmentStream"));
+              pipeline.audioSegmentStream.on("timingInfo", self2.trigger.bind(self2, "audioTimingInfo"));
+              pipeline.adtsStream.pipe(pipeline.audioSegmentStream).pipe(pipeline.coalesceStream);
+              self2.trigger("trackinfo", {
+                hasAudio: !!audioTrack,
+                hasVideo: !!videoTrack
+              });
+            });
+            pipeline.coalesceStream.on("data", this.trigger.bind(this, "data"));
+            pipeline.coalesceStream.on("done", this.trigger.bind(this, "done"));
+            addPipelineLogRetriggers(this, pipeline);
+          };
+          this.setupTsPipeline = function() {
+            var pipeline = {};
+            this.transmuxPipeline_ = pipeline;
+            pipeline.type = "ts";
+            pipeline.metadataStream = new m2ts_1.MetadataStream();
+            pipeline.packetStream = new m2ts_1.TransportPacketStream();
+            pipeline.parseStream = new m2ts_1.TransportParseStream();
+            pipeline.elementaryStream = new m2ts_1.ElementaryStream();
+            pipeline.timestampRolloverStream = new m2ts_1.TimestampRolloverStream();
+            pipeline.adtsStream = new adts();
+            pipeline.h264Stream = new H264Stream$1();
+            pipeline.captionStream = new m2ts_1.CaptionStream(options);
+            pipeline.coalesceStream = new _CoalesceStream(options, pipeline.metadataStream);
+            pipeline.headOfPipeline = pipeline.packetStream;
+            pipeline.packetStream.pipe(pipeline.parseStream).pipe(pipeline.elementaryStream).pipe(pipeline.timestampRolloverStream);
+            pipeline.timestampRolloverStream.pipe(pipeline.h264Stream);
+            pipeline.timestampRolloverStream.pipe(pipeline.adtsStream);
+            pipeline.timestampRolloverStream.pipe(pipeline.metadataStream).pipe(pipeline.coalesceStream);
+            pipeline.h264Stream.pipe(pipeline.captionStream).pipe(pipeline.coalesceStream);
+            pipeline.elementaryStream.on("data", function(data) {
+              var i;
+              if (data.type === "metadata") {
+                i = data.tracks.length;
+                while (i--) {
+                  if (!videoTrack && data.tracks[i].type === "video") {
+                    videoTrack = data.tracks[i];
+                    videoTrack.timelineStartInfo.baseMediaDecodeTime = self2.baseMediaDecodeTime;
+                  } else if (!audioTrack && data.tracks[i].type === "audio") {
+                    audioTrack = data.tracks[i];
+                    audioTrack.timelineStartInfo.baseMediaDecodeTime = self2.baseMediaDecodeTime;
+                  }
+                }
+                if (videoTrack && !pipeline.videoSegmentStream) {
+                  pipeline.coalesceStream.numberOfTracks++;
+                  pipeline.videoSegmentStream = new _VideoSegmentStream$1(videoTrack, options);
+                  pipeline.videoSegmentStream.on("log", self2.getLogTrigger_("videoSegmentStream"));
+                  pipeline.videoSegmentStream.on("timelineStartInfo", function(timelineStartInfo) {
+                    if (audioTrack && !options.keepOriginalTimestamps) {
+                      audioTrack.timelineStartInfo = timelineStartInfo;
+                      pipeline.audioSegmentStream.setEarliestDts(timelineStartInfo.dts - self2.baseMediaDecodeTime);
+                    }
+                  });
+                  pipeline.videoSegmentStream.on("processedGopsInfo", self2.trigger.bind(self2, "gopInfo"));
+                  pipeline.videoSegmentStream.on("segmentTimingInfo", self2.trigger.bind(self2, "videoSegmentTimingInfo"));
+                  pipeline.videoSegmentStream.on("baseMediaDecodeTime", function(baseMediaDecodeTime) {
+                    if (audioTrack) {
+                      pipeline.audioSegmentStream.setVideoBaseMediaDecodeTime(baseMediaDecodeTime);
+                    }
+                  });
+                  pipeline.videoSegmentStream.on("timingInfo", self2.trigger.bind(self2, "videoTimingInfo"));
+                  pipeline.h264Stream.pipe(pipeline.videoSegmentStream).pipe(pipeline.coalesceStream);
+                }
+                if (audioTrack && !pipeline.audioSegmentStream) {
+                  pipeline.coalesceStream.numberOfTracks++;
+                  pipeline.audioSegmentStream = new _AudioSegmentStream$1(audioTrack, options);
+                  pipeline.audioSegmentStream.on("log", self2.getLogTrigger_("audioSegmentStream"));
+                  pipeline.audioSegmentStream.on("timingInfo", self2.trigger.bind(self2, "audioTimingInfo"));
+                  pipeline.audioSegmentStream.on("segmentTimingInfo", self2.trigger.bind(self2, "audioSegmentTimingInfo"));
+                  pipeline.adtsStream.pipe(pipeline.audioSegmentStream).pipe(pipeline.coalesceStream);
+                }
+                self2.trigger("trackinfo", {
+                  hasAudio: !!audioTrack,
+                  hasVideo: !!videoTrack
+                });
+              }
+            });
+            pipeline.coalesceStream.on("data", this.trigger.bind(this, "data"));
+            pipeline.coalesceStream.on("id3Frame", function(id3Frame) {
+              id3Frame.dispatchType = pipeline.metadataStream.dispatchType;
+              self2.trigger("id3Frame", id3Frame);
+            });
+            pipeline.coalesceStream.on("caption", this.trigger.bind(this, "caption"));
+            pipeline.coalesceStream.on("done", this.trigger.bind(this, "done"));
+            addPipelineLogRetriggers(this, pipeline);
+          };
+          this.setBaseMediaDecodeTime = function(baseMediaDecodeTime) {
+            var pipeline = this.transmuxPipeline_;
+            if (!options.keepOriginalTimestamps) {
+              this.baseMediaDecodeTime = baseMediaDecodeTime;
+            }
+            if (audioTrack) {
+              audioTrack.timelineStartInfo.dts = void 0;
+              audioTrack.timelineStartInfo.pts = void 0;
+              trackDecodeInfo.clearDtsInfo(audioTrack);
+              if (pipeline.audioTimestampRolloverStream) {
+                pipeline.audioTimestampRolloverStream.discontinuity();
+              }
+            }
+            if (videoTrack) {
+              if (pipeline.videoSegmentStream) {
+                pipeline.videoSegmentStream.gopCache_ = [];
+              }
+              videoTrack.timelineStartInfo.dts = void 0;
+              videoTrack.timelineStartInfo.pts = void 0;
+              trackDecodeInfo.clearDtsInfo(videoTrack);
+              pipeline.captionStream.reset();
+            }
+            if (pipeline.timestampRolloverStream) {
+              pipeline.timestampRolloverStream.discontinuity();
+            }
+          };
+          this.setAudioAppendStart = function(timestamp) {
+            if (audioTrack) {
+              this.transmuxPipeline_.audioSegmentStream.setAudioAppendStart(timestamp);
+            }
+          };
+          this.setRemux = function(val) {
+            var pipeline = this.transmuxPipeline_;
+            options.remux = val;
+            if (pipeline && pipeline.coalesceStream) {
+              pipeline.coalesceStream.setRemux(val);
+            }
+          };
+          this.alignGopsWith = function(gopsToAlignWith) {
+            if (videoTrack && this.transmuxPipeline_.videoSegmentStream) {
+              this.transmuxPipeline_.videoSegmentStream.alignGopsWith(gopsToAlignWith);
+            }
+          };
+          this.getLogTrigger_ = function(key) {
+            var self3 = this;
+            return function(event) {
+              event.stream = key;
+              self3.trigger("log", event);
+            };
+          };
+          this.push = function(data) {
+            if (hasFlushed) {
+              var isAac = isLikelyAacData$1(data);
+              if (isAac && this.transmuxPipeline_.type !== "aac") {
+                this.setupAacPipeline();
+              } else if (!isAac && this.transmuxPipeline_.type !== "ts") {
+                this.setupTsPipeline();
+              }
+              hasFlushed = false;
+            }
+            this.transmuxPipeline_.headOfPipeline.push(data);
+          };
+          this.flush = function() {
+            hasFlushed = true;
+            this.transmuxPipeline_.headOfPipeline.flush();
+          };
+          this.endTimeline = function() {
+            this.transmuxPipeline_.headOfPipeline.endTimeline();
+          };
+          this.reset = function() {
+            if (this.transmuxPipeline_.headOfPipeline) {
+              this.transmuxPipeline_.headOfPipeline.reset();
+            }
+          };
+          this.resetCaptions = function() {
+            if (this.transmuxPipeline_.captionStream) {
+              this.transmuxPipeline_.captionStream.reset();
+            }
+          };
+        };
+        _Transmuxer$1.prototype = new stream();
+        var transmuxer$2 = {
+          Transmuxer: _Transmuxer$1,
+          VideoSegmentStream: _VideoSegmentStream$1,
+          AudioSegmentStream: _AudioSegmentStream$1,
+          AUDIO_PROPERTIES: audioProperties,
+          VIDEO_PROPERTIES: videoProperties,
+          generateSegmentTimingInfo
+        };
+        var discardEmulationPreventionBytes = captionPacketParser.discardEmulationPreventionBytes;
+        var CaptionStream = captionStream.CaptionStream;
+        var mapToSample = function mapToSample2(offset, samples) {
+          var approximateOffset = offset;
+          for (var i = 0; i < samples.length; i++) {
+            var sample = samples[i];
+            if (approximateOffset < sample.size) {
+              return sample;
+            }
+            approximateOffset -= sample.size;
+          }
+          return null;
+        };
+        var findSeiNals = function findSeiNals2(avcStream, samples, trackId) {
+          var avcView = new DataView(avcStream.buffer, avcStream.byteOffset, avcStream.byteLength), result = {
+            logs: [],
+            seiNals: []
+          }, seiNal, i, length, lastMatchedSample;
+          for (i = 0; i + 4 < avcStream.length; i += length) {
+            length = avcView.getUint32(i);
+            i += 4;
+            if (length <= 0) {
+              continue;
+            }
+            switch (avcStream[i] & 31) {
+              case 6:
+                var data = avcStream.subarray(i + 1, i + 1 + length);
+                var matchingSample = mapToSample(i, samples);
+                seiNal = {
+                  nalUnitType: "sei_rbsp",
+                  size: length,
+                  data,
+                  escapedRBSP: discardEmulationPreventionBytes(data),
+                  trackId
+                };
+                if (matchingSample) {
+                  seiNal.pts = matchingSample.pts;
+                  seiNal.dts = matchingSample.dts;
+                  lastMatchedSample = matchingSample;
+                } else if (lastMatchedSample) {
+                  seiNal.pts = lastMatchedSample.pts;
+                  seiNal.dts = lastMatchedSample.dts;
+                } else {
+                  result.logs.push({
+                    level: "warn",
+                    message: "We've encountered a nal unit without data at " + i + " for trackId " + trackId + ". See mux.js#223."
+                  });
+                  break;
+                }
+                result.seiNals.push(seiNal);
+                break;
+            }
+          }
+          return result;
+        };
+        var parseSamples = function parseSamples2(truns, baseMediaDecodeTime, tfhd2) {
+          var currentDts = baseMediaDecodeTime;
+          var defaultSampleDuration = tfhd2.defaultSampleDuration || 0;
+          var defaultSampleSize = tfhd2.defaultSampleSize || 0;
+          var trackId = tfhd2.trackId;
+          var allSamples = [];
+          truns.forEach(function(trun2) {
+            var trackRun = parseTrun(trun2);
+            var samples = trackRun.samples;
+            samples.forEach(function(sample) {
+              if (sample.duration === void 0) {
+                sample.duration = defaultSampleDuration;
+              }
+              if (sample.size === void 0) {
+                sample.size = defaultSampleSize;
+              }
+              sample.trackId = trackId;
+              sample.dts = currentDts;
+              if (sample.compositionTimeOffset === void 0) {
+                sample.compositionTimeOffset = 0;
+              }
+              if (typeof currentDts === "bigint") {
+                sample.pts = currentDts + window__default["default"].BigInt(sample.compositionTimeOffset);
+                currentDts += window__default["default"].BigInt(sample.duration);
+              } else {
+                sample.pts = currentDts + sample.compositionTimeOffset;
+                currentDts += sample.duration;
+              }
+            });
+            allSamples = allSamples.concat(samples);
+          });
+          return allSamples;
+        };
+        var parseCaptionNals = function parseCaptionNals2(segment, videoTrackId) {
+          var trafs = findBox_1(segment, ["moof", "traf"]);
+          var mdats = findBox_1(segment, ["mdat"]);
+          var captionNals = {};
+          var mdatTrafPairs = [];
+          mdats.forEach(function(mdat2, index) {
+            var matchingTraf = trafs[index];
+            mdatTrafPairs.push({
+              mdat: mdat2,
+              traf: matchingTraf
+            });
+          });
+          mdatTrafPairs.forEach(function(pair) {
+            var mdat2 = pair.mdat;
+            var traf2 = pair.traf;
+            var tfhd2 = findBox_1(traf2, ["tfhd"]);
+            var headerInfo = parseTfhd(tfhd2[0]);
+            var trackId = headerInfo.trackId;
+            var tfdt2 = findBox_1(traf2, ["tfdt"]);
+            var baseMediaDecodeTime = tfdt2.length > 0 ? parseTfdt(tfdt2[0]).baseMediaDecodeTime : 0;
+            var truns = findBox_1(traf2, ["trun"]);
+            var samples;
+            var result;
+            if (videoTrackId === trackId && truns.length > 0) {
+              samples = parseSamples(truns, baseMediaDecodeTime, headerInfo);
+              result = findSeiNals(mdat2, samples, trackId);
+              if (!captionNals[trackId]) {
+                captionNals[trackId] = {
+                  seiNals: [],
+                  logs: []
+                };
+              }
+              captionNals[trackId].seiNals = captionNals[trackId].seiNals.concat(result.seiNals);
+              captionNals[trackId].logs = captionNals[trackId].logs.concat(result.logs);
+            }
+          });
+          return captionNals;
+        };
+        var parseEmbeddedCaptions = function parseEmbeddedCaptions2(segment, trackId, timescale2) {
+          var captionNals;
+          if (trackId === null) {
+            return null;
+          }
+          captionNals = parseCaptionNals(segment, trackId);
+          var trackNals = captionNals[trackId] || {};
+          return {
+            seiNals: trackNals.seiNals,
+            logs: trackNals.logs,
+            timescale: timescale2
+          };
+        };
+        var CaptionParser = function CaptionParser2() {
+          var isInitialized = false;
+          var captionStream2;
+          var segmentCache;
+          var trackId;
+          var timescale2;
+          var parsedCaptions;
+          var parsingPartial;
+          this.isInitialized = function() {
+            return isInitialized;
+          };
+          this.init = function(options) {
+            captionStream2 = new CaptionStream();
+            isInitialized = true;
+            parsingPartial = options ? options.isPartial : false;
+            captionStream2.on("data", function(event) {
+              event.startTime = event.startPts / timescale2;
+              event.endTime = event.endPts / timescale2;
+              parsedCaptions.captions.push(event);
+              parsedCaptions.captionStreams[event.stream] = true;
+            });
+            captionStream2.on("log", function(log2) {
+              parsedCaptions.logs.push(log2);
+            });
+          };
+          this.isNewInit = function(videoTrackIds, timescales) {
+            if (videoTrackIds && videoTrackIds.length === 0 || timescales && typeof timescales === "object" && Object.keys(timescales).length === 0) {
+              return false;
+            }
+            return trackId !== videoTrackIds[0] || timescale2 !== timescales[trackId];
+          };
+          this.parse = function(segment, videoTrackIds, timescales) {
+            var parsedData;
+            if (!this.isInitialized()) {
+              return null;
+            } else if (!videoTrackIds || !timescales) {
+              return null;
+            } else if (this.isNewInit(videoTrackIds, timescales)) {
+              trackId = videoTrackIds[0];
+              timescale2 = timescales[trackId];
+            } else if (trackId === null || !timescale2) {
+              segmentCache.push(segment);
+              return null;
+            }
+            while (segmentCache.length > 0) {
+              var cachedSegment = segmentCache.shift();
+              this.parse(cachedSegment, videoTrackIds, timescales);
+            }
+            parsedData = parseEmbeddedCaptions(segment, trackId, timescale2);
+            if (parsedData && parsedData.logs) {
+              parsedCaptions.logs = parsedCaptions.logs.concat(parsedData.logs);
+            }
+            if (parsedData === null || !parsedData.seiNals) {
+              if (parsedCaptions.logs.length) {
+                return {
+                  logs: parsedCaptions.logs,
+                  captions: [],
+                  captionStreams: []
+                };
+              }
+              return null;
+            }
+            this.pushNals(parsedData.seiNals);
+            this.flushStream();
+            return parsedCaptions;
+          };
+          this.pushNals = function(nals) {
+            if (!this.isInitialized() || !nals || nals.length === 0) {
+              return null;
+            }
+            nals.forEach(function(nal) {
+              captionStream2.push(nal);
+            });
+          };
+          this.flushStream = function() {
+            if (!this.isInitialized()) {
+              return null;
+            }
+            if (!parsingPartial) {
+              captionStream2.flush();
+            } else {
+              captionStream2.partialFlush();
+            }
+          };
+          this.clearParsedCaptions = function() {
+            parsedCaptions.captions = [];
+            parsedCaptions.captionStreams = {};
+            parsedCaptions.logs = [];
+          };
+          this.resetCaptionStream = function() {
+            if (!this.isInitialized()) {
+              return null;
+            }
+            captionStream2.reset();
+          };
+          this.clearAllCaptions = function() {
+            this.clearParsedCaptions();
+            this.resetCaptionStream();
+          };
+          this.reset = function() {
+            segmentCache = [];
+            trackId = null;
+            timescale2 = null;
+            if (!parsedCaptions) {
+              parsedCaptions = {
+                captions: [],
+                captionStreams: {},
+                logs: []
+              };
+            } else {
+              this.clearParsedCaptions();
+            }
+            this.resetCaptionStream();
+          };
+          this.reset();
+        };
+        var captionParser = CaptionParser;
+        var mp4 = {
+          generator: mp4Generator,
+          probe: probe$2,
+          Transmuxer: transmuxer$2.Transmuxer,
+          AudioSegmentStream: transmuxer$2.AudioSegmentStream,
+          VideoSegmentStream: transmuxer$2.VideoSegmentStream,
+          CaptionParser: captionParser
+        };
+        var _FlvTag;
+        _FlvTag = function FlvTag(type2, extraData) {
+          var adHoc = 0, bufferStartSize = 16384, prepareWrite = function prepareWrite2(flv2, count) {
+            var bytes, minLength = flv2.position + count;
+            if (minLength < flv2.bytes.byteLength) {
+              return;
+            }
+            bytes = new Uint8Array(minLength * 2);
+            bytes.set(flv2.bytes.subarray(0, flv2.position), 0);
+            flv2.bytes = bytes;
+            flv2.view = new DataView(flv2.bytes.buffer);
+          }, widthBytes = _FlvTag.widthBytes || new Uint8Array("width".length), heightBytes = _FlvTag.heightBytes || new Uint8Array("height".length), videocodecidBytes = _FlvTag.videocodecidBytes || new Uint8Array("videocodecid".length), i;
+          if (!_FlvTag.widthBytes) {
+            for (i = 0; i < "width".length; i++) {
+              widthBytes[i] = "width".charCodeAt(i);
+            }
+            for (i = 0; i < "height".length; i++) {
+              heightBytes[i] = "height".charCodeAt(i);
+            }
+            for (i = 0; i < "videocodecid".length; i++) {
+              videocodecidBytes[i] = "videocodecid".charCodeAt(i);
+            }
+            _FlvTag.widthBytes = widthBytes;
+            _FlvTag.heightBytes = heightBytes;
+            _FlvTag.videocodecidBytes = videocodecidBytes;
+          }
+          this.keyFrame = false;
+          switch (type2) {
+            case _FlvTag.VIDEO_TAG:
+              this.length = 16;
+              bufferStartSize *= 6;
+              break;
+            case _FlvTag.AUDIO_TAG:
+              this.length = 13;
+              this.keyFrame = true;
+              break;
+            case _FlvTag.METADATA_TAG:
+              this.length = 29;
+              this.keyFrame = true;
+              break;
+            default:
+              throw new Error("Unknown FLV tag type");
+          }
+          this.bytes = new Uint8Array(bufferStartSize);
+          this.view = new DataView(this.bytes.buffer);
+          this.bytes[0] = type2;
+          this.position = this.length;
+          this.keyFrame = extraData;
+          this.pts = 0;
+          this.dts = 0;
+          this.writeBytes = function(bytes, offset, length) {
+            var start = offset || 0, end;
+            length = length || bytes.byteLength;
+            end = start + length;
+            prepareWrite(this, length);
+            this.bytes.set(bytes.subarray(start, end), this.position);
+            this.position += length;
+            this.length = Math.max(this.length, this.position);
+          };
+          this.writeByte = function(byte) {
+            prepareWrite(this, 1);
+            this.bytes[this.position] = byte;
+            this.position++;
+            this.length = Math.max(this.length, this.position);
+          };
+          this.writeShort = function(short) {
+            prepareWrite(this, 2);
+            this.view.setUint16(this.position, short);
+            this.position += 2;
+            this.length = Math.max(this.length, this.position);
+          };
+          this.negIndex = function(pos) {
+            return this.bytes[this.length - pos];
+          };
+          this.nalUnitSize = function() {
+            if (adHoc === 0) {
+              return 0;
+            }
+            return this.length - (adHoc + 4);
+          };
+          this.startNalUnit = function() {
+            if (adHoc > 0) {
+              throw new Error("Attempted to create new NAL wihout closing the old one");
+            }
+            adHoc = this.length;
+            this.length += 4;
+            this.position = this.length;
+          };
+          this.endNalUnit = function(nalContainer) {
+            var nalStart, nalLength;
+            if (this.length === adHoc + 4) {
+              this.length -= 4;
+            } else if (adHoc > 0) {
+              nalStart = adHoc + 4;
+              nalLength = this.length - nalStart;
+              this.position = adHoc;
+              this.view.setUint32(this.position, nalLength);
+              this.position = this.length;
+              if (nalContainer) {
+                nalContainer.push(this.bytes.subarray(nalStart, nalStart + nalLength));
+              }
+            }
+            adHoc = 0;
+          };
+          this.writeMetaDataDouble = function(key, val) {
+            var i2;
+            prepareWrite(this, 2 + key.length + 9);
+            this.view.setUint16(this.position, key.length);
+            this.position += 2;
+            if (key === "width") {
+              this.bytes.set(widthBytes, this.position);
+              this.position += 5;
+            } else if (key === "height") {
+              this.bytes.set(heightBytes, this.position);
+              this.position += 6;
+            } else if (key === "videocodecid") {
+              this.bytes.set(videocodecidBytes, this.position);
+              this.position += 12;
+            } else {
+              for (i2 = 0; i2 < key.length; i2++) {
+                this.bytes[this.position] = key.charCodeAt(i2);
+                this.position++;
+              }
+            }
+            this.position++;
+            this.view.setFloat64(this.position, val);
+            this.position += 8;
+            this.length = Math.max(this.length, this.position);
+            ++adHoc;
+          };
+          this.writeMetaDataBoolean = function(key, val) {
+            var i2;
+            prepareWrite(this, 2);
+            this.view.setUint16(this.position, key.length);
+            this.position += 2;
+            for (i2 = 0; i2 < key.length; i2++) {
+              prepareWrite(this, 1);
+              this.bytes[this.position] = key.charCodeAt(i2);
+              this.position++;
+            }
+            prepareWrite(this, 2);
+            this.view.setUint8(this.position, 1);
+            this.position++;
+            this.view.setUint8(this.position, val ? 1 : 0);
+            this.position++;
+            this.length = Math.max(this.length, this.position);
+            ++adHoc;
+          };
+          this.finalize = function() {
+            var dtsDelta, len;
+            switch (this.bytes[0]) {
+              case _FlvTag.VIDEO_TAG:
+                this.bytes[11] = (this.keyFrame || extraData ? 16 : 32) | 7;
+                this.bytes[12] = extraData ? 0 : 1;
+                dtsDelta = this.pts - this.dts;
+                this.bytes[13] = (dtsDelta & 16711680) >>> 16;
+                this.bytes[14] = (dtsDelta & 65280) >>> 8;
+                this.bytes[15] = (dtsDelta & 255) >>> 0;
+                break;
+              case _FlvTag.AUDIO_TAG:
+                this.bytes[11] = 175;
+                this.bytes[12] = extraData ? 0 : 1;
+                break;
+              case _FlvTag.METADATA_TAG:
+                this.position = 11;
+                this.view.setUint8(this.position, 2);
+                this.position++;
+                this.view.setUint16(this.position, 10);
+                this.position += 2;
+                this.bytes.set([111, 110, 77, 101, 116, 97, 68, 97, 116, 97], this.position);
+                this.position += 10;
+                this.bytes[this.position] = 8;
+                this.position++;
+                this.view.setUint32(this.position, adHoc);
+                this.position = this.length;
+                this.bytes.set([0, 0, 9], this.position);
+                this.position += 3;
+                this.length = this.position;
+                break;
+            }
+            len = this.length - 11;
+            this.bytes[1] = (len & 16711680) >>> 16;
+            this.bytes[2] = (len & 65280) >>> 8;
+            this.bytes[3] = (len & 255) >>> 0;
+            this.bytes[4] = (this.dts & 16711680) >>> 16;
+            this.bytes[5] = (this.dts & 65280) >>> 8;
+            this.bytes[6] = (this.dts & 255) >>> 0;
+            this.bytes[7] = (this.dts & 4278190080) >>> 24;
+            this.bytes[8] = 0;
+            this.bytes[9] = 0;
+            this.bytes[10] = 0;
+            prepareWrite(this, 4);
+            this.view.setUint32(this.length, this.length);
+            this.length += 4;
+            this.position += 4;
+            this.bytes = this.bytes.subarray(0, this.length);
+            this.frameTime = _FlvTag.frameTime(this.bytes);
+            return this;
+          };
+        };
+        _FlvTag.AUDIO_TAG = 8;
+        _FlvTag.VIDEO_TAG = 9;
+        _FlvTag.METADATA_TAG = 18;
+        _FlvTag.isAudioFrame = function(tag) {
+          return _FlvTag.AUDIO_TAG === tag[0];
+        };
+        _FlvTag.isVideoFrame = function(tag) {
+          return _FlvTag.VIDEO_TAG === tag[0];
+        };
+        _FlvTag.isMetaData = function(tag) {
+          return _FlvTag.METADATA_TAG === tag[0];
+        };
+        _FlvTag.isKeyFrame = function(tag) {
+          if (_FlvTag.isVideoFrame(tag)) {
+            return tag[11] === 23;
+          }
+          if (_FlvTag.isAudioFrame(tag)) {
+            return true;
+          }
+          if (_FlvTag.isMetaData(tag)) {
+            return true;
+          }
+          return false;
+        };
+        _FlvTag.frameTime = function(tag) {
+          var pts = tag[4] << 16;
+          pts |= tag[5] << 8;
+          pts |= tag[6] << 0;
+          pts |= tag[7] << 24;
+          return pts;
+        };
+        var flvTag = _FlvTag;
+        var CoalesceStream = function CoalesceStream2(options) {
+          this.numberOfTracks = 0;
+          this.metadataStream = options.metadataStream;
+          this.videoTags = [];
+          this.audioTags = [];
+          this.videoTrack = null;
+          this.audioTrack = null;
+          this.pendingCaptions = [];
+          this.pendingMetadata = [];
+          this.pendingTracks = 0;
+          this.processedTracks = 0;
+          CoalesceStream2.prototype.init.call(this);
+          this.push = function(output) {
+            if (output.text) {
+              return this.pendingCaptions.push(output);
+            }
+            if (output.frames) {
+              return this.pendingMetadata.push(output);
+            }
+            if (output.track.type === "video") {
+              this.videoTrack = output.track;
+              this.videoTags = output.tags;
+              this.pendingTracks++;
+            }
+            if (output.track.type === "audio") {
+              this.audioTrack = output.track;
+              this.audioTags = output.tags;
+              this.pendingTracks++;
+            }
+          };
+        };
+        CoalesceStream.prototype = new stream();
+        CoalesceStream.prototype.flush = function(flushSource) {
+          var id3, caption, i, timelineStartPts, event = {
+            tags: {},
+            captions: [],
+            captionStreams: {},
+            metadata: []
+          };
+          if (this.pendingTracks < this.numberOfTracks) {
+            if (flushSource !== "VideoSegmentStream" && flushSource !== "AudioSegmentStream") {
+              return;
+            } else if (this.pendingTracks === 0) {
+              this.processedTracks++;
+              if (this.processedTracks < this.numberOfTracks) {
+                return;
+              }
+            }
+          }
+          this.processedTracks += this.pendingTracks;
+          this.pendingTracks = 0;
+          if (this.processedTracks < this.numberOfTracks) {
+            return;
+          }
+          if (this.videoTrack) {
+            timelineStartPts = this.videoTrack.timelineStartInfo.pts;
+          } else if (this.audioTrack) {
+            timelineStartPts = this.audioTrack.timelineStartInfo.pts;
+          }
+          event.tags.videoTags = this.videoTags;
+          event.tags.audioTags = this.audioTags;
+          for (i = 0; i < this.pendingCaptions.length; i++) {
+            caption = this.pendingCaptions[i];
+            caption.startTime = caption.startPts - timelineStartPts;
+            caption.startTime /= 9e4;
+            caption.endTime = caption.endPts - timelineStartPts;
+            caption.endTime /= 9e4;
+            event.captionStreams[caption.stream] = true;
+            event.captions.push(caption);
+          }
+          for (i = 0; i < this.pendingMetadata.length; i++) {
+            id3 = this.pendingMetadata[i];
+            id3.cueTime = id3.pts - timelineStartPts;
+            id3.cueTime /= 9e4;
+            event.metadata.push(id3);
+          }
+          event.metadata.dispatchType = this.metadataStream.dispatchType;
+          this.videoTrack = null;
+          this.audioTrack = null;
+          this.videoTags = [];
+          this.audioTags = [];
+          this.pendingCaptions.length = 0;
+          this.pendingMetadata.length = 0;
+          this.pendingTracks = 0;
+          this.processedTracks = 0;
+          this.trigger("data", event);
+          this.trigger("done");
+        };
+        var coalesceStream = CoalesceStream;
+        var TagList = function TagList2() {
+          var self2 = this;
+          this.list = [];
+          this.push = function(tag) {
+            this.list.push({
+              bytes: tag.bytes,
+              dts: tag.dts,
+              pts: tag.pts,
+              keyFrame: tag.keyFrame,
+              metaDataTag: tag.metaDataTag
+            });
+          };
+          Object.defineProperty(this, "length", {
+            get: function get() {
+              return self2.list.length;
+            }
+          });
+        };
+        var tagList = TagList;
+        var H264Stream = h264.H264Stream;
+        var _Transmuxer, _VideoSegmentStream, _AudioSegmentStream, collectTimelineInfo, metaDataTag, extraDataTag;
+        collectTimelineInfo = function collectTimelineInfo2(track, data) {
+          if (typeof data.pts === "number") {
+            if (track.timelineStartInfo.pts === void 0) {
+              track.timelineStartInfo.pts = data.pts;
+            } else {
+              track.timelineStartInfo.pts = Math.min(track.timelineStartInfo.pts, data.pts);
+            }
+          }
+          if (typeof data.dts === "number") {
+            if (track.timelineStartInfo.dts === void 0) {
+              track.timelineStartInfo.dts = data.dts;
+            } else {
+              track.timelineStartInfo.dts = Math.min(track.timelineStartInfo.dts, data.dts);
+            }
+          }
+        };
+        metaDataTag = function metaDataTag2(track, pts) {
+          var tag = new flvTag(flvTag.METADATA_TAG);
+          tag.dts = pts;
+          tag.pts = pts;
+          tag.writeMetaDataDouble("videocodecid", 7);
+          tag.writeMetaDataDouble("width", track.width);
+          tag.writeMetaDataDouble("height", track.height);
+          return tag;
+        };
+        extraDataTag = function extraDataTag2(track, pts) {
+          var i, tag = new flvTag(flvTag.VIDEO_TAG, true);
+          tag.dts = pts;
+          tag.pts = pts;
+          tag.writeByte(1);
+          tag.writeByte(track.profileIdc);
+          tag.writeByte(track.profileCompatibility);
+          tag.writeByte(track.levelIdc);
+          tag.writeByte(252 | 3);
+          tag.writeByte(224 | 1);
+          tag.writeShort(track.sps[0].length);
+          tag.writeBytes(track.sps[0]);
+          tag.writeByte(track.pps.length);
+          for (i = 0; i < track.pps.length; ++i) {
+            tag.writeShort(track.pps[i].length);
+            tag.writeBytes(track.pps[i]);
+          }
+          return tag;
+        };
+        _AudioSegmentStream = function AudioSegmentStream2(track) {
+          var adtsFrames = [], videoKeyFrames = [], oldExtraData;
+          _AudioSegmentStream.prototype.init.call(this);
+          this.push = function(data) {
+            collectTimelineInfo(track, data);
+            if (track) {
+              track.audioobjecttype = data.audioobjecttype;
+              track.channelcount = data.channelcount;
+              track.samplerate = data.samplerate;
+              track.samplingfrequencyindex = data.samplingfrequencyindex;
+              track.samplesize = data.samplesize;
+              track.extraData = track.audioobjecttype << 11 | track.samplingfrequencyindex << 7 | track.channelcount << 3;
+            }
+            data.pts = Math.round(data.pts / 90);
+            data.dts = Math.round(data.dts / 90);
+            adtsFrames.push(data);
+          };
+          this.flush = function() {
+            var currentFrame, adtsFrame, lastMetaPts, tags = new tagList();
+            if (adtsFrames.length === 0) {
+              this.trigger("done", "AudioSegmentStream");
+              return;
+            }
+            lastMetaPts = -Infinity;
+            while (adtsFrames.length) {
+              currentFrame = adtsFrames.shift();
+              if (videoKeyFrames.length && currentFrame.pts >= videoKeyFrames[0]) {
+                lastMetaPts = videoKeyFrames.shift();
+                this.writeMetaDataTags(tags, lastMetaPts);
+              }
+              if (track.extraData !== oldExtraData || currentFrame.pts - lastMetaPts >= 1e3) {
+                this.writeMetaDataTags(tags, currentFrame.pts);
+                oldExtraData = track.extraData;
+                lastMetaPts = currentFrame.pts;
+              }
+              adtsFrame = new flvTag(flvTag.AUDIO_TAG);
+              adtsFrame.pts = currentFrame.pts;
+              adtsFrame.dts = currentFrame.dts;
+              adtsFrame.writeBytes(currentFrame.data);
+              tags.push(adtsFrame.finalize());
+            }
+            videoKeyFrames.length = 0;
+            oldExtraData = null;
+            this.trigger("data", {
+              track,
+              tags: tags.list
+            });
+            this.trigger("done", "AudioSegmentStream");
+          };
+          this.writeMetaDataTags = function(tags, pts) {
+            var adtsFrame;
+            adtsFrame = new flvTag(flvTag.METADATA_TAG);
+            adtsFrame.pts = pts;
+            adtsFrame.dts = pts;
+            adtsFrame.writeMetaDataDouble("audiocodecid", 10);
+            adtsFrame.writeMetaDataBoolean("stereo", track.channelcount === 2);
+            adtsFrame.writeMetaDataDouble("audiosamplerate", track.samplerate);
+            adtsFrame.writeMetaDataDouble("audiosamplesize", 16);
+            tags.push(adtsFrame.finalize());
+            adtsFrame = new flvTag(flvTag.AUDIO_TAG, true);
+            adtsFrame.pts = pts;
+            adtsFrame.dts = pts;
+            adtsFrame.view.setUint16(adtsFrame.position, track.extraData);
+            adtsFrame.position += 2;
+            adtsFrame.length = Math.max(adtsFrame.length, adtsFrame.position);
+            tags.push(adtsFrame.finalize());
+          };
+          this.onVideoKeyFrame = function(pts) {
+            videoKeyFrames.push(pts);
+          };
+        };
+        _AudioSegmentStream.prototype = new stream();
+        _VideoSegmentStream = function VideoSegmentStream2(track) {
+          var nalUnits = [], config, h264Frame;
+          _VideoSegmentStream.prototype.init.call(this);
+          this.finishFrame = function(tags, frame) {
+            if (!frame) {
+              return;
+            }
+            if (config && track && track.newMetadata && (frame.keyFrame || tags.length === 0)) {
+              var metaTag = metaDataTag(config, frame.dts).finalize();
+              var extraTag = extraDataTag(track, frame.dts).finalize();
+              metaTag.metaDataTag = extraTag.metaDataTag = true;
+              tags.push(metaTag);
+              tags.push(extraTag);
+              track.newMetadata = false;
+              this.trigger("keyframe", frame.dts);
+            }
+            frame.endNalUnit();
+            tags.push(frame.finalize());
+            h264Frame = null;
+          };
+          this.push = function(data) {
+            collectTimelineInfo(track, data);
+            data.pts = Math.round(data.pts / 90);
+            data.dts = Math.round(data.dts / 90);
+            nalUnits.push(data);
+          };
+          this.flush = function() {
+            var currentNal, tags = new tagList();
+            while (nalUnits.length) {
+              if (nalUnits[0].nalUnitType === "access_unit_delimiter_rbsp") {
+                break;
+              }
+              nalUnits.shift();
+            }
+            if (nalUnits.length === 0) {
+              this.trigger("done", "VideoSegmentStream");
+              return;
+            }
+            while (nalUnits.length) {
+              currentNal = nalUnits.shift();
+              if (currentNal.nalUnitType === "seq_parameter_set_rbsp") {
+                track.newMetadata = true;
+                config = currentNal.config;
+                track.width = config.width;
+                track.height = config.height;
+                track.sps = [currentNal.data];
+                track.profileIdc = config.profileIdc;
+                track.levelIdc = config.levelIdc;
+                track.profileCompatibility = config.profileCompatibility;
+                h264Frame.endNalUnit();
+              } else if (currentNal.nalUnitType === "pic_parameter_set_rbsp") {
+                track.newMetadata = true;
+                track.pps = [currentNal.data];
+                h264Frame.endNalUnit();
+              } else if (currentNal.nalUnitType === "access_unit_delimiter_rbsp") {
+                if (h264Frame) {
+                  this.finishFrame(tags, h264Frame);
+                }
+                h264Frame = new flvTag(flvTag.VIDEO_TAG);
+                h264Frame.pts = currentNal.pts;
+                h264Frame.dts = currentNal.dts;
+              } else {
+                if (currentNal.nalUnitType === "slice_layer_without_partitioning_rbsp_idr") {
+                  h264Frame.keyFrame = true;
+                }
+                h264Frame.endNalUnit();
+              }
+              h264Frame.startNalUnit();
+              h264Frame.writeBytes(currentNal.data);
+            }
+            if (h264Frame) {
+              this.finishFrame(tags, h264Frame);
+            }
+            this.trigger("data", {
+              track,
+              tags: tags.list
+            });
+            this.trigger("done", "VideoSegmentStream");
+          };
+        };
+        _VideoSegmentStream.prototype = new stream();
+        _Transmuxer = function Transmuxer2(options) {
+          var self2 = this, packetStream, parseStream, elementaryStream, videoTimestampRolloverStream, audioTimestampRolloverStream, timedMetadataTimestampRolloverStream, adtsStream, h264Stream, videoSegmentStream2, audioSegmentStream2, captionStream2, coalesceStream$1;
+          _Transmuxer.prototype.init.call(this);
+          options = options || {};
+          this.metadataStream = new m2ts_1.MetadataStream();
+          options.metadataStream = this.metadataStream;
+          packetStream = new m2ts_1.TransportPacketStream();
+          parseStream = new m2ts_1.TransportParseStream();
+          elementaryStream = new m2ts_1.ElementaryStream();
+          videoTimestampRolloverStream = new m2ts_1.TimestampRolloverStream("video");
+          audioTimestampRolloverStream = new m2ts_1.TimestampRolloverStream("audio");
+          timedMetadataTimestampRolloverStream = new m2ts_1.TimestampRolloverStream("timed-metadata");
+          adtsStream = new adts();
+          h264Stream = new H264Stream();
+          coalesceStream$1 = new coalesceStream(options);
+          packetStream.pipe(parseStream).pipe(elementaryStream);
+          elementaryStream.pipe(videoTimestampRolloverStream).pipe(h264Stream);
+          elementaryStream.pipe(audioTimestampRolloverStream).pipe(adtsStream);
+          elementaryStream.pipe(timedMetadataTimestampRolloverStream).pipe(this.metadataStream).pipe(coalesceStream$1);
+          captionStream2 = new m2ts_1.CaptionStream(options);
+          h264Stream.pipe(captionStream2).pipe(coalesceStream$1);
+          elementaryStream.on("data", function(data) {
+            var i, videoTrack, audioTrack;
+            if (data.type === "metadata") {
+              i = data.tracks.length;
+              while (i--) {
+                if (data.tracks[i].type === "video") {
+                  videoTrack = data.tracks[i];
+                } else if (data.tracks[i].type === "audio") {
+                  audioTrack = data.tracks[i];
+                }
+              }
+              if (videoTrack && !videoSegmentStream2) {
+                coalesceStream$1.numberOfTracks++;
+                videoSegmentStream2 = new _VideoSegmentStream(videoTrack);
+                h264Stream.pipe(videoSegmentStream2).pipe(coalesceStream$1);
+              }
+              if (audioTrack && !audioSegmentStream2) {
+                coalesceStream$1.numberOfTracks++;
+                audioSegmentStream2 = new _AudioSegmentStream(audioTrack);
+                adtsStream.pipe(audioSegmentStream2).pipe(coalesceStream$1);
+                if (videoSegmentStream2) {
+                  videoSegmentStream2.on("keyframe", audioSegmentStream2.onVideoKeyFrame);
+                }
+              }
+            }
+          });
+          this.push = function(data) {
+            packetStream.push(data);
+          };
+          this.flush = function() {
+            packetStream.flush();
+          };
+          this.resetCaptions = function() {
+            captionStream2.reset();
+          };
+          coalesceStream$1.on("data", function(event) {
+            self2.trigger("data", event);
+          });
+          coalesceStream$1.on("done", function() {
+            self2.trigger("done");
+          });
+        };
+        _Transmuxer.prototype = new stream();
+        var transmuxer$1 = _Transmuxer;
+        var getFlvHeader = function getFlvHeader2(duration, audio, video) {
+          var headBytes = new Uint8Array(3 + 1 + 1 + 4), head = new DataView(headBytes.buffer), metadata, result, metadataLength;
+          duration = duration || 0;
+          audio = audio === void 0 ? true : audio;
+          video = video === void 0 ? true : video;
+          head.setUint8(0, 70);
+          head.setUint8(1, 76);
+          head.setUint8(2, 86);
+          head.setUint8(3, 1);
+          head.setUint8(4, (audio ? 4 : 0) | (video ? 1 : 0));
+          head.setUint32(5, headBytes.byteLength);
+          if (duration <= 0) {
+            result = new Uint8Array(headBytes.byteLength + 4);
+            result.set(headBytes);
+            result.set([0, 0, 0, 0], headBytes.byteLength);
+            return result;
+          }
+          metadata = new flvTag(flvTag.METADATA_TAG);
+          metadata.pts = metadata.dts = 0;
+          metadata.writeMetaDataDouble("duration", duration);
+          metadataLength = metadata.finalize().length;
+          result = new Uint8Array(headBytes.byteLength + metadataLength);
+          result.set(headBytes);
+          result.set(head.byteLength, metadataLength);
+          return result;
+        };
+        var flvHeader = getFlvHeader;
+        var flv = {
+          tag: flvTag,
+          Transmuxer: transmuxer$1,
+          getFlvHeader: flvHeader
+        };
+        var m2ts = m2ts_1;
+        var ONE_SECOND_IN_TS$1 = clock.ONE_SECOND_IN_TS;
+        var AudioSegmentStream = function AudioSegmentStream2(track, options) {
+          var adtsFrames = [], sequenceNumber = 0, earliestAllowedDts = 0, audioAppendStartTs = 0, videoBaseMediaDecodeTime = Infinity, segmentStartPts = null, segmentEndPts = null;
+          options = options || {};
+          AudioSegmentStream2.prototype.init.call(this);
+          this.push = function(data) {
+            trackDecodeInfo.collectDtsInfo(track, data);
+            if (track) {
+              audioProperties.forEach(function(prop) {
+                track[prop] = data[prop];
+              });
+            }
+            adtsFrames.push(data);
+          };
+          this.setEarliestDts = function(earliestDts) {
+            earliestAllowedDts = earliestDts;
+          };
+          this.setVideoBaseMediaDecodeTime = function(baseMediaDecodeTime) {
+            videoBaseMediaDecodeTime = baseMediaDecodeTime;
+          };
+          this.setAudioAppendStart = function(timestamp) {
+            audioAppendStartTs = timestamp;
+          };
+          this.processFrames_ = function() {
+            var frames, moof2, mdat2, boxes, timingInfo;
+            if (adtsFrames.length === 0) {
+              return;
+            }
+            frames = audioFrameUtils.trimAdtsFramesByEarliestDts(adtsFrames, track, earliestAllowedDts);
+            if (frames.length === 0) {
+              return;
+            }
+            track.baseMediaDecodeTime = trackDecodeInfo.calculateTrackBaseMediaDecodeTime(track, options.keepOriginalTimestamps);
+            audioFrameUtils.prefixWithSilence(track, frames, audioAppendStartTs, videoBaseMediaDecodeTime);
+            track.samples = audioFrameUtils.generateSampleTable(frames);
+            mdat2 = mp4Generator.mdat(audioFrameUtils.concatenateFrameData(frames));
+            adtsFrames = [];
+            moof2 = mp4Generator.moof(sequenceNumber, [track]);
+            sequenceNumber++;
+            track.initSegment = mp4Generator.initSegment([track]);
+            boxes = new Uint8Array(moof2.byteLength + mdat2.byteLength);
+            boxes.set(moof2);
+            boxes.set(mdat2, moof2.byteLength);
+            trackDecodeInfo.clearDtsInfo(track);
+            if (segmentStartPts === null) {
+              segmentEndPts = segmentStartPts = frames[0].pts;
+            }
+            segmentEndPts += frames.length * (ONE_SECOND_IN_TS$1 * 1024 / track.samplerate);
+            timingInfo = {
+              start: segmentStartPts
+            };
+            this.trigger("timingInfo", timingInfo);
+            this.trigger("data", {
+              track,
+              boxes
+            });
+          };
+          this.flush = function() {
+            this.processFrames_();
+            this.trigger("timingInfo", {
+              start: segmentStartPts,
+              end: segmentEndPts
+            });
+            this.resetTiming_();
+            this.trigger("done", "AudioSegmentStream");
+          };
+          this.partialFlush = function() {
+            this.processFrames_();
+            this.trigger("partialdone", "AudioSegmentStream");
+          };
+          this.endTimeline = function() {
+            this.flush();
+            this.trigger("endedtimeline", "AudioSegmentStream");
+          };
+          this.resetTiming_ = function() {
+            trackDecodeInfo.clearDtsInfo(track);
+            segmentStartPts = null;
+            segmentEndPts = null;
+          };
+          this.reset = function() {
+            this.resetTiming_();
+            adtsFrames = [];
+            this.trigger("reset");
+          };
+        };
+        AudioSegmentStream.prototype = new stream();
+        var audioSegmentStream = AudioSegmentStream;
+        var VideoSegmentStream = function VideoSegmentStream2(track, options) {
+          var sequenceNumber = 0, nalUnits = [], frameCache = [], config, pps, segmentStartPts = null, segmentEndPts = null, gops, ensureNextFrameIsKeyFrame = true;
+          options = options || {};
+          VideoSegmentStream2.prototype.init.call(this);
+          this.push = function(nalUnit) {
+            trackDecodeInfo.collectDtsInfo(track, nalUnit);
+            if (typeof track.timelineStartInfo.dts === "undefined") {
+              track.timelineStartInfo.dts = nalUnit.dts;
+            }
+            if (nalUnit.nalUnitType === "seq_parameter_set_rbsp" && !config) {
+              config = nalUnit.config;
+              track.sps = [nalUnit.data];
+              videoProperties.forEach(function(prop) {
+                track[prop] = config[prop];
+              }, this);
+            }
+            if (nalUnit.nalUnitType === "pic_parameter_set_rbsp" && !pps) {
+              pps = nalUnit.data;
+              track.pps = [nalUnit.data];
+            }
+            nalUnits.push(nalUnit);
+          };
+          this.processNals_ = function(cacheLastFrame) {
+            var i;
+            nalUnits = frameCache.concat(nalUnits);
+            while (nalUnits.length) {
+              if (nalUnits[0].nalUnitType === "access_unit_delimiter_rbsp") {
+                break;
+              }
+              nalUnits.shift();
+            }
+            if (nalUnits.length === 0) {
+              return;
+            }
+            var frames = frameUtils.groupNalsIntoFrames(nalUnits);
+            if (!frames.length) {
+              return;
+            }
+            frameCache = frames[frames.length - 1];
+            if (cacheLastFrame) {
+              frames.pop();
+              frames.duration -= frameCache.duration;
+              frames.nalCount -= frameCache.length;
+              frames.byteLength -= frameCache.byteLength;
+            }
+            if (!frames.length) {
+              nalUnits = [];
+              return;
+            }
+            this.trigger("timelineStartInfo", track.timelineStartInfo);
+            if (ensureNextFrameIsKeyFrame) {
+              gops = frameUtils.groupFramesIntoGops(frames);
+              if (!gops[0][0].keyFrame) {
+                gops = frameUtils.extendFirstKeyFrame(gops);
+                if (!gops[0][0].keyFrame) {
+                  nalUnits = [].concat.apply([], frames).concat(frameCache);
+                  frameCache = [];
+                  return;
+                }
+                frames = [].concat.apply([], gops);
+                frames.duration = gops.duration;
+              }
+              ensureNextFrameIsKeyFrame = false;
+            }
+            if (segmentStartPts === null) {
+              segmentStartPts = frames[0].pts;
+              segmentEndPts = segmentStartPts;
+            }
+            segmentEndPts += frames.duration;
+            this.trigger("timingInfo", {
+              start: segmentStartPts,
+              end: segmentEndPts
+            });
+            for (i = 0; i < frames.length; i++) {
+              var frame = frames[i];
+              track.samples = frameUtils.generateSampleTableForFrame(frame);
+              var mdat2 = mp4Generator.mdat(frameUtils.concatenateNalDataForFrame(frame));
+              trackDecodeInfo.clearDtsInfo(track);
+              trackDecodeInfo.collectDtsInfo(track, frame);
+              track.baseMediaDecodeTime = trackDecodeInfo.calculateTrackBaseMediaDecodeTime(track, options.keepOriginalTimestamps);
+              var moof2 = mp4Generator.moof(sequenceNumber, [track]);
+              sequenceNumber++;
+              track.initSegment = mp4Generator.initSegment([track]);
+              var boxes = new Uint8Array(moof2.byteLength + mdat2.byteLength);
+              boxes.set(moof2);
+              boxes.set(mdat2, moof2.byteLength);
+              this.trigger("data", {
+                track,
+                boxes,
+                sequence: sequenceNumber,
+                videoFrameDts: frame.dts,
+                videoFramePts: frame.pts
+              });
+            }
+            nalUnits = [];
+          };
+          this.resetTimingAndConfig_ = function() {
+            config = void 0;
+            pps = void 0;
+            segmentStartPts = null;
+            segmentEndPts = null;
+          };
+          this.partialFlush = function() {
+            this.processNals_(true);
+            this.trigger("partialdone", "VideoSegmentStream");
+          };
+          this.flush = function() {
+            this.processNals_(false);
+            this.resetTimingAndConfig_();
+            this.trigger("done", "VideoSegmentStream");
+          };
+          this.endTimeline = function() {
+            this.flush();
+            this.trigger("endedtimeline", "VideoSegmentStream");
+          };
+          this.reset = function() {
+            this.resetTimingAndConfig_();
+            frameCache = [];
+            nalUnits = [];
+            ensureNextFrameIsKeyFrame = true;
+            this.trigger("reset");
+          };
+        };
+        VideoSegmentStream.prototype = new stream();
+        var videoSegmentStream = VideoSegmentStream;
+        var isLikelyAacData = utils.isLikelyAacData;
+        var createPipeline = function createPipeline2(object) {
+          object.prototype = new stream();
+          object.prototype.init.call(object);
+          return object;
+        };
+        var tsPipeline = function tsPipeline2(options) {
+          var pipeline = {
+            type: "ts",
+            tracks: {
+              audio: null,
+              video: null
+            },
+            packet: new m2ts_1.TransportPacketStream(),
+            parse: new m2ts_1.TransportParseStream(),
+            elementary: new m2ts_1.ElementaryStream(),
+            timestampRollover: new m2ts_1.TimestampRolloverStream(),
+            adts: new codecs.Adts(),
+            h264: new codecs.h264.H264Stream(),
+            captionStream: new m2ts_1.CaptionStream(options),
+            metadataStream: new m2ts_1.MetadataStream()
+          };
+          pipeline.headOfPipeline = pipeline.packet;
+          pipeline.packet.pipe(pipeline.parse).pipe(pipeline.elementary).pipe(pipeline.timestampRollover);
+          pipeline.timestampRollover.pipe(pipeline.h264);
+          pipeline.h264.pipe(pipeline.captionStream);
+          pipeline.timestampRollover.pipe(pipeline.metadataStream);
+          pipeline.timestampRollover.pipe(pipeline.adts);
+          pipeline.elementary.on("data", function(data) {
+            if (data.type !== "metadata") {
+              return;
+            }
+            for (var i = 0; i < data.tracks.length; i++) {
+              if (!pipeline.tracks[data.tracks[i].type]) {
+                pipeline.tracks[data.tracks[i].type] = data.tracks[i];
+                pipeline.tracks[data.tracks[i].type].timelineStartInfo.baseMediaDecodeTime = options.baseMediaDecodeTime;
+              }
+            }
+            if (pipeline.tracks.video && !pipeline.videoSegmentStream) {
+              pipeline.videoSegmentStream = new videoSegmentStream(pipeline.tracks.video, options);
+              pipeline.videoSegmentStream.on("timelineStartInfo", function(timelineStartInfo) {
+                if (pipeline.tracks.audio && !options.keepOriginalTimestamps) {
+                  pipeline.audioSegmentStream.setEarliestDts(timelineStartInfo.dts - options.baseMediaDecodeTime);
+                }
+              });
+              pipeline.videoSegmentStream.on("timingInfo", pipeline.trigger.bind(pipeline, "videoTimingInfo"));
+              pipeline.videoSegmentStream.on("data", function(data2) {
+                pipeline.trigger("data", {
+                  type: "video",
+                  data: data2
+                });
+              });
+              pipeline.videoSegmentStream.on("done", pipeline.trigger.bind(pipeline, "done"));
+              pipeline.videoSegmentStream.on("partialdone", pipeline.trigger.bind(pipeline, "partialdone"));
+              pipeline.videoSegmentStream.on("endedtimeline", pipeline.trigger.bind(pipeline, "endedtimeline"));
+              pipeline.h264.pipe(pipeline.videoSegmentStream);
+            }
+            if (pipeline.tracks.audio && !pipeline.audioSegmentStream) {
+              pipeline.audioSegmentStream = new audioSegmentStream(pipeline.tracks.audio, options);
+              pipeline.audioSegmentStream.on("data", function(data2) {
+                pipeline.trigger("data", {
+                  type: "audio",
+                  data: data2
+                });
+              });
+              pipeline.audioSegmentStream.on("done", pipeline.trigger.bind(pipeline, "done"));
+              pipeline.audioSegmentStream.on("partialdone", pipeline.trigger.bind(pipeline, "partialdone"));
+              pipeline.audioSegmentStream.on("endedtimeline", pipeline.trigger.bind(pipeline, "endedtimeline"));
+              pipeline.audioSegmentStream.on("timingInfo", pipeline.trigger.bind(pipeline, "audioTimingInfo"));
+              pipeline.adts.pipe(pipeline.audioSegmentStream);
+            }
+            pipeline.trigger("trackinfo", {
+              hasAudio: !!pipeline.tracks.audio,
+              hasVideo: !!pipeline.tracks.video
+            });
+          });
+          pipeline.captionStream.on("data", function(caption) {
+            var timelineStartPts;
+            if (pipeline.tracks.video) {
+              timelineStartPts = pipeline.tracks.video.timelineStartInfo.pts || 0;
+            } else {
+              timelineStartPts = 0;
+            }
+            caption.startTime = clock.metadataTsToSeconds(caption.startPts, timelineStartPts, options.keepOriginalTimestamps);
+            caption.endTime = clock.metadataTsToSeconds(caption.endPts, timelineStartPts, options.keepOriginalTimestamps);
+            pipeline.trigger("caption", caption);
+          });
+          pipeline = createPipeline(pipeline);
+          pipeline.metadataStream.on("data", pipeline.trigger.bind(pipeline, "id3Frame"));
+          return pipeline;
+        };
+        var aacPipeline = function aacPipeline2(options) {
+          var pipeline = {
+            type: "aac",
+            tracks: {
+              audio: null
+            },
+            metadataStream: new m2ts_1.MetadataStream(),
+            aacStream: new aac(),
+            audioRollover: new m2ts_1.TimestampRolloverStream("audio"),
+            timedMetadataRollover: new m2ts_1.TimestampRolloverStream("timed-metadata"),
+            adtsStream: new adts(true)
+          };
+          pipeline.headOfPipeline = pipeline.aacStream;
+          pipeline.aacStream.pipe(pipeline.audioRollover).pipe(pipeline.adtsStream);
+          pipeline.aacStream.pipe(pipeline.timedMetadataRollover).pipe(pipeline.metadataStream);
+          pipeline.metadataStream.on("timestamp", function(frame) {
+            pipeline.aacStream.setTimestamp(frame.timeStamp);
+          });
+          pipeline.aacStream.on("data", function(data) {
+            if (data.type !== "timed-metadata" && data.type !== "audio" || pipeline.audioSegmentStream) {
+              return;
+            }
+            pipeline.tracks.audio = pipeline.tracks.audio || {
+              timelineStartInfo: {
+                baseMediaDecodeTime: options.baseMediaDecodeTime
+              },
+              codec: "adts",
+              type: "audio"
+            };
+            pipeline.audioSegmentStream = new audioSegmentStream(pipeline.tracks.audio, options);
+            pipeline.audioSegmentStream.on("data", function(data2) {
+              pipeline.trigger("data", {
+                type: "audio",
+                data: data2
+              });
+            });
+            pipeline.audioSegmentStream.on("partialdone", pipeline.trigger.bind(pipeline, "partialdone"));
+            pipeline.audioSegmentStream.on("done", pipeline.trigger.bind(pipeline, "done"));
+            pipeline.audioSegmentStream.on("endedtimeline", pipeline.trigger.bind(pipeline, "endedtimeline"));
+            pipeline.audioSegmentStream.on("timingInfo", pipeline.trigger.bind(pipeline, "audioTimingInfo"));
+            pipeline.adtsStream.pipe(pipeline.audioSegmentStream);
+            pipeline.trigger("trackinfo", {
+              hasAudio: !!pipeline.tracks.audio,
+              hasVideo: !!pipeline.tracks.video
+            });
+          });
+          pipeline = createPipeline(pipeline);
+          pipeline.metadataStream.on("data", pipeline.trigger.bind(pipeline, "id3Frame"));
+          return pipeline;
+        };
+        var setupPipelineListeners = function setupPipelineListeners2(pipeline, transmuxer3) {
+          pipeline.on("data", transmuxer3.trigger.bind(transmuxer3, "data"));
+          pipeline.on("done", transmuxer3.trigger.bind(transmuxer3, "done"));
+          pipeline.on("partialdone", transmuxer3.trigger.bind(transmuxer3, "partialdone"));
+          pipeline.on("endedtimeline", transmuxer3.trigger.bind(transmuxer3, "endedtimeline"));
+          pipeline.on("audioTimingInfo", transmuxer3.trigger.bind(transmuxer3, "audioTimingInfo"));
+          pipeline.on("videoTimingInfo", transmuxer3.trigger.bind(transmuxer3, "videoTimingInfo"));
+          pipeline.on("trackinfo", transmuxer3.trigger.bind(transmuxer3, "trackinfo"));
+          pipeline.on("id3Frame", function(event) {
+            event.dispatchType = pipeline.metadataStream.dispatchType;
+            event.cueTime = clock.videoTsToSeconds(event.pts);
+            transmuxer3.trigger("id3Frame", event);
+          });
+          pipeline.on("caption", function(event) {
+            transmuxer3.trigger("caption", event);
+          });
+        };
+        var Transmuxer = function Transmuxer2(options) {
+          var pipeline = null, hasFlushed = true;
+          options = options || {};
+          Transmuxer2.prototype.init.call(this);
+          options.baseMediaDecodeTime = options.baseMediaDecodeTime || 0;
+          this.push = function(bytes) {
+            if (hasFlushed) {
+              var isAac = isLikelyAacData(bytes);
+              if (isAac && (!pipeline || pipeline.type !== "aac")) {
+                pipeline = aacPipeline(options);
+                setupPipelineListeners(pipeline, this);
+              } else if (!isAac && (!pipeline || pipeline.type !== "ts")) {
+                pipeline = tsPipeline(options);
+                setupPipelineListeners(pipeline, this);
+              }
+              hasFlushed = false;
+            }
+            pipeline.headOfPipeline.push(bytes);
+          };
+          this.flush = function() {
+            if (!pipeline) {
+              return;
+            }
+            hasFlushed = true;
+            pipeline.headOfPipeline.flush();
+          };
+          this.partialFlush = function() {
+            if (!pipeline) {
+              return;
+            }
+            pipeline.headOfPipeline.partialFlush();
+          };
+          this.endTimeline = function() {
+            if (!pipeline) {
+              return;
+            }
+            pipeline.headOfPipeline.endTimeline();
+          };
+          this.reset = function() {
+            if (!pipeline) {
+              return;
+            }
+            pipeline.headOfPipeline.reset();
+          };
+          this.setBaseMediaDecodeTime = function(baseMediaDecodeTime) {
+            if (!options.keepOriginalTimestamps) {
+              options.baseMediaDecodeTime = baseMediaDecodeTime;
+            }
+            if (!pipeline) {
+              return;
+            }
+            if (pipeline.tracks.audio) {
+              pipeline.tracks.audio.timelineStartInfo.dts = void 0;
+              pipeline.tracks.audio.timelineStartInfo.pts = void 0;
+              trackDecodeInfo.clearDtsInfo(pipeline.tracks.audio);
+              if (pipeline.audioRollover) {
+                pipeline.audioRollover.discontinuity();
+              }
+            }
+            if (pipeline.tracks.video) {
+              if (pipeline.videoSegmentStream) {
+                pipeline.videoSegmentStream.gopCache_ = [];
+              }
+              pipeline.tracks.video.timelineStartInfo.dts = void 0;
+              pipeline.tracks.video.timelineStartInfo.pts = void 0;
+              trackDecodeInfo.clearDtsInfo(pipeline.tracks.video);
+            }
+            if (pipeline.timestampRollover) {
+              pipeline.timestampRollover.discontinuity();
+            }
+          };
+          this.setRemux = function(val) {
+            options.remux = val;
+            if (pipeline && pipeline.coalesceStream) {
+              pipeline.coalesceStream.setRemux(val);
+            }
+          };
+          this.setAudioAppendStart = function(audioAppendStart) {
+            if (!pipeline || !pipeline.tracks.audio || !pipeline.audioSegmentStream) {
+              return;
+            }
+            pipeline.audioSegmentStream.setAudioAppendStart(audioAppendStart);
+          };
+          this.alignGopsWith = function(gopsToAlignWith) {
+            return;
+          };
+        };
+        Transmuxer.prototype = new stream();
+        var transmuxer2 = Transmuxer;
+        var partial = {
+          Transmuxer: transmuxer2
+        };
+        var getUint64$1 = numbers.getUint64;
+        var parseSidx = function parseSidx2(data) {
+          var view = new DataView(data.buffer, data.byteOffset, data.byteLength), result = {
+            version: data[0],
+            flags: new Uint8Array(data.subarray(1, 4)),
+            references: [],
+            referenceId: view.getUint32(4),
+            timescale: view.getUint32(8)
+          }, i = 12;
+          if (result.version === 0) {
+            result.earliestPresentationTime = view.getUint32(i);
+            result.firstOffset = view.getUint32(i + 4);
+            i += 8;
+          } else {
+            result.earliestPresentationTime = getUint64$1(data.subarray(i));
+            result.firstOffset = getUint64$1(data.subarray(i + 8));
+            i += 16;
+          }
+          i += 2;
+          var referenceCount = view.getUint16(i);
+          i += 2;
+          for (; referenceCount > 0; i += 12, referenceCount--) {
+            result.references.push({
+              referenceType: (data[i] & 128) >>> 7,
+              referencedSize: view.getUint32(i) & 2147483647,
+              subsegmentDuration: view.getUint32(i + 4),
+              startsWithSap: !!(data[i + 8] & 128),
+              sapType: (data[i + 8] & 112) >>> 4,
+              sapDeltaTime: view.getUint32(i + 8) & 268435455
+            });
+          }
+          return result;
+        };
+        var parseSidx_1 = parseSidx;
+        var getUint64 = numbers.getUint64;
+        var inspectMp4, _textifyMp, parseMp4Date = function parseMp4Date2(seconds) {
+          return new Date(seconds * 1e3 - 20828448e5);
+        }, nalParse = function nalParse2(avcStream) {
+          var avcView = new DataView(avcStream.buffer, avcStream.byteOffset, avcStream.byteLength), result = [], i, length;
+          for (i = 0; i + 4 < avcStream.length; i += length) {
+            length = avcView.getUint32(i);
+            i += 4;
+            if (length <= 0) {
+              result.push("<span style='color:red;'>MALFORMED DATA</span>");
+              continue;
+            }
+            switch (avcStream[i] & 31) {
+              case 1:
+                result.push("slice_layer_without_partitioning_rbsp");
+                break;
+              case 5:
+                result.push("slice_layer_without_partitioning_rbsp_idr");
+                break;
+              case 6:
+                result.push("sei_rbsp");
+                break;
+              case 7:
+                result.push("seq_parameter_set_rbsp");
+                break;
+              case 8:
+                result.push("pic_parameter_set_rbsp");
+                break;
+              case 9:
+                result.push("access_unit_delimiter_rbsp");
+                break;
+              default:
+                result.push("UNKNOWN NAL - " + avcStream[i] & 31);
+                break;
+            }
+          }
+          return result;
+        }, parse = {
+          avc1: function avc1(data) {
+            var view = new DataView(data.buffer, data.byteOffset, data.byteLength);
+            return {
+              dataReferenceIndex: view.getUint16(6),
+              width: view.getUint16(24),
+              height: view.getUint16(26),
+              horizresolution: view.getUint16(28) + view.getUint16(30) / 16,
+              vertresolution: view.getUint16(32) + view.getUint16(34) / 16,
+              frameCount: view.getUint16(40),
+              depth: view.getUint16(74),
+              config: inspectMp4(data.subarray(78, data.byteLength))
+            };
+          },
+          avcC: function avcC(data) {
+            var view = new DataView(data.buffer, data.byteOffset, data.byteLength), result = {
+              configurationVersion: data[0],
+              avcProfileIndication: data[1],
+              profileCompatibility: data[2],
+              avcLevelIndication: data[3],
+              lengthSizeMinusOne: data[4] & 3,
+              sps: [],
+              pps: []
+            }, numOfSequenceParameterSets = data[5] & 31, numOfPictureParameterSets, nalSize, offset, i;
+            offset = 6;
+            for (i = 0; i < numOfSequenceParameterSets; i++) {
+              nalSize = view.getUint16(offset);
+              offset += 2;
+              result.sps.push(new Uint8Array(data.subarray(offset, offset + nalSize)));
+              offset += nalSize;
+            }
+            numOfPictureParameterSets = data[offset];
+            offset++;
+            for (i = 0; i < numOfPictureParameterSets; i++) {
+              nalSize = view.getUint16(offset);
+              offset += 2;
+              result.pps.push(new Uint8Array(data.subarray(offset, offset + nalSize)));
+              offset += nalSize;
+            }
+            return result;
+          },
+          btrt: function btrt(data) {
+            var view = new DataView(data.buffer, data.byteOffset, data.byteLength);
+            return {
+              bufferSizeDB: view.getUint32(0),
+              maxBitrate: view.getUint32(4),
+              avgBitrate: view.getUint32(8)
+            };
+          },
+          edts: function edts(data) {
+            return {
+              boxes: inspectMp4(data)
+            };
+          },
+          elst: function elst(data) {
+            var view = new DataView(data.buffer, data.byteOffset, data.byteLength), result = {
+              version: view.getUint8(0),
+              flags: new Uint8Array(data.subarray(1, 4)),
+              edits: []
+            }, entryCount = view.getUint32(4), i;
+            for (i = 8; entryCount; entryCount--) {
+              if (result.version === 0) {
+                result.edits.push({
+                  segmentDuration: view.getUint32(i),
+                  mediaTime: view.getInt32(i + 4),
+                  mediaRate: view.getUint16(i + 8) + view.getUint16(i + 10) / (256 * 256)
+                });
+                i += 12;
+              } else {
+                result.edits.push({
+                  segmentDuration: getUint64(data.subarray(i)),
+                  mediaTime: getUint64(data.subarray(i + 8)),
+                  mediaRate: view.getUint16(i + 16) + view.getUint16(i + 18) / (256 * 256)
+                });
+                i += 20;
+              }
+            }
+            return result;
+          },
+          esds: function esds2(data) {
+            return {
+              version: data[0],
+              flags: new Uint8Array(data.subarray(1, 4)),
+              esId: data[6] << 8 | data[7],
+              streamPriority: data[8] & 31,
+              decoderConfig: {
+                objectProfileIndication: data[11],
+                streamType: data[12] >>> 2 & 63,
+                bufferSize: data[13] << 16 | data[14] << 8 | data[15],
+                maxBitrate: data[16] << 24 | data[17] << 16 | data[18] << 8 | data[19],
+                avgBitrate: data[20] << 24 | data[21] << 16 | data[22] << 8 | data[23],
+                decoderConfigDescriptor: {
+                  tag: data[24],
+                  length: data[25],
+                  audioObjectType: data[26] >>> 3 & 31,
+                  samplingFrequencyIndex: (data[26] & 7) << 1 | data[27] >>> 7 & 1,
+                  channelConfiguration: data[27] >>> 3 & 15
+                }
+              }
+            };
+          },
+          ftyp: function ftyp2(data) {
+            var view = new DataView(data.buffer, data.byteOffset, data.byteLength), result = {
+              majorBrand: parseType_1(data.subarray(0, 4)),
+              minorVersion: view.getUint32(4),
+              compatibleBrands: []
+            }, i = 8;
+            while (i < data.byteLength) {
+              result.compatibleBrands.push(parseType_1(data.subarray(i, i + 4)));
+              i += 4;
+            }
+            return result;
+          },
+          dinf: function dinf2(data) {
+            return {
+              boxes: inspectMp4(data)
+            };
+          },
+          dref: function dref(data) {
+            return {
+              version: data[0],
+              flags: new Uint8Array(data.subarray(1, 4)),
+              dataReferences: inspectMp4(data.subarray(8))
+            };
+          },
+          hdlr: function hdlr2(data) {
+            var view = new DataView(data.buffer, data.byteOffset, data.byteLength), result = {
+              version: view.getUint8(0),
+              flags: new Uint8Array(data.subarray(1, 4)),
+              handlerType: parseType_1(data.subarray(8, 12)),
+              name: ""
+            }, i = 8;
+            for (i = 24; i < data.byteLength; i++) {
+              if (data[i] === 0) {
+                i++;
+                break;
+              }
+              result.name += String.fromCharCode(data[i]);
+            }
+            result.name = decodeURIComponent(escape(result.name));
+            return result;
+          },
+          mdat: function mdat2(data) {
+            return {
+              byteLength: data.byteLength,
+              nals: nalParse(data)
+            };
+          },
+          mdhd: function mdhd2(data) {
+            var view = new DataView(data.buffer, data.byteOffset, data.byteLength), i = 4, language, result = {
+              version: view.getUint8(0),
+              flags: new Uint8Array(data.subarray(1, 4)),
+              language: ""
+            };
+            if (result.version === 1) {
+              i += 4;
+              result.creationTime = parseMp4Date(view.getUint32(i));
+              i += 8;
+              result.modificationTime = parseMp4Date(view.getUint32(i));
+              i += 4;
+              result.timescale = view.getUint32(i);
+              i += 8;
+              result.duration = view.getUint32(i);
+            } else {
+              result.creationTime = parseMp4Date(view.getUint32(i));
+              i += 4;
+              result.modificationTime = parseMp4Date(view.getUint32(i));
+              i += 4;
+              result.timescale = view.getUint32(i);
+              i += 4;
+              result.duration = view.getUint32(i);
+            }
+            i += 4;
+            language = view.getUint16(i);
+            result.language += String.fromCharCode((language >> 10) + 96);
+            result.language += String.fromCharCode(((language & 992) >> 5) + 96);
+            result.language += String.fromCharCode((language & 31) + 96);
+            return result;
+          },
+          mdia: function mdia2(data) {
+            return {
+              boxes: inspectMp4(data)
+            };
+          },
+          mfhd: function mfhd2(data) {
+            return {
+              version: data[0],
+              flags: new Uint8Array(data.subarray(1, 4)),
+              sequenceNumber: data[4] << 24 | data[5] << 16 | data[6] << 8 | data[7]
+            };
+          },
+          minf: function minf2(data) {
+            return {
+              boxes: inspectMp4(data)
+            };
+          },
+          mp4a: function mp4a(data) {
+            var view = new DataView(data.buffer, data.byteOffset, data.byteLength), result = {
+              dataReferenceIndex: view.getUint16(6),
+              channelcount: view.getUint16(16),
+              samplesize: view.getUint16(18),
+              samplerate: view.getUint16(24) + view.getUint16(26) / 65536
+            };
+            if (data.byteLength > 28) {
+              result.streamDescriptor = inspectMp4(data.subarray(28))[0];
+            }
+            return result;
+          },
+          moof: function moof2(data) {
+            return {
+              boxes: inspectMp4(data)
+            };
+          },
+          moov: function moov2(data) {
+            return {
+              boxes: inspectMp4(data)
+            };
+          },
+          mvex: function mvex2(data) {
+            return {
+              boxes: inspectMp4(data)
+            };
+          },
+          mvhd: function mvhd2(data) {
+            var view = new DataView(data.buffer, data.byteOffset, data.byteLength), i = 4, result = {
+              version: view.getUint8(0),
+              flags: new Uint8Array(data.subarray(1, 4))
+            };
+            if (result.version === 1) {
+              i += 4;
+              result.creationTime = parseMp4Date(view.getUint32(i));
+              i += 8;
+              result.modificationTime = parseMp4Date(view.getUint32(i));
+              i += 4;
+              result.timescale = view.getUint32(i);
+              i += 8;
+              result.duration = view.getUint32(i);
+            } else {
+              result.creationTime = parseMp4Date(view.getUint32(i));
+              i += 4;
+              result.modificationTime = parseMp4Date(view.getUint32(i));
+              i += 4;
+              result.timescale = view.getUint32(i);
+              i += 4;
+              result.duration = view.getUint32(i);
+            }
+            i += 4;
+            result.rate = view.getUint16(i) + view.getUint16(i + 2) / 16;
+            i += 4;
+            result.volume = view.getUint8(i) + view.getUint8(i + 1) / 8;
+            i += 2;
+            i += 2;
+            i += 2 * 4;
+            result.matrix = new Uint32Array(data.subarray(i, i + 9 * 4));
+            i += 9 * 4;
+            i += 6 * 4;
+            result.nextTrackId = view.getUint32(i);
+            return result;
+          },
+          pdin: function pdin(data) {
+            var view = new DataView(data.buffer, data.byteOffset, data.byteLength);
+            return {
+              version: view.getUint8(0),
+              flags: new Uint8Array(data.subarray(1, 4)),
+              rate: view.getUint32(4),
+              initialDelay: view.getUint32(8)
+            };
+          },
+          sdtp: function sdtp2(data) {
+            var result = {
+              version: data[0],
+              flags: new Uint8Array(data.subarray(1, 4)),
+              samples: []
+            }, i;
+            for (i = 4; i < data.byteLength; i++) {
+              result.samples.push({
+                dependsOn: (data[i] & 48) >> 4,
+                isDependedOn: (data[i] & 12) >> 2,
+                hasRedundancy: data[i] & 3
+              });
+            }
+            return result;
+          },
+          sidx: parseSidx_1,
+          smhd: function smhd(data) {
+            return {
+              version: data[0],
+              flags: new Uint8Array(data.subarray(1, 4)),
+              balance: data[4] + data[5] / 256
+            };
+          },
+          stbl: function stbl2(data) {
+            return {
+              boxes: inspectMp4(data)
+            };
+          },
+          ctts: function ctts(data) {
+            var view = new DataView(data.buffer, data.byteOffset, data.byteLength), result = {
+              version: view.getUint8(0),
+              flags: new Uint8Array(data.subarray(1, 4)),
+              compositionOffsets: []
+            }, entryCount = view.getUint32(4), i;
+            for (i = 8; entryCount; i += 8, entryCount--) {
+              result.compositionOffsets.push({
+                sampleCount: view.getUint32(i),
+                sampleOffset: view[result.version === 0 ? "getUint32" : "getInt32"](i + 4)
+              });
+            }
+            return result;
+          },
+          stss: function stss(data) {
+            var view = new DataView(data.buffer, data.byteOffset, data.byteLength), result = {
+              version: view.getUint8(0),
+              flags: new Uint8Array(data.subarray(1, 4)),
+              syncSamples: []
+            }, entryCount = view.getUint32(4), i;
+            for (i = 8; entryCount; i += 4, entryCount--) {
+              result.syncSamples.push(view.getUint32(i));
+            }
+            return result;
+          },
+          stco: function stco(data) {
+            var view = new DataView(data.buffer, data.byteOffset, data.byteLength), result = {
+              version: data[0],
+              flags: new Uint8Array(data.subarray(1, 4)),
+              chunkOffsets: []
+            }, entryCount = view.getUint32(4), i;
+            for (i = 8; entryCount; i += 4, entryCount--) {
+              result.chunkOffsets.push(view.getUint32(i));
+            }
+            return result;
+          },
+          stsc: function stsc(data) {
+            var view = new DataView(data.buffer, data.byteOffset, data.byteLength), entryCount = view.getUint32(4), result = {
+              version: data[0],
+              flags: new Uint8Array(data.subarray(1, 4)),
+              sampleToChunks: []
+            }, i;
+            for (i = 8; entryCount; i += 12, entryCount--) {
+              result.sampleToChunks.push({
+                firstChunk: view.getUint32(i),
+                samplesPerChunk: view.getUint32(i + 4),
+                sampleDescriptionIndex: view.getUint32(i + 8)
+              });
+            }
+            return result;
+          },
+          stsd: function stsd2(data) {
+            return {
+              version: data[0],
+              flags: new Uint8Array(data.subarray(1, 4)),
+              sampleDescriptions: inspectMp4(data.subarray(8))
+            };
+          },
+          stsz: function stsz(data) {
+            var view = new DataView(data.buffer, data.byteOffset, data.byteLength), result = {
+              version: data[0],
+              flags: new Uint8Array(data.subarray(1, 4)),
+              sampleSize: view.getUint32(4),
+              entries: []
+            }, i;
+            for (i = 12; i < data.byteLength; i += 4) {
+              result.entries.push(view.getUint32(i));
+            }
+            return result;
+          },
+          stts: function stts(data) {
+            var view = new DataView(data.buffer, data.byteOffset, data.byteLength), result = {
+              version: data[0],
+              flags: new Uint8Array(data.subarray(1, 4)),
+              timeToSamples: []
+            }, entryCount = view.getUint32(4), i;
+            for (i = 8; entryCount; i += 8, entryCount--) {
+              result.timeToSamples.push({
+                sampleCount: view.getUint32(i),
+                sampleDelta: view.getUint32(i + 4)
+              });
+            }
+            return result;
+          },
+          styp: function styp(data) {
+            return parse.ftyp(data);
+          },
+          tfdt: parseTfdt,
+          tfhd: parseTfhd,
+          tkhd: function tkhd2(data) {
+            var view = new DataView(data.buffer, data.byteOffset, data.byteLength), i = 4, result = {
+              version: view.getUint8(0),
+              flags: new Uint8Array(data.subarray(1, 4))
+            };
+            if (result.version === 1) {
+              i += 4;
+              result.creationTime = parseMp4Date(view.getUint32(i));
+              i += 8;
+              result.modificationTime = parseMp4Date(view.getUint32(i));
+              i += 4;
+              result.trackId = view.getUint32(i);
+              i += 4;
+              i += 8;
+              result.duration = view.getUint32(i);
+            } else {
+              result.creationTime = parseMp4Date(view.getUint32(i));
+              i += 4;
+              result.modificationTime = parseMp4Date(view.getUint32(i));
+              i += 4;
+              result.trackId = view.getUint32(i);
+              i += 4;
+              i += 4;
+              result.duration = view.getUint32(i);
+            }
+            i += 4;
+            i += 2 * 4;
+            result.layer = view.getUint16(i);
+            i += 2;
+            result.alternateGroup = view.getUint16(i);
+            i += 2;
+            result.volume = view.getUint8(i) + view.getUint8(i + 1) / 8;
+            i += 2;
+            i += 2;
+            result.matrix = new Uint32Array(data.subarray(i, i + 9 * 4));
+            i += 9 * 4;
+            result.width = view.getUint16(i) + view.getUint16(i + 2) / 65536;
+            i += 4;
+            result.height = view.getUint16(i) + view.getUint16(i + 2) / 65536;
+            return result;
+          },
+          traf: function traf2(data) {
+            return {
+              boxes: inspectMp4(data)
+            };
+          },
+          trak: function trak2(data) {
+            return {
+              boxes: inspectMp4(data)
+            };
+          },
+          trex: function trex2(data) {
+            var view = new DataView(data.buffer, data.byteOffset, data.byteLength);
+            return {
+              version: data[0],
+              flags: new Uint8Array(data.subarray(1, 4)),
+              trackId: view.getUint32(4),
+              defaultSampleDescriptionIndex: view.getUint32(8),
+              defaultSampleDuration: view.getUint32(12),
+              defaultSampleSize: view.getUint32(16),
+              sampleDependsOn: data[20] & 3,
+              sampleIsDependedOn: (data[21] & 192) >> 6,
+              sampleHasRedundancy: (data[21] & 48) >> 4,
+              samplePaddingValue: (data[21] & 14) >> 1,
+              sampleIsDifferenceSample: !!(data[21] & 1),
+              sampleDegradationPriority: view.getUint16(22)
+            };
+          },
+          trun: parseTrun,
+          "url ": function url(data) {
+            return {
+              version: data[0],
+              flags: new Uint8Array(data.subarray(1, 4))
+            };
+          },
+          vmhd: function vmhd(data) {
+            var view = new DataView(data.buffer, data.byteOffset, data.byteLength);
+            return {
+              version: data[0],
+              flags: new Uint8Array(data.subarray(1, 4)),
+              graphicsmode: view.getUint16(4),
+              opcolor: new Uint16Array([view.getUint16(6), view.getUint16(8), view.getUint16(10)])
+            };
+          }
+        };
+        inspectMp4 = function inspectMp42(data) {
+          var i = 0, result = [], view, size, type2, end, box2;
+          var ab = new ArrayBuffer(data.length);
+          var v = new Uint8Array(ab);
+          for (var z = 0; z < data.length; ++z) {
+            v[z] = data[z];
+          }
+          view = new DataView(ab);
+          while (i < data.byteLength) {
+            size = view.getUint32(i);
+            type2 = parseType_1(data.subarray(i + 4, i + 8));
+            end = size > 1 ? i + size : data.byteLength;
+            box2 = (parse[type2] || function(data2) {
+              return {
+                data: data2
+              };
+            })(data.subarray(i + 8, end));
+            box2.size = size;
+            box2.type = type2;
+            result.push(box2);
+            i = end;
+          }
+          return result;
+        };
+        _textifyMp = function textifyMp4(inspectedMp4, depth) {
+          var indent;
+          depth = depth || 0;
+          indent = new Array(depth * 2 + 1).join(" ");
+          return inspectedMp4.map(function(box2, index) {
+            return indent + box2.type + "\n" + Object.keys(box2).filter(function(key) {
+              return key !== "type" && key !== "boxes";
+            }).map(function(key) {
+              var prefix = indent + "  " + key + ": ", value = box2[key];
+              if (value instanceof Uint8Array || value instanceof Uint32Array) {
+                var bytes = Array.prototype.slice.call(new Uint8Array(value.buffer, value.byteOffset, value.byteLength)).map(function(byte) {
+                  return " " + ("00" + byte.toString(16)).slice(-2);
+                }).join("").match(/.{1,24}/g);
+                if (!bytes) {
+                  return prefix + "<>";
+                }
+                if (bytes.length === 1) {
+                  return prefix + "<" + bytes.join("").slice(1) + ">";
+                }
+                return prefix + "<\n" + bytes.map(function(line) {
+                  return indent + "  " + line;
+                }).join("\n") + "\n" + indent + "  >";
+              }
+              return prefix + JSON.stringify(value, null, 2).split("\n").map(function(line, index2) {
+                if (index2 === 0) {
+                  return line;
+                }
+                return indent + "  " + line;
+              }).join("\n");
+            }).join("\n") + (box2.boxes ? "\n" + _textifyMp(box2.boxes, depth + 1) : "");
+          }).join("\n");
+        };
+        var mp4Inspector = {
+          inspect: inspectMp4,
+          textify: _textifyMp,
+          parseType: parseType_1,
+          findBox: findBox_1,
+          parseTraf: parse.traf,
+          parseTfdt: parse.tfdt,
+          parseHdlr: parse.hdlr,
+          parseTfhd: parse.tfhd,
+          parseTrun: parse.trun,
+          parseSidx: parse.sidx
+        };
+        var tagTypes = {
+          8: "audio",
+          9: "video",
+          18: "metadata"
+        }, hex = function hex2(val) {
+          return "0x" + ("00" + val.toString(16)).slice(-2).toUpperCase();
+        }, hexStringList = function hexStringList2(data) {
+          var arr = [], i;
+          while (data.byteLength > 0) {
+            i = 0;
+            arr.push(hex(data[i++]));
+            data = data.subarray(i);
+          }
+          return arr.join(" ");
+        }, parseAVCTag = function parseAVCTag2(tag, obj) {
+          var avcPacketTypes = ["AVC Sequence Header", "AVC NALU", "AVC End-of-Sequence"], compositionTime = tag[1] & parseInt("01111111", 2) << 16 | tag[2] << 8 | tag[3];
+          obj = obj || {};
+          obj.avcPacketType = avcPacketTypes[tag[0]];
+          obj.CompositionTime = tag[1] & parseInt("10000000", 2) ? -compositionTime : compositionTime;
+          if (tag[0] === 1) {
+            obj.nalUnitTypeRaw = hexStringList(tag.subarray(4, 100));
+          } else {
+            obj.data = hexStringList(tag.subarray(4));
+          }
+          return obj;
+        }, parseVideoTag = function parseVideoTag2(tag, obj) {
+          var frameTypes = ["Unknown", "Keyframe (for AVC, a seekable frame)", "Inter frame (for AVC, a nonseekable frame)", "Disposable inter frame (H.263 only)", "Generated keyframe (reserved for server use only)", "Video info/command frame"], codecID = tag[0] & parseInt("00001111", 2);
+          obj = obj || {};
+          obj.frameType = frameTypes[(tag[0] & parseInt("11110000", 2)) >>> 4];
+          obj.codecID = codecID;
+          if (codecID === 7) {
+            return parseAVCTag(tag.subarray(1), obj);
+          }
+          return obj;
+        }, parseAACTag = function parseAACTag2(tag, obj) {
+          var packetTypes = ["AAC Sequence Header", "AAC Raw"];
+          obj = obj || {};
+          obj.aacPacketType = packetTypes[tag[0]];
+          obj.data = hexStringList(tag.subarray(1));
+          return obj;
+        }, parseAudioTag = function parseAudioTag2(tag, obj) {
+          var formatTable = ["Linear PCM, platform endian", "ADPCM", "MP3", "Linear PCM, little endian", "Nellymoser 16-kHz mono", "Nellymoser 8-kHz mono", "Nellymoser", "G.711 A-law logarithmic PCM", "G.711 mu-law logarithmic PCM", "reserved", "AAC", "Speex", "MP3 8-Khz", "Device-specific sound"], samplingRateTable = ["5.5-kHz", "11-kHz", "22-kHz", "44-kHz"], soundFormat = (tag[0] & parseInt("11110000", 2)) >>> 4;
+          obj = obj || {};
+          obj.soundFormat = formatTable[soundFormat];
+          obj.soundRate = samplingRateTable[(tag[0] & parseInt("00001100", 2)) >>> 2];
+          obj.soundSize = (tag[0] & parseInt("00000010", 2)) >>> 1 ? "16-bit" : "8-bit";
+          obj.soundType = tag[0] & parseInt("00000001", 2) ? "Stereo" : "Mono";
+          if (soundFormat === 10) {
+            return parseAACTag(tag.subarray(1), obj);
+          }
+          return obj;
+        }, parseGenericTag = function parseGenericTag2(tag) {
+          return {
+            tagType: tagTypes[tag[0]],
+            dataSize: tag[1] << 16 | tag[2] << 8 | tag[3],
+            timestamp: tag[7] << 24 | tag[4] << 16 | tag[5] << 8 | tag[6],
+            streamID: tag[8] << 16 | tag[9] << 8 | tag[10]
+          };
+        }, inspectFlvTag = function inspectFlvTag2(tag) {
+          var header = parseGenericTag(tag);
+          switch (tag[0]) {
+            case 8:
+              parseAudioTag(tag.subarray(11), header);
+              break;
+            case 9:
+              parseVideoTag(tag.subarray(11), header);
+              break;
+          }
+          return header;
+        }, inspectFlv = function inspectFlv2(bytes) {
+          var i = 9, dataSize, parsedResults = [], tag;
+          i += 4;
+          while (i < bytes.byteLength) {
+            dataSize = bytes[i + 1] << 16;
+            dataSize |= bytes[i + 2] << 8;
+            dataSize |= bytes[i + 3];
+            dataSize += 11;
+            tag = bytes.subarray(i, i + dataSize);
+            parsedResults.push(inspectFlvTag(tag));
+            i += dataSize + 4;
+          }
+          return parsedResults;
+        }, textifyFlv = function textifyFlv2(flvTagArray) {
+          return JSON.stringify(flvTagArray, null, 2);
+        };
+        var flvInspector = {
+          inspectTag: inspectFlvTag,
+          inspect: inspectFlv,
+          textify: textifyFlv
+        };
+        var parsePid = function parsePid2(packet) {
+          var pid = packet[1] & 31;
+          pid <<= 8;
+          pid |= packet[2];
+          return pid;
+        };
+        var parsePayloadUnitStartIndicator = function parsePayloadUnitStartIndicator2(packet) {
+          return !!(packet[1] & 64);
+        };
+        var parseAdaptionField = function parseAdaptionField2(packet) {
+          var offset = 0;
+          if ((packet[3] & 48) >>> 4 > 1) {
+            offset += packet[4] + 1;
+          }
+          return offset;
+        };
+        var parseType = function parseType2(packet, pmtPid) {
+          var pid = parsePid(packet);
+          if (pid === 0) {
+            return "pat";
+          } else if (pid === pmtPid) {
+            return "pmt";
+          } else if (pmtPid) {
+            return "pes";
+          }
+          return null;
+        };
+        var parsePat = function parsePat2(packet) {
+          var pusi = parsePayloadUnitStartIndicator(packet);
+          var offset = 4 + parseAdaptionField(packet);
+          if (pusi) {
+            offset += packet[offset] + 1;
+          }
+          return (packet[offset + 10] & 31) << 8 | packet[offset + 11];
+        };
+        var parsePmt = function parsePmt2(packet) {
+          var programMapTable = {};
+          var pusi = parsePayloadUnitStartIndicator(packet);
+          var payloadOffset = 4 + parseAdaptionField(packet);
+          if (pusi) {
+            payloadOffset += packet[payloadOffset] + 1;
+          }
+          if (!(packet[payloadOffset + 5] & 1)) {
+            return;
+          }
+          var sectionLength, tableEnd, programInfoLength;
+          sectionLength = (packet[payloadOffset + 1] & 15) << 8 | packet[payloadOffset + 2];
+          tableEnd = 3 + sectionLength - 4;
+          programInfoLength = (packet[payloadOffset + 10] & 15) << 8 | packet[payloadOffset + 11];
+          var offset = 12 + programInfoLength;
+          while (offset < tableEnd) {
+            var i = payloadOffset + offset;
+            programMapTable[(packet[i + 1] & 31) << 8 | packet[i + 2]] = packet[i];
+            offset += ((packet[i + 3] & 15) << 8 | packet[i + 4]) + 5;
+          }
+          return programMapTable;
+        };
+        var parsePesType = function parsePesType2(packet, programMapTable) {
+          var pid = parsePid(packet);
+          var type2 = programMapTable[pid];
+          switch (type2) {
+            case streamTypes.H264_STREAM_TYPE:
+              return "video";
+            case streamTypes.ADTS_STREAM_TYPE:
+              return "audio";
+            case streamTypes.METADATA_STREAM_TYPE:
+              return "timed-metadata";
+            default:
+              return null;
+          }
+        };
+        var parsePesTime = function parsePesTime2(packet) {
+          var pusi = parsePayloadUnitStartIndicator(packet);
+          if (!pusi) {
+            return null;
+          }
+          var offset = 4 + parseAdaptionField(packet);
+          if (offset >= packet.byteLength) {
+            return null;
+          }
+          var pes = null;
+          var ptsDtsFlags;
+          ptsDtsFlags = packet[offset + 7];
+          if (ptsDtsFlags & 192) {
+            pes = {};
+            pes.pts = (packet[offset + 9] & 14) << 27 | (packet[offset + 10] & 255) << 20 | (packet[offset + 11] & 254) << 12 | (packet[offset + 12] & 255) << 5 | (packet[offset + 13] & 254) >>> 3;
+            pes.pts *= 4;
+            pes.pts += (packet[offset + 13] & 6) >>> 1;
+            pes.dts = pes.pts;
+            if (ptsDtsFlags & 64) {
+              pes.dts = (packet[offset + 14] & 14) << 27 | (packet[offset + 15] & 255) << 20 | (packet[offset + 16] & 254) << 12 | (packet[offset + 17] & 255) << 5 | (packet[offset + 18] & 254) >>> 3;
+              pes.dts *= 4;
+              pes.dts += (packet[offset + 18] & 6) >>> 1;
+            }
+          }
+          return pes;
+        };
+        var parseNalUnitType = function parseNalUnitType2(type2) {
+          switch (type2) {
+            case 5:
+              return "slice_layer_without_partitioning_rbsp_idr";
+            case 6:
+              return "sei_rbsp";
+            case 7:
+              return "seq_parameter_set_rbsp";
+            case 8:
+              return "pic_parameter_set_rbsp";
+            case 9:
+              return "access_unit_delimiter_rbsp";
+            default:
+              return null;
+          }
+        };
+        var videoPacketContainsKeyFrame = function videoPacketContainsKeyFrame2(packet) {
+          var offset = 4 + parseAdaptionField(packet);
+          var frameBuffer = packet.subarray(offset);
+          var frameI = 0;
+          var frameSyncPoint = 0;
+          var foundKeyFrame = false;
+          var nalType;
+          for (; frameSyncPoint < frameBuffer.byteLength - 3; frameSyncPoint++) {
+            if (frameBuffer[frameSyncPoint + 2] === 1) {
+              frameI = frameSyncPoint + 5;
+              break;
+            }
+          }
+          while (frameI < frameBuffer.byteLength) {
+            switch (frameBuffer[frameI]) {
+              case 0:
+                if (frameBuffer[frameI - 1] !== 0) {
+                  frameI += 2;
+                  break;
+                } else if (frameBuffer[frameI - 2] !== 0) {
+                  frameI++;
+                  break;
+                }
+                if (frameSyncPoint + 3 !== frameI - 2) {
+                  nalType = parseNalUnitType(frameBuffer[frameSyncPoint + 3] & 31);
+                  if (nalType === "slice_layer_without_partitioning_rbsp_idr") {
+                    foundKeyFrame = true;
+                  }
+                }
+                do {
+                  frameI++;
+                } while (frameBuffer[frameI] !== 1 && frameI < frameBuffer.length);
+                frameSyncPoint = frameI - 2;
+                frameI += 3;
+                break;
+              case 1:
+                if (frameBuffer[frameI - 1] !== 0 || frameBuffer[frameI - 2] !== 0) {
+                  frameI += 3;
+                  break;
+                }
+                nalType = parseNalUnitType(frameBuffer[frameSyncPoint + 3] & 31);
+                if (nalType === "slice_layer_without_partitioning_rbsp_idr") {
+                  foundKeyFrame = true;
+                }
+                frameSyncPoint = frameI - 2;
+                frameI += 3;
+                break;
+              default:
+                frameI += 3;
+                break;
+            }
+          }
+          frameBuffer = frameBuffer.subarray(frameSyncPoint);
+          frameI -= frameSyncPoint;
+          frameSyncPoint = 0;
+          if (frameBuffer && frameBuffer.byteLength > 3) {
+            nalType = parseNalUnitType(frameBuffer[frameSyncPoint + 3] & 31);
+            if (nalType === "slice_layer_without_partitioning_rbsp_idr") {
+              foundKeyFrame = true;
+            }
+          }
+          return foundKeyFrame;
+        };
+        var probe$1 = {
+          parseType,
+          parsePat,
+          parsePmt,
+          parsePayloadUnitStartIndicator,
+          parsePesType,
+          parsePesTime,
+          videoPacketContainsKeyFrame
+        };
+        var handleRollover = timestampRolloverStream.handleRollover;
+        var probe = {};
+        probe.ts = probe$1;
+        probe.aac = utils;
+        var ONE_SECOND_IN_TS = clock.ONE_SECOND_IN_TS;
+        var MP2T_PACKET_LENGTH = 188, SYNC_BYTE = 71;
+        var parsePsi_ = function parsePsi_2(bytes, pmt) {
+          var startIndex = 0, endIndex = MP2T_PACKET_LENGTH, packet, type2;
+          while (endIndex < bytes.byteLength) {
+            if (bytes[startIndex] === SYNC_BYTE && bytes[endIndex] === SYNC_BYTE) {
+              packet = bytes.subarray(startIndex, endIndex);
+              type2 = probe.ts.parseType(packet, pmt.pid);
+              switch (type2) {
+                case "pat":
+                  pmt.pid = probe.ts.parsePat(packet);
+                  break;
+                case "pmt":
+                  var table = probe.ts.parsePmt(packet);
+                  pmt.table = pmt.table || {};
+                  Object.keys(table).forEach(function(key) {
+                    pmt.table[key] = table[key];
+                  });
+                  break;
+              }
+              startIndex += MP2T_PACKET_LENGTH;
+              endIndex += MP2T_PACKET_LENGTH;
+              continue;
+            }
+            startIndex++;
+            endIndex++;
+          }
+        };
+        var parseAudioPes_ = function parseAudioPes_2(bytes, pmt, result) {
+          var startIndex = 0, endIndex = MP2T_PACKET_LENGTH, packet, type2, pesType, pusi, parsed;
+          var endLoop = false;
+          while (endIndex <= bytes.byteLength) {
+            if (bytes[startIndex] === SYNC_BYTE && (bytes[endIndex] === SYNC_BYTE || endIndex === bytes.byteLength)) {
+              packet = bytes.subarray(startIndex, endIndex);
+              type2 = probe.ts.parseType(packet, pmt.pid);
+              switch (type2) {
+                case "pes":
+                  pesType = probe.ts.parsePesType(packet, pmt.table);
+                  pusi = probe.ts.parsePayloadUnitStartIndicator(packet);
+                  if (pesType === "audio" && pusi) {
+                    parsed = probe.ts.parsePesTime(packet);
+                    if (parsed) {
+                      parsed.type = "audio";
+                      result.audio.push(parsed);
+                      endLoop = true;
+                    }
+                  }
+                  break;
+              }
+              if (endLoop) {
+                break;
+              }
+              startIndex += MP2T_PACKET_LENGTH;
+              endIndex += MP2T_PACKET_LENGTH;
+              continue;
+            }
+            startIndex++;
+            endIndex++;
+          }
+          endIndex = bytes.byteLength;
+          startIndex = endIndex - MP2T_PACKET_LENGTH;
+          endLoop = false;
+          while (startIndex >= 0) {
+            if (bytes[startIndex] === SYNC_BYTE && (bytes[endIndex] === SYNC_BYTE || endIndex === bytes.byteLength)) {
+              packet = bytes.subarray(startIndex, endIndex);
+              type2 = probe.ts.parseType(packet, pmt.pid);
+              switch (type2) {
+                case "pes":
+                  pesType = probe.ts.parsePesType(packet, pmt.table);
+                  pusi = probe.ts.parsePayloadUnitStartIndicator(packet);
+                  if (pesType === "audio" && pusi) {
+                    parsed = probe.ts.parsePesTime(packet);
+                    if (parsed) {
+                      parsed.type = "audio";
+                      result.audio.push(parsed);
+                      endLoop = true;
+                    }
+                  }
+                  break;
+              }
+              if (endLoop) {
+                break;
+              }
+              startIndex -= MP2T_PACKET_LENGTH;
+              endIndex -= MP2T_PACKET_LENGTH;
+              continue;
+            }
+            startIndex--;
+            endIndex--;
+          }
+        };
+        var parseVideoPes_ = function parseVideoPes_2(bytes, pmt, result) {
+          var startIndex = 0, endIndex = MP2T_PACKET_LENGTH, packet, type2, pesType, pusi, parsed, frame, i, pes;
+          var endLoop = false;
+          var currentFrame = {
+            data: [],
+            size: 0
+          };
+          while (endIndex < bytes.byteLength) {
+            if (bytes[startIndex] === SYNC_BYTE && bytes[endIndex] === SYNC_BYTE) {
+              packet = bytes.subarray(startIndex, endIndex);
+              type2 = probe.ts.parseType(packet, pmt.pid);
+              switch (type2) {
+                case "pes":
+                  pesType = probe.ts.parsePesType(packet, pmt.table);
+                  pusi = probe.ts.parsePayloadUnitStartIndicator(packet);
+                  if (pesType === "video") {
+                    if (pusi && !endLoop) {
+                      parsed = probe.ts.parsePesTime(packet);
+                      if (parsed) {
+                        parsed.type = "video";
+                        result.video.push(parsed);
+                        endLoop = true;
+                      }
+                    }
+                    if (!result.firstKeyFrame) {
+                      if (pusi) {
+                        if (currentFrame.size !== 0) {
+                          frame = new Uint8Array(currentFrame.size);
+                          i = 0;
+                          while (currentFrame.data.length) {
+                            pes = currentFrame.data.shift();
+                            frame.set(pes, i);
+                            i += pes.byteLength;
+                          }
+                          if (probe.ts.videoPacketContainsKeyFrame(frame)) {
+                            var firstKeyFrame = probe.ts.parsePesTime(frame);
+                            if (firstKeyFrame) {
+                              result.firstKeyFrame = firstKeyFrame;
+                              result.firstKeyFrame.type = "video";
+                            } else {
+                              console.warn("Failed to extract PTS/DTS from PES at first keyframe. This could be an unusual TS segment, or else mux.js did not parse your TS segment correctly. If you know your TS segments do contain PTS/DTS on keyframes please file a bug report! You can try ffprobe to double check for yourself.");
+                            }
+                          }
+                          currentFrame.size = 0;
+                        }
+                      }
+                      currentFrame.data.push(packet);
+                      currentFrame.size += packet.byteLength;
+                    }
+                  }
+                  break;
+              }
+              if (endLoop && result.firstKeyFrame) {
+                break;
+              }
+              startIndex += MP2T_PACKET_LENGTH;
+              endIndex += MP2T_PACKET_LENGTH;
+              continue;
+            }
+            startIndex++;
+            endIndex++;
+          }
+          endIndex = bytes.byteLength;
+          startIndex = endIndex - MP2T_PACKET_LENGTH;
+          endLoop = false;
+          while (startIndex >= 0) {
+            if (bytes[startIndex] === SYNC_BYTE && bytes[endIndex] === SYNC_BYTE) {
+              packet = bytes.subarray(startIndex, endIndex);
+              type2 = probe.ts.parseType(packet, pmt.pid);
+              switch (type2) {
+                case "pes":
+                  pesType = probe.ts.parsePesType(packet, pmt.table);
+                  pusi = probe.ts.parsePayloadUnitStartIndicator(packet);
+                  if (pesType === "video" && pusi) {
+                    parsed = probe.ts.parsePesTime(packet);
+                    if (parsed) {
+                      parsed.type = "video";
+                      result.video.push(parsed);
+                      endLoop = true;
+                    }
+                  }
+                  break;
+              }
+              if (endLoop) {
+                break;
+              }
+              startIndex -= MP2T_PACKET_LENGTH;
+              endIndex -= MP2T_PACKET_LENGTH;
+              continue;
+            }
+            startIndex--;
+            endIndex--;
+          }
+        };
+        var adjustTimestamp_ = function adjustTimestamp_2(segmentInfo, baseTimestamp) {
+          if (segmentInfo.audio && segmentInfo.audio.length) {
+            var audioBaseTimestamp = baseTimestamp;
+            if (typeof audioBaseTimestamp === "undefined" || isNaN(audioBaseTimestamp)) {
+              audioBaseTimestamp = segmentInfo.audio[0].dts;
+            }
+            segmentInfo.audio.forEach(function(info) {
+              info.dts = handleRollover(info.dts, audioBaseTimestamp);
+              info.pts = handleRollover(info.pts, audioBaseTimestamp);
+              info.dtsTime = info.dts / ONE_SECOND_IN_TS;
+              info.ptsTime = info.pts / ONE_SECOND_IN_TS;
+            });
+          }
+          if (segmentInfo.video && segmentInfo.video.length) {
+            var videoBaseTimestamp = baseTimestamp;
+            if (typeof videoBaseTimestamp === "undefined" || isNaN(videoBaseTimestamp)) {
+              videoBaseTimestamp = segmentInfo.video[0].dts;
+            }
+            segmentInfo.video.forEach(function(info) {
+              info.dts = handleRollover(info.dts, videoBaseTimestamp);
+              info.pts = handleRollover(info.pts, videoBaseTimestamp);
+              info.dtsTime = info.dts / ONE_SECOND_IN_TS;
+              info.ptsTime = info.pts / ONE_SECOND_IN_TS;
+            });
+            if (segmentInfo.firstKeyFrame) {
+              var frame = segmentInfo.firstKeyFrame;
+              frame.dts = handleRollover(frame.dts, videoBaseTimestamp);
+              frame.pts = handleRollover(frame.pts, videoBaseTimestamp);
+              frame.dtsTime = frame.dts / ONE_SECOND_IN_TS;
+              frame.ptsTime = frame.pts / ONE_SECOND_IN_TS;
+            }
+          }
+        };
+        var inspectAac_ = function inspectAac_2(bytes) {
+          var endLoop = false, audioCount = 0, sampleRate = null, timestamp = null, frameSize = 0, byteIndex = 0, packet;
+          while (bytes.length - byteIndex >= 3) {
+            var type2 = probe.aac.parseType(bytes, byteIndex);
+            switch (type2) {
+              case "timed-metadata":
+                if (bytes.length - byteIndex < 10) {
+                  endLoop = true;
+                  break;
+                }
+                frameSize = probe.aac.parseId3TagSize(bytes, byteIndex);
+                if (frameSize > bytes.length) {
+                  endLoop = true;
+                  break;
+                }
+                if (timestamp === null) {
+                  packet = bytes.subarray(byteIndex, byteIndex + frameSize);
+                  timestamp = probe.aac.parseAacTimestamp(packet);
+                }
+                byteIndex += frameSize;
+                break;
+              case "audio":
+                if (bytes.length - byteIndex < 7) {
+                  endLoop = true;
+                  break;
+                }
+                frameSize = probe.aac.parseAdtsSize(bytes, byteIndex);
+                if (frameSize > bytes.length) {
+                  endLoop = true;
+                  break;
+                }
+                if (sampleRate === null) {
+                  packet = bytes.subarray(byteIndex, byteIndex + frameSize);
+                  sampleRate = probe.aac.parseSampleRate(packet);
+                }
+                audioCount++;
+                byteIndex += frameSize;
+                break;
+              default:
+                byteIndex++;
+                break;
+            }
+            if (endLoop) {
+              return null;
+            }
+          }
+          if (sampleRate === null || timestamp === null) {
+            return null;
+          }
+          var audioTimescale = ONE_SECOND_IN_TS / sampleRate;
+          var result = {
+            audio: [{
+              type: "audio",
+              dts: timestamp,
+              pts: timestamp
+            }, {
+              type: "audio",
+              dts: timestamp + audioCount * 1024 * audioTimescale,
+              pts: timestamp + audioCount * 1024 * audioTimescale
+            }]
+          };
+          return result;
+        };
+        var inspectTs_ = function inspectTs_2(bytes) {
+          var pmt = {
+            pid: null,
+            table: null
+          };
+          var result = {};
+          parsePsi_(bytes, pmt);
+          for (var pid in pmt.table) {
+            if (pmt.table.hasOwnProperty(pid)) {
+              var type2 = pmt.table[pid];
+              switch (type2) {
+                case streamTypes.H264_STREAM_TYPE:
+                  result.video = [];
+                  parseVideoPes_(bytes, pmt, result);
+                  if (result.video.length === 0) {
+                    delete result.video;
+                  }
+                  break;
+                case streamTypes.ADTS_STREAM_TYPE:
+                  result.audio = [];
+                  parseAudioPes_(bytes, pmt, result);
+                  if (result.audio.length === 0) {
+                    delete result.audio;
+                  }
+                  break;
+              }
+            }
+          }
+          return result;
+        };
+        var inspect = function inspect2(bytes, baseTimestamp) {
+          var isAacData = probe.aac.isLikelyAacData(bytes);
+          var result;
+          if (isAacData) {
+            result = inspectAac_(bytes);
+          } else {
+            result = inspectTs_(bytes);
+          }
+          if (!result || !result.audio && !result.video) {
+            return null;
+          }
+          adjustTimestamp_(result, baseTimestamp);
+          return result;
+        };
+        var tsInspector = {
+          inspect,
+          parseAudioPes_
+        };
+        var muxjs2 = {
+          codecs,
+          mp4,
+          flv,
+          mp2t: m2ts,
+          partial
+        };
+        muxjs2.mp4.tools = mp4Inspector;
+        muxjs2.flv.tools = flvInspector;
+        muxjs2.mp2t.tools = tsInspector;
+        var lib = muxjs2;
+        return lib;
+      });
+    }
+  });
+
+  // src/wasm/wasp_hls.js
+  var import_meta = {};
+  var wasm;
+  var cachedTextDecoder = new TextDecoder("utf-8", { ignoreBOM: true, fatal: true });
+  cachedTextDecoder.decode();
+  var cachedUint8Memory0 = new Uint8Array();
+  function getUint8Memory0() {
+    if (cachedUint8Memory0.byteLength === 0) {
+      cachedUint8Memory0 = new Uint8Array(wasm.memory.buffer);
+    }
+    return cachedUint8Memory0;
+  }
+  function getStringFromWasm0(ptr, len) {
+    return cachedTextDecoder.decode(getUint8Memory0().subarray(ptr, ptr + len));
+  }
+  var WASM_VECTOR_LEN = 0;
+  var cachedTextEncoder = new TextEncoder("utf-8");
+  var encodeString = typeof cachedTextEncoder.encodeInto === "function" ? function(arg, view) {
+    return cachedTextEncoder.encodeInto(arg, view);
+  } : function(arg, view) {
+    const buf = cachedTextEncoder.encode(arg);
+    view.set(buf);
+    return {
+      read: arg.length,
+      written: buf.length
+    };
+  };
+  function passStringToWasm0(arg, malloc, realloc) {
+    if (realloc === void 0) {
+      const buf = cachedTextEncoder.encode(arg);
+      const ptr2 = malloc(buf.length);
+      getUint8Memory0().subarray(ptr2, ptr2 + buf.length).set(buf);
+      WASM_VECTOR_LEN = buf.length;
+      return ptr2;
+    }
+    let len = arg.length;
+    let ptr = malloc(len);
+    const mem = getUint8Memory0();
+    let offset = 0;
+    for (; offset < len; offset++) {
+      const code = arg.charCodeAt(offset);
+      if (code > 127)
+        break;
+      mem[ptr + offset] = code;
+    }
+    if (offset !== len) {
+      if (offset !== 0) {
+        arg = arg.slice(offset);
+      }
+      ptr = realloc(ptr, len, len = offset + arg.length * 3);
+      const view = getUint8Memory0().subarray(ptr + offset, ptr + len);
+      const ret = encodeString(arg, view);
+      offset += ret.written;
+    }
+    WASM_VECTOR_LEN = offset;
+    return ptr;
+  }
+  var cachedInt32Memory0 = new Int32Array();
+  function getInt32Memory0() {
+    if (cachedInt32Memory0.byteLength === 0) {
+      cachedInt32Memory0 = new Int32Array(wasm.memory.buffer);
+    }
+    return cachedInt32Memory0;
+  }
+  function getArrayU8FromWasm0(ptr, len) {
+    return getUint8Memory0().subarray(ptr / 1, ptr / 1 + len);
+  }
+  function _assertClass(instance, klass) {
+    if (!(instance instanceof klass)) {
+      throw new Error(`expected instance of ${klass.name}`);
+    }
+    return instance.ptr;
+  }
+  var cachedFloat64Memory0 = new Float64Array();
+  function getFloat64Memory0() {
+    if (cachedFloat64Memory0.byteLength === 0) {
+      cachedFloat64Memory0 = new Float64Array(wasm.memory.buffer);
+    }
+    return cachedFloat64Memory0;
+  }
+  function passArrayF64ToWasm0(arg, malloc) {
+    const ptr = malloc(arg.length * 8);
+    getFloat64Memory0().set(arg, ptr / 8);
+    WASM_VECTOR_LEN = arg.length;
+    return ptr;
+  }
+  function passArray8ToWasm0(arg, malloc) {
+    const ptr = malloc(arg.length * 1);
+    getUint8Memory0().set(arg, ptr / 1);
+    WASM_VECTOR_LEN = arg.length;
+    return ptr;
+  }
+  function isLikeNone(x) {
+    return x === void 0 || x === null;
+  }
+  function notDefined(what) {
+    return () => {
+      throw new Error(`${what} is not defined`);
+    };
+  }
+  var MediaSourceReadyState = Object.freeze({
+    Closed: 0,
+    "0": "Closed",
+    Ended: 1,
+    "1": "Ended",
+    Open: 2,
+    "2": "Open"
+  });
+  var PlaybackTickReason = Object.freeze({ Init: 0, "0": "Init", Seeking: 1, "1": "Seeking", Seeked: 2, "2": "Seeked", RegularInterval: 3, "3": "RegularInterval", LoadedData: 4, "4": "LoadedData", LoadedMetadata: 5, "5": "LoadedMetadata", CanPlay: 6, "6": "CanPlay", CanPlayThrough: 7, "7": "CanPlayThrough", Ended: 8, "8": "Ended", Pause: 9, "9": "Pause", Play: 10, "10": "Play", RateChange: 11, "11": "RateChange", Stalled: 12, "12": "Stalled" });
+  var RemoveMediaSourceErrorCode = Object.freeze({
+    NoMediaSourceAttached: 0,
+    "0": "NoMediaSourceAttached",
+    UnknownError: 1,
+    "1": "UnknownError"
+  });
+  var MediaSourceDurationUpdateErrorCode = Object.freeze({
+    NoMediaSourceAttached: 0,
+    "0": "NoMediaSourceAttached",
+    UnknownError: 1,
+    "1": "UnknownError"
+  });
+  var AttachMediaSourceErrorCode = Object.freeze({
+    UnknownError: 0,
+    "0": "UnknownError"
+  });
+  var RemoveBufferErrorCode = Object.freeze({
+    SourceBufferNotFound: 0,
+    "0": "SourceBufferNotFound",
+    UnknownError: 1,
+    "1": "UnknownError"
+  });
+  var EndOfStreamErrorCode = Object.freeze({
+    UnknownError: 0,
+    "0": "UnknownError"
+  });
+  var AddSourceBufferErrorCode = Object.freeze({
+    NoMediaSourceAttached: 0,
+    "0": "NoMediaSourceAttached",
+    MediaSourceIsClosed: 1,
+    "1": "MediaSourceIsClosed",
+    QuotaExceededError: 2,
+    "2": "QuotaExceededError",
+    TypeNotSupportedError: 3,
+    "3": "TypeNotSupportedError",
+    EmptyMimeType: 4,
+    "4": "EmptyMimeType",
+    UnknownError: 5,
+    "5": "UnknownError"
+  });
+  var AppendBufferErrorCode = Object.freeze({
+    NoResource: 0,
+    "0": "NoResource",
+    NoSourceBuffer: 1,
+    "1": "NoSourceBuffer",
+    TransmuxerError: 2,
+    "2": "TransmuxerError",
+    UnknownError: 3,
+    "3": "UnknownError"
+  });
+  var PlaybackObservationReason = Object.freeze({
+    Init: 0,
+    "0": "Init",
+    Seeked: 1,
+    "1": "Seeked",
+    Seeking: 2,
+    "2": "Seeking",
+    Ended: 3,
+    "3": "Ended",
+    ReadyStateChanged: 4,
+    "4": "ReadyStateChanged",
+    RegularInterval: 5,
+    "5": "RegularInterval",
+    Error: 6,
+    "6": "Error"
+  });
+  var TimerReason = Object.freeze({
+    MediaPlaylistRefresh: 0,
+    "0": "MediaPlaylistRefresh"
+  });
+  var LogLevel = Object.freeze({
+    Error: 0,
+    "0": "Error",
+    Warn: 1,
+    "1": "Warn",
+    Info: 2,
+    "2": "Info",
+    Debug: 3,
+    "3": "Debug"
+  });
+  var MediaType = Object.freeze({ Audio: 0, "0": "Audio", Video: 1, "1": "Video" });
+  var AppendBufferResult = class {
+    static __wrap(ptr) {
+      const obj = Object.create(AppendBufferResult.prototype);
+      obj.ptr = ptr;
+      return obj;
+    }
+    __destroy_into_raw() {
+      const ptr = this.ptr;
+      this.ptr = 0;
+      return ptr;
+    }
+    free() {
+      const ptr = this.__destroy_into_raw();
+      wasm.__wbg_appendbufferresult_free(ptr);
+    }
+    static success(start, duration) {
+      const ret = wasm.appendbufferresult_success(!isLikeNone(start), isLikeNone(start) ? 0 : start, !isLikeNone(duration), isLikeNone(duration) ? 0 : duration);
+      return AppendBufferResult.__wrap(ret);
+    }
+    static error(err, desc) {
+      var ptr0 = isLikeNone(desc) ? 0 : passStringToWasm0(desc, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+      var len0 = WASM_VECTOR_LEN;
+      const ret = wasm.appendbufferresult_error(err, ptr0, len0);
+      return AppendBufferResult.__wrap(ret);
+    }
+  };
+  var Dispatcher = class {
+    static __wrap(ptr) {
+      const obj = Object.create(Dispatcher.prototype);
+      obj.ptr = ptr;
+      return obj;
+    }
+    __destroy_into_raw() {
+      const ptr = this.ptr;
+      this.ptr = 0;
+      return ptr;
+    }
+    free() {
+      const ptr = this.__destroy_into_raw();
+      wasm.__wbg_dispatcher_free(ptr);
+    }
+    constructor() {
+      const ret = wasm.dispatcher_new();
+      return Dispatcher.__wrap(ret);
+    }
+    load_content(content_url) {
+      const ptr0 = passStringToWasm0(content_url, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+      const len0 = WASM_VECTOR_LEN;
+      wasm.dispatcher_load_content(this.ptr, ptr0, len0);
+    }
+    get_available_audio_tracks() {
+      try {
+        const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+        wasm.dispatcher_get_available_audio_tracks(retptr, this.ptr);
+        var r0 = getInt32Memory0()[retptr / 4 + 0];
+        var r1 = getInt32Memory0()[retptr / 4 + 1];
+        var v0 = getArrayU8FromWasm0(r0, r1).slice();
+        wasm.__wbindgen_free(r0, r1 * 1);
+        return v0;
+      } finally {
+        wasm.__wbindgen_add_to_stack_pointer(16);
+      }
+    }
+    stop() {
+      wasm.dispatcher_stop(this.ptr);
+    }
+    static log(level, msg) {
+      const ptr0 = passStringToWasm0(msg, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+      const len0 = WASM_VECTOR_LEN;
+      wasm.dispatcher_log(level, ptr0, len0);
+    }
+    on_request_finished(request_id, resource_id, resource_size, final_url, duration_ms) {
+      const ptr0 = passStringToWasm0(final_url, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+      const len0 = WASM_VECTOR_LEN;
+      wasm.dispatcher_on_request_finished(this.ptr, request_id, resource_id, resource_size, ptr0, len0, duration_ms);
+    }
+    on_request_failed(request_id) {
+      wasm.dispatcher_on_request_failed(this.ptr, request_id);
+    }
+    on_media_source_state_change(state) {
+      wasm.dispatcher_on_media_source_state_change(this.ptr, state);
+    }
+    on_source_buffer_update(source_buffer_id) {
+      wasm.dispatcher_on_source_buffer_update(this.ptr, source_buffer_id);
+    }
+    on_source_buffer_error(source_buffer_id) {
+      wasm.dispatcher_on_source_buffer_error(this.ptr, source_buffer_id);
+    }
+    on_playback_tick(observation) {
+      _assertClass(observation, MediaObservation);
+      var ptr0 = observation.ptr;
+      observation.ptr = 0;
+      wasm.dispatcher_on_playback_tick(this.ptr, ptr0);
+    }
+    on_timer_ended(id, reason) {
+      wasm.dispatcher_on_timer_ended(this.ptr, id, reason);
+    }
+  };
+  var MediaObservation = class {
+    static __wrap(ptr) {
+      const obj = Object.create(MediaObservation.prototype);
+      obj.ptr = ptr;
+      return obj;
+    }
+    __destroy_into_raw() {
+      const ptr = this.ptr;
+      this.ptr = 0;
+      return ptr;
+    }
+    free() {
+      const ptr = this.__destroy_into_raw();
+      wasm.__wbg_mediaobservation_free(ptr);
+    }
+    constructor(reason, current_time, ready_state, buffered, paused, seeking) {
+      const ptr0 = passArrayF64ToWasm0(buffered, wasm.__wbindgen_malloc);
+      const len0 = WASM_VECTOR_LEN;
+      const ret = wasm.mediaobservation_new(reason, current_time, ready_state, ptr0, len0, paused, seeking);
+      return MediaObservation.__wrap(ret);
+    }
+  };
+  async function load(module, imports) {
+    if (typeof Response === "function" && module instanceof Response) {
+      if (typeof WebAssembly.instantiateStreaming === "function") {
+        try {
+          return await WebAssembly.instantiateStreaming(module, imports);
+        } catch (e) {
+          if (module.headers.get("Content-Type") != "application/wasm") {
+            console.warn("`WebAssembly.instantiateStreaming` failed because your server does not serve wasm with `application/wasm` MIME type. Falling back to `WebAssembly.instantiate` which is slower. Original error:\n", e);
+          } else {
+            throw e;
+          }
+        }
+      }
+      const bytes = await module.arrayBuffer();
+      return await WebAssembly.instantiate(bytes, imports);
+    } else {
+      const instance = await WebAssembly.instantiate(module, imports);
+      if (instance instanceof WebAssembly.Instance) {
+        return { instance, module };
+      } else {
+        return instance;
+      }
+    }
+  }
+  function getImports() {
+    const imports = {};
+    imports.wbg = {};
+    imports.wbg.__wbg_jsLog_da12411f674ee50f = function(arg0, arg1, arg2) {
+      jsLog(arg0 >>> 0, getStringFromWasm0(arg1, arg2));
+    };
+    imports.wbg.__wbg_jsTimer_13ace9ec5780a1dd = function(arg0, arg1) {
+      const ret = jsTimer(arg0, arg1 >>> 0);
+      return ret;
+    };
+    imports.wbg.__wbg_jsGetResourceData_1a5580de201a7896 = function(arg0, arg1) {
+      const ret = jsGetResourceData(arg1);
+      var ptr0 = isLikeNone(ret) ? 0 : passArray8ToWasm0(ret, wasm.__wbindgen_malloc);
+      var len0 = WASM_VECTOR_LEN;
+      getInt32Memory0()[arg0 / 4 + 1] = len0;
+      getInt32Memory0()[arg0 / 4 + 0] = ptr0;
+    };
+    imports.wbg.__wbg_jsFetch_1c0faf7eaeeec79c = function(arg0, arg1) {
+      const ret = jsFetch(getStringFromWasm0(arg0, arg1));
+      return ret;
+    };
+    imports.wbg.__wbg_jsAbortRequest_3ad497cfce2a4eb6 = typeof jsAbortRequest == "function" ? jsAbortRequest : notDefined("jsAbortRequest");
+    imports.wbg.__wbg_jsAttachMediaSource_69fcab1c5cd6f603 = typeof jsAttachMediaSource == "function" ? jsAttachMediaSource : notDefined("jsAttachMediaSource");
+    imports.wbg.__wbg_jsRemoveMediaSource_bfd555f14dbd804d = typeof jsRemoveMediaSource == "function" ? jsRemoveMediaSource : notDefined("jsRemoveMediaSource");
+    imports.wbg.__wbg_jsSetMediaSourceDuration_4c22750bc2e2b8b6 = typeof jsSetMediaSourceDuration == "function" ? jsSetMediaSourceDuration : notDefined("jsSetMediaSourceDuration");
+    imports.wbg.__wbg_jsAddSourceBuffer_f769ac5dd28e087f = function(arg0, arg1, arg2) {
+      const ret = jsAddSourceBuffer(arg0 >>> 0, getStringFromWasm0(arg1, arg2));
+      return ret;
+    };
+    imports.wbg.__wbg_jsAppendBuffer_1c43e16b9b4bc73f = function(arg0, arg1, arg2) {
+      const ret = jsAppendBuffer(arg0, arg1, arg2 !== 0);
+      _assertClass(ret, AppendBufferResult);
+      var ptr0 = ret.ptr;
+      ret.ptr = 0;
+      return ptr0;
+    };
+    imports.wbg.__wbg_jsEndOfStream_d21dc02fa7e95e93 = typeof jsEndOfStream == "function" ? jsEndOfStream : notDefined("jsEndOfStream");
+    imports.wbg.__wbg_jsStartObservingPlayback_39e965722ac389f3 = typeof jsStartObservingPlayback == "function" ? jsStartObservingPlayback : notDefined("jsStartObservingPlayback");
+    imports.wbg.__wbg_jsStopObservingPlayback_6ba8aea701a8a72e = typeof jsStopObservingPlayback == "function" ? jsStopObservingPlayback : notDefined("jsStopObservingPlayback");
+    imports.wbg.__wbg_jsFreeResource_efd8cc10a164752b = typeof jsFreeResource == "function" ? jsFreeResource : notDefined("jsFreeResource");
+    imports.wbg.__wbg_jsSeek_264e96c2a274615f = typeof jsSeek == "function" ? jsSeek : notDefined("jsSeek");
+    imports.wbg.__wbindgen_throw = function(arg0, arg1) {
+      throw new Error(getStringFromWasm0(arg0, arg1));
+    };
+    return imports;
+  }
+  function initMemory(imports, maybe_memory) {
+  }
+  function finalizeInit(instance, module) {
+    wasm = instance.exports;
+    init.__wbindgen_wasm_module = module;
+    cachedFloat64Memory0 = new Float64Array();
+    cachedInt32Memory0 = new Int32Array();
+    cachedUint8Memory0 = new Uint8Array();
+    return wasm;
+  }
+  async function init(input) {
+    if (typeof input === "undefined") {
+      input = new URL("wasp_hls_bg.wasm", import_meta.url);
+    }
+    const imports = getImports();
+    if (typeof input === "string" || typeof Request === "function" && input instanceof Request || typeof URL === "function" && input instanceof URL) {
+      input = fetch(input);
+    }
+    initMemory(imports);
+    const { instance, module } = await load(await input, imports);
+    return finalizeInit(instance, module);
+  }
+  var wasp_hls_default = init;
+
+  // src/ts-common/idGenerator.ts
+  function idGenerator() {
+    let prefix = "";
+    let currId = -1;
+    return function generateNewId() {
+      currId++;
+      if (currId >= Number.MAX_SAFE_INTEGER) {
+        prefix += "0";
+        currId = 0;
+      }
+      return prefix + String(currId);
+    };
+  }
+  function numberIdGenerator() {
+    let currId = -1;
+    return function generateNewNumberId() {
+      currId++;
+      if (currId >= Number.MAX_SAFE_INTEGER) {
+        console.warn("Exceeding `numberIdGenerator` limit. Collisions may occur");
+        currId = 0;
+      }
+      return currId;
+    };
+  }
+
+  // src/ts-common/isobmff-utils.ts
+  function getTrackFragmentDecodeTime(buffer) {
+    const traf = getTRAF(buffer);
+    if (traf === null) {
+      return void 0;
+    }
+    const tfdt = getBoxContent(traf, 1952867444);
+    if (tfdt === null) {
+      return void 0;
+    }
+    const version = tfdt[0];
+    return version === 1 ? be8toi(tfdt, 4) : version === 0 ? be4toi(tfdt, 4) : void 0;
+  }
+  function getDurationFromTrun(buffer) {
+    const trafs = getTRAFs(buffer);
+    if (trafs.length === 0) {
+      return void 0;
+    }
+    let completeDuration = 0;
+    for (const traf of trafs) {
+      const trun = getBoxContent(traf, 1953658222);
+      if (trun === null) {
+        return void 0;
+      }
+      let cursor = 0;
+      const version = trun[cursor];
+      cursor += 1;
+      if (version > 1) {
+        return void 0;
+      }
+      const flags = be3toi(trun, cursor);
+      cursor += 3;
+      const hasSampleDuration = (flags & 256) > 0;
+      let defaultDuration = 0;
+      if (!hasSampleDuration) {
+        defaultDuration = getDefaultDurationFromTFHDInTRAF(traf);
+        if (defaultDuration === void 0) {
+          return void 0;
+        }
+      }
+      const hasDataOffset = (flags & 1) > 0;
+      const hasFirstSampleFlags = (flags & 4) > 0;
+      const hasSampleSize = (flags & 512) > 0;
+      const hasSampleFlags = (flags & 1024) > 0;
+      const hasSampleCompositionOffset = (flags & 2048) > 0;
+      const sampleCounts = be4toi(trun, cursor);
+      cursor += 4;
+      if (hasDataOffset) {
+        cursor += 4;
+      }
+      if (hasFirstSampleFlags) {
+        cursor += 4;
+      }
+      let i = sampleCounts;
+      let duration = 0;
+      while (i-- > 0) {
+        if (hasSampleDuration) {
+          duration += be4toi(trun, cursor);
+          cursor += 4;
+        } else {
+          duration += defaultDuration;
+        }
+        if (hasSampleSize) {
+          cursor += 4;
+        }
+        if (hasSampleFlags) {
+          cursor += 4;
+        }
+        if (hasSampleCompositionOffset) {
+          cursor += 4;
+        }
+      }
+      completeDuration += duration;
+    }
+    return completeDuration;
+  }
+  function getMDHDTimescale(buffer) {
+    const mdia = getMDIA(buffer);
+    if (mdia === null) {
+      return void 0;
+    }
+    const mdhd = getBoxContent(mdia, 1835296868);
+    if (mdhd === null) {
+      return void 0;
+    }
+    let cursor = 0;
+    const version = mdhd[cursor];
+    cursor += 4;
+    return version === 1 ? be4toi(mdhd, cursor + 16) : version === 0 ? be4toi(mdhd, cursor + 8) : void 0;
+  }
+  function getDefaultDurationFromTFHDInTRAF(traf) {
+    const tfhd = getBoxContent(traf, 1952868452);
+    if (tfhd === null) {
+      return void 0;
+    }
+    let cursor = 1;
+    const flags = be3toi(tfhd, cursor);
+    cursor += 3;
+    const hasBaseDataOffset = (flags & 1) > 0;
+    const hasSampleDescriptionIndex = (flags & 2) > 0;
+    const hasDefaultSampleDuration = (flags & 8) > 0;
+    if (!hasDefaultSampleDuration) {
+      return void 0;
+    }
+    cursor += 4;
+    if (hasBaseDataOffset) {
+      cursor += 8;
+    }
+    if (hasSampleDescriptionIndex) {
+      cursor += 4;
+    }
+    const defaultDuration = be4toi(tfhd, cursor);
+    return defaultDuration;
+  }
+  function getTRAF(buffer) {
+    const moof = getBoxContent(buffer, 1836019558);
+    if (moof === null) {
+      return null;
+    }
+    return getBoxContent(moof, 1953653094);
+  }
+  function getTRAFs(buffer) {
+    const moofs = getBoxesContent(buffer, 1836019558);
+    return moofs.reduce((acc, moof) => {
+      const traf = getBoxContent(moof, 1953653094);
+      if (traf !== null) {
+        acc.push(traf);
+      }
+      return acc;
+    }, []);
+  }
+  function getMDIA(buf) {
+    const moov = getBoxContent(buf, 1836019574);
+    if (moov === null) {
+      return null;
+    }
+    const trak = getBoxContent(moov, 1953653099);
+    if (trak === null) {
+      return null;
+    }
+    return getBoxContent(trak, 1835297121);
+  }
+  function getBoxContent(buf, boxName) {
+    const offsets = getBoxOffsets(buf, boxName);
+    return offsets !== null ? buf.subarray(offsets[1], offsets[2]) : null;
+  }
+  function getBoxesContent(buf, boxName) {
+    const ret = [];
+    let currentBuf = buf;
+    while (true) {
+      const offsets = getBoxOffsets(currentBuf, boxName);
+      if (offsets === null) {
+        return ret;
+      }
+      if (offsets[2] === 0 || currentBuf.length === 0) {
+        throw new Error("Error while parsing ISOBMFF box");
+      }
+      ret.push(currentBuf.subarray(offsets[1], offsets[2]));
+      currentBuf = currentBuf.subarray(offsets[2]);
+    }
+  }
+  function getBoxOffsets(buf, boxName) {
+    const len = buf.length;
+    let boxBaseOffset = 0;
+    let name;
+    let lastBoxSize = 0;
+    let lastOffset;
+    while (boxBaseOffset + 8 <= len) {
+      lastOffset = boxBaseOffset;
+      lastBoxSize = be4toi(buf, lastOffset);
+      lastOffset += 4;
+      name = be4toi(buf, lastOffset);
+      lastOffset += 4;
+      if (lastBoxSize === 0) {
+        lastBoxSize = len - boxBaseOffset;
+      } else if (lastBoxSize === 1) {
+        if (lastOffset + 8 > len) {
+          return null;
+        }
+        lastBoxSize = be8toi(buf, lastOffset);
+        lastOffset += 8;
+      }
+      if (lastBoxSize < 0) {
+        throw new Error("ISOBMFF: Size out of range");
+      }
+      if (name === boxName) {
+        if (boxName === 1970628964) {
+          lastOffset += 16;
+        }
+        return [boxBaseOffset, lastOffset, boxBaseOffset + lastBoxSize];
+      } else {
+        boxBaseOffset += lastBoxSize;
+      }
+    }
+    return null;
+  }
+  function be3toi(bytes, offset) {
+    return bytes[offset + 0] * 65536 + bytes[offset + 1] * 256 + bytes[offset + 2];
+  }
+  function be4toi(bytes, offset) {
+    return bytes[offset + 0] * 16777216 + bytes[offset + 1] * 65536 + bytes[offset + 2] * 256 + bytes[offset + 3];
+  }
+  function be8toi(bytes, offset) {
+    return (bytes[offset + 0] * 16777216 + bytes[offset + 1] * 65536 + bytes[offset + 2] * 256 + bytes[offset + 3]) * 4294967296 + bytes[offset + 4] * 16777216 + bytes[offset + 5] * 65536 + bytes[offset + 6] * 256 + bytes[offset + 7];
+  }
+
+  // src/ts-common/QueuedSourceBuffer.ts
+  var QueuedSourceBuffer = class {
+    constructor(sourceBuffer) {
+      this._sourceBuffer = sourceBuffer;
+      this._queue = [];
+      this._pendingTask = null;
+      const intervalId = setInterval(() => {
+        this._flush();
+      }, 2e3);
+      const onError = this._onPendingTaskError.bind(this);
+      const _onUpdateEnd = () => {
+        this._flush();
+      };
+      sourceBuffer.addEventListener("error", onError);
+      sourceBuffer.addEventListener("updateend", _onUpdateEnd);
+      this._dispose = [() => {
+        clearInterval(intervalId);
+        sourceBuffer.removeEventListener("error", onError);
+        sourceBuffer.removeEventListener("updateend", _onUpdateEnd);
+      }];
+    }
+    push(data) {
+      console.debug("QSB: receiving order to push data to the SourceBuffer");
+      return this._addToQueue({ type: 0 /* Push */, value: data });
+    }
+    removeBuffer(start, end) {
+      console.debug("QSB: receiving order to remove data from the SourceBuffer", start, end);
+      return this._addToQueue({
+        type: 1 /* Remove */,
+        value: { start, end }
+      });
+    }
+    getBufferedRanges() {
+      return this._sourceBuffer.buffered;
+    }
+    dispose() {
+      this._dispose.forEach((disposeFn) => disposeFn());
+      if (this._pendingTask !== null) {
+        this._pendingTask.reject(new Error("QueuedSourceBuffer Cancelled"));
+        this._pendingTask = null;
+      }
+      while (this._queue.length > 0) {
+        const nextElement = this._queue.shift();
+        if (nextElement !== void 0) {
+          nextElement.reject(new Error("QueuedSourceBuffer Cancelled"));
+        }
+      }
+    }
+    _onPendingTaskError(err) {
+      const error = err instanceof Error ? err : new Error("An unknown error occured when doing operations on the SourceBuffer");
+      if (this._pendingTask != null) {
+        this._pendingTask.reject(error);
+      }
+    }
+    _addToQueue(operation) {
+      return new Promise((resolve, reject) => {
+        const shouldRestartQueue = this._queue.length === 0 && this._pendingTask === null;
+        const queueItem = { resolve, reject, ...operation };
+        this._queue.push(queueItem);
+        if (shouldRestartQueue) {
+          this._flush();
+        }
+      });
+    }
+    _flush() {
+      if (this._sourceBuffer.updating) {
+        return;
+      }
+      if (this._pendingTask !== null) {
+        const task = this._pendingTask;
+        const { resolve } = task;
+        this._pendingTask = null;
+        resolve();
+        return this._flush();
+      } else {
+        const nextItem = this._queue.shift();
+        if (nextItem === void 0) {
+          return;
+        } else {
+          this._pendingTask = nextItem;
+        }
+      }
+      try {
+        switch (this._pendingTask.type) {
+          case 0 /* Push */:
+            const segmentData = this._pendingTask.value;
+            if (segmentData === void 0) {
+              this._flush();
+              return;
+            }
+            console.debug("QSB: pushing data");
+            this._sourceBuffer.appendBuffer(segmentData);
+            break;
+          case 1 /* Remove */:
+            const { start, end } = this._pendingTask.value;
+            console.debug("QSB: removing data from SourceBuffer", start, end);
+            this._sourceBuffer.remove(start, end);
+            break;
+          default:
+            assertUnreachable(this._pendingTask);
+        }
+      } catch (e) {
+        this._onPendingTaskError(e);
+      }
+    }
+  };
+  function assertUnreachable(_) {
+    throw new Error("Unreachable path taken");
+  }
+
+  // src/ts-worker/globals.ts
+  var PlayerInstance = class {
+    constructor() {
+      this._instanceInfo = null;
+      this.hasWorkerMse = void 0;
+    }
+    start(hasWorkerMse) {
+      this.hasWorkerMse = hasWorkerMse;
+      this._instanceInfo = {
+        dispatcher: new Dispatcher(),
+        content: null
+      };
+    }
+    dispose() {
+      this._instanceInfo?.dispatcher.free();
+      jsMemoryResources.freeEverything();
+      requestsStore.freeEverything();
+    }
+    changeContent(content) {
+      if (this._instanceInfo === null) {
+        console.error();
+        return;
+      }
+      jsMemoryResources.freeEverything();
+      requestsStore.freeEverything();
+      this._instanceInfo.content = content;
+    }
+    getDispatcher() {
+      return this._instanceInfo === null ? null : this._instanceInfo.dispatcher;
+    }
+    getContentInfo() {
+      return this._instanceInfo === null ? null : this._instanceInfo.content;
+    }
+  };
+  var GenericStore = class {
+    constructor() {
+      this._generateId = numberIdGenerator();
+      this._store = {};
+    }
+    create(data) {
+      const id = this._generateId();
+      this._store[id] = data;
+      return id;
+    }
+    delete(id) {
+      delete this._store[id];
+    }
+    get(id) {
+      return this._store[id];
+    }
+    freeEverything() {
+      this._store = {};
+    }
+  };
+  var playerInstance = new PlayerInstance();
+  var jsMemoryResources = new GenericStore();
+  var requestsStore = new GenericStore();
+  function getMediaSourceObj() {
+    const contentInfo = playerInstance.getContentInfo();
+    if (contentInfo === null) {
+      return void 0;
+    }
+    const { mediaSourceObj } = contentInfo;
+    if (mediaSourceObj === null) {
+      return void 0;
+    }
+    return mediaSourceObj;
+  }
+
+  // src/ts-worker/postMessage.ts
+  function postMessageToMain(msg, transferables) {
+    console.debug("<-- sending to main:", msg.type);
+    if (transferables === void 0) {
+      postMessage(msg);
+    } else {
+      postMessage(msg, transferables);
+    }
+  }
+
+  // src/ts-worker/segment-preparation.ts
+  function getTimeInformationFromMp4(segment, initTimescale) {
+    const baseDecodeTime = getTrackFragmentDecodeTime(segment);
+    if (baseDecodeTime === void 0) {
+      return null;
+    }
+    const trunDuration = getDurationFromTrun(segment);
+    return {
+      time: baseDecodeTime / initTimescale,
+      duration: trunDuration === void 0 ? void 0 : trunDuration / initTimescale
+    };
+  }
+
+  // src/ts-worker/transmux.ts
+  var import_mux = __toESM(require_mux());
+  var transmuxer;
+  var MPEG_TS_REGEXP = /^[a-z]+\/mp2t;/i;
+  function isMpegTsType(typ) {
+    return MPEG_TS_REGEXP.test(typ);
+  }
+  function shouldTransmux(typ) {
+    if (!canTransmux(typ)) {
+      return false;
+    }
+    if (typeof MediaSource === "undefined") {
+      return true;
+    }
+    return !MediaSource.isTypeSupported(typ);
+  }
+  function canTransmux(typ) {
+    return isMpegTsType(typ);
+  }
+  function getTransmuxedType(typ, mediaType) {
+    if (!canTransmux(typ)) {
+      return typ;
+    }
+    let mimeType = typ.replace(/mp2t/i, "mp4");
+    if (mediaType === MediaType.Audio) {
+      mimeType = typ.replace(/video/i, "audio");
+    }
+    const match = /avc1\.(66|77|100)\.(\d+)/.exec(mimeType);
+    if (match) {
+      const profile = match[1];
+      let newProfile;
+      if (profile === "66") {
+        newProfile = "4200";
+      } else if (profile === "77") {
+        newProfile = "4d00";
+      } else {
+        if (profile !== "100") {
+          console.error("Impossible regex catch");
+        }
+        newProfile = "6400";
+      }
+      const level = Number(match[2]);
+      if (level >= 256) {
+        console.error("Invalid legacy avc1 level number.");
+      }
+      const newLevel = (level >> 4).toString(16) + (level & 15).toString(16);
+      mimeType = `avc1.${newProfile}${newLevel}`;
+    }
+    return mimeType;
+  }
+  function resetTransmuxer() {
+    transmuxer = void 0;
+  }
+  function transmux(inputSegment) {
+    if (transmuxer === void 0) {
+      transmuxer = new import_mux.default.mp4.Transmuxer();
+    }
+    const subSegments = [];
+    transmuxer.on("data", function(segment) {
+      const transmuxedSegment = new Uint8Array(segment.initSegment.byteLength + segment.data.byteLength);
+      transmuxedSegment.set(segment.initSegment, 0);
+      transmuxedSegment.set(segment.data, segment.initSegment.byteLength);
+      subSegments.push(transmuxedSegment);
+    });
+    transmuxer.push(inputSegment);
+    transmuxer.flush();
+    if (subSegments.length === 0) {
+      return null;
+    } else if (subSegments.length === 1) {
+      return subSegments[0];
+    } else {
+      const segmentSize = subSegments.reduce((acc, s) => {
+        return acc + s.byteLength;
+      }, 0);
+      const fullSegment = new Uint8Array(segmentSize);
+      let currOffset = 0;
+      for (const subSegment of subSegments) {
+        fullSegment.set(subSegment, currOffset);
+        currOffset += subSegment.byteLength;
+      }
+      return fullSegment;
+    }
+  }
+
+  // src/ts-worker/utils.ts
+  function formatErrMessage(err, defaultMsg) {
+    return err instanceof Error ? err.name + ": " + err.message : defaultMsg;
+  }
+
+  // src/ts-worker/bindings.ts
+  var generateMediaSourceId = idGenerator();
+  function getResourceData(resourceId) {
+    return jsMemoryResources.get(resourceId);
+  }
+  function log(logLevel, logStr) {
+    const now = performance.now().toFixed(2);
+    switch (logLevel) {
+      case LogLevel.Error:
+        console.error(now, logStr);
+        break;
+      case LogLevel.Warn:
+        console.warn(now, logStr);
+        break;
+      case LogLevel.Info:
+        console.info(now, logStr);
+        break;
+      case LogLevel.Debug:
+        console.debug(now, logStr);
+        break;
+    }
+  }
+  function timer(duration, reason) {
+    const timerId = setTimeout(() => {
+      const dispatcher = playerInstance.getDispatcher();
+      if (dispatcher === null) {
+        return;
+      }
+      dispatcher.on_timer_ended(timerId, reason);
+    }, duration);
+    return timerId;
+  }
+  function clearTimer(id) {
+    clearTimeout(id);
+  }
+  function doFetch(url) {
+    const abortController = new AbortController();
+    const currentRequestId = requestsStore.create({ abortController });
+    const timestampBef = performance.now();
+    fetch(url, { signal: abortController.signal }).then(async (res) => {
+      const arrRes = await res.arrayBuffer();
+      const elapsedMs = performance.now() - timestampBef;
+      requestsStore.delete(currentRequestId);
+      const dispatcher = playerInstance.getDispatcher();
+      if (dispatcher !== null) {
+        const segmentArray = new Uint8Array(arrRes);
+        const currentResourceId = jsMemoryResources.create(segmentArray);
+        dispatcher.on_request_finished(currentRequestId, currentResourceId, segmentArray.byteLength, res.url, elapsedMs);
+      }
+    }).catch((err) => {
+      requestsStore.delete(currentRequestId);
+      if (err instanceof Error && err.name === "AbortError") {
+        return;
+      }
+    });
+    return currentRequestId;
+  }
+  function abortRequest(id) {
+    const requestObj = requestsStore.get(id);
+    if (requestObj !== void 0) {
+      requestObj.abortController.abort();
+      Promise.resolve().then(() => {
+        requestsStore.delete(id);
+      });
+      return true;
+    }
+    return false;
+  }
+  function seek(position) {
+    const contentInfo = playerInstance.getContentInfo();
+    if (contentInfo === null || contentInfo.mediaSourceObj === null) {
+      console.error("Attempting to seek when no MediaSource is created");
+      return;
+    }
+    postMessageToMain({
+      type: "seek",
+      value: {
+        mediaSourceId: contentInfo.mediaSourceObj.mediaSourceId,
+        position
+      }
+    });
+  }
+  function attachMediaSource() {
+    const contentInfo = playerInstance.getContentInfo();
+    if (contentInfo === null) {
+      return;
+    }
+    try {
+      let onMediaSourceEnded = function() {
+        playerInstance.getDispatcher()?.on_media_source_state_change(MediaSourceReadyState.Ended);
+      }, onMediaSourceOpen = function() {
+        playerInstance.getDispatcher()?.on_media_source_state_change(MediaSourceReadyState.Open);
+      }, onMediaSourceClose = function() {
+        playerInstance.getDispatcher()?.on_media_source_state_change(MediaSourceReadyState.Closed);
+      };
+      if (playerInstance.hasWorkerMse !== true) {
+        const mediaSourceId = generateMediaSourceId();
+        contentInfo.mediaSourceObj = {
+          nextSourceBufferId: 0,
+          sourceBuffers: [],
+          type: "main",
+          mediaSourceId
+        };
+        postMessageToMain({
+          type: "create-media-source",
+          value: {
+            contentId: contentInfo.contentId,
+            mediaSourceId
+          }
+        });
+      } else {
+        const mediaSource = new MediaSource();
+        mediaSource.addEventListener("sourceclose", onMediaSourceClose);
+        mediaSource.addEventListener("sourceended", onMediaSourceEnded);
+        mediaSource.addEventListener("sourceopen", onMediaSourceOpen);
+        const removeEventListeners = () => {
+          mediaSource.removeEventListener("sourceclose", onMediaSourceClose);
+          mediaSource.removeEventListener("sourceended", onMediaSourceEnded);
+          mediaSource.removeEventListener("sourceopen", onMediaSourceOpen);
+        };
+        const handle = mediaSource.handle;
+        let objectURL;
+        if (handle === void 0 || handle === null) {
+          objectURL = URL.createObjectURL(mediaSource);
+        }
+        const mediaSourceId = generateMediaSourceId();
+        contentInfo.mediaSourceObj = {
+          type: "worker",
+          mediaSourceId,
+          mediaSource,
+          removeEventListeners,
+          sourceBuffers: [],
+          nextSourceBufferId: 0
+        };
+        postMessageToMain({
+          type: "attach-media-source",
+          value: {
+            contentId: contentInfo.contentId,
+            handle,
+            src: objectURL,
+            mediaSourceId
+          }
+        }, handle !== void 0 ? [handle] : []);
+      }
+    } catch (e) {
+      scheduleMicrotask(() => {
+      });
+    }
+  }
+  function scheduleMicrotask(fn) {
+    if (typeof queueMicrotask === "function") {
+      queueMicrotask(fn);
+    } else {
+      Promise.resolve().then(fn).catch(() => {
+      });
+    }
+  }
+  function removeMediaSource() {
+    const contentInfo = playerInstance.getContentInfo();
+    if (contentInfo === null) {
+      return;
+    }
+    if (contentInfo.mediaSourceObj === null) {
+      return;
+    }
+    if (contentInfo.mediaSourceObj.type === "worker") {
+      const {
+        mediaSource,
+        removeEventListeners
+      } = contentInfo.mediaSourceObj;
+      removeEventListeners();
+      if (mediaSource !== null && mediaSource.readyState !== "closed") {
+        const { readyState, sourceBuffers } = mediaSource;
+        for (let i = sourceBuffers.length - 1; i >= 0; i--) {
+          const sourceBuffer = sourceBuffers[i];
+          if (!sourceBuffer.updating) {
+            try {
+              if (readyState === "open") {
+                sourceBuffer.abort();
+              }
+              mediaSource.removeSourceBuffer(sourceBuffer);
+            } catch (e) {
+              const msg = formatErrMessage(e, "Unknown error while removing SourceBuffer");
+              Dispatcher.log(LogLevel.Error, "Could not remove SourceBuffer: " + msg);
+            }
+          }
+        }
+      }
+    }
+    postMessageToMain({
+      type: "clear-media-source",
+      value: { mediaSourceId: contentInfo.mediaSourceObj.mediaSourceId }
+    });
+  }
+  function setMediaSourceDuration(duration) {
+    const contentInfo = playerInstance.getContentInfo();
+    if (contentInfo === null) {
+      return;
+    }
+    if (contentInfo.mediaSourceObj === null) {
+      return;
+    }
+    if (contentInfo.mediaSourceObj.type === "worker") {
+      try {
+        contentInfo.mediaSourceObj.mediaSource.duration = duration;
+      } catch (err) {
+      }
+    } else {
+      postMessageToMain({
+        type: "update-media-source-duration",
+        value: {
+          mediaSourceId: contentInfo.mediaSourceObj.mediaSourceId,
+          duration
+        }
+      });
+    }
+  }
+  function addSourceBuffer(mediaType, typ) {
+    const contentInfo = playerInstance.getContentInfo();
+    if (contentInfo === null) {
+      throw new Error("Error 1");
+    }
+    if (contentInfo.mediaSourceObj === null) {
+      throw new Error("Error 2");
+    }
+    if (contentInfo.mediaSourceObj.type === "main") {
+      const {
+        sourceBuffers,
+        nextSourceBufferId
+      } = contentInfo.mediaSourceObj;
+      try {
+        let mimeType = typ;
+        if (shouldTransmux(typ)) {
+          mimeType = getTransmuxedType(typ, mediaType);
+        }
+        const sourceBufferId = nextSourceBufferId;
+        sourceBuffers.push({
+          lastInitTimescale: void 0,
+          id: sourceBufferId,
+          transmuxer: mimeType === typ ? null : transmux,
+          sourceBuffer: null
+        });
+        contentInfo.mediaSourceObj.nextSourceBufferId++;
+        postMessageToMain({
+          type: "create-source-buffer",
+          value: {
+            mediaSourceId: contentInfo.mediaSourceObj.mediaSourceId,
+            sourceBufferId,
+            contentType: mimeType
+          }
+        });
+        return sourceBufferId;
+      } catch (err) {
+        throw err;
+      }
+    } else {
+      const {
+        mediaSource,
+        sourceBuffers,
+        nextSourceBufferId
+      } = contentInfo.mediaSourceObj;
+      if (mediaSource.readyState === "closed") {
+        throw new Error("A");
+      }
+      if (typ === "") {
+        throw new Error("B");
+      }
+      try {
+        let mimeType = typ;
+        if (shouldTransmux(typ)) {
+          mimeType = getTransmuxedType(typ, mediaType);
+        }
+        const sourceBuffer = mediaSource.addSourceBuffer(mimeType);
+        const sourceBufferId = nextSourceBufferId;
+        const queuedSourceBuffer = new QueuedSourceBuffer(sourceBuffer);
+        sourceBuffers.push({
+          lastInitTimescale: void 0,
+          id: sourceBufferId,
+          sourceBuffer: queuedSourceBuffer,
+          transmuxer: mimeType === typ ? null : transmux
+        });
+        contentInfo.mediaSourceObj.nextSourceBufferId++;
+        return sourceBufferId;
+      } catch (err) {
+        throw new Error("C");
+      }
+    }
+  }
+  function appendBuffer(sourceBufferId, resourceId, parseTimeInformation) {
+    let segment = jsMemoryResources.get(resourceId);
+    const mediaSourceObj = getMediaSourceObj();
+    if (segment === void 0) {
+      return AppendBufferResult.error(AppendBufferErrorCode.NoResource, "Segment preparation error: No resource with the given `resourceId`");
+    }
+    if (mediaSourceObj === void 0) {
+      return AppendBufferResult.error(AppendBufferErrorCode.NoSourceBuffer, "Segment preparation error: No MediaSource attached");
+    }
+    const sourceBufferObjIdx = mediaSourceObj.sourceBuffers.findIndex(({ id }) => id === sourceBufferId);
+    if (sourceBufferObjIdx < -1) {
+      return AppendBufferResult.error(AppendBufferErrorCode.NoSourceBuffer, "Segment preparation error: No SourceBuffer with the given `SourceBufferId`");
+    }
+    const sourceBufferObj = mediaSourceObj.sourceBuffers[sourceBufferObjIdx];
+    if (sourceBufferObj.transmuxer !== null) {
+      try {
+        const transmuxedData = sourceBufferObj.transmuxer(segment);
+        if (transmuxedData !== null) {
+          segment = transmuxedData;
+        } else {
+          return AppendBufferResult.error(AppendBufferErrorCode.TransmuxerError, "Segment preparation error: the transmuxer couldn't process the segment");
+        }
+      } catch (err) {
+        const msg = formatErrMessage(err, "Unknown error while transmuxing segment");
+        return AppendBufferResult.error(AppendBufferErrorCode.TransmuxerError, msg);
+      }
+    }
+    let timescale = getMDHDTimescale(segment);
+    if (timescale !== void 0) {
+      sourceBufferObj.lastInitTimescale = timescale;
+    } else {
+      timescale = sourceBufferObj.lastInitTimescale;
+    }
+    let timeInfo;
+    if (parseTimeInformation === true && timescale !== void 0) {
+      timeInfo = getTimeInformationFromMp4(segment, timescale);
+    }
+    try {
+      if (sourceBufferObj.sourceBuffer !== null) {
+        sourceBufferObj.sourceBuffer.push(segment).then(() => {
+          try {
+            playerInstance.getDispatcher()?.on_source_buffer_update(sourceBufferId);
+          } catch (err) {
+            console.error("Error when calling `on_source_buffer_update`", err);
+          }
+        }).catch(() => {
+          try {
+            playerInstance.getDispatcher()?.on_source_buffer_error(sourceBufferId);
+          } catch (err) {
+            console.error("Error when calling `on_source_buffer_error`", err);
+          }
+        });
+      } else {
+        const buffer = segment.buffer;
+        postMessageToMain({
+          type: "append-buffer",
+          value: {
+            mediaSourceId: mediaSourceObj.mediaSourceId,
+            sourceBufferId,
+            data: buffer
+          }
+        }, [buffer]);
+      }
+    } catch (err) {
+      return AppendBufferResult.error(AppendBufferErrorCode.UnknownError);
+    }
+    return AppendBufferResult.success(timeInfo?.time, timeInfo?.duration);
+  }
+  function removeBuffer(sourceBufferId, start, end) {
+    try {
+      const mediaSourceObj = getMediaSourceObj();
+      if (mediaSourceObj === void 0) {
+        return;
+      }
+      if (mediaSourceObj.type === "worker") {
+        const sourceBuffer = mediaSourceObj.sourceBuffers.find(({ id }) => id === sourceBufferId);
+        if (sourceBuffer === void 0) {
+          return;
+        }
+        sourceBuffer.sourceBuffer.removeBuffer(start, end).then(() => {
+          try {
+            playerInstance.getDispatcher()?.on_source_buffer_update(sourceBufferId);
+          } catch (err) {
+            console.error("Error when calling `on_source_buffer_update`", err);
+          }
+        }).catch(() => {
+          try {
+            playerInstance.getDispatcher()?.on_source_buffer_error(sourceBufferId);
+          } catch (err) {
+            console.error("Error when calling `on_source_buffer_error`", err);
+          }
+        });
+      } else {
+        postMessageToMain({
+          type: "remove-buffer",
+          value: {
+            mediaSourceId: mediaSourceObj.mediaSourceId,
+            sourceBufferId,
+            start,
+            end
+          }
+        });
+      }
+    } catch (err) {
+      return;
+    }
+  }
+  function endOfStream() {
+    try {
+      const mediaSourceObj = getMediaSourceObj();
+      if (mediaSourceObj === void 0) {
+        return;
+      }
+      if (mediaSourceObj.type === "worker") {
+        mediaSourceObj.mediaSource.endOfStream();
+      } else {
+        postMessageToMain({
+          type: "end-of-stream",
+          value: { mediaSourceId: mediaSourceObj.mediaSourceId }
+        });
+      }
+    } catch (err) {
+      return;
+    }
+  }
+  function startObservingPlayback() {
+    const contentInfo = playerInstance.getContentInfo();
+    if (contentInfo === null) {
+      return;
+    }
+    if (contentInfo.mediaSourceObj === null) {
+      return;
+    }
+    postMessageToMain({
+      type: "start-playback-observation",
+      value: { mediaSourceId: contentInfo.mediaSourceObj.mediaSourceId }
+    });
+  }
+  function stopObservingPlayback() {
+    const contentInfo = playerInstance.getContentInfo();
+    if (contentInfo === null) {
+      return;
+    }
+    if (contentInfo.mediaSourceObj === null) {
+      return;
+    }
+    postMessageToMain({
+      type: "stop-playback-observation",
+      value: { mediaSourceId: contentInfo.mediaSourceObj.mediaSourceId }
+    });
+  }
+  function freeResource(resourceId) {
+    if (jsMemoryResources.get(resourceId) === void 0) {
+      return false;
+    }
+    jsMemoryResources.delete(resourceId);
+    return true;
+  }
+  var global2 = self;
+  global2.jsLog = log;
+  global2.jsFetch = doFetch;
+  global2.jsAbortRequest = abortRequest;
+  global2.jsAttachMediaSource = attachMediaSource;
+  global2.jsRemoveMediaSource = removeMediaSource;
+  global2.jsSetMediaSourceDuration = setMediaSourceDuration;
+  global2.jsAddSourceBuffer = addSourceBuffer;
+  global2.jsAppendBuffer = appendBuffer;
+  global2.jsRemoveBuffer = removeBuffer;
+  global2.jsEndOfStream = endOfStream;
+  global2.jsStartObservingPlayback = startObservingPlayback;
+  global2.jsStopObservingPlayback = stopObservingPlayback;
+  global2.jsFreeResource = freeResource;
+  global2.jsSeek = seek;
+  global2.jsTimer = timer;
+  global2.jsClearTimer = clearTimer;
+  global2.jsGetResourceData = getResourceData;
+
+  // src/ts-worker/MessageReceiver.ts
+  var wasInitializedCalled = false;
+  function MessageReceiver() {
+    onmessage = function(evt) {
+      if (evt.origin !== "") {
+        console.error("Unexpected trans-origin message");
+        return;
+      }
+      const { data } = evt;
+      if (typeof data !== "object" || data === null || typeof data.type !== "string") {
+        console.error("unexpected main message");
+        return;
+      }
+      switch (data.type) {
+        case "init":
+          if (wasInitializedCalled) {
+            return handleInitializationError("Worker initialization already done", 0 /* AlreadyInitializedError */);
+          }
+          wasInitializedCalled = true;
+          const { wasmUrl, hasWorkerMse } = data.value;
+          initialize(wasmUrl, hasWorkerMse);
+          break;
+        case "dispose":
+          dispose();
+          break;
+        case "load": {
+          const dispatcher = playerInstance.getDispatcher();
+          if (dispatcher === null) {
+            return postUnitializedWorkerError(data.value.contentId);
+          }
+          const contentInfo = {
+            contentId: data.value.contentId,
+            mediaSourceObj: null,
+            observationsObj: null
+          };
+          playerInstance.changeContent(contentInfo);
+          resetTransmuxer();
+          dispatcher.load_content(data.value.url);
+          break;
+        }
+        case "stop": {
+          const dispatcher = playerInstance.getDispatcher();
+          if (dispatcher === null) {
+            return postUnitializedWorkerError(data.value.contentId);
+          }
+          dispatcher.stop();
+          break;
+        }
+        case "media-source-state-changed": {
+          const dispatcher = playerInstance.getDispatcher();
+          const contentInfo = playerInstance.getContentInfo();
+          if (dispatcher === null || contentInfo === null || contentInfo.mediaSourceObj?.mediaSourceId !== data.value.mediaSourceId) {
+            return;
+          }
+          dispatcher.on_media_source_state_change(data.value.state);
+          break;
+        }
+        case "source-buffer-updated": {
+          const dispatcher = playerInstance.getDispatcher();
+          const contentInfo = playerInstance.getContentInfo();
+          if (dispatcher === null || contentInfo === null || contentInfo.mediaSourceObj?.mediaSourceId !== data.value.mediaSourceId) {
+            return;
+          }
+          dispatcher.on_source_buffer_update(data.value.sourceBufferId);
+          break;
+        }
+        case "observation": {
+          const dispatcher = playerInstance.getDispatcher();
+          const contentInfo = playerInstance.getContentInfo();
+          if (dispatcher === null || contentInfo === null || contentInfo.mediaSourceObj?.mediaSourceId !== data.value.mediaSourceId) {
+            return;
+          }
+          const mediaObservation = new MediaObservation(data.value.reason, data.value.currentTime, data.value.readyState, data.value.buffered, data.value.paused, data.value.seeking);
+          dispatcher.on_playback_tick(mediaObservation);
+          break;
+        }
+        case "create-media-source-error": {
+          const dispatcher = playerInstance.getDispatcher();
+          const contentInfo = playerInstance.getContentInfo();
+          if (dispatcher === null || contentInfo === null || contentInfo.mediaSourceObj?.mediaSourceId !== data.value.mediaSourceId) {
+            return;
+          }
+          dispatcher.stop();
+          break;
+        }
+        case "update-media-source-duration-error": {
+          const dispatcher = playerInstance.getDispatcher();
+          const contentInfo = playerInstance.getContentInfo();
+          if (dispatcher === null || contentInfo === null || contentInfo.mediaSourceObj?.mediaSourceId !== data.value.mediaSourceId) {
+            return;
+          }
+          console.error("Error: when setting the MediaSource's duration");
+          break;
+        }
+        case "create-source-buffer-error": {
+          const dispatcher = playerInstance.getDispatcher();
+          const contentInfo = playerInstance.getContentInfo();
+          if (dispatcher === null || contentInfo === null || contentInfo.mediaSourceObj?.mediaSourceId !== data.value.mediaSourceId) {
+            return;
+          }
+          dispatcher.stop();
+          break;
+        }
+      }
+    };
+  }
+  function handleInitializationError(err, code) {
+    let message;
+    if (typeof err === "string") {
+      message = err;
+    } else if (err instanceof Error) {
+      message = err.message;
+    }
+    postMessageToMain({
+      type: "initialization-error",
+      value: {
+        code,
+        message
+      }
+    });
+  }
+  function postUnitializedWorkerError(contentId) {
+    postMessageToMain({
+      type: "content-error",
+      value: {
+        contentId,
+        message: "Error: Worker not initialized.",
+        code: 0 /* UnitializedError */
+      }
+    });
+  }
+  function initialize(wasmUrl, hasWorkerMse) {
+    wasp_hls_default(fetch(wasmUrl)).then(() => {
+      playerInstance.start(hasWorkerMse);
+      postMessageToMain({ type: "initialized", value: null });
+    }).catch((err) => {
+      handleInitializationError(err, 1 /* WasmRequestError */);
+    });
+  }
+  function dispose() {
+    stopObservingPlayback();
+    playerInstance.dispose();
+  }
+
+  // src/ts-worker/index.ts
+  MessageReceiver();
+})();
 /*! @name mux.js @version 6.1.0 @license Apache-2.0 */
