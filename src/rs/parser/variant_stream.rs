@@ -260,14 +260,18 @@ impl VariantStream {
         }
     }
 
+    pub(crate) fn url(&self) -> &Url {
+        &self.url
+    }
+
     /// TODO real update
     pub fn update_media_playlist(&mut self,
         playlist: impl BufRead,
         url: Url
-    ) -> Result<(), MediaPlaylistParsingError> {
+    ) -> Result<&MediaPlaylist, MediaPlaylistParsingError> {
         let new_mp = MediaPlaylist::create(playlist, url)?;
         self.media_playlist = Some(new_mp);
-        Ok(())
+        Ok(self.media_playlist.as_ref().unwrap())
     }
 
     pub fn get_url(&self) -> &Url {

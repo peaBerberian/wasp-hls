@@ -1,7 +1,13 @@
 use std::{io::BufRead, error, fmt};
 use crate::{utils::url::Url, Logger, bindings::MediaType};
 
-use super::utils::{parse_decimal_integer, parse_quoted_string, parse_decimal_floating_point, parse_enumerated_string};
+use super::utils::{
+    parse_decimal_integer,
+    parse_quoted_string,
+    parse_decimal_floating_point,
+    parse_enumerated_string,
+    parse_iso_8601_date,
+ };
 
 /// Structure representing the concept of the `Media Playlist` in HLS.
 #[derive(Clone, Debug)]
@@ -17,6 +23,7 @@ pub struct MediaPlaylist {
     pub i_frames_only: bool,
     pub map: Option<MapInfo>,
     pub segment_list: Vec<SegmentInfo>,
+    pub url: Url,
 
     // TODO
     // pub server_control: ServerControl,
@@ -112,7 +119,6 @@ impl MediaPlaylist {
         let mut next_segment_duration: Option<f64> = None;
 
         while let Some(line) = lines.next() {
-            // XXX TODO
             let str_line = line.unwrap();
             if str_line.is_empty() {
                 continue;
@@ -138,7 +144,6 @@ impl MediaPlaylist {
                     "-X-START:" => /* TODO */ {},
                     "INF" => match parse_decimal_floating_point(&str_line, 4 + "INF:".len()).0 {
                         Ok(d) => next_segment_duration = Some(d),
-                        // XXX TODO
                         Err(_) => return Err(MediaPlaylistParsingError::UnparsableExtInf),
                     },
                     "-X-MEDIA-SEQUENCE" => match parse_decimal_integer(&str_line, colon_idx + 1).0 {
@@ -156,6 +161,9 @@ impl MediaPlaylist {
                             Logger::warn(&format!("Unrecognized playlist type: {}", x));
                             playlist_type = PlaylistType::None;
                         },
+                    },
+                    "-X-PROGRAM-DATE-TIME" => if let Some(date) = parse_iso_8601_date(&str_line, colon_idx + 1) {
+                        curr_start_time = date;
                     },
                     "-X-I-FRAMES-ONLY" => i_frames_only = true,
                     "-X-MAP" => {
@@ -244,6 +252,7 @@ impl MediaPlaylist {
             i_frames_only,
             map,
             segment_list,
+            url,
             // TODO
             // server_control,
             // part_inf,
@@ -252,6 +261,10 @@ impl MediaPlaylist {
 
     pub(crate) fn extension(&self) -> Option<&str> {
         self.segment_list.get(0).map(|s| s.url.extension())
+    }
+
+    pub(crate) fn target_duration(&self) -> u32 {
+        self.target_duration
     }
 
     pub(crate) fn duration(&self) -> Option<f64> {
@@ -299,7 +312,6 @@ impl MediaPlaylist {
     pub fn last_segment_start(&self) -> Option<f64> {
         match self.end_list {
             false => {
-                Logger::warn("no end list");
                 None
             },
             true => self.segment_list.last().map(|x| x.start),

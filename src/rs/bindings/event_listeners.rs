@@ -3,7 +3,7 @@ use crate::{
     dispatcher::{MediaSourceReadyState, Dispatcher}, utils::url::Url,
 };
 
-use super::js_functions::{self, RequestId, SourceBufferId};
+use super::{js_functions::{self, RequestId, SourceBufferId}, TimerReason, TimerId, jsGetResourceData, ResourceId};
 
 /// Methods triggered on JavaScript events by the JavaScript code
 ///
@@ -14,7 +14,7 @@ use super::js_functions::{self, RequestId, SourceBufferId};
 #[wasm_bindgen]
 impl Dispatcher {
     /// Called by the JavaScript code each time an HTTP(S) request started with
-    /// `jsFetchU8` finished with success.
+    /// `jsFetch` finished with success.
     ///
     /// # Arguments
     ///
@@ -22,39 +22,24 @@ impl Dispatcher {
     ///   was started. This allows the `Dispatcher` to identify which request
     ///   is actually finished
     ///
-    /// * `result` - The data returned.
-    pub fn on_u8_request_finished(&mut self,
+    /// * `resource_id` - Id refering to the resource on the JavaScript-side.
+    pub fn on_request_finished(&mut self,
         request_id: RequestId,
-        result: Vec<u8>,
-        final_url: String,
-        duration_ms: f64 // TODO Rust-side?
-    ) {
-        let resource_size = result.len() as u32;
-        Dispatcher::on_request_succeeded(self,
-            request_id,
-            DataSource::Raw(result),
-            Url::new(final_url),
-            resource_size,
-            duration_ms);
-    }
-
-    pub fn on_u8_no_copy_request_finished(&mut self,
-        request_id: RequestId,
-        resource_id: u32,
+        resource_id: ResourceId,
         resource_size: u32,
         final_url: String,
         duration_ms: f64 // TODO Rust-side?
     ) {
         let resource_handle = JsMemoryBlob::from_resource_id(resource_id);
         Dispatcher::on_request_succeeded(self, request_id,
-            DataSource::JsBlob(resource_handle),
+            resource_handle,
             Url::new(final_url),
             resource_size,
             duration_ms);
     }
 
-    pub fn on_u8_request_failed(&mut self, request_id: RequestId) {
-        Dispatcher::on_request_failed(self, request_id);
+    pub fn on_request_failed(&mut self, request_id: RequestId) {
+        Dispatcher::on_request_failed_inner(self, request_id);
     }
 
     /// Called by the JavaScript code when the MediaSource's readyState changed.
@@ -88,9 +73,13 @@ impl Dispatcher {
     /// (seek operations, end of the streams, known stalls etc.) until
     /// `jsStopObservingPlayback` is called.
     pub fn on_playback_tick(&mut self, observation: MediaObservation) {
-        match observation.reason {
-            PlaybackTickReason::Seeking => Dispatcher::on_seek(self, observation),
-            _ => Dispatcher::on_regular_tick(self, observation),
+        Dispatcher::on_observation(self, observation);
+    }
+
+    pub fn on_timer_ended(&mut self, id: TimerId, reason: TimerReason) {
+        match reason {
+            TimerReason::MediaPlaylistRefresh =>
+                Dispatcher::on_playlist_refresh_timer_ended(self, id),
         }
     }
 }
@@ -113,37 +102,22 @@ pub enum PlaybackTickReason {
     Stalled,
 }
 
-pub enum DataSource {
-    /// When the Segment to push is available right now in memory.
-    Raw(Vec<u8>),
-    /// When the Segment to push is only accessible through JavaScript's memory.
-    JsBlob(JsMemoryBlob),
-}
-
-impl From<Vec<u8>> for DataSource {
-    fn from(v: Vec<u8>) -> DataSource {
-        DataSource::Raw(v)
-    }
-}
-
-impl From<JsMemoryBlob> for DataSource {
-    fn from(b: JsMemoryBlob) -> DataSource {
-        DataSource::JsBlob(b)
-    }
-}
-
 pub struct JsMemoryBlob {
-    id: u32,
+    id: ResourceId,
 }
 
 /// Special structure to handle data
 impl JsMemoryBlob {
-    pub fn from_resource_id(id: u32) -> Self {
+    pub fn from_resource_id(id: ResourceId) -> Self {
         Self { id }
     }
 
-    pub fn get_id(&self) -> u32 {
+    pub fn get_id(&self) -> ResourceId {
         self.id
+    }
+
+    pub fn obtain(self) -> Vec<u8> {
+        jsGetResourceData(self.id).unwrap()
     }
 }
 

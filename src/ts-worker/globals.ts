@@ -1,3 +1,5 @@
+import { numberIdGenerator } from "../ts-common/idGenerator";
+import QueuedSourceBuffer from "../ts-common/QueuedSourceBuffer";
 import { Dispatcher } from "../wasm/wasp_hls";
 
 export interface WorkerInfo {
@@ -53,21 +55,26 @@ class PlayerInstance {
   }
 }
 
+
 class GenericStore<T> {
-  private _store: Partial<Record<number, T>>;
+  private _store: Partial<Record<ResourceId, T>>;
+  private _generateId: () => number;
   constructor() {
+    this._generateId = numberIdGenerator();
     this._store = {};
   }
 
-  public create(id: number, data: T) {
+  public create(data: T): ResourceId {
+    const id = this._generateId();
     this._store[id] = data;
+    return id;
   }
 
-  public delete(id: number): void {
+  public delete(id: ResourceId): void {
     delete this._store[id];
   }
 
-  public get(id: number): T | undefined {
+  public get(id: ResourceId): T | undefined {
     return this._store[id];
   }
 
@@ -86,8 +93,9 @@ export interface RequestObject {
 
 export interface SourceBufferInstanceInfo<HasMseInWorker extends boolean> {
   id: SourceBufferId;
+  lastInitTimescale: number | undefined;
   sourceBuffer: HasMseInWorker extends true ?
-    SourceBuffer :
+    QueuedSourceBuffer :
     null;
   transmuxer: null | ((input: Uint8Array) => Uint8Array | null);
 }
@@ -121,6 +129,20 @@ export const playerInstance = new PlayerInstance();
 export const jsMemoryResources = new GenericStore<Uint8Array>();
 export const requestsStore = new GenericStore<RequestObject>();
 
+export function getMediaSourceObj(
+) : MainMediaSourceInstanceInfo | WorkerMediaSourceInstanceInfo | undefined {
+  const contentInfo = playerInstance.getContentInfo();
+  if (contentInfo === null) {
+    return undefined;
+  }
+  const { mediaSourceObj } = contentInfo;
+  if (mediaSourceObj === null) {
+    return undefined;
+  }
+  return mediaSourceObj;
+}
+
+export type TimerId = number;
 export type RequestId = number;
 export type SourceBufferId = number;
 export type ResourceId = number;

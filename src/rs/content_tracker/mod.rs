@@ -118,7 +118,7 @@ impl ContentTracker {
         id: &MediaPlaylistPermanentId,
         media_playlist_data: impl BufRead,
         url: Url
-    ) -> Result<(), MediaPlaylistUpdateError> {
+    ) -> Result<&MediaPlaylist, MediaPlaylistUpdateError> {
         match id {
             MediaPlaylistPermanentId::VariantStreamUrl(idx) =>
                 self.playlist.update_variant_media_playlist(*idx, media_playlist_data, url),
@@ -264,6 +264,28 @@ impl ContentTracker {
             }
         }
     }
+
+    // pub(crate) fn refresh_time(&self) -> Option<f64> {
+    //     let media_playlists = self.curr_media_playlists();
+    //     if media_playlists.is_empty() ||
+    //         media_playlists.iter().all(|p| { p.1.end_list })
+    //     {
+    //         None
+    //     } else {
+    //         media_playlists.iter().fold(None, |acc, p| {
+    //             let target_duration = p.1.target_duration();
+    //             if let Some(acc_dur) = acc {
+    //                 if let Some(p_dur) = target_duration {
+    //                     Some(acc_dur.min(p_dur))
+    //                 } else {
+    //                     Some(acc_dur)
+    //                 }
+    //             } else {
+    //                 target_duration
+    //             }
+    //         })
+    //     }
+    // }
 
     fn set_curr_variant(&mut self, variant_idx: usize) {
         let variants = self.playlist.variants();

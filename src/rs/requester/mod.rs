@@ -1,8 +1,7 @@
 use crate::{
     bindings::{
         MediaType,
-        jsFetchU8,
-        jsFetchU8NoCopy,
+        jsFetch,
         RequestId,
         jsAbortRequest,
     },
@@ -97,7 +96,7 @@ pub struct Requester {
 #[derive(PartialEq)]
 pub enum PlaylistFileType {
     MultiVariantPlaylist,
-    MediaPlaylist { id: MediaPlaylistPermanentId, media_type: MediaType },
+    MediaPlaylist { id: MediaPlaylistPermanentId },
     Unknown,
 }
 
@@ -220,27 +219,26 @@ impl Requester {
     /// For an optimal `Requester` behavior, it should be set to the wanted playback position.
     pub fn update_base_position(&mut self, time: Option<f64>) {
         self.base_position = time;
-
-        // TODO reconstruct priorities
+        self.check_segment_queue();
     }
 
     /// Fetch either the MultiVariantPlaylist or a MediaPlaylist reachable
     /// through the given `url` and add its `request_id` to `pending_playlist_requests`.
     ///
-    /// Once it succeeds, the `on_u8_request_finished` function will be called.
+    /// Once it succeeds, the `on_request_finished` function will be called.
     pub(crate) fn fetch_playlist(&mut self, url: Url, playlist_type: PlaylistFileType) {
         Logger::info(&format!("Fetching playlist {}", url.get_ref()));
-        let request_id = jsFetchU8(url.get_ref());
+        let request_id = jsFetch(url.get_ref());
         self.pending_playlist_requests.push(PlaylistRequestInfo { request_id, url, playlist_type });
     }
 
     /// Fetch the initialization segment whose metadata is given here add its
     /// `request_id` to `pending_segment_requests`.
     ///
-    /// Once it succeeds, the `on_u8_request_finished` function will be called.
+    /// Once it succeeds, the `on_request_finished` function will be called.
     pub(crate) fn request_init_segment(&mut self, media_type: MediaType, url: Url) {
         Logger::debug(&format!("Requesting {} initialization segment", media_type));
-        let request_id = jsFetchU8NoCopy(url.get_ref());
+        let request_id = jsFetch(url.get_ref());
         self.pending_segment_requests.push(SegmentRequestInfo {
             request_id,
             media_type,
@@ -257,7 +255,7 @@ impl Requester {
     /// `unlock_segment_requests` methods), the request will technically either be
     /// started right away or once the right condition is triggered.
     ///
-    /// Once the request finishes with success, the `on_u8_request_finished`
+    /// Once the request finishes with success, the `on_request_finished`
     /// function will be called.
     pub(crate) fn request_media_segment(&mut self,
         media_type: MediaType,
@@ -275,7 +273,7 @@ impl Requester {
             });
         } else {
             Logger::debug("Req: Performing request right away");
-            let request_id = jsFetchU8NoCopy(seg.url.get_ref());
+            let request_id = jsFetch(seg.url.get_ref());
             self.pending_segment_requests.push(SegmentRequestInfo {
                 request_id,
                 media_type,
@@ -435,7 +433,7 @@ impl Requester {
                 .for_each(|seg| {
                     // TODO indicate which segment in log
                     Logger::debug("Req: Performing request of queued segment");
-                    let request_id = jsFetchU8NoCopy(seg.url.get_ref());
+                    let request_id = jsFetch(seg.url.get_ref());
                     self.pending_segment_requests.push(SegmentRequestInfo {
                         request_id,
                         media_type: seg.media_type,
@@ -448,7 +446,7 @@ impl Requester {
             while let Some(seg) = self.segment_waiting_queue.pop() {
                 // TODO indicate which segment in log
                 Logger::debug("Req: Performing request of queued segment");
-                let request_id = jsFetchU8NoCopy(seg.url.get_ref());
+                let request_id = jsFetch(seg.url.get_ref());
                 self.pending_segment_requests.push(SegmentRequestInfo {
                     request_id,
                     media_type: seg.media_type,

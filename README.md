@@ -62,7 +62,8 @@ A lot:
 Type of contents:
   - [x] Play HLS VoD contents
   - [x] Transcode mpeg-ts (thanks to mux.js for now)
-  - [ ] Play HLS live contents _(high priority)_
+  - [x] Play HLS live contents _(for now require presence of
+        `EXT-X-PROGRAM-DATE-TIME` tag in media playlist)_
   - [ ] Proper support of HLS low-latency contents
 
 Worker-related features:
@@ -117,6 +118,11 @@ most do not prevent playback):
   - [X] EXTINF: Only the indicated duration of a segment is considered, not
     the title for which we have no use for now. Both integer and float durations
     should be handled.
+  - [X] EXT-X-PROGRAM-DATE-TIME: Used to determine the starting position of
+    segments as stored by the player - which may be different than the actual
+    media time once the corresponding segment is pushed.
+    The units/scale indicated by this tag will be preferred over the real media
+    time in the player APIs.
   - EXT-X-MAP:
     - [X] URI: Used to fetch the initialization segment if one is present
     - [ ] BYTERANGE: No Range request implementation for now, though this should
@@ -183,7 +189,6 @@ most do not prevent playback):
   - [ ] EXT-X-BYTERANGE: Should probably be handled soon
   - [ ] EXT-X-DISCONTINUITY
   - [ ] EXT-X-KEY: decryption and related tags are very low priority
-  - [ ] EXT-X-PROGRAM-DATE-TIME
   - [ ] EXT-X-GAP
   - [ ] EXT-X-BITRATE
   - [ ] EXT-X-PART

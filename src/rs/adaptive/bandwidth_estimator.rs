@@ -12,6 +12,7 @@ pub struct BandwithEstimator {
 }
 
 impl BandwithEstimator {
+    /// Creates a new BandwithEstimator
     pub fn new() -> Self {
         Self {
             fast_ewma: Ewma::new(FAST_EWMA_HALF_LIFE),
@@ -20,6 +21,11 @@ impl BandwithEstimator {
         }
     }
 
+    /// Feed the BandwithEstimator a new bandwidth data sample.
+    ///
+    /// You may want to call this method after a new resource was loaded, in the
+    /// case where you want to consider this request in the whole bandwidth
+    /// estimation logic.
     pub fn add_sample(&mut self, duration_ms: f64, size_bytes: u32) {
         if size_bytes < MINIMUM_CHUNK_SIZE {
             return;

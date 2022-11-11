@@ -12,6 +12,7 @@ import {
   playerInstance,
 } from "./globals";
 import postMessageToMain from "./postMessage";
+import { resetTransmuxer } from "./transmux";
 
 let wasInitializedCalled = false;
 
@@ -56,6 +57,7 @@ export default function MessageReceiver() {
           observationsObj: null,
         };
         playerInstance.changeContent(contentInfo);
+        resetTransmuxer();
         dispatcher.load_content(data.value.url);
         break;
       }

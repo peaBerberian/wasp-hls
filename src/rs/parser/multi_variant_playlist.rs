@@ -194,7 +194,7 @@ impl MultiVariantPlaylist {
         variant_idx: usize,
         media_playlist_data: impl io::BufRead,
         url: Url
-    ) -> Result<(), MediaPlaylistUpdateError> {
+    ) -> Result<&MediaPlaylist, MediaPlaylistUpdateError> {
         match self.variants.get_mut(variant_idx) {
             Some(v) => Ok(v.update_media_playlist(media_playlist_data, url)?),
             None => Err(MediaPlaylistUpdateError::NotFound)
@@ -209,7 +209,7 @@ impl MultiVariantPlaylist {
         media_tag_idx: usize,
         media_playlist_data: impl io::BufRead,
         url: Url
-    ) -> Result<(), MediaPlaylistUpdateError> {
+    ) -> Result<&MediaPlaylist, MediaPlaylistUpdateError> {
         match self.media.get_mut(media_tag_idx) {
             Some(m) => Ok(m.update(media_playlist_data, url)?),
             None => Err(MediaPlaylistUpdateError::NotFound),
