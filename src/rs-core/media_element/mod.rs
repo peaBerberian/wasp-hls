@@ -9,7 +9,7 @@ use crate::bindings::{
     MediaObservation,
     JsMemoryBlob,
     AppendBufferErrorCode,
-    JsResult, jsRemoveMediaSource, ParsedSegmentInfo,
+    JsResult, jsRemoveMediaSource, ParsedSegmentInfo, jsSetMediaOffset,
 };
 use crate::dispatcher::MediaSourceReadyState;
 use crate::Logger;
@@ -223,8 +223,10 @@ self.check_awaiting_seek();
                 let parsed = sb.append_buffer(metadata, do_time_parsing)?;
                 let media_start = parsed.map_or(None, |p| p.start);
                 if let (Some(segment_start), Some(media_start)) = (start, media_start) {
+                    let media_offset = media_start - segment_start;
                     Logger::info(&format!("Setting media offset: {}", media_start - segment_start));
-                    self.media_offset = Some(media_start - segment_start);
+                    self.media_offset = Some(media_offset);
+                    jsSetMediaOffset(media_offset);
                     self.check_awaiting_seek();
                 }
                 Ok(())

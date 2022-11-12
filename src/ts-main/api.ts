@@ -10,80 +10,6 @@ import InitializationError from "./errors";
 import observePlayback from "./observePlayback";
 import postMessageToWorker from "./postMessageToWorker";
 
-/**
- * Structure storing metadata associated to a content being played by a
- * `WaspHlsPlayer`.
- */
-interface ContentMetadata {
-  /**
-   * Unique identifier identifying the loaded content.
-   *
-   * This identifier should be unique for any instances of `WaspHlsPlayer`
-   * created in the current JavaScript realm.
-   *
-   * Identifying a loaded content this way allows to ensure that messages
-   * exchanged with a Worker concern the same content, mostly in cases of race
-   * conditions.
-   */
-  contentId: string;
-
-  /**
-   * Unique identifier identifying a MediaSource attached to the
-   * HTMLVideoElement.
-   *
-   * This identifier should be unique for the worker in question.
-   *
-   * Identifying a MediaSource this way allows to ensure that messages
-   * exchanged with a Worker concern the same MediaSource instance.
-   *
-   * `null` when no `MediaSource` is created now.
-   */
-  mediaSourceId: string | null;
-
-  /**
-   * `MediaSource` instance linked to the current content being played.
-   *
-   * `null` when either:
-   *   - no `MediaSource` instance is active for now
-   *   - the `MediaSource` has been created on the Worker side.
-   *
-   * You can know whether a `MediaSource` is currently created at all by
-   * refering to `mediaSourceId` instead.
-   */
-  mediaSource: MediaSource | null;
-
-  /**
-   * Callback that should be called when the `MediaSource` linked to the current
-   * content becomes unattached - whether the `MediaSource` has been created in
-   * this realm or in the worker.
-   */
-  disposeMediaSource: (() => void) | null;
-
-  /**
-   * Describe `SourceBuffer` instances currently associated to the current
-   * `MediaSource` that have been created in this realm (and not in the Worker).
-   */
-  sourceBuffers: Array<{
-    /**
-     * Id uniquely identifying this SourceBuffer.
-     * It is generated from the Worker and it is unique for all SourceBuffers
-     * created after associated with the linked `mediaSourceId`.
-     */
-    sourceBufferId: number;
-    /**
-     * QueuedSourceBuffer associated to this SourceBuffers.
-     * This is the abstraction used to push and remove data to the SourceBuffer.
-     */
-    queuedSourceBuffer: QueuedSourceBuffer;
-  }>;
-
-  /**
-   * Callback allowing to stop playback observations currently pending.
-   * `null` if no "playback observation" is currently pending.
-   */
-  stopPlaybackObservations: null | (() => void);
-}
-
 const generateContentId = idGenerator();
 
 export default class WaspHlsPlayer {
@@ -151,6 +77,7 @@ export default class WaspHlsPlayer {
       disposeMediaSource: null,
       sourceBuffers: [],
       stopPlaybackObservations: null,
+      mediaOffset: undefined,
     };
     postMessageToWorker(this._worker, {
       type: "load",
@@ -158,8 +85,49 @@ export default class WaspHlsPlayer {
     });
   }
 
+  public getPosition(): number {
+    if (this._currentContentMetadata === null) {
+      return 0;
+    }
+    const currentTime = this.videoElement.currentTime;
+    return currentTime - (this._currentContentMetadata.mediaOffset ?? 0);
+  }
+
   public seek(position: number): void {
-    this.videoElement.currentTime = position;
+    if (this._currentContentMetadata === null) {
+      throw new Error("Cannot seek: no content loaded.");
+    }
+    this.videoElement.currentTime = position +
+      (this._currentContentMetadata.mediaOffset ?? 0);
+  }
+
+  public getMediaOffset(): number | undefined {
+    return this._currentContentMetadata?.mediaOffset ?? undefined;
+  }
+
+  public setVolume(volume: number): void {
+    this.videoElement.volume = volume;
+  }
+
+  public mute(): void {
+    this.videoElement.muted = true;
+  }
+
+  public unmute(): void {
+    this.videoElement.muted = false;
+  }
+
+  public isPaused(): boolean {
+    return this.videoElement.paused;
+  }
+
+  public pause(): void {
+    this.videoElement.pause();
+  }
+
+  public resume(): void {
+    this.videoElement.play()
+      .catch(() => { /* noop */});
   }
 
   public stop(): void {
@@ -179,6 +147,16 @@ export default class WaspHlsPlayer {
         value: { contentId: this._currentContentMetadata.contentId },
       });
     }
+  }
+
+  public setSpeed(speed: number): void {
+    // TODO playbackRate  may be used to implement force rebuffering in the
+    // future, in which case another solution will need to be found.
+    this.videoElement.playbackRate = speed;
+  }
+
+  public getSpeed(): number {
+    return this.videoElement.playbackRate;
   }
 
   public dispose() {
@@ -305,7 +283,7 @@ export default class WaspHlsPlayer {
           }
           const { mediaSourceId } = data.value;
 
-          let mediaSource;
+          let mediaSource : MediaSource;
           try {
             mediaSource = new MediaSource();
           } catch (err) {
@@ -545,6 +523,19 @@ export default class WaspHlsPlayer {
             });
           }
           break;
+
+        case "media-offset-update":
+          if (
+            this._currentContentMetadata === null ||
+            this._currentContentMetadata.contentId !== data.value.contentId
+          ) {
+            console.info(
+              "API: Ignoring media offset update due to wrong `contentId`"
+            );
+            return;
+          }
+          this._currentContentMetadata.mediaOffset = data.value.offset;
+          break;
       }
     };
 
@@ -687,4 +678,80 @@ function getErrorInformation(err: unknown, defaultMsg: string) : {
   } else {
     return { message: defaultMsg, name: undefined };
   }
+}
+
+/**
+ * Structure storing metadata associated to a content being played by a
+ * `WaspHlsPlayer`.
+ */
+interface ContentMetadata {
+  /**
+   * Unique identifier identifying the loaded content.
+   *
+   * This identifier should be unique for any instances of `WaspHlsPlayer`
+   * created in the current JavaScript realm.
+   *
+   * Identifying a loaded content this way allows to ensure that messages
+   * exchanged with a Worker concern the same content, mostly in cases of race
+   * conditions.
+   */
+  contentId: string;
+
+  /**
+   * Unique identifier identifying a MediaSource attached to the
+   * HTMLVideoElement.
+   *
+   * This identifier should be unique for the worker in question.
+   *
+   * Identifying a MediaSource this way allows to ensure that messages
+   * exchanged with a Worker concern the same MediaSource instance.
+   *
+   * `null` when no `MediaSource` is created now.
+   */
+  mediaSourceId: string | null;
+
+  /**
+   * `MediaSource` instance linked to the current content being played.
+   *
+   * `null` when either:
+   *   - no `MediaSource` instance is active for now
+   *   - the `MediaSource` has been created on the Worker side.
+   *
+   * You can know whether a `MediaSource` is currently created at all by
+   * refering to `mediaSourceId` instead.
+   */
+  mediaSource: MediaSource | null;
+
+  /**
+   * Callback that should be called when the `MediaSource` linked to the current
+   * content becomes unattached - whether the `MediaSource` has been created in
+   * this realm or in the worker.
+   */
+  disposeMediaSource: (() => void) | null;
+
+  /**
+   * Describe `SourceBuffer` instances currently associated to the current
+   * `MediaSource` that have been created in this realm (and not in the Worker).
+   */
+  sourceBuffers: Array<{
+    /**
+     * Id uniquely identifying this SourceBuffer.
+     * It is generated from the Worker and it is unique for all SourceBuffers
+     * created after associated with the linked `mediaSourceId`.
+     */
+    sourceBufferId: number;
+    /**
+     * QueuedSourceBuffer associated to this SourceBuffers.
+     * This is the abstraction used to push and remove data to the SourceBuffer.
+     */
+    queuedSourceBuffer: QueuedSourceBuffer;
+  }>;
+
+  /**
+   * Callback allowing to stop playback observations currently pending.
+   * `null` if no "playback observation" is currently pending.
+   */
+  stopPlaybackObservations: null | (() => void);
+
+  mediaOffset: number | undefined;
 }

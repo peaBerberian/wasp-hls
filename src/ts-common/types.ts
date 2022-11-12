@@ -38,7 +38,8 @@ export type WorkerMessage =
   RemoveBufferWorkerMessage |
   EndOfStreamWorkerMessage |
   StartPlaybackObservationWorkerMessage |
-  StopPlaybackObservationWorkerMessage;
+  StopPlaybackObservationWorkerMessage |
+  MediaOffsetUpdateWorkerMessage;
 
 /**
  * Error codes generated for `InitializationErrorWorkerMessage` messages.
@@ -360,6 +361,24 @@ export interface EndOfStreamWorkerMessage {
      * If `mediaSourceId` don't match, the message will be ignored.
      */
     mediaSourceId: string;
+  };
+}
+
+/**
+ * Message sent when the Worker has updated its offset to convert playlist time,
+ * as anounced in the MediaPlaylist (and which should be preferred for a user
+ * interface) into media time, which is the time actually present on the
+ * HTMLMediaElement.
+ */
+export interface MediaOffsetUpdateWorkerMessage {
+  type: "media-offset-update";
+  value: {
+    /**
+     * A unique identifier for the content being loaded, that will have to be
+     * present on the various events concerning that content.
+     */
+    contentId: string;
+    offset: number;
   };
 }
 

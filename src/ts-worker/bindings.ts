@@ -1,5 +1,4 @@
 import idGenerator from "../ts-common/idGenerator.js";
-import { getMDHDTimescale } from "../ts-common/isobmff-utils.js";
 import QueuedSourceBuffer from "../ts-common/QueuedSourceBuffer.js";
 import {
   Dispatcher,
@@ -20,9 +19,12 @@ import {
   TimerId,
   getMediaSourceObj,
 } from "./globals";
+import {
+  getDurationFromTrun,
+  getMDHDTimescale,
+  getTrackFragmentDecodeTime,
+} from "./isobmff-utils.js";
 import postMessageToMain from "./postMessage.js";
-import { getTimeInformationFromMp4 } from "./segment-preparation.js";
-// import { getTimeInformationFromMp4 } from "./segment-preparation.js";
 import {
   getTransmuxedType,
   shouldTransmux,
@@ -61,7 +63,7 @@ export function log(logLevel: LogLevel, logStr: string) {
 }
 
 export function timer(duration: number, reason: TimerReason): TimerId {
-  const timerId = setTimeout(() => {
+  const timerId = self.setTimeout(() => {
     const dispatcher = playerInstance.getDispatcher();
     if (dispatcher === null) {
       return;
@@ -655,12 +657,43 @@ export function stopObservingPlayback() {
   });
 }
 
+export function setMediaOffset(mediaOffset: number) {
+  const contentInfo = playerInstance.getContentInfo();
+  if (contentInfo === null) {
+    return;
+  }
+  postMessageToMain({
+    type: "media-offset-update",
+    value: {
+      contentId: contentInfo.contentId,
+      offset: mediaOffset,
+    },
+  });
+}
+
 export function freeResource(resourceId: number) : boolean {
   if (jsMemoryResources.get(resourceId) === undefined) {
     return false;
   }
   jsMemoryResources.delete(resourceId);
   return true;
+}
+
+function getTimeInformationFromMp4(
+  segment: Uint8Array,
+  initTimescale: number
+) : ({ time: number; duration: number | undefined }) | null {
+  const baseDecodeTime = getTrackFragmentDecodeTime(segment);
+  if (baseDecodeTime === undefined) {
+    return null;
+  }
+  const trunDuration = getDurationFromTrun(segment);
+  return {
+    time: baseDecodeTime / initTimescale,
+    duration: trunDuration === undefined ?
+      undefined :
+      trunDuration / initTimescale,
+  };
 }
 
 // TODO real way of binding
@@ -683,3 +716,4 @@ global.jsSeek = seek;
 global.jsTimer = timer;
 global.jsClearTimer = clearTimer;
 global.jsGetResourceData = getResourceData;
+global.jsSetMediaOffset = setMediaOffset;

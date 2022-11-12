@@ -190,6 +190,10 @@ extern "C" {
     //        source_buffer_id: SourceBufferId
     //    ) -> Vec<f64>;
 
+    // Method called to indicate the offset to convert playlist time, as anounced in the
+    // MediaPlaylist (and which should be preferred for a user interface) into media time,
+    // which is the time actually present on the HTMLMediaElement.
+    pub fn jsSetMediaOffset(media_offset: f64);
 }
 
 // TODO some macro-based metaprogramming, instead of just repeating the same boilerplate for each

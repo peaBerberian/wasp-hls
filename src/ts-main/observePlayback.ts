@@ -92,7 +92,7 @@ export default function observePlayback(
       seeking,
     });
 
-    timeoutId = setTimeout(() => {
+    timeoutId = window.setTimeout(() => {
       if (isStopped) {
         timeoutId = undefined;
         return;
