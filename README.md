@@ -273,7 +273,7 @@ top to bottom:
     The corresponding code runs in:
       - the `src/ts-worker/` directory for the TypeScript part of the code
         (compiled into JavaScript once the library is built).
-      - the `src/rs/` directory for the Rust part of the code (compiled
+      - the `src/rs-core/` directory for the Rust part of the code (compiled
         into WebAssembly once the library is built).
 
   - **MessageReceiver**: Entry point of the Web Worker, to which the API post
@@ -301,46 +301,46 @@ top to bottom:
 
   - **WebAssembly (once compiled)**: Lower than the corresponding line is the
     of code written in Rust - that will be compiled to WebAssembly - present in
-    the `src/rs` directory.
+    the `src/rs-core` directory.
 
   - **Dispatcher**: Entry point of the Rust logic. Receive orders and/or events,
     and call the right modules in the right order.
 
-    The Dispatcher is defined in the `src/rs/dispatcher/` directory.
+    The Dispatcher is defined in the `src/rs-core/dispatcher/` directory.
 
   - **Rs bindings**: Define both TypeScript functions exposed by TS bindings but
     also "event listeners" (which are technically a part of the Dispatcher)
     which will be called by TS bindings on various events.
 
-    Rs bindings are defined in the `src/rs/bindings/` directory.
+    Rs bindings are defined in the `src/rs-core/bindings/` directory.
 
   - **Requester**: Schedule playlist and segment requests.
 
-    The Requester is defined in the `src/rs/requester/` directory.
+    The Requester is defined in the `src/rs-core/requester/` directory.
 
   - **NextSegmentSelector**: Keep track of the next segments that should be
     requested
 
-    The NextSegmentSelector is defined in the `src/rs/segment_selector/`
+    The NextSegmentSelector is defined in the `src/rs-core/segment_selector/`
     directory.
 
   - **AdaptiveQualitySelector**: Implement Adaptive BitRate (a.k.a. ABR)
     management, such as calculating the network bandwidth, to be able to
     choose the best variant and media selected.
 
-    The AdaptiveQualitySelector is defined in the `src/rs/adaptive/`
+    The AdaptiveQualitySelector is defined in the `src/rs-core/adaptive/`
     directory.
 
   - **ContentTracker**: Parses and stores the metadata of the current content as
     well as keep tracks of the current variant and media playlists selected.
 
-    The ContentTracker is defined in the `src/rs/content_tracker/`
+    The ContentTracker is defined in the `src/rs-core/content_tracker/`
     directory.
 
   - **MediaElementReference**: Interface to interact with the media element in
     the web page, as well as to buffer media.
 
-    The MediaElementReference is defined in the `src/rs/media_element/`
+    The MediaElementReference is defined in the `src/rs-core/media_element/`
     directory.
 
   - **Modules**: Specialized blocks of the Rust logic doing specific tasks,
