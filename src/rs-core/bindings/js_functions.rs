@@ -60,14 +60,13 @@ extern "C" {
     pub fn jsAbortRequest(request_id: RequestId) -> bool;
 
     // Create MediaSource and attach it to the <video> element associated with
-    // the `WaspHlsPlayer` linked to the given `player_id`.
+    // this `WaspHlsPlayer`.
     //
     // This function performs the MediaSource creation and attachment
     // synchronously. Yet the MediaSource is not usable right away (e.g. it is
     // not immediately possible to open SourceBuffers on it.
-    // The `WaspHlsPlayer` instance linked to the given `player_id` will know
-    // when this MediaSource becomes usable or not when its
-    // `on_media_source_state_change` method is called with the "Open"
+    // This `WaspHlsPlayer` instance will know when this MediaSource becomes usable or not
+    // when its `on_media_source_state_change` method is called with the "Open"
     // `MediaSourceReadyState`.
     pub fn jsAttachMediaSource();
 
@@ -78,6 +77,7 @@ extern "C" {
     // This function performs all those operations synchronously.
     pub fn jsRemoveMediaSource();
 
+    // Update the duration in seconds of the MediaSource attached to this WaspHlsPlayer.
     pub fn jsSetMediaSourceDuration(duration: f64);
 
     // Add a SourceBuffer to the created MediaSource, allowing to push media
@@ -85,6 +85,7 @@ extern "C" {
     //
     // This function performs this operation synchronously and may fail, see
     // `AddSourceBufferResult` for more details on the return value.
+    // TODO actually return AddSourceBufferResult
     pub fn jsAddSourceBuffer(
         media_type: MediaType,
         typ: &str
@@ -116,7 +117,7 @@ extern "C" {
     // Remove media data from the given SourceBuffer.
     //
     // This process is asynchronous, meaning that the data might not be directly
-    // considered directly after calling `jsAppendBuffer`.
+    // considered after calling `jsRemoveBuffer`.
     //
     // Append and remove operations performed on that SourceBuffer, respectively
     // through the `jsAppendBuffer` and `jsRemoveBuffer` functions, are all
@@ -136,32 +137,41 @@ extern "C" {
         end: f64
     );
 
+    // Call the `MediaSource.prototype.endOfStream` API, allowing to signal that
+    // all contents have been pushed to all of its buffer.
+    //
+    // Note that you should make sure that all of the buffers have an empty queue
+    // of operations (no `jsAppendBuffer` or `jsRemoveBuffer` call not yet
+    // validated through a `on_source_buffer_update` callback) before making the
+    // `jsEndOfStream` call.
     pub fn jsEndOfStream();
 
     // After this method is called, this `WaspHlsPlayer` instance will regularly receive
     // `PlaybackObservation` objects, describing the current playback conditions through
     // its `on_playback_tick` method.
-    // The first event will be sent "almost" synchronously (queued as a
-    // JavaScript microtask).
+    // The first event will be sent right away, though asynchronously.
     //
     // You can stop receiving those observations by calling
-    // `stopObservingPlayback` with the same `player_id` and restart it by
-    // calling `startObservingPlayback` a new time.
+    // `stopObservingPlayback` and restart it by calling `startObservingPlayback` a new
+    // time.
     //
-    // If the `WaspHlsPlayer` was already observing playback when that function
+    // If this `WaspHlsPlayer` was already observing playback when that function
     // was called, this function does nothing.
     pub fn jsStartObservingPlayback();
 
-    // If playback observations were being regularly sent to the
-    // `WaspHlsPlayer` instance with the given `player_id`, stop emitting them
-    // until `startObservingPlayback` is called again.
+    // If playback observations were being regularly sent to this
+    // `WaspHlsPlayer` instance, stop emitting them until `startObservingPlayback` is
+    // called again.
     pub fn jsStopObservingPlayback();
 
     // Free resource stored in JavaScript's memory kept alive for the current
     // `WaspHlsPlayer`.
     pub fn jsFreeResource(resource_id: ResourceId) -> bool;
 
+    // Call the `HTMLMediaElement.prototype.seek` API, allowing to move the current
+    // playback's playhead.
     pub fn jsSeek(position: f64);
+
     //    // Check if the given mime-type and codecs are supported for playback.
     //    //
     //    // Returns `true` if that is the case, false if it isn't
@@ -414,8 +424,7 @@ pub enum AddSourceBufferErrorCode {
     /// element.
     NoMediaSourceAttached,
 
-    /// The `MediaSource` instance linked to the `WaspHlsPlayer` (itself linked to the given
-    /// `PlayerId`) is in a "closed" state.
+    /// The `MediaSource` instance linked to this `WaspHlsPlayer` is in a "closed" state.
     MediaSourceIsClosed,
 
     /// A `QuotaExceededError` was received while trying to add the `SourceBuffer`
