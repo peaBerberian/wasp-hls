@@ -4,60 +4,78 @@
     <title>WASP-HLS Demo</title>
     <meta content="text/html;charset=utf-8" http-equiv="Content-Type"/>
   </head>
+<style>
+  body {
+    text-align: center;
+  }
+  .title {
+    color: #807c53;
+    margin: 30px auto;
+    font-weight: normal;
+    border-bottom: 1px solid #807c53;
+    width: 400px;
+  }
+  .player-container {
+    width: 70%;
+    margin: auto;
+  }
+
+  .video-container {
+    width: auto;
+  }
+
+  .input-url {
+    margin: 5px;
+    width: 90%;
+    max-width: 600px;
+  }
+
+  .video-small {
+    background-color: #000;
+    width: 100%;
+    max-width: 1280px;
+    max-height: 720px;
+  }
+
+  @keyframes inline-spinner-kf {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+.inline-spinner,
+.inline-spinner:before {
+  display: inline-block;
+  width: 55px;
+  height: 55px;
+  transform-origin: 50%;
+  border: 2px solid transparent;
+  border-color: #807c53 #807c53 transparent transparent;
+  border-radius: 50%;
+  content: "";
+  animation: linear inline-spinner-kf 900ms infinite;
+  position: relative;
+  vertical-align: inherit;
+  line-height: inherit;
+}
+.inline-spinner {
+  top: 3px;
+  margin: 0 3px;
+}
+.inline-spinner:before {
+  border-color: #807c53 #807c53 transparent transparent;
+  position: absolute;
+  left: -2px;
+  top: -2px;
+  border-style: solid;
+}
+</style>
+</style>
   <body>
     <script src="./main.js"></script>
-    <script>
-      const videoElement = document.createElement("video");
-      videoElement.autoplay = true;
-      videoElement.controls = true;
-
-      videoElement.addEventListener("canplay", () => {
-        videoElement.play();
-      });
-
-      const player = new WaspHlsPlayer(videoElement);
-      player.initialize({
-        workerUrl: "./worker.js",
-        wasmUrl: "./wasp_hls_bg.wasm"
-      }).then(() => {
-        const labelElt = document.createElement("label");
-        labelElt.for = "url";
-        labelElt.textContent = "URL to HLS MultiVariant (a.k.a. Master) Playlist:";
-        document.body.appendChild(labelElt);
-
-        document.body.appendChild(createBreakElement());
-
-        const inputEl = document.createElement("input");
-        inputEl.style.width = "600px";
-        inputEl.type = "text";
-        inputEl.name = "url";
-        inputEl.value = "https://storage.googleapis.com/shaka-demo-assets/angel-one-hls/hls.m3u8";
-        document.body.appendChild(inputEl);
-
-        const loadingButton = document.createElement("button");
-        loadingButton.id = "loading-button";
-        loadingButton.textContent = "Load";
-        loadingButton.onclick = () => {
-          loadUrl(inputEl.value);
-        };
-        document.body.appendChild(loadingButton);
-        document.body.appendChild(createBreakElement());
-        document.body.appendChild(videoElement);
-
-        function loadUrl(url) {
-          player.loadContent(url);
-          // player.loadContent(
-          //   "https://cdn.jwplayer.com/manifests/pZxWPRg4.m3u8");
-          // player.loadContent(
-          //   "https://storage.googleapis.com/shaka-demo-assets/angel-one-hls/hls.m3u8");
-            window.player = player;
-        }
-      });
-
-      function createBreakElement() {
-        return document.createElement("br");
-      }
-
-    </script>
+    <script src="./demo.js"></script>
   </body>
 </html>
