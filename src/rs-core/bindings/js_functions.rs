@@ -11,10 +11,20 @@ extern "C" {
     // Log the given text in the JavaScript console, with the log level given.
     pub fn jsLog(log_level: LogLevel, log: &str);
 
+    // Starts a timer for the number of milliseconds indicated by the `duration` argument.
+    //
+    // Once this timer has elapsed, and unless `jsClearTimer` has been called since with
+    // the `TimerId` returned by this function, the `on_timer_ended` of this
+    // `WaspHlsPlayer` will be called with both the corresponding `TimerId` and `reason`,
+    // which you can use on your side to better categorize timer categories.
     pub fn jsTimer(duration: f64, reason: TimerReason) -> TimerId;
 
+    // Clear a timer started with `jsTimer`.
     pub fn jsClearTimer(id: TimerId);
 
+    // Returns the data, as a vector of bytes of a resource behind a `ResourceId`.
+    //
+    // Returns `None` if that `ResourceId` is not linked to any resource right now.
     pub fn jsGetResourceData(id: ResourceId) -> Option<Vec<u8>>;
 
     // Fetch the given `url` from the network and await a response.
@@ -68,28 +78,27 @@ extern "C" {
     // This `WaspHlsPlayer` instance will know when this MediaSource becomes usable or not
     // when its `on_media_source_state_change` method is called with the "Open"
     // `MediaSourceReadyState`.
-    pub fn jsAttachMediaSource();
+    pub fn jsAttachMediaSource() -> AttachMediaSourceResult;
 
     // Remove MediaSource attached to the <video> element associated with
     // the `WaspHlsPlayer` if one, and free all its associated resources
     // (such as event listeners or created ObjectURL).
     //
     // This function performs all those operations synchronously.
-    pub fn jsRemoveMediaSource();
+    pub fn jsRemoveMediaSource() -> RemoveMediaSourceResult;
 
     // Update the duration in seconds of the MediaSource attached to this WaspHlsPlayer.
-    pub fn jsSetMediaSourceDuration(duration: f64);
+    pub fn jsSetMediaSourceDuration(duration: f64) -> MediaSourceDurationUpdateResult;
 
     // Add a SourceBuffer to the created MediaSource, allowing to push media
     // segment of a given type to a lower-level media buffer.
     //
     // This function performs this operation synchronously and may fail, see
     // `AddSourceBufferResult` for more details on the return value.
-    // TODO actually return AddSourceBufferResult
     pub fn jsAddSourceBuffer(
         media_type: MediaType,
         typ: &str
-    ) -> SourceBufferId;
+    ) -> AddSourceBufferResult;
 
     // Append media data to the given SourceBuffer.
     //
@@ -135,7 +144,7 @@ extern "C" {
         source_buffer_id: SourceBufferId,
         start: f64,
         end: f64
-    );
+    ) -> RemoveBufferResult;
 
     // Call the `MediaSource.prototype.endOfStream` API, allowing to signal that
     // all contents have been pushed to all of its buffer.
@@ -144,7 +153,7 @@ extern "C" {
     // of operations (no `jsAppendBuffer` or `jsRemoveBuffer` call not yet
     // validated through a `on_source_buffer_update` callback) before making the
     // `jsEndOfStream` call.
-    pub fn jsEndOfStream();
+    pub fn jsEndOfStream() -> EndOfStreamResult;
 
     // After this method is called, this `WaspHlsPlayer` instance will regularly receive
     // `PlaybackObservation` objects, describing the current playback conditions through
@@ -172,11 +181,6 @@ extern "C" {
     // playback's playhead.
     pub fn jsSeek(position: f64);
 
-    //    // Check if the given mime-type and codecs are supported for playback.
-    //    //
-    //    // Returns `true` if that is the case, false if it isn't
-    //    pub fn jsIsTypeSupported(typ: &str) -> bool;
-
     //    // Get the content of what has been buffered by the SourceBuffer, in terms of contiguous
     //    // time ranges, in seconds.
     //    // The returned vectors should always have an even length as it is organized by couples
@@ -186,7 +190,6 @@ extern "C" {
     //    // TODO this API might error depending on the underlying media element or MediaSource's
     //    // state.
     //    pub fn jsGetSourceBufferBuffered(
-    //        ,
     //        source_buffer_id: SourceBufferId
     //    ) -> Vec<f64>;
 
@@ -311,6 +314,10 @@ impl JsResult<(), MediaSourceDurationUpdateErrorCode> for MediaSourceDurationUpd
 pub enum AttachMediaSourceErrorCode {
     /// Could not attach MediaSource to the media element because of an unknown error.
     UnknownError,
+
+    /// Could not attach MediaSource to the media element because no content is currently
+    /// loaded.
+    NoContentLoaded,
 }
 
 /// Errors that can arise when calling the `jsRemoveBuffer` JavaScript function.
@@ -367,6 +374,10 @@ impl JsResult<(), RemoveBufferErrorCode> for RemoveBufferResult {
 /// Errors that can arise when calling the `jsEndOfStream` JavaScript function.
 #[wasm_bindgen]
 pub enum EndOfStreamErrorCode {
+    /// The `WaspHlsPlayer` linked had no MediaSource attached to its media
+    /// element.
+    NoMediaSourceAttached,
+
     /// The operation failed because of an unknown error.
     UnknownError,
 }

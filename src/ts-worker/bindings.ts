@@ -8,6 +8,18 @@ import {
   TimerReason,
   AppendBufferErrorCode,
   AppendBufferResult,
+  AttachMediaSourceResult,
+  AttachMediaSourceErrorCode,
+  RemoveMediaSourceResult,
+  RemoveMediaSourceErrorCode,
+  MediaSourceDurationUpdateResult,
+  MediaSourceDurationUpdateErrorCode,
+  AddSourceBufferResult,
+  AddSourceBufferErrorCode,
+  RemoveBufferResult,
+  RemoveBufferErrorCode,
+  EndOfStreamResult,
+  EndOfStreamErrorCode,
 } from "../wasm/wasp_hls.js";
 import {
   jsMemoryResources,
@@ -34,6 +46,10 @@ import { formatErrMessage } from "./utils.js";
 
 const generateMediaSourceId = idGenerator();
 
+/**
+ * @param {number} resourceId
+ * @returns {Uint8Array|undefined}
+ */
 export function getResourceData(
   resourceId: ResourceId
 ) : Uint8Array | undefined {
@@ -62,6 +78,11 @@ export function log(logLevel: LogLevel, logStr: string) {
   }
 }
 
+/**
+ * @param {number} duration
+ * @param {number} reason
+ * @returns {string}
+ */
 export function timer(duration: number, reason: TimerReason): TimerId {
   const timerId = self.setTimeout(() => {
     const dispatcher = playerInstance.getDispatcher();
@@ -74,7 +95,10 @@ export function timer(duration: number, reason: TimerReason): TimerId {
   return timerId;
 }
 
-export function clearTimer(id: TimerId) {
+/**
+ * @param {number} id
+ */
+export function clearTimer(id: TimerId): void {
   clearTimeout(id);
 }
 
@@ -135,7 +159,10 @@ export function abortRequest(id: RequestId) : boolean {
   return false;
 }
 
-export function seek(position: number) {
+/**
+ * @param {number} position
+ */
+export function seek(position: number): void {
   const contentInfo = playerInstance.getContentInfo();
   if (contentInfo === null || contentInfo.mediaSourceObj === null) {
     console.error("Attempting to seek when no MediaSource is created");
@@ -150,11 +177,15 @@ export function seek(position: number) {
   });
 }
 
-export function attachMediaSource(): void {
+/**
+ * @returns {Object}
+ */
+export function attachMediaSource(): AttachMediaSourceResult {
   const contentInfo = playerInstance.getContentInfo();
   if (contentInfo === null) {
-    // TODO
-    return;
+    return AttachMediaSourceResult.error(
+      AttachMediaSourceErrorCode.NoContentLoaded
+    );
   }
 
   try {
@@ -211,53 +242,43 @@ export function attachMediaSource(): void {
       }, handle !== undefined ? [handle] : []);
     }
 
-    function onMediaSourceEnded() {
+    function onMediaSourceEnded(): void {
       playerInstance.getDispatcher()?.on_media_source_state_change(
         MediaSourceReadyState.Ended
       );
     }
-    function onMediaSourceOpen() {
+    function onMediaSourceOpen(): void {
       playerInstance.getDispatcher()?.on_media_source_state_change(
         MediaSourceReadyState.Open
       );
     }
-    function onMediaSourceClose() {
+    function onMediaSourceClose(): void {
       playerInstance.getDispatcher()?.on_media_source_state_change(
         MediaSourceReadyState.Closed
       );
     }
   } catch (e) {
-    // TODO
-    scheduleMicrotask(() => {
-      // contentInfo?.dispatcher.on_media_source_creation_error(
-      //   getErrorMessage(e)
-      // );
-    });
+    return AttachMediaSourceResult.error(
+      AttachMediaSourceErrorCode.UnknownError
+    );
   }
-}
-
-function scheduleMicrotask(fn: () => unknown) : void {
-  if (typeof queueMicrotask === "function") {
-    queueMicrotask(fn);
-  } else {
-    Promise.resolve().then(fn).catch(() => {
-      /* noop*/
-    });
-  }
+  return AttachMediaSourceResult.success();
 }
 
 /**
- * @returns {number}
+ * @returns {Object}
  */
-export function removeMediaSource(): void {
+export function removeMediaSource(): RemoveMediaSourceResult {
   const contentInfo = playerInstance.getContentInfo();
   if (contentInfo === null) {
-    // TODO
-    return;
+    return RemoveMediaSourceResult.error(
+      RemoveMediaSourceErrorCode.NoMediaSourceAttached
+    );
   }
   if (contentInfo.mediaSourceObj === null) {
-    // TODO
-    return;
+    return RemoveMediaSourceResult.error(
+      RemoveMediaSourceErrorCode.NoMediaSourceAttached
+    );
   }
 
   if (contentInfo.mediaSourceObj.type === "worker") {
@@ -281,48 +302,53 @@ export function removeMediaSource(): void {
             mediaSource.removeSourceBuffer(sourceBuffer);
           }
           catch (e) {
-            // TODO?
             const msg =
               formatErrMessage(e, "Unknown error while removing SourceBuffer");
             Dispatcher.log(LogLevel.Error, "Could not remove SourceBuffer: " + msg);
+            return RemoveMediaSourceResult.error(
+              RemoveMediaSourceErrorCode.UnknownError,
+              msg
+            );
           }
         }
       }
     }
-    // clearElementSrc(contentInfo.videoElement);
-    // // if (objectURL !== null) {
-    // //   try {
-    // //     URL.revokeObjectURL(objectURL);
-    // //   } catch (e) {
-    // //       // TODO proper WASM communication?
-    // //     const msg = formatErrMessage(e, "Unknown error while revoking ObjectURL");
-    // //     Dispatcher.log(LogLevel.Error, "Could not revoke ObjectURL: " + msg);
-    // //   }
-    // // }
   }
 
   postMessageToMain({
     type: "clear-media-source",
     value: { mediaSourceId: contentInfo.mediaSourceObj.mediaSourceId },
   });
+  return RemoveMediaSourceResult.success();
 }
 
-export function setMediaSourceDuration(duration: number) : void {
+/**
+ * @param {number} duration
+ * @returns {Object}
+ */
+export function setMediaSourceDuration(
+  duration: number
+): MediaSourceDurationUpdateResult {
   const contentInfo = playerInstance.getContentInfo();
   if (contentInfo === null) {
-    // TODO
-    return ;
+    return  MediaSourceDurationUpdateResult.error(
+      MediaSourceDurationUpdateErrorCode.NoMediaSourceAttached
+    );
   }
   if (contentInfo.mediaSourceObj === null) {
-    // TODO
-    return;
+    return  MediaSourceDurationUpdateResult.error(
+      MediaSourceDurationUpdateErrorCode.NoMediaSourceAttached
+    );
   }
 
   if (contentInfo.mediaSourceObj.type === "worker") {
     try {
       contentInfo.mediaSourceObj.mediaSource.duration = duration;
+      return MediaSourceDurationUpdateResult.success();
     } catch (err) {
-      // TODO
+      return MediaSourceDurationUpdateResult.error(
+        MediaSourceDurationUpdateErrorCode.UnknownError
+      );
     }
   } else {
     postMessageToMain({
@@ -332,9 +358,14 @@ export function setMediaSourceDuration(duration: number) : void {
         duration,
       },
     });
+    return MediaSourceDurationUpdateResult.success();
   }
 }
 
+/**
+ * @param {*} e
+ * @returns {string|undefined}
+ */
 export function getErrorMessage(e: unknown) : string | undefined {
   return e instanceof Error ?
     e.message :
@@ -344,17 +375,22 @@ export function getErrorMessage(e: unknown) : string | undefined {
 /**
  * @param {number} mediaType
  * @param {string} typ
- * @returns {number}
+ * @returns {Object}
  */
-export function addSourceBuffer(mediaType: MediaType, typ: string): number {
+export function addSourceBuffer(
+  mediaType: MediaType,
+  typ: string
+): AddSourceBufferResult {
   const contentInfo = playerInstance.getContentInfo();
   if (contentInfo === null) {
-    // TODO
-    throw new Error("Error 1");
+    return AddSourceBufferResult.error(
+      AddSourceBufferErrorCode.NoMediaSourceAttached
+    );
   }
   if (contentInfo.mediaSourceObj === null) {
-    // TODO
-    throw new Error("Error 2");
+    return AddSourceBufferResult.error(
+      AddSourceBufferErrorCode.NoMediaSourceAttached
+    );
   }
 
   if (contentInfo.mediaSourceObj.type === "main") {
@@ -383,10 +419,14 @@ export function addSourceBuffer(mediaType: MediaType, typ: string): number {
           contentType: mimeType,
         },
       });
-      return sourceBufferId;
+      return AddSourceBufferResult.success(sourceBufferId);
     } catch (err) {
-      // TODO
-      throw err;
+      const msg =
+        formatErrMessage(err, "Unknown error while creating Sourcebuffer");
+      return AddSourceBufferResult.error(
+        AddSourceBufferErrorCode.UnknownError,
+        msg
+      );
     }
   } else {
     const {
@@ -395,12 +435,14 @@ export function addSourceBuffer(mediaType: MediaType, typ: string): number {
       nextSourceBufferId,
     } = contentInfo.mediaSourceObj;
     if (mediaSource.readyState === "closed") {
-      // TODO
-      throw new Error("A");
+      return AddSourceBufferResult.error(
+        AddSourceBufferErrorCode.MediaSourceIsClosed
+      );
     }
     if (typ === "") {
-      // TODO
-      throw new Error("B");
+      return AddSourceBufferResult.error(
+        AddSourceBufferErrorCode.EmptyMimeType
+      );
     }
     try {
       let mimeType = typ;
@@ -417,23 +459,31 @@ export function addSourceBuffer(mediaType: MediaType, typ: string): number {
         transmuxer: mimeType === typ ? null : transmux,
       });
       contentInfo.mediaSourceObj.nextSourceBufferId++;
-      // TODO
-      return sourceBufferId;
+      return AddSourceBufferResult.success(sourceBufferId);
     } catch (err) {
-      throw new Error("C");
-      // if (!(err instanceof Error)) {
-      //   // TODO
-      //   return;
-      // } else if (err.name === "QuotaExceededError") {
-      //   // TODO
-      //   return;
-      // } else if (err.name === "NotSupportedError") {
-      //   // TODO
-      //   return;
-      // } else {
-      //   // TODO
-      //   return;
-      // }
+      const msg =
+        formatErrMessage(err, "Unknown error while creating Sourcebuffer");
+      if (!(err instanceof Error)) {
+        return AddSourceBufferResult.error(
+          AddSourceBufferErrorCode.UnknownError,
+          msg
+        );
+      } else if (err.name === "QuotaExceededError") {
+        return AddSourceBufferResult.error(
+          AddSourceBufferErrorCode.QuotaExceededError,
+          msg
+        );
+      } else if (err.name === "NotSupportedError") {
+        return AddSourceBufferResult.error(
+          AddSourceBufferErrorCode.TypeNotSupportedError,
+          msg
+        );
+      } else {
+        return AddSourceBufferResult.error(
+          AddSourceBufferErrorCode.UnknownError,
+          msg
+        );
+      }
     }
   }
 }
@@ -441,7 +491,8 @@ export function addSourceBuffer(mediaType: MediaType, typ: string): number {
 /**
  * @param {number} sourceBufferId
  * @param {number} resourceId
- * @returns {number}
+ * @param {boolean} parseTimeInformation
+ * @returns {Object}
  */
 export function appendBuffer(
   sourceBufferId: SourceBufferId,
@@ -547,25 +598,30 @@ export function appendBuffer(
  * @param {number} sourceBufferId
  * @param {number} start
  * @param {number} end
+ * @returns {Object}
  */
 export function removeBuffer(
   sourceBufferId: SourceBufferId,
   start: number,
   end: number
-): void {
+): RemoveBufferResult {
   try {
     const mediaSourceObj = getMediaSourceObj();
     if (mediaSourceObj === undefined) {
-      // TODO
-      return;
+      return RemoveBufferResult.error(
+        RemoveBufferErrorCode.SourceBufferNotFound,
+        "No MediaSource created."
+      );
     }
 
     if (mediaSourceObj.type === "worker") {
       const sourceBuffer = mediaSourceObj.sourceBuffers
         .find(({ id }) => id === sourceBufferId);
       if (sourceBuffer === undefined) {
-        // TODO
-        return;
+        return RemoveBufferResult.error(
+          RemoveBufferErrorCode.SourceBufferNotFound,
+          "SourceBuffer linked to the given id not found."
+        );
       }
       sourceBuffer.sourceBuffer.removeBuffer(start, end)
         .then(() => {
@@ -594,20 +650,26 @@ export function removeBuffer(
       });
     }
   } catch (err) {
-    // TODO
-    return ;
+    const msg = formatErrMessage(err, "Unknown error while removing buffer");
+    return RemoveBufferResult.error(
+      RemoveBufferErrorCode.UnknownError,
+      msg
+    );
   }
+  return RemoveBufferResult.success();
 }
 
 /**
- * @returns {number}
+ * @returns {Object}
  */
-export function endOfStream(): void {
+export function endOfStream(): EndOfStreamResult {
   try {
     const mediaSourceObj = getMediaSourceObj();
     if (mediaSourceObj === undefined) {
-      // TODO
-      return;
+      return EndOfStreamResult.error(
+        EndOfStreamErrorCode.NoMediaSourceAttached,
+        "There's no MediaSource attached currently."
+      );
     }
     if (mediaSourceObj.type === "worker") {
       mediaSourceObj.mediaSource.endOfStream();
@@ -618,9 +680,13 @@ export function endOfStream(): void {
       });
     }
   } catch (err) {
-    // TODO
-    return;
+    const msg = formatErrMessage(err, "Unknown error while calling endOfStream");
+    return EndOfStreamResult.error(
+      EndOfStreamErrorCode.UnknownError,
+      msg
+    );
   }
+  return EndOfStreamResult.success();
 }
 
 /**
@@ -631,7 +697,10 @@ export function startObservingPlayback(): void {
     return;
   }
   if (contentInfo.mediaSourceObj === null) {
-    // TODO error/log?
+    Dispatcher.log(
+      LogLevel.Error,
+      "Cannot start observing playback: No MediaSource Attached"
+    );
     return;
   }
   postMessageToMain({
@@ -648,7 +717,10 @@ export function stopObservingPlayback() {
     return;
   }
   if (contentInfo.mediaSourceObj === null) {
-    // TODO error/log?
+    Dispatcher.log(
+      LogLevel.Error,
+      "Cannot stop observing playback: No MediaSource Attached"
+    );
     return;
   }
   postMessageToMain({
@@ -657,6 +729,9 @@ export function stopObservingPlayback() {
   });
 }
 
+/**
+ * @param {number} mediaOffset
+ */
 export function setMediaOffset(mediaOffset: number) {
   const contentInfo = playerInstance.getContentInfo();
   if (contentInfo === null) {
@@ -671,7 +746,11 @@ export function setMediaOffset(mediaOffset: number) {
   });
 }
 
-export function freeResource(resourceId: number) : boolean {
+/**
+ * @param {number} resourceId
+ * @returns {boolean}
+ */
+export function freeResource(resourceId: ResourceId) : boolean {
   if (jsMemoryResources.get(resourceId) === undefined) {
     return false;
   }
@@ -679,6 +758,11 @@ export function freeResource(resourceId: number) : boolean {
   return true;
 }
 
+/**
+ * @param {Uint8Array} segment
+ * @param {number} initTimescale
+ * @returns {Object|null}
+ */
 function getTimeInformationFromMp4(
   segment: Uint8Array,
   initTimescale: number

@@ -468,15 +468,20 @@ pub enum SourceBufferQueueElement {
 impl SourceBuffer {
     fn new(media_type: MediaType, typ: String) -> Self {
         Logger::info(&format!("Creating new {} SourceBuffer", media_type));
-        let x = jsAddSourceBuffer(media_type, &typ,);
-        Self {
-            id: x,
-            typ,
-            has_remaining_operation: false,
-            queue: vec![],
-            was_used: false,
-            last_segment_pushed: false,
-            media_type,
+        // TODO
+        match jsAddSourceBuffer(media_type, &typ,).result() {
+            Ok(x) => {
+                Self {
+                    id: x,
+                    typ,
+                    has_remaining_operation: false,
+                    queue: vec![],
+                    was_used: false,
+                    last_segment_pushed: false,
+                    media_type,
+                }
+            },
+            _ => panic!("XXX TODO"),
         }
     }
 
