@@ -63,12 +63,21 @@ impl Dispatcher {
         Dispatcher::internal_on_source_buffer_update(self, source_buffer_id);
     }
 
+    /// Called by the JavaScript code when a SourceBuffer emits an `error`
+    /// event.
+    ///
+    /// # Arguments
+    ///
+    /// * `source_buffer_id` - The identifier given by the JavaScript when the
+    ///   SourceBuffer was created. This allows the `Dispatcher` to identify
+    ///   which SourceBuffer actually emitted this event.
     pub fn on_source_buffer_error(&mut self, source_buffer_id: SourceBufferId) {
         Dispatcher::internal_on_source_buffer_error(self, source_buffer_id);
     }
 
     /// Called by the JavaScript code once regular playback "tick" are enabled
     /// after the `jsStartObservingPlayback` function has been called.
+    ///
     /// This function will be continuously called at each important media events
     /// (seek operations, end of the streams, known stalls etc.) until
     /// `jsStopObservingPlayback` is called.
