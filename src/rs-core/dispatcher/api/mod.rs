@@ -18,6 +18,8 @@ use super::{
 /// Methods exposed to the JavaScript-side
 #[wasm_bindgen]
 impl Dispatcher {
+    /// Create a new `Dispatcher` allowing to load a content on the HTMLMediaElement that should be
+    /// linked to it on the JavaScript-side.
     #[wasm_bindgen(constructor)]
     pub fn new() -> Self {
         Dispatcher {
@@ -33,6 +35,7 @@ impl Dispatcher {
         }
     }
 
+    /// Start loading a new content by communicating its MultiVariantPlaylist's URL
     pub fn load_content(&mut self, content_url: String) {
         Logger::info("load_content called");
         self.stop();
@@ -56,10 +59,12 @@ impl Dispatcher {
         }
     }
 
+    /// Stop the currently loaded content.
     pub fn stop(&mut self) {
         self.internal_stop();
     }
 
+    /// Produce a log for the given `LogLevel`.
     pub fn log(level: LogLevel, msg: &str) {
         match level {
             LogLevel::Error => Logger::error(msg),

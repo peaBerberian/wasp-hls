@@ -11,12 +11,10 @@ use crate::{
     utils::url::Url,
 };
 
-#[derive(Clone, PartialEq, Eq, Debug)]
-pub enum MediaPlaylistPermanentId {
-    VariantStreamUrl(usize),
-    MediaTagUrl(usize),
-}
-
+/// Stores information about the current loaded playlist:
+///   - The playlist itself.
+///   - The current variant selected.
+///   - The different audio and video media playlist selected.
 pub struct ContentTracker {
     /// A struct representing the `MultiVariant Playlist`, a.k.a. `Master Playlist` of
     /// the currently loaded HLS content.
@@ -27,47 +25,21 @@ pub struct ContentTracker {
     /// Has to be watched closely to avoid out-of-bounds and de-synchronizations.
     curr_variant_idx: Option<usize>,
 
+    /// Chosen playlist for video.
+    ///
+    /// Also concerns playlist containing both audio and video. 
+    ///
+    /// Set to `None` if no video playlist is chosen. 
     curr_video_idx: Option<MediaPlaylistPermanentId>,
+
+    /// Chosen playlist for audio.
+    ///
+    /// Set to `None` if no audio playlist is chosen. 
     curr_audio_idx: Option<MediaPlaylistPermanentId>,
 }
 
-pub enum MediaPlaylistLoadedState {
-    None,
-    Loaded,
-    NotLoaded,
-}
-
-pub struct AvailableAudioTrack<'a> {
-    is_current: bool,
-    id: usize,
-    language: Option<&'a str>,
-    assoc_language: Option<&'a str>,
-    name: &'a str,
-    channels: Option<u32>,
-}
-
-impl<'a> AvailableAudioTrack<'a> {
-   pub fn is_current(&self) -> bool {
-       self.is_current
-   }
-   pub fn id(&self) -> usize {
-       self.id
-   }
-   pub fn language(&self) -> Option<&'a str> {
-       self.language
-   }
-   pub fn assoc_language(&self) -> Option<&'a str> {
-       self.assoc_language
-   }
-   pub fn name(&self) -> &'a str {
-       self.name
-   }
-   pub fn channels(&self) -> Option<u32> {
-       self.channels
-   }
-}
-
 impl ContentTracker {
+    /// Create a new `ContentTracker` based on the given parsed MultiVariantPlaylist.
     pub(crate) fn new(playlist: MultiVariantPlaylist) -> Self {
         Self {
             playlist,
@@ -77,6 +49,11 @@ impl ContentTracker {
         }
     }
 
+    /// Returns the list of tuple listing loaded media playlists.
+    ///
+    /// The tuples are defined as such:
+    ///   - first, the `MediaType`, each `MediaType` can be in the array only once at most.
+    ///   - Second, a reference to the parsed `MediaPlaylist`
     pub(crate) fn curr_media_playlists(&self) -> Vec<(MediaType, &MediaPlaylist)> {
         let mut ret = vec![];
         if let Some(pl) = self.curr_media_playlist(MediaType::Audio) {
@@ -88,10 +65,17 @@ impl ContentTracker {
         ret
     }
 
+    /// Returns `true` if the current playlist linked to the given `MediaType` has been loaded.
+    ///
+    /// Returns `false` either if it has not been loaded yet or if there's no media playlist for
+    /// that `MediaType`.
+    /// You can call `has_media_type` to know if there's a playlist to load for a given
+    /// `MediaType`.
     pub(crate) fn curr_media_playlist_ready(&self, media_type: MediaType) -> bool {
         self.curr_media_playlist(media_type).is_some()
     }
 
+    /// Returns `true` only if all media playlists currently selected have been loaded.
     pub(crate) fn all_curr_media_playlists_ready(&self) -> bool {
         if self.has_media_type(MediaType::Audio) &&
             !self.curr_media_playlist_ready(MediaType::Audio)
@@ -107,6 +91,8 @@ impl ContentTracker {
 
     }
 
+    /// Returns true if a MediaPlaylist for the given `MediaType` has been selected, regardless if
+    /// that playlist has been loaded or not. 
     pub(crate) fn has_media_type(&self, media_type: MediaType) -> bool {
         match media_type {
             MediaType::Audio => self.curr_audio_idx.is_some(),
@@ -114,6 +100,7 @@ impl ContentTracker {
         }
     }
 
+    /// Initialize or update a `MediaPlaylist`, based on its `MediaPlaylistPermanentId`.
     pub(crate) fn update_media_playlist(&mut self,
         id: &MediaPlaylistPermanentId,
         media_playlist_data: impl BufRead,
@@ -127,10 +114,16 @@ impl ContentTracker {
         }
     }
 
+    /// Returns vec describing all available variant streams in the current MultiVariantPlaylist.
     pub(crate) fn variants(&self) -> &[VariantStream] {
         self.playlist.variants()
     }
 
+    /// Estimates the duration of the current content based on the currently selected audio and
+    /// video media playlists.
+    ///
+    /// Returns `None` if there's not enough data to produce that estimate (e.g. no audio or video
+    /// media playlist selected or they are not loaded).
     pub(crate) fn curr_duration(&self) -> Option<f64> {
         let audio_duration = match self.curr_media_playlist(MediaType::Audio) {
             None => None,
@@ -148,10 +141,18 @@ impl ContentTracker {
         }
     }
 
+    /// Returns a reference to the `VariantStream` currently selected. You can influence the
+    /// variant currently selected by e.g. calling the `update_curr_bandwidth` method.
     pub(crate) fn curr_variant(&self) -> Option<&VariantStream> {
         self.playlist.variants().get(self.curr_variant_idx?)
     }
 
+    /// Optionally update currently-selected variant by communicating the last bandwidth estimate.
+    ///
+    /// Returns a vec of `MediaType` corresponding to the MediaPlaylists that have been in
+    /// consequence updated.
+    /// Returns an empty vec if this new bandwidth estimate did not have any effect on any selected
+    /// MediaPlaylist.
     pub(crate) fn update_curr_bandwidth(
         &mut self, bandwidth: f64
     ) -> Vec<MediaType> {
@@ -191,6 +192,8 @@ impl ContentTracker {
         }
     }
 
+    /// Returns the metadata allowing to load and the update the MediaPlaylist of the given
+    /// `MediaType`.
     pub(crate) fn curr_media_playlist_request_info(&self,
         media_type: MediaType
     ) -> Option<(&Url, &MediaPlaylistPermanentId)> {
@@ -215,6 +218,10 @@ impl ContentTracker {
         }
     }
 
+    /// Returns a reference to the MediaPlaylist currently loaded for the given `MediaType`.
+    ///
+    /// Returns `None` either if there's no MediaPlaylist selected for that `MediaType` or if the
+    /// MediaPlaylist is not yet loaded.
     pub(crate) fn curr_media_playlist(&self,
         media_type: MediaType
     ) -> Option<&MediaPlaylist> {
@@ -233,10 +240,18 @@ impl ContentTracker {
         }
     }
 
+    /// Returns `Url` to the initialization segment of the MediaPlaylist corresponding to the given
+    /// `MediaType`.
+    ///
+    /// Returns `None` if any of the following is true:
+    ///   - There's no MediaPlaylist for that given `MediaType`.
+    ///   - The MediaPlaylist for that given `MediaType` is not yet loaded.
+    ///   - There's no initialization segment for the MediaPlaylist of that given `MediaType`.
     pub(crate) fn curr_init_segment(&self, media_type: MediaType) -> Option<&Url> {
         self.curr_media_playlist(media_type).as_ref()?.init_segment().map(|i| { &i.uri })
     }
 
+    /// Returns currently estimated start time in seconds at which to begin playing the content.
     pub(crate) fn get_expected_start_time(&self) -> f64 {
         let media_playlists = self.curr_media_playlists();
         if media_playlists.is_empty() ||
@@ -345,4 +360,54 @@ impl ContentTracker {
         }
         available_audio_tracks
     }
+}
+
+/// Identifier allowing to identify a given MediaPlaylist based on its index in the array of
+/// variants and media tags in the MultiVariantPlaylist.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub enum MediaPlaylistPermanentId {
+    /// This Media Playlist is defined by a variant stream definition in the MediaPlaylist whose
+    /// index is its argument.
+    VariantStreamUrl(usize),
+    /// This Media Playlist is defined by a media tag definition in the MediaPlaylist whose
+    /// index is its argument.
+    MediaTagUrl(usize),
+}
+
+/// Current state a given Media Playlist, defined either by a veriant stream or a media tag in the
+/// MultiVariantPlaylist is loaded or not.
+pub enum MediaPlaylistLoadedState {
+    None,
+    Loaded,
+    NotLoaded,
+}
+
+pub struct AvailableAudioTrack<'a> {
+    is_current: bool,
+    id: usize,
+    language: Option<&'a str>,
+    assoc_language: Option<&'a str>,
+    name: &'a str,
+    channels: Option<u32>,
+}
+
+impl<'a> AvailableAudioTrack<'a> {
+   pub fn is_current(&self) -> bool {
+       self.is_current
+   }
+   pub fn id(&self) -> usize {
+       self.id
+   }
+   pub fn language(&self) -> Option<&'a str> {
+       self.language
+   }
+   pub fn assoc_language(&self) -> Option<&'a str> {
+       self.assoc_language
+   }
+   pub fn name(&self) -> &'a str {
+       self.name
+   }
+   pub fn channels(&self) -> Option<u32> {
+       self.channels
+   }
 }

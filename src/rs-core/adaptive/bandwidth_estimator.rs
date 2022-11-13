@@ -5,6 +5,12 @@ const SLOW_EWMA_HALF_LIFE : u32 = 10;
 const MINIMUM_CHUNK_SIZE : u32 = 16_000;
 const MINIMUM_TOTAL_BYTES : u64 = 150_000;
 
+/// Produce bandwidth estimates based on two EWMA (exponentially-weighted moving average), one
+/// evolving slow and the other evolving fast.
+///
+/// The minimum between both is then taken into consideration to ensure a sudden fall in bandwidth
+/// has a lasting impact on estimates and that we only raise that estimate once it raised for
+/// enough time.
 pub struct BandwithEstimator {
     fast_ewma: Ewma,
     slow_ewma: Ewma,
@@ -12,7 +18,7 @@ pub struct BandwithEstimator {
 }
 
 impl BandwithEstimator {
-    /// Creates a new BandwithEstimator
+    /// Creates a new `BandwithEstimator`
     pub fn new() -> Self {
         Self {
             fast_ewma: Ewma::new(FAST_EWMA_HALF_LIFE),
@@ -37,6 +43,9 @@ impl BandwithEstimator {
         self.slow_ewma.add_sample(weight, bandwidth);
     }
 
+    /// Get the current estimate made by the `BandwithEstimator`.
+    ///
+    /// Returns `None` if it does not have enough data to produce a estimate yet.
     pub fn get_estimate(&self) -> Option<f64> {
         if self.bytes_sampled < MINIMUM_TOTAL_BYTES {
             None
@@ -45,6 +54,7 @@ impl BandwithEstimator {
         }
     }
 
+    /// Reset the `BandwithEstimator` as if there was no sample added yet.
     pub fn reset(&mut self) {
         self.fast_ewma = Ewma::new(FAST_EWMA_HALF_LIFE);
         self.slow_ewma = Ewma::new(SLOW_EWMA_HALF_LIFE);

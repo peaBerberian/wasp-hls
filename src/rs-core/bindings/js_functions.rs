@@ -254,6 +254,8 @@ impl JsResult<(), RemoveMediaSourceErrorCode> for RemoveMediaSourceResult {
     }
 }
 
+/// Trait allowing to convert "JavaScript Results" as exposed by the JavaScript functions into
+/// `Result` structs more idiomatic to Rust.
 pub(crate) trait JsResult<T, E> {
     fn result(self)  -> Result<T, (E, Option<String>)>;
 }
