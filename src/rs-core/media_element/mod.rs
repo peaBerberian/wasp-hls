@@ -3,9 +3,10 @@ use crate::bindings::{
     MediaType,
     jsAttachMediaSource,
     jsEndOfStream,
+    JsResult,
     MediaObservation,
     jsRemoveMediaSource,
-    jsSetMediaOffset,
+    jsSetMediaOffset, AttachMediaSourceErrorCode,
 };
 use crate::dispatcher::MediaSourceReadyState;
 use crate::Logger;
@@ -58,6 +59,7 @@ pub(crate) struct MediaElementReference {
 
 impl MediaElementReference {
     /// Create a new `MediaElementReference`.
+    ///
     /// This has no effect on playback, you may then call `attach_media_source` to being
     /// attaching a MediaSource to the corresponding `HTMLMediaElement` or `reset` to remove
     /// a `MediaSource` already-attached to it.
@@ -89,16 +91,18 @@ impl MediaElementReference {
     /// Attach a new `MediaSource` to the media element linked to this `MediaElementReference`.
     ///
     /// This is a necessary step before creating media buffers on it.
-    pub(crate) fn attach_media_source(&mut self) {
+    pub(crate) fn attach_media_source(&mut self) -> Result<(), AttachMediaSourceError> {
         self.reset();
-        // TODO handle result
-        jsAttachMediaSource();
+        Ok(jsAttachMediaSource().result()?)
     }
 
     /// Returns the currently wanted playlist position.
+    ///
     /// That is:
+    ///
     ///   - If a seek has been asked for but could not be performed yet (for example,
     ///     because initialization is still pending), the position for that seek
+    ///
     ///   - Else if no seek is pending, the last known media playhead position
     ///     converted to a playlist position.
     pub(crate) fn wanted_position(&self) -> f64 {
@@ -145,12 +149,6 @@ impl MediaElementReference {
         }
     }
 
-    /// Method to call once a `MediaObservation` has been received.
-    pub(crate) fn on_observation(&mut self, observation: MediaObservation) {
-        self.last_observation = Some(observation);
-self.check_awaiting_seek();
-    }
-
     /// Returns the last communicated `readyState` of the `MediaSource` attached
     /// to this `MediaElementReference`.
     ///
@@ -163,13 +161,6 @@ self.check_awaiting_seek();
     /// `update_media_source_ready_state` first.
     pub(crate) fn media_source_ready_state(&self) -> Option<MediaSourceReadyState> {
         self.media_source_ready_state
-    }
-
-    /// Update the current `readyState` of the `MediaSource`.
-    /// TODO trigger MediaObservation when MediaSourceReadyState' changes?
-    pub(crate) fn update_media_source_ready_state(&mut self, ready_state: MediaSourceReadyState) {
-        self.media_source_ready_state = Some(ready_state);
-        self.check_end_of_stream();
     }
 
     /// Create a new `SourceBuffer` instance linked to this
@@ -217,6 +208,11 @@ self.check_awaiting_seek();
         }
     }
 
+    /// Push a segment to the SourceBuffer of the media type given.
+    ///
+    /// You should have created a SourceBuffer of the corresponding type with
+    /// `create_source_buffer` before calling this method. If you did not this method will return a
+    /// `NoSourceBuffer` error.
     pub(crate) fn push_segment(
         &mut self,
         media_type: MediaType,
@@ -245,6 +241,11 @@ self.check_awaiting_seek();
         }
     }
 
+    /// Remove media data, based on a `start` and `end` time in seconds.
+    ///
+    /// You should have created a SourceBuffer of the corresponding type with
+    /// `create_source_buffer` before calling this method. If you did not this method will return a
+    /// `NoSourceBuffer` error.
     pub(crate) fn remove_data(
         &mut self,
         media_type: MediaType,
@@ -258,6 +259,19 @@ self.check_awaiting_seek();
                 Ok(())
             },
         }
+    }
+
+    /// Method to call once a `MediaObservation` has been received.
+    pub(crate) fn on_observation(&mut self, observation: MediaObservation) {
+        self.last_observation = Some(observation);
+self.check_awaiting_seek();
+    }
+
+    /// Update the current `readyState` of the `MediaSource`.
+    /// TODO trigger MediaObservation when MediaSourceReadyState' changes?
+    pub(crate) fn update_media_source_ready_state(&mut self, ready_state: MediaSourceReadyState) {
+        self.media_source_ready_state = Some(ready_state);
+        self.check_end_of_stream();
     }
 
     /// Callback that should be called once one of the `SourceBuffer` linked to this
@@ -286,18 +300,30 @@ self.check_awaiting_seek();
     }
 
 
+    /// Announce that the last chronological segment has been pushed to the buffer of a
+    /// given `media_type`.
+    ///
+    /// Calling this method for the media_type of each created SourceBuffer allows to properly end
+    /// the stream once those last segments are reached.
+    /// Pushing further segments for that `media_type` is still possible after calling `end_buffer`
+    /// in which case, `end_buffer` should be re-called once, the new last chronological segment
+    /// has been pushed.
     pub(crate) fn end_buffer(&mut self, media_type: MediaType) {
         match self.get_buffer_mut(media_type) {
             None => {
                 Logger::warn(&format!("Asked to end a non existent {} buffer", media_type))
             },
             Some(sb) => {
-                sb.anounced_last_segment_pushed();
+                sb.announce_last_segment_pushed();
             }
         }
         self.check_end_of_stream();
     }
 
+    /// Get reference to SourceBuffer attached to this `MediaElementReference` for this
+    /// `media_type`.
+    ///
+    /// `None` if no SourceBuffer has been created for this `MediaType`
     fn get_buffer(&self, media_type: MediaType) -> Option<&source_buffers::SourceBuffer> {
         match media_type {
             MediaType::Audio => self.audio_buffer.as_ref(),
@@ -305,6 +331,10 @@ self.check_awaiting_seek();
         }
     }
 
+    /// Get mutable reference to SourceBuffer attached to this `MediaElementReference` for this
+    /// `media_type`.
+    ///
+    /// `None` if no SourceBuffer has been created for this `MediaType`
     fn get_buffer_mut(&mut self, media_type: MediaType) -> Option<&mut source_buffers::SourceBuffer> {
         match media_type {
             MediaType::Audio => self.audio_buffer.as_mut(),
@@ -312,6 +342,10 @@ self.check_awaiting_seek();
         }
     }
 
+    /// Perform checks that all conditions for calling the `endOfStream` MSE API have been reached
+    /// and call `jsEndOfStream` if that's the case.
+    ///
+    /// To call when any of its condition might have changed.
     fn check_end_of_stream(&self) {
         if self.video_buffer.is_none() && self.audio_buffer.is_none() {
             return;
@@ -324,6 +358,9 @@ self.check_awaiting_seek();
         }
     }
 
+    /// Returns `true` if the `SourceBuffer` of the corresponding `media_type` has ended, that is:
+    ///   - its last chronological segment has been pushed.
+    ///   - it has no operation left to perform.
     fn is_buffer_ended(&self, media_type: MediaType) -> bool {
         match self.get_buffer(media_type) {
             None => true,
@@ -331,6 +368,10 @@ self.check_awaiting_seek();
         }
     }
 
+    /// Check if a scheduled seek is awaiting and if all condition to perform it are reached.
+    /// If both are true, perform the seek.
+    ///
+    /// To call when any of its condition might have changed.
     fn check_awaiting_seek(&mut self) {
         if self.awaiting_seek.is_some() && self.last_observation.as_ref().unwrap().ready_state() >= 1 {
             let awaiting_seek = self.awaiting_seek.unwrap();
@@ -403,4 +444,25 @@ impl From<AddSourceBufferError> for SourceBufferCreationError {
 
     }
   }
+}
+
+#[derive(Error, Debug)]
+pub(crate) enum AttachMediaSourceError {
+    #[error("Error when attaching MediaSource: No content is currently loaded.")]
+    NoContentLoaded,
+    #[error("Uncategorized Error when attaching MediaSource: {message}")]
+    UnknownError { message: String },
+}
+
+impl From<(AttachMediaSourceErrorCode, Option<String>)> for AttachMediaSourceError {
+    fn from(x: (AttachMediaSourceErrorCode, Option<String>)) -> Self {
+        match x.0 {
+            AttachMediaSourceErrorCode::NoContentLoaded =>
+                AttachMediaSourceError::NoContentLoaded,
+            AttachMediaSourceErrorCode::UnknownError =>
+                AttachMediaSourceError::UnknownError {
+                    message: x.1.unwrap_or("Unknown Error.".to_string())
+                }
+        }
+    }
 }

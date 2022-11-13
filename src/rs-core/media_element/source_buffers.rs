@@ -43,6 +43,7 @@ pub(super) struct SourceBuffer {
 }
 
 impl SourceBuffer {
+    /// Create a new `SourceBuffer` for the given `MediaType` and the mime-type indicated by `typ`.
     pub(super) fn new(media_type: MediaType, typ: String) -> Result<Self, AddSourceBufferError> {
         Logger::info(&format!("Creating new {} SourceBuffer", media_type));
         match jsAddSourceBuffer(media_type, &typ,).result() {
@@ -60,14 +61,24 @@ impl SourceBuffer {
         }
     }
 
+    /// Get the `SourceBufferId`, needed to refer to that SourceBuffer when interacting with
+    /// JavaScript.
     pub(super) fn id(&self) -> SourceBufferId {
         self.id
     }
 
+    /// Get the queue of operations which are still pending on the SourceBuffer.
+    ///
+    /// The SourceBuffer performs one operation at a time, in the same order than the elements of
+    /// that queue.
     pub(super) fn get_segment_queue(&self) -> &[SourceBufferQueueElement] {
         &self.queue
     }
 
+    /// Push a new segment to the SourceBuffer.
+    ///
+    /// If the `parse_time_info` bool in argument is set to `true`, the segment might be parsed to
+    /// recuperate its time information which will be returned if found.
     pub(super) fn append_buffer(
         &mut self,
         metadata: PushMetadata,
@@ -84,14 +95,7 @@ impl SourceBuffer {
         }
     }
 
-    pub(super) fn anounced_last_segment_pushed(&mut self) {
-        self.last_segment_pushed = true;
-    }
-
-    pub(super) fn is_last_segment_pushed(&self) -> bool {
-        self.last_segment_pushed
-    }
-
+    /// Remove media data from this `SourceBuffer`, based on a `start` and `end` time in seconds.
     pub(super) fn remove_buffer(&mut self, start: f64, end: f64) {
         self.was_used = true;
         self.queue.push(SourceBufferQueueElement::Remove { start, end });
@@ -100,6 +104,19 @@ impl SourceBuffer {
         jsRemoveBuffer(self.id, start, end);
     }
 
+    /// Indicate to this `SourceBuffer` that the last chronological segment has been pushed.
+    pub(super) fn announce_last_segment_pushed(&mut self) {
+        // TODO reset to `false` if later segment is then pushed?
+        self.last_segment_pushed = true;
+    }
+
+    /// Returns `true` if the last chronological segment is known to have been pushed.
+    pub(super) fn is_last_segment_pushed(&self) -> bool {
+        self.last_segment_pushed
+    }
+
+    /// To call once a `SourceBuffer` operation, either created through `append_buffer` or
+    /// `remove_buffer`, has been finished by the underlying MSE SourceBuffer.
     pub(super) fn on_operation_end(&mut self) {
         self.queue.remove(0);
     }
@@ -118,12 +135,20 @@ impl SourceBuffer {
 //     }
 }
 
+/// Structure describing a segment that should be pushed to the SourceBuffer.
 pub(crate) struct PushMetadata {
+    /// Raw data of the segment to push.
     segment_data: JsMemoryBlob,
+    /// Time information, as a tuple of its start time and end time in seconds as deduced from the
+    /// media playlist.
+    ///
+    /// This should always be defined, unless the segment contains no media data (like for
+    /// initialization segments).
     pub(crate) time_info: Option<(f64, f64)>
 }
 
 impl PushMetadata {
+    /// Creates a new `PushMetadata`.
     pub(crate) fn new(
         segment_data: JsMemoryBlob,
         time_info: Option<(f64, f64)>
@@ -144,6 +169,12 @@ pub(crate) enum SourceBufferQueueElement {
 
 use thiserror::Error;
 
+/// Formatted error when the creation of a MSE SourceBuffer fails.
+///
+/// This is almost a 1:1 to error codes returned by `AddSourceBufferErrorCode`.
+///
+/// Note that `thiserror` is not used here because this error will really be formatted at a later
+/// time.
 #[derive(Debug)]
 pub(super) enum AddSourceBufferError {
   NoMediaSourceAttached { message: String },
@@ -184,6 +215,7 @@ impl AddSourceBufferError {
     }
 }
 
+/// Error encountered synchronously after trying to push a segment to a `SourceBuffer`.
 #[derive(Error, Debug)]
 pub(crate) enum PushSegmentError {
     #[error("No SourceBuffer created for {0}")]
@@ -197,6 +229,8 @@ pub(crate) enum PushSegmentError {
 }
 
 impl PushSegmentError {
+    /// Creates a new `PushSegmentError` based on a given `MediaType` and the original error as
+    /// returned by the `jsAppendBuffer` binding.
     fn from_append_buffer_error(
         media_type: MediaType,
         err: (AppendBufferErrorCode, Option<String>)
@@ -220,6 +254,7 @@ impl PushSegmentError {
     }
 }
 
+/// Error encountered synchronously after trying to remove media data from a `SourceBuffer`.
 #[derive(Error, Debug)]
 pub(crate) enum RemoveDataError {
     #[error("No SourceBuffer created for {0}")]
