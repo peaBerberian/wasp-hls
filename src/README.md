@@ -11,7 +11,7 @@ The code is splitted into several directories:
     playback and so on.
 
   - **ts-main** The player's API, usable directly from an user interface
-  application. It is written in TypeScript.
+    application. It is written in TypeScript.
 
     This directory also contains logic that can only run in the main thread,
     like code about the page's HTMLMediaElement, as well as code to

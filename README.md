@@ -52,7 +52,7 @@ The real reasons why I started this project are more personal, mainly:
 
   - to work on and improve my Rust skills
 
-  - To try relying on [wasm_bindgen](https://github.com/rustwasm/wasm-bindgen)
+  - To try relying on [wasm\_bindgen](https://github.com/rustwasm/wasm-bindgen)
     on a sufficiently complex library.
 
 ## What's left to do?
