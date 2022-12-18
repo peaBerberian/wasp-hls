@@ -13,32 +13,68 @@ const titleElt = createElement("h1", {
 const playerContainer = createElement("div", {
   className: "player-container",
 });
-addInnerElements(document.body, [titleElt, playerContainer]);
+const createNewPlayerButtonElt = createElement("button", {
+  className: "create-new-player",
+  textContent: "Create new Player",
+  onclick() {
+    createNewPlayer(playerContainer);
+  },
+});
+addInnerElements(document.body, [
+  titleElt,
+  playerContainer,
+  createNewPlayerButtonElt,
+]);
 createNewPlayer(playerContainer);
 
 function createNewPlayer(containerElt) {
+  let isRemoved = false;
   const spinnerElt = createElement("div", {
     className: "inline-spinner",
   });
-  containerElt.appendChild(spinnerElt);
 
   const videoElt = createElement("video", {
     className: "video video-small",
     autoplay: true,
     controls: true,
   });
+  const playerParentElt = createElement("div", {
+    className: "player-parent",
+  });
 
+  const removePlayerButtonElt = createElement("button", {
+    className: "remove-player",
+    textContent: "Remove Player",
+    onclick() {
+      isRemoved = true;
+      if (containerElt.contains(spinnerElt)) {
+        containerElt.removeChild(spinnerElt);
+      }
+      if (containerElt.contains(playerParentElt)) {
+        containerElt.removeChild(playerParentElt);
+      }
+      containerElt.removeChild(removePlayerButtonElt);
+    },
+  });
+
+  addInnerElements(containerElt, [removePlayerButtonElt, spinnerElt]);
   const player = new WaspHlsPlayer(videoElt);
   window.player = player;
   player.initialize({
     workerUrl: "./worker.js",
     wasmUrl: "./wasp_hls_bg.wasm"
   }).then(() => {
+    if (isRemoved) {
+      return;
+    }
     containerElt.removeChild(spinnerElt);
-    addInnerElements(containerElt, [
+    containerElt.removeChild(removePlayerButtonElt);
+    addInnerElements(playerParentElt, [
       ContentInputComponent(player),
       createBreakElement(),
       VideoPlayerComponent(videoElt),
+      removePlayerButtonElt,
     ]);
+    addInnerElements(playerContainer, [playerParentElt]);
   });
 }
