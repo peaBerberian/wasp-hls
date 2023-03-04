@@ -62,7 +62,8 @@ Type of contents:
   - [x] Transcode mpeg-ts (thanks to mux.js for now)
   - [x] Play HLS live contents _(for now require presence of
         `EXT-X-PROGRAM-DATE-TIME` tag in media playlist)_
-  - [ ] Proper support of HLS low-latency contents
+  - [ ] Proper support of HLS low-latency contents.
+    _Priority: average_
 
 Worker-related features:
   - [x] Load content-related resources and run main logic loop in worker
@@ -71,17 +72,21 @@ Worker-related features:
 
 Adaptive BitRate:
   - [x] Choose variant based on throughtput-based estimates
-  - [ ] Also choose variant based on buffer-based estimates
+  - [ ] Also choose variant based on buffer-based estimates.
+    _Priority: low_
 
 Request Scheduling:
   - [x] Lazy Media Playlist downloading
+  - [x] Media Playlist refreshing for live contents
   - [x] Buffer goal implementation (as in: stop loading segment once enough to fill
     the buffer up to a certain point are loaded)
   - [x] Parallel audio and video segment loading
   - [X] Priorization between audio and video segment requests (to e.g. stop
     doing audio segment requests when video ones become urgent).
-  - [ ] Range requests
-  - [ ] Retry of failed requests with an exponential backoff
+  - [ ] Perform range requests for segments (rare use case).
+    _Priority: low_
+  - [ ] Retry of failed requests with an exponential backoff.
+    _Priority: high_
 
 Buffers:
   - [x] End of stream support (as in: actually end when playback reached the end!)
@@ -90,23 +95,34 @@ Buffers:
     and for several optimizations (though quality identification seems more difficult
     to implement in HLS than in DASH due to the fact that HLS only link variants to
     bitrate, not the actual audio and video streams - but it should be doable).
+    _Priority: very low_
   - [ ] Proper handling of `QuotaExceededError` after pushing segments (when low
-    on memory)
+    on memory).
+    This is generally not needed as the browser should already handle some kind of
+    garbage collection but some platforms still may have issues when memory is
+    constrained.
+    _Priority: low_
 
 Tracks:
-  - [ ] Provide API to set an audio, video and/or text track
-  - [ ] support of at least one text track format (didn't check which yet)
-    _(low priority)_
+  - [ ] Provide API to set an audio, video and/or text track.
+    _Priority: low_
+  - [ ] support of at least one text track format (didn't check which yet).
+    _Priority: low_
 
 Decryption:
-  - [ ] Support content decryption _(very low priority)_
+  - [ ] Support content decryption.
+    _Priority: very low_
 
 Miscellaneous:
-  - [ ] Proper Error API (should be high priority but that does not look like
-    fun for now!)
-  - [ ] WebAssembly-based mpeg-ts transcoder (very low priority)
-  - [ ] Delta playlist handling
-  - [ ] Content Steering handling
+  - [ ] Proper Error API (high priority but that does not look like fun for
+    now!).
+    _Priority: high_
+  - [ ] WebAssembly-based mpeg-ts transcoder.
+    _Priority: very low_
+  - [ ] Delta playlist handling.
+    _Priority: low_
+  - [ ] Content Steering handling.
+    _Priority: low_
 
 Playlist tags specifically considered (unchecked ones are mainly just ignored,
 most do not prevent playback):
