@@ -38,6 +38,14 @@ impl Dispatcher {
             duration_ms);
     }
 
+    /// Called by the JavaScript code each time an HTTP(S) request started with
+    /// `jsFetch` finished with an error.
+    ///
+    /// # Arguments
+    ///
+    /// * `request_id` - The identifier given by the JavaScript when the request
+    ///   was started. This allows the `Dispatcher` to identify which request
+    ///   is actually finished
     pub fn on_request_failed(&mut self, request_id: RequestId) {
         Dispatcher::on_request_failed_inner(self, request_id);
     }
@@ -85,6 +93,19 @@ impl Dispatcher {
         Dispatcher::on_observation(self, observation);
     }
 
+    /// Called by the JavaScript code each time a timer started with the `jsTimer`
+    /// function finished.
+    ///
+    /// # Arguments
+    ///
+    /// * `id` - The `TimerId` given by the JavaScript when the timer was
+    ///   started. This allows the `Dispatcher` to identify which timer
+    ///   actually finished.
+    ///
+    /// * `reason` - The `TimerReason` given by the Rust code when that timer
+    ///   was started. Using this supplementary attribute allows to better
+    ///   discriminate between timers used for different purposes and thus
+    ///   to simplify the logic handling a resolved timer.
     pub fn on_timer_ended(&mut self, id: TimerId, reason: TimerReason) {
         match reason {
             TimerReason::MediaPlaylistRefresh =>
