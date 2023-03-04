@@ -6,7 +6,6 @@ import {
   EndOfStreamErrorCode,
   SourceBufferCreationErrorCode,
 } from "../ts-common/types";
-import { WarningCode } from "../wasm/wasp_hls";
 import InitializationError from "./errors";
 import EventEmitter from "./EventEmitter";
 import observePlayback from "./observePlayback";
@@ -16,7 +15,7 @@ const generateContentId = idGenerator();
 
 interface WaspHlsPlayerEvents {
   warning:  {
-    code: WarningCode;
+    // code: WarningCode;
     message: string | undefined;
   };
 }
@@ -565,7 +564,7 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
             console.info("API: Ignoring warning due to wrong `contentId`");
             return;
           }
-          console.warn("Warning received", data.value.code);
+          // console.warn("Warning received", data.value.code);
           // this.trigger("warning", {
           //   code: data.value.code,
           //   // TODO
@@ -817,5 +816,3 @@ interface ContentMetadata {
 
   maximumPosition : number | undefined;
 }
-
-export { WarningCode };
