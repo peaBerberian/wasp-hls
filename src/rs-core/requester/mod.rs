@@ -237,7 +237,7 @@ impl Requester {
     ///
     /// Once it succeeds, the `on_request_finished` function will be called.
     pub(crate) fn request_init_segment(&mut self, media_type: MediaType, url: Url) {
-        Logger::debug(&format!("Requesting {} initialization segment", media_type));
+        Logger::info(&format!("Requesting {} initialization segment", media_type));
         let request_id = jsFetch(url.get_ref());
         self.pending_segment_requests.push(SegmentRequestInfo {
             request_id,
@@ -261,7 +261,7 @@ impl Requester {
         media_type: MediaType,
         seg: &SegmentInfo
     ) {
-        Logger::debug(&format!("Req: Asking to request {} segment: t: {}, d: {}",
+        Logger::info(&format!("Req: Asking to request {} segment: t: {}, d: {}",
                 media_type, seg.start, seg.duration));
         let time_info = Some((seg.start, seg.start + seg.duration));
         if !self.can_start_new_media_segment_request(seg.start) {
@@ -498,7 +498,7 @@ impl Requester {
 }
 
 fn log_segment_abort(seg: &impl RequesterSegmentInfo) {
-    Logger::lazy_debug(&|| {
+    Logger::lazy_info(&|| {
         let media_type = seg.media_type();
         match (seg.start_time(), seg.duration()) {
             (Some(start), Some(duration)) =>

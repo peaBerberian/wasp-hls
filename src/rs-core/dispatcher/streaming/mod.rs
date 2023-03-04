@@ -315,7 +315,7 @@ impl Dispatcher {
             Ok(()) => if let Some(ti) = time_info {
                 self.segment_selectors.get_mut(media_type).validate_media(ti.0);
                 if was_last_segment(self.content_tracker.as_ref(), media_type, ti.0) {
-                    Logger::debug(&format!("Last {} segment request finished, declaring its buffer's end", media_type));
+                    Logger::info(&format!("Last {} segment request finished, declaring its buffer's end", media_type));
                     self.media_element_ref.end_buffer(media_type);
                 }
             } else {
@@ -334,7 +334,7 @@ impl Dispatcher {
                 Logger::debug(&format!("New bandwidth estimate: {}", bandwidth));
                 ctnt.update_curr_bandwidth(bandwidth).iter().for_each(|mt| {
                     let mt = *mt;
-                    Logger::debug(&format!("{} MediaPlaylist changed", mt));
+                    Logger::info(&format!("{} MediaPlaylist changed", mt));
                     self.requester.abort_segments_with_type(mt);
                     let selector = self.segment_selectors.get_mut(mt);
                     selector.rollback();
@@ -360,7 +360,7 @@ impl Dispatcher {
         resource_size: u32,
         duration_ms: f64,
     ) {
-        Logger::lazy_debug(&|| {
+        Logger::lazy_info(&|| {
             let media_type = segment_req.media_type;
             match segment_req.time_info {
                 None => format!("Loaded {} init segment", media_type),
