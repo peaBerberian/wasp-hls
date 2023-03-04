@@ -1,9 +1,8 @@
-import React, { useEffect, useState } from "react";
+import * as React from "react";
+import WaspHlsPlayer from "../../../src";
 import ContentInput from "./ContentInput";
 import RemovePlayerButton from "./RemovePlayerButton";
 import VideoPlayer from "./VideoPlayer";
-
-const win = window as any;
 
 export default function PlayerContainer(
   {
@@ -12,32 +11,37 @@ export default function PlayerContainer(
     onClose : () => void;
   }
 ) {
-  const [player, setPlayer] = useState(null);
+  const [player, setPlayer] = React.useState<WaspHlsPlayer|null>(null);
 
-  useEffect(() => {
+  React.useEffect(() => {
     let isRemoved = false;
     const videoElt = document.createElement("video");
     videoElt.className = "video video-small";
     videoElt.autoplay = true;
     videoElt.controls = true;
-    const player = new win.WaspHlsPlayer(videoElt);
-    win.player = player;
-    player.initialize({
+    const waspHlsPlayer = new WaspHlsPlayer(videoElt);
+    /* eslint-disable-next-line */
+    (window as any).player = waspHlsPlayer;
+    waspHlsPlayer.initialize({
       workerUrl: "./worker.js",
-      wasmUrl: "./wasp_hls_bg.wasm"
+      wasmUrl: "./wasp_hls_bg.wasm",
     }).then(() => {
       if (isRemoved) {
-        player.dispose();
+        waspHlsPlayer.dispose();
         return;
       }
-     setPlayer(player);
+      setPlayer(waspHlsPlayer);
+    }, (err) => {
+      console.error("Could not initialize WaspHlsPlayer:", err);
     });
 
     return () => {
       isRemoved = true;
-      player.dispose();
-      if (win.player === player) {
-        win.player = null;
+      waspHlsPlayer.dispose();
+      /* eslint-disable-next-line */
+      if ((window as any).player === waspHlsPlayer) {
+        /* eslint-disable-next-line */
+        (window as any).player = null;
       }
     };
   }, []);

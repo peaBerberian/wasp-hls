@@ -1,8 +1,4 @@
-import React, {
-  useCallback,
-  useState,
-  useEffect,
-} from "react";
+import * as React from "react";
 import CreateNewPlayerButton from "./CreateNewPlayerButton.js";
 import PlayerContainer from "./PlayerContainer.jsx";
 
@@ -10,12 +6,12 @@ import PlayerContainer from "./PlayerContainer.jsx";
 let currentPlayerId = 1;
 
 export default function PlayerContainersWrapper() : JSX.Element {
-  const [players, setPlayers] = useState([]);
+  const [players, setPlayers] = React.useState<JSX.Element[]>([]);
 
-  const createPlayerContainer = useCallback((id : number) => {
+  const createPlayerContainer = React.useCallback((id : number) => {
     const newContainer = <PlayerContainer key={id} onClose={onClose} />;
 
-    setPlayers((prevPlayers : JSX.Element[]) => {
+    setPlayers((prevPlayers) => {
       const newPlayers = prevPlayers.slice();
       newPlayers.push(newContainer);
       return newPlayers;
@@ -36,16 +32,16 @@ export default function PlayerContainersWrapper() : JSX.Element {
     }
   }, []);
 
-  const createNewPlayer = useCallback(() => {
+  const createNewPlayer = React.useCallback(() => {
     createPlayerContainer(currentPlayerId);
     currentPlayerId++;
   }, []);
 
   // Create initial player
-  useEffect(() => createPlayerContainer(0), []);
+  React.useEffect(() => createPlayerContainer(0), []);
 
   return <>
-      {players}
-      <CreateNewPlayerButton onClick={createNewPlayer} />
-    </>;
+    {players}
+    <CreateNewPlayerButton onClick={createNewPlayer} />
+  </>;
 }

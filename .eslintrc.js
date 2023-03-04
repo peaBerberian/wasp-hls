@@ -223,7 +223,7 @@ module.exports = {
     "import/no-extraneous-dependencies": [
       "error",
       {
-        "devDependencies": false
+        "devDependencies": true
       }
     ],
     "import/no-internal-modules": "off",

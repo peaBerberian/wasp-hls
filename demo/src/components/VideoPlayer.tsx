@@ -1,7 +1,5 @@
-import React, {
-  useEffect,
-  useRef,
-} from "react";
+import * as React from "react";
+import WaspHlsPlayer from "../../../src";
 
 const TIME_BOUNDS_CHECK_INTERVAL = 1000;
 
@@ -9,22 +7,24 @@ export default function VideoPlayer(
   {
     player,
   } : {
-    player : any;
+    player : WaspHlsPlayer;
   }
 ) : JSX.Element {
   // Inserting already-existing DOM into React looks a little far-fetched
-  const containerRef = useRef(null);
-  useEffect(() => {
+  const containerRef : React.Ref<HTMLDivElement> = React.useRef(null);
+  React.useEffect(() => {
     const intervalId = setInterval(() => {
       const pos = player.getPosition();
       const minPos = player.getMinimumPosition();
       if (minPos !== undefined && minPos > pos + 2) {
-        console.warn("Behind minimum position, seeking...")
+        console.warn("Behind minimum position, seeking...");
         player.seek(minPos + 2);
       }
     }, TIME_BOUNDS_CHECK_INTERVAL);
     player.addEventListener("warning", onWarning);
-    containerRef.current.appendChild(player.videoElement);
+    if (containerRef.current !== null) {
+      containerRef.current.appendChild(player.videoElement);
+    }
 
     return () => {
       clearInterval(intervalId);
@@ -34,7 +34,7 @@ export default function VideoPlayer(
       }
     };
 
-    function onWarning(payload : any) {
+    function onWarning(payload: unknown) {
       console.warn("RECEIVED WARNING!!!!", payload);
     }
   }, []);

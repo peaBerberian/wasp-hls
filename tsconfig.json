@@ -17,12 +17,16 @@
     "moduleResolution": "node",
     "typeRoots": [
       "./node_modules/@types"
-    ]
+    ],
+
+    // Only for the demo pages
+    "jsx": "react"
   },
   "include": [
     "./src/ts-main/**/*",
     "./src/ts-worker/**/*",
     "./src/ts-common/**/*",
+    "./demo/src/**/*",
     "./wasm/**/*"
   ]
 }
