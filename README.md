@@ -10,10 +10,11 @@ player for the web which:
      [Rust](https://www.rust-lang.org/) language)
 
   2. Runs mostly in a Web Worker (even for media buffering when APIs are
-     available), to reduce the influence an heavy UI can have on playback.
+     available), to reduce the influence an heavy UI can have on playback (and
+     in some situations vice-versa).
 
 Note that this is only a personal project as well as a proof of concept and it
-is still heavily in development. 
+is still heavily in development.
 
 ## Why starting this project?
 
