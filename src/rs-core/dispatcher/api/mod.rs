@@ -59,6 +59,18 @@ impl Dispatcher {
         }
     }
 
+    pub fn minimum_position(&self) -> Option<f64> {
+        self.content_tracker.as_ref().and_then(|c| {
+            c.curr_min_position()
+        })
+    }
+
+    pub fn maximum_position(&self) -> Option<f64> {
+        self.content_tracker.as_ref().and_then(|c| {
+            c.curr_min_position()
+        })
+    }
+
     /// Stop the currently loaded content.
     pub fn stop(&mut self) {
         self.internal_stop();

@@ -8,12 +8,10 @@ use crate::{
         SourceBufferId,
         TimerId,
         TimerReason,
-        WarningCode,
         jsSetMediaSourceDuration,
         jsStartObservingPlayback,
         jsStopObservingPlayback,
-        jsTimer,
-        jsWarning,
+        jsTimer, jsUpdateContentInfo,
     },
     Logger,
     content_tracker::{MediaPlaylistPermanentId, ContentTracker},
@@ -155,8 +153,7 @@ impl Dispatcher {
         Logger::info(&format!("Media playlist loaded successfully: {}", playlist_url.get_ref()));
         if let Some(ref mut content_tracker) = self.content_tracker.as_mut() {
             match content_tracker.update_media_playlist(&playlist_id, data.as_ref(), playlist_url) {
-                Err(e) =>
-                    self.fail_on_error(&format!("Failed to parse MediaPlaylist: {:?}", e)),
+                Err(e) => self.fail_on_error(&format!("Failed to parse MediaPlaylist: {:?}", e)),
                 Ok(p) => {
                     if !p.end_list {
                         let target_duration = p.target_duration;
@@ -169,6 +166,12 @@ impl Dispatcher {
                         self.check_ready_to_load_segments();
                     } else if self.ready_state > PlayerReadyState::Loading {
                         self.check_segments_to_request();
+                    }
+
+                    if let Some(content_tracker) = self.content_tracker.as_ref() {
+                        let min_pos = content_tracker.curr_min_position();
+                        let max_pos = content_tracker.curr_max_position();
+                        jsUpdateContentInfo( min_pos, max_pos);
                     }
                 },
             }
@@ -214,9 +217,6 @@ impl Dispatcher {
         Logger::debug(&format!("Tick received: {:?} {}",
                 reason, observation.current_time()));
         self.media_element_ref.on_observation(observation);
-        check_min_and_max_position(
-            self.content_tracker.as_ref(),
-            self.media_element_ref.wanted_position());
         match reason {
             PlaybackTickReason::Seeking => self.on_seek(),
             _ => self.on_regular_tick(),
@@ -401,29 +401,5 @@ fn was_last_segment(
                 },
             }
         },
-    }
-}
-
-fn check_min_and_max_position(
-    content_tracker: Option<&ContentTracker>,
-    wanted_pos : f64
-) {
-    if let Some(content) = content_tracker {
-        match content.curr_min_position() {
-            Some(min_pos) if min_pos > wanted_pos => {
-                Logger::warn(&format!("Behind minimum position: {} {}",
-                        min_pos, wanted_pos));
-                jsWarning(WarningCode::PositionBehindPlaylist);
-            },
-            _ => {},
-        }
-        match content.curr_max_position() {
-            Some(max_pos) if max_pos < wanted_pos => {
-                Logger::warn(&format!("Ahead of maximum position: {:?} {}",
-                        max_pos, wanted_pos));
-                jsWarning(WarningCode::PositionAheadPlaylist);
-            },
-            _ => {},
-        }
     }
 }

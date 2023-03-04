@@ -5,6 +5,7 @@
   "scripts": {
     "build:all": "npm run clean && npm run build:wasm && npm run build:worker && npm run build:main",
     "build:demo": "esbuild demo/src/index.tsx --bundle --outfile=build/demo.js",
+    "build:demo:watch": "esbuild demo/src/index.tsx --bundle --outfile=build/demo.js --watch",
     "build:demo:release": "esbuild demo/src/index.tsx --bundle --outfile=build/demo.js --minify",
     "build:main": "esbuild src/ts-main/index.ts --bundle --outfile=build/main.js",
     "build:worker": "esbuild src/ts-worker/index.ts --bundle --outfile=build/worker.js",

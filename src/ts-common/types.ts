@@ -41,7 +41,8 @@ export type WorkerMessage =
   EndOfStreamWorkerMessage |
   StartPlaybackObservationWorkerMessage |
   StopPlaybackObservationWorkerMessage |
-  MediaOffsetUpdateWorkerMessage;
+  MediaOffsetUpdateWorkerMessage |
+  ContentInfoUpdateWorkerMessage;
 
 /**
  * Error codes generated for `InitializationErrorWorkerMessage` messages.
@@ -161,6 +162,23 @@ export interface ContentWarningWorkerMessage {
      * purposes.
      */
     message?: string | undefined;
+  };
+}
+
+/**
+ * Message sent when the Worker has new information on the content being played.
+ */
+export interface ContentInfoUpdateWorkerMessage {
+  type: "content-info-update";
+  value: {
+    /**
+     * The identifier for the content on which an error was received.
+     * This is the same `contentId` value that on the related
+     * `LoadContentMainMessage`.
+     */
+    contentId: string;
+    minimumPosition: number | undefined;
+    maximumPosition: number | undefined;
   };
 }
 

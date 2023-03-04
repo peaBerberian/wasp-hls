@@ -161,7 +161,7 @@ export function abortRequest(id: RequestId) : boolean {
 }
 
 /**
- * @param {number} position
+ * @param {number} warningCode
  */
 export function warning(warningCode: WarningCode): void {
   const contentInfo = playerInstance.getContentInfo();
@@ -794,25 +794,48 @@ function getTimeInformationFromMp4(
   };
 }
 
+/**
+ * @param {number|undefined} minimumPosition
+ * @param {number|undefined} maximumPosition
+ */
+export function updateContentInfo(
+  minimumPosition: number | undefined,
+  maximumPosition: number | undefined
+) : void {
+  const contentInfo = playerInstance.getContentInfo();
+  if (contentInfo === null) {
+    return ;
+  }
+  postMessageToMain({
+    type: "content-info-update",
+    value: {
+      contentId: contentInfo.contentId,
+      minimumPosition,
+      maximumPosition,
+    },
+  });
+}
+
 // TODO real way of binding
 /* eslint-disable */
 const global = self as any;
-global.jsLog = log;
-global.jsFetch = doFetch;
 global.jsAbortRequest = abortRequest;
-global.jsAttachMediaSource = attachMediaSource;
-global.jsRemoveMediaSource = removeMediaSource;
-global.jsSetMediaSourceDuration = setMediaSourceDuration;
 global.jsAddSourceBuffer = addSourceBuffer;
 global.jsAppendBuffer = appendBuffer;
-global.jsRemoveBuffer = removeBuffer;
+global.jsAttachMediaSource = attachMediaSource;
+global.jsClearTimer = clearTimer;
 global.jsEndOfStream = endOfStream;
+global.jsFetch = doFetch;
+global.jsFreeResource = freeResource;
+global.jsGetResourceData = getResourceData;
+global.jsLog = log;
+global.jsRemoveBuffer = removeBuffer;
+global.jsRemoveMediaSource = removeMediaSource;
+global.jsSeek = seek;
+global.jsSetMediaOffset = setMediaOffset;
+global.jsSetMediaSourceDuration = setMediaSourceDuration;
 global.jsStartObservingPlayback = startObservingPlayback;
 global.jsStopObservingPlayback = stopObservingPlayback;
-global.jsFreeResource = freeResource;
-global.jsSeek = seek;
 global.jsTimer = timer;
-global.jsClearTimer = clearTimer;
-global.jsGetResourceData = getResourceData;
-global.jsSetMediaOffset = setMediaOffset;
+global.jsUpdateContentInfo = updateContentInfo;
 global.jsWarning = warning;

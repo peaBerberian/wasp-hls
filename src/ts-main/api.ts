@@ -88,6 +88,8 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
       sourceBuffers: [],
       stopPlaybackObservations: null,
       mediaOffset: undefined,
+      minimumPosition: undefined,
+      maximumPosition: undefined,
     };
     postMessageToWorker(this._worker, {
       type: "load",
@@ -167,6 +169,14 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
 
   public getSpeed(): number {
     return this.videoElement.playbackRate;
+  }
+
+  public getMinimumPosition() : number | undefined {
+    return this._currentContentMetadata?.minimumPosition;
+  }
+
+  public getMaximumPosition() : number | undefined {
+    return this._currentContentMetadata?.maximumPosition;
   }
 
   public dispose() {
@@ -562,6 +572,18 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
             message: undefined,
           });
           break;
+
+        case "content-info-update":
+          if (
+            this._currentContentMetadata === null ||
+            this._currentContentMetadata.contentId !== data.value.contentId
+          ) {
+            console.info("API: Ignoring warning due to wrong `contentId`");
+            return;
+          }
+          this._currentContentMetadata.minimumPosition = data.value.minimumPosition;
+          this._currentContentMetadata.maximumPosition = data.value.minimumPosition;
+          break;
       }
     };
 
@@ -779,7 +801,21 @@ interface ContentMetadata {
    */
   stopPlaybackObservations: null | (() => void);
 
+  /**
+   * Offset allowing to convert from the position as announced by the media
+   * element's `currentTime` property, to the actual content's position.
+   *
+   * To obtain the content's position from the `currentTime` property, just
+   * remove `mediaOffset` (seconds) from the latter.
+   *
+   * To obtain the media element's time from a content's time, just add
+   * `mediaOffset` to the latter.
+   */
   mediaOffset: number | undefined;
+
+  minimumPosition : number | undefined;
+
+  maximumPosition : number | undefined;
 }
 
 export { WarningCode };

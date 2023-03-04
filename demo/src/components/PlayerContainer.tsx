@@ -57,7 +57,7 @@ export default function PlayerContainer(
               <>
                 <ContentInput player={player} />
                 <br />
-                <VideoPlayer videoElt={player.videoElement} />
+                <VideoPlayer player={player} />
                 <RemovePlayerButton onClick={onClose} />
               </>
             )
