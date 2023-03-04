@@ -86,13 +86,26 @@ module.exports = {
         "leadingUnderscore": "allow",
         "trailingUnderscore": "allow",
         "filter": {
-          "regex": "^(__esModule$)|(__priv_)",
+          "regex": "^(__esModule$)|(__private__)",
           "match": false
         }
       },
       {
         "selector": "method",
         "format": ["camelCase"],
+        "leadingUnderscore": "allow",
+        "trailingUnderscore": "allow",
+      },
+      {
+        "selector": "classMethod",
+        // After spending way to much time, I must admit that I do not know why
+        // my fucking `filter` doesn't work.
+        // Because of this, I just disabled the rule, I'm mad.
+        "format": null,
+        "filter": {
+          "regex": "^__private__",
+          "match": true
+        },
         "leadingUnderscore": "allow",
         "trailingUnderscore": "allow",
       },
@@ -107,8 +120,7 @@ module.exports = {
         "format": ["camelCase"],
         "leadingUnderscore": "allow",
         "filter": {
-          // you can expand this regex to add more allowed names
-          "regex": "^__priv_",
+          "regex": "^__private__",
           "match": false
         }
       },

@@ -65,7 +65,7 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
         resolveProm = resolve;
         rejectProm = reject;
       });
-      this._startWorker(workerUrl, wasmUrl, resolveProm, rejectProm);
+      this.__private__startWorker(workerUrl, wasmUrl, resolveProm, rejectProm);
       return ret;
     }
     catch (err) {
@@ -194,7 +194,7 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
     this._worker = null;
   }
 
-  private _startWorker(
+  private __private__startWorker(
     workerUrl: string,
     wasmUrl: string,
     resolveProm: () => void,
