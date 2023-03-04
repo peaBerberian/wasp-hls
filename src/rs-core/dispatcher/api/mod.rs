@@ -55,7 +55,7 @@ impl Dispatcher {
 
     pub fn maximum_position(&self) -> Option<f64> {
         self.content_tracker.as_ref().and_then(|c| {
-            c.curr_min_position()
+            c.curr_max_position()
         })
     }
 
