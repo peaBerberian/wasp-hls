@@ -8,6 +8,10 @@ use crate::wasm_bindgen;
 
 #[wasm_bindgen]
 extern "C" {
+    // Announces that a minor problem occured when trying to play the current
+    // content.
+    pub fn jsWarning(warning: WarningCode);
+
     // Log the given text in the JavaScript console, with the log level given.
     pub fn jsLog(log_level: LogLevel, log: &str);
 
@@ -654,6 +658,13 @@ pub enum TimerReason {
     /// The timer is linked to the MediaPlaylistRefresh's mechanism, meaning
     /// that the wanted MediaPlaylist may have to be reloaded.
     MediaPlaylistRefresh = 0,
+}
+
+#[wasm_bindgen]
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum WarningCode {
+    PositionBehindPlaylist = 0,
+    PositionAheadPlaylist = 1,
 }
 
 /// Levels with which a log can be emitted.

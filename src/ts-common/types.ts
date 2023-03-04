@@ -1,6 +1,7 @@
 import {
   MediaSourceReadyState,
   PlaybackTickReason,
+  WarningCode,
 } from "../wasm/wasp_hls";
 
 export {
@@ -29,6 +30,7 @@ export type WorkerMessage =
   SeekWorkerMessage |
   InitializationErrorWorkerMessage |
   ContentErrorWorkerMessage |
+  ContentWarningWorkerMessage |
   AttachMediaSourceWorkerMessage |
   CreateMediaSourceWorkerMessage |
   SetMediaSourceDurationWorkerMessage |
@@ -129,6 +131,31 @@ export interface ContentErrorWorkerMessage {
      * Code describing the error encountered.
      */
     code: ContentErrorCode;
+    /**
+     * If set, human-readable string describing the error, for debugging
+     * purposes.
+     */
+    message?: string | undefined;
+  };
+}
+
+/**
+ * Message sent when the Worker has encountered a minor error linked to a
+ * specific content which did not interrupt playback;
+ */
+export interface ContentWarningWorkerMessage {
+  type: "content-warning";
+  value: {
+    /**
+     * The identifier for the content on which an error was received.
+     * This is the same `contentId` value that on the related
+     * `LoadContentMainMessage`.
+     */
+    contentId: string;
+    /**
+     * Code describing the error encountered.
+     */
+    code: WarningCode;
     /**
      * If set, human-readable string describing the error, for debugging
      * purposes.

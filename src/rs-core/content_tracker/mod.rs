@@ -27,14 +27,14 @@ pub struct ContentTracker {
 
     /// Chosen playlist for video.
     ///
-    /// Also concerns playlist containing both audio and video. 
+    /// Also concerns playlist containing both audio and video.
     ///
-    /// Set to `None` if no video playlist is chosen. 
+    /// Set to `None` if no video playlist is chosen.
     curr_video_idx: Option<MediaPlaylistPermanentId>,
 
     /// Chosen playlist for audio.
     ///
-    /// Set to `None` if no audio playlist is chosen. 
+    /// Set to `None` if no audio playlist is chosen.
     curr_audio_idx: Option<MediaPlaylistPermanentId>,
 }
 
@@ -92,7 +92,7 @@ impl ContentTracker {
     }
 
     /// Returns true if a MediaPlaylist for the given `MediaType` has been selected, regardless if
-    /// that playlist has been loaded or not. 
+    /// that playlist has been loaded or not.
     pub(crate) fn has_media_type(&self, media_type: MediaType) -> bool {
         match media_type {
             MediaType::Audio => self.curr_audio_idx.is_some(),
@@ -125,20 +125,51 @@ impl ContentTracker {
     /// Returns `None` if there's not enough data to produce that estimate (e.g. no audio or video
     /// media playlist selected or they are not loaded).
     pub(crate) fn curr_duration(&self) -> Option<f64> {
-        let audio_duration = match self.curr_media_playlist(MediaType::Audio) {
-            None => None,
-            Some(m) => m.duration(),
-        };
-        let video_duration = match self.curr_media_playlist(MediaType::Video) {
-            None => None,
-            Some(m) => m.duration(),
-        };
+        let audio_duration = self.curr_media_playlist(MediaType::Audio).and_then(|a| {
+            a.duration()
+        });
+        let video_duration = self.curr_media_playlist(MediaType::Video).and_then(|v| {
+            v.duration()
+        });
         match (audio_duration, video_duration) {
             (None, None) => None,
             (Some(a), Some(v)) => Some(f64::min(a, v)),
             (Some(a), None) => Some(a),
             (None, Some(v)) => Some(v)
         }
+    }
+
+    /// Returns the minimum reachable position seen in the last fetched media playlist.
+    ///
+    /// This function actually defines the minimum position as the maximum of the
+    /// minimum positions reachable through all media playlists.
+    ///
+    /// Returns `None` if there's not enough data to produce that value (e.g. no audio
+    /// or video media playlist selected or they are not loaded).
+    pub(crate) fn curr_min_position(&self) -> Option<f64> {
+        let audio_duration = self.curr_media_playlist(MediaType::Audio).and_then(|a| {
+            a.beginning()
+        });
+        let video_duration = self.curr_media_playlist(MediaType::Video).and_then(|v| {
+            v.beginning()
+        });
+        match (audio_duration, video_duration) {
+            (None, None) => None,
+            (Some(a), Some(v)) => Some(f64::max(a, v)),
+            (Some(a), None) => Some(a),
+            (None, Some(v)) => Some(v)
+        }
+    }
+
+    /// Returns the maximum reachable position seen in the last fetched media playlist.
+    ///
+    /// This function actually defines the maximum position as the minimum of the
+    /// maximum positions reachable through all media playlists.
+    ///
+    /// Returns `None` if there's not enough data to produce that value (e.g. no audio
+    /// or video media playlist selected or they are not loaded).
+    pub(crate) fn curr_max_position(&self) -> Option<f64> {
+        self.curr_duration()
     }
 
     /// Returns a reference to the `VariantStream` currently selected. You can influence the

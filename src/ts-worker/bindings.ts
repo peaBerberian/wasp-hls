@@ -20,6 +20,7 @@ import {
   RemoveBufferErrorCode,
   EndOfStreamResult,
   EndOfStreamErrorCode,
+  WarningCode,
 } from "../wasm/wasp_hls.js";
 import {
   jsMemoryResources,
@@ -157,6 +158,23 @@ export function abortRequest(id: RequestId) : boolean {
     return true;
   }
   return false;
+}
+
+/**
+ * @param {number} position
+ */
+export function warning(warningCode: WarningCode): void {
+  const contentInfo = playerInstance.getContentInfo();
+  if (contentInfo === null) {
+    return ;
+  }
+  postMessageToMain({
+    type: "content-warning",
+    value: {
+      contentId: contentInfo.contentId,
+      code: warningCode,
+    },
+  });
 }
 
 /**
@@ -797,3 +815,4 @@ global.jsTimer = timer;
 global.jsClearTimer = clearTimer;
 global.jsGetResourceData = getResourceData;
 global.jsSetMediaOffset = setMediaOffset;
+global.jsWarning = warning;

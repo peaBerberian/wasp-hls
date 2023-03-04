@@ -6,13 +6,22 @@ import {
   EndOfStreamErrorCode,
   SourceBufferCreationErrorCode,
 } from "../ts-common/types";
+import { WarningCode } from "../wasm/wasp_hls";
 import InitializationError from "./errors";
+import EventEmitter from "./EventEmitter";
 import observePlayback from "./observePlayback";
 import postMessageToWorker from "./postMessageToWorker";
 
 const generateContentId = idGenerator();
 
-export default class WaspHlsPlayer {
+interface WaspHlsPlayerEvents {
+  warning:  {
+    code: WarningCode;
+    message: string | undefined;
+  };
+}
+
+export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
   public initializationStatus: InitializationStatus;
   public videoElement: HTMLVideoElement;
   private _worker : Worker | null;
@@ -27,6 +36,7 @@ export default class WaspHlsPlayer {
    * @param {HTMLVideoElement} videoElement
    */
   constructor(videoElement: HTMLVideoElement) {
+    super();
     this.videoElement = videoElement;
     this.initializationStatus = InitializationStatus.Uninitialized;
     this._worker = null;
@@ -536,6 +546,22 @@ export default class WaspHlsPlayer {
           }
           this._currentContentMetadata.mediaOffset = data.value.offset;
           break;
+
+        case "content-warning":
+          if (
+            this._currentContentMetadata === null ||
+            this._currentContentMetadata.contentId !== data.value.contentId
+          ) {
+            console.info("API: Ignoring warning due to wrong `contentId`");
+            return;
+          }
+          console.warn("Warning received", data.value.code);
+          this.trigger("warning", {
+            code: data.value.code,
+            // TODO
+            message: undefined,
+          });
+          break;
       }
     };
 
@@ -755,3 +781,5 @@ interface ContentMetadata {
 
   mediaOffset: number | undefined;
 }
+
+export { WarningCode };

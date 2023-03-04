@@ -1,13 +1,19 @@
 use crate::{
     bindings::{
+        JsMemoryBlob,
+        MediaObservation,
         MediaType,
-        jsStartObservingPlayback,
-        jsStopObservingPlayback,
+        PlaybackTickReason,
         RequestId,
         SourceBufferId,
+        TimerId,
+        TimerReason,
+        WarningCode,
         jsSetMediaSourceDuration,
-        MediaObservation,
-        PlaybackTickReason, TimerId, jsTimer, TimerReason, JsMemoryBlob,
+        jsStartObservingPlayback,
+        jsStopObservingPlayback,
+        jsTimer,
+        jsWarning,
     },
     Logger,
     content_tracker::{MediaPlaylistPermanentId, ContentTracker},
@@ -173,7 +179,7 @@ impl Dispatcher {
         media_type: MediaType
     ) -> Option<Result<(), SourceBufferCreationError>> {
         let content = self.content_tracker.as_mut()?;
-        
+
         let media_playlist = content.curr_media_playlist(media_type)?;
         let mime_type = media_playlist.mime_type(media_type).unwrap_or("");
 
@@ -208,6 +214,9 @@ impl Dispatcher {
         Logger::debug(&format!("Tick received: {:?} {}",
                 reason, observation.current_time()));
         self.media_element_ref.on_observation(observation);
+        check_min_and_max_position(
+            self.content_tracker.as_ref(),
+            self.media_element_ref.wanted_position());
         match reason {
             PlaybackTickReason::Seeking => self.on_seek(),
             _ => self.on_regular_tick(),
@@ -273,6 +282,7 @@ impl Dispatcher {
         self.segment_selectors.reset_position(0.);
         self.content_tracker = None;
         self.last_position = 0.;
+        self.playlist_refresh_timers.clear();
         self.ready_state = PlayerReadyState::Stopped;
     }
 
@@ -297,8 +307,8 @@ impl Dispatcher {
     ) {
         let md = PushMetadata::new(data, time_info);
         match self.media_element_ref.push_segment(media_type, md) {
-            Err(_) => {
-                let err = &format!("Can't push: {} SourceBuffer not found", media_type);
+            Err(x) => {
+                let err = &format!("Can't push {} segment: {:?}", media_type, x);
                 self.fail_on_error(err);
                 return;
             }
@@ -354,8 +364,8 @@ impl Dispatcher {
             let media_type = segment_req.media_type;
             match segment_req.time_info {
                 None => format!("Loaded {} init segment", media_type),
-                Some((start, duration)) =>
-                    format!("Loaded {} segment: t: {}, d: {}", media_type, start, duration),
+                Some((start, end)) =>
+                    format!("Loaded {} segment: t: {}, d: {}", media_type, start, end - start),
             }
         });
 
@@ -391,5 +401,29 @@ fn was_last_segment(
                 },
             }
         },
+    }
+}
+
+fn check_min_and_max_position(
+    content_tracker: Option<&ContentTracker>,
+    wanted_pos : f64
+) {
+    if let Some(content) = content_tracker {
+        match content.curr_min_position() {
+            Some(min_pos) if min_pos > wanted_pos => {
+                Logger::warn(&format!("Behind minimum position: {} {}",
+                        min_pos, wanted_pos));
+                jsWarning(WarningCode::PositionBehindPlaylist);
+            },
+            _ => {},
+        }
+        match content.curr_max_position() {
+            Some(max_pos) if max_pos < wanted_pos => {
+                Logger::warn(&format!("Ahead of maximum position: {:?} {}",
+                        max_pos, wanted_pos));
+                jsWarning(WarningCode::PositionAheadPlaylist);
+            },
+            _ => {},
+        }
     }
 }

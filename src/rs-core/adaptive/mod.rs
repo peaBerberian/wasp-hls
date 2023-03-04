@@ -34,4 +34,8 @@ impl AdaptiveQualitySelector {
             x * ADAPTIVE_FACTOR
         })
     }
+
+    pub fn reset(&mut self) {
+        self.bandwidth_estimator.reset();
+    }
 }

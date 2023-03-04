@@ -267,6 +267,10 @@ impl MediaPlaylist {
         self.target_duration
     }
 
+    pub(crate) fn beginning(&self) -> Option<f64> {
+        self.segment_list.first().map(|s| s.start)
+    }
+
     pub(crate) fn duration(&self) -> Option<f64> {
         self.segment_list.last().map(|s| s.start + s.duration)
     }
