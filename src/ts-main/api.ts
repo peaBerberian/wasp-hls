@@ -566,11 +566,11 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
             return;
           }
           console.warn("Warning received", data.value.code);
-          this.trigger("warning", {
-            code: data.value.code,
-            // TODO
-            message: undefined,
-          });
+          // this.trigger("warning", {
+          //   code: data.value.code,
+          //   // TODO
+          //   message: undefined,
+          // });
           break;
 
         case "content-info-update":

@@ -20,7 +20,6 @@ import {
   RemoveBufferErrorCode,
   EndOfStreamResult,
   EndOfStreamErrorCode,
-  WarningCode,
 } from "../wasm/wasp_hls.js";
 import {
   jsMemoryResources,

@@ -1,7 +1,6 @@
 import {
   MediaSourceReadyState,
   PlaybackTickReason,
-  WarningCode,
 } from "../wasm/wasp_hls";
 
 export {
@@ -156,7 +155,7 @@ export interface ContentWarningWorkerMessage {
     /**
      * Code describing the error encountered.
      */
-    code: WarningCode;
+    // code: WarningCode;
     /**
      * If set, human-readable string describing the error, for debugging
      * purposes.
