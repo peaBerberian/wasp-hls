@@ -4,8 +4,8 @@
   "description": "WebAssembly HLS Player Proof Of Concept",
   "scripts": {
     "build:all": "npm run clean && npm run build:wasm && npm run build:worker && npm run build:main",
-    "build:demo": "esbuild demo/src/index.js --bundle --outfile=build/demo.js",
-    "build:demo:release": "esbuild demo/src/index.js --bundle --outfile=build/demo.js --minify",
+    "build:demo": "esbuild demo/src/index.tsx --bundle --outfile=build/demo.js",
+    "build:demo:release": "esbuild demo/src/index.tsx --bundle --outfile=build/demo.js --minify",
     "build:main": "esbuild src/ts-main/index.ts --bundle --outfile=build/main.js",
     "build:worker": "esbuild src/ts-worker/index.ts --bundle --outfile=build/worker.js",
     "build:main:release": "esbuild src/ts-main/index.ts --bundle --outfile=build/main.js --minify",
@@ -29,6 +29,8 @@
     "eslint-plugin-import": "^2.26.0",
     "eslint-plugin-jsdoc": "^39.2.9",
     "http-server": "^14.1.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
     "typescript": "^4.6.4"
   },
   "dependencies": {
