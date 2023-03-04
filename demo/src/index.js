@@ -53,7 +53,9 @@ function createNewPlayer(containerElt) {
       if (containerElt.contains(playerParentElt)) {
         containerElt.removeChild(playerParentElt);
       }
-      containerElt.removeChild(removePlayerButtonElt);
+      if (containerElt.contains(removePlayerButtonElt)) {
+        containerElt.removeChild(removePlayerButtonElt);
+      }
     },
   });
 
