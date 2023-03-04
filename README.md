@@ -22,10 +22,7 @@ I'm currently working as the lead developper of another, featureful adaptive
 media player, the open-source [RxPlayer](https://github.com/canalplus/rx-player)
 so this is not something totally out of the blue.
 
-However even after stating that, `Wasp-hls` doesn't really answer any real
-worthwile need I personally observed when working on the RxPlayer.
-
-The real reasons why I started this project are more personal, mainly:
+The reasons why I started this project are mainly:
 
   - to see how IO-heavy logic (like we have here with many requests, media
     segments streaming, playback observation, network metrics etc.) using web
