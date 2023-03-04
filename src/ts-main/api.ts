@@ -581,7 +581,7 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
             return;
           }
           this._currentContentMetadata.minimumPosition = data.value.minimumPosition;
-          this._currentContentMetadata.maximumPosition = data.value.minimumPosition;
+          this._currentContentMetadata.maximumPosition = data.value.maximumPosition;
           break;
       }
     };
