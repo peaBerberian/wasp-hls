@@ -159,22 +159,22 @@ export function abortRequest(id: RequestId) : boolean {
   return false;
 }
 
-/**
- * @param {number} warningCode
- */
-export function warning(warningCode: WarningCode): void {
-  const contentInfo = playerInstance.getContentInfo();
-  if (contentInfo === null) {
-    return ;
-  }
-  postMessageToMain({
-    type: "content-warning",
-    value: {
-      contentId: contentInfo.contentId,
-      code: warningCode,
-    },
-  });
-}
+// /**
+//  * @param {number} warningCode
+//  */
+// export function warning(warningCode: WarningCode): void {
+//   const contentInfo = playerInstance.getContentInfo();
+//   if (contentInfo === null) {
+//     return ;
+//   }
+//   postMessageToMain({
+//     type: "content-warning",
+//     value: {
+//       contentId: contentInfo.contentId,
+//       code: warningCode,
+//     },
+//   });
+// }
 
 /**
  * @param {number} position
@@ -838,4 +838,4 @@ global.jsStartObservingPlayback = startObservingPlayback;
 global.jsStopObservingPlayback = stopObservingPlayback;
 global.jsTimer = timer;
 global.jsUpdateContentInfo = updateContentInfo;
-global.jsWarning = warning;
+// global.jsWarning = warning;
