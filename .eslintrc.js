@@ -83,46 +83,31 @@ module.exports = {
       {
         "selector": "property",
         "format": ["camelCase", "UPPER_CASE", "PascalCase"],
-        "leadingUnderscore": "allow",
-        "trailingUnderscore": "allow",
-        "filter": {
-          "regex": "^(__esModule$)|(__private__)",
-          "match": false
-        }
+        "leadingUnderscore": "allowSingleOrDouble",
+        "trailingUnderscore": "allowSingleOrDouble",
       },
       {
         "selector": "method",
         "format": ["camelCase"],
-        "leadingUnderscore": "allow",
-        "trailingUnderscore": "allow",
+        "leadingUnderscore": "allowSingleOrDouble",
+        "trailingUnderscore": "allowSingleOrDouble",
       },
       {
         "selector": "classMethod",
-        // After spending way to much time, I must admit that I do not know why
-        // my fucking `filter` doesn't work.
-        // Because of this, I just disabled the rule, I'm mad.
-        "format": null,
-        "filter": {
-          "regex": "^__private__",
-          "match": true
-        },
-        "leadingUnderscore": "allow",
-        "trailingUnderscore": "allow",
+        "format": ["camelCase"],
+        "leadingUnderscore": "allowSingleOrDouble",
+        "trailingUnderscore": "allowSingleOrDouble",
       },
       {
         "selector": "variable",
         "format": ["camelCase", "UPPER_CASE", "PascalCase"],
-        "leadingUnderscore": "allow",
-        "trailingUnderscore": "allow",
+        "leadingUnderscore": "allowSingleOrDouble",
+        "trailingUnderscore": "allowSingleOrDouble",
       },
       {
         "selector": "parameter",
         "format": ["camelCase"],
-        "leadingUnderscore": "allow",
-        "filter": {
-          "regex": "^__private__",
-          "match": false
-        }
+        "leadingUnderscore": "allowSingleOrDouble",
       },
 
       {
@@ -134,12 +119,12 @@ module.exports = {
       {
         "selector": "enum",
         "format": ["PascalCase", "UPPER_CASE"],
-        "leadingUnderscore": "allow"
+        "leadingUnderscore": "allowSingleOrDouble"
       },
       {
         "selector": "typeLike",
         "format": ["PascalCase"],
-        "leadingUnderscore": "allow"
+        "leadingUnderscore": "allowSingleOrDouble"
       },
     ],
     "@typescript-eslint/no-empty-function": "error",

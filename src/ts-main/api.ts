@@ -23,8 +23,8 @@ interface WaspHlsPlayerEvents {
 export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
   public initializationStatus: InitializationStatus;
   public videoElement: HTMLVideoElement;
-  private _worker : Worker | null;
-  private _currentContentMetadata : ContentMetadata | null;
+  private __worker__ : Worker | null;
+  private __contentMetadata__ : ContentMetadata | null;
 
   /**
    * Create a new WaspHlsPlayer, associating with a video element.
@@ -38,8 +38,8 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
     super();
     this.videoElement = videoElement;
     this.initializationStatus = InitializationStatus.Uninitialized;
-    this._worker = null;
-    this._currentContentMetadata = null;
+    this.__worker__ = null;
+    this.__contentMetadata__ = null;
   }
 
   /**
@@ -65,7 +65,7 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
         resolveProm = resolve;
         rejectProm = reject;
       });
-      this.__private__startWorker(workerUrl, wasmUrl, resolveProm, rejectProm);
+      this.__startWorker__(workerUrl, wasmUrl, resolveProm, rejectProm);
       return ret;
     }
     catch (err) {
@@ -75,11 +75,11 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
   }
 
   public loadContent(url: string): void {
-    if (this._worker === null) {
+    if (this.__worker__ === null) {
       throw new Error("The Player is not initialized or disposed.");
     }
     const contentId = generateContentId();
-    this._currentContentMetadata = {
+    this.__contentMetadata__ = {
       contentId,
       mediaSourceId: null,
       mediaSource: null,
@@ -90,30 +90,30 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
       minimumPosition: undefined,
       maximumPosition: undefined,
     };
-    postMessageToWorker(this._worker, {
+    postMessageToWorker(this.__worker__, {
       type: "load",
       value: { contentId, url },
     });
   }
 
   public getPosition(): number {
-    if (this._currentContentMetadata === null) {
+    if (this.__contentMetadata__ === null) {
       return 0;
     }
     const currentTime = this.videoElement.currentTime;
-    return currentTime - (this._currentContentMetadata.mediaOffset ?? 0);
+    return currentTime - (this.__contentMetadata__.mediaOffset ?? 0);
   }
 
   public seek(position: number): void {
-    if (this._currentContentMetadata === null) {
+    if (this.__contentMetadata__ === null) {
       throw new Error("Cannot seek: no content loaded.");
     }
     this.videoElement.currentTime = position +
-      (this._currentContentMetadata.mediaOffset ?? 0);
+      (this.__contentMetadata__.mediaOffset ?? 0);
   }
 
   public getMediaOffset(): number | undefined {
-    return this._currentContentMetadata?.mediaOffset ?? undefined;
+    return this.__contentMetadata__?.mediaOffset ?? undefined;
   }
 
   public setVolume(volume: number): void {
@@ -142,20 +142,20 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
   }
 
   public stop(): void {
-    if (this._worker === null) {
+    if (this.__worker__ === null) {
       throw new Error("The Player is not initialized or disposed.");
     }
     if (
-      this._currentContentMetadata !== null &&
-      this._currentContentMetadata.stopPlaybackObservations !== null
+      this.__contentMetadata__ !== null &&
+      this.__contentMetadata__.stopPlaybackObservations !== null
     ) {
-      this._currentContentMetadata.stopPlaybackObservations();
-      this._currentContentMetadata.stopPlaybackObservations = null;
+      this.__contentMetadata__.stopPlaybackObservations();
+      this.__contentMetadata__.stopPlaybackObservations = null;
     }
-    if (this._currentContentMetadata !== null) {
-      postMessageToWorker(this._worker, {
+    if (this.__contentMetadata__ !== null) {
+      postMessageToWorker(this.__worker__, {
         type: "stop",
-        value: { contentId: this._currentContentMetadata.contentId },
+        value: { contentId: this.__contentMetadata__.contentId },
       });
     }
   }
@@ -171,30 +171,30 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
   }
 
   public getMinimumPosition() : number | undefined {
-    return this._currentContentMetadata?.minimumPosition;
+    return this.__contentMetadata__?.minimumPosition;
   }
 
   public getMaximumPosition() : number | undefined {
-    return this._currentContentMetadata?.maximumPosition;
+    return this.__contentMetadata__?.maximumPosition;
   }
 
   public dispose() {
-    if (this._worker === null) {
+    if (this.__worker__ === null) {
       return;
     }
     if (
-      this._currentContentMetadata !== null &&
-      this._currentContentMetadata.stopPlaybackObservations !== null
+      this.__contentMetadata__ !== null &&
+      this.__contentMetadata__.stopPlaybackObservations !== null
     ) {
-      this._currentContentMetadata.stopPlaybackObservations();
-      this._currentContentMetadata.stopPlaybackObservations = null;
+      this.__contentMetadata__.stopPlaybackObservations();
+      this.__contentMetadata__.stopPlaybackObservations = null;
     }
     // TODO needed? What about GC once it is set to `null`?
-    postMessageToWorker(this._worker, { type: "dispose", value: null });
-    this._worker = null;
+    postMessageToWorker(this.__worker__, { type: "dispose", value: null });
+    this.__worker__ = null;
   }
 
-  private __private__startWorker(
+  private __startWorker__(
     workerUrl: string,
     wasmUrl: string,
     resolveProm: () => void,
@@ -202,7 +202,7 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
   ) {
     let mayStillReject = true;
     const worker = new Worker(workerUrl);
-    this._worker = worker;
+    this.__worker__ = worker;
     postMessageToWorker(worker, {
       type: "init",
       value: {
@@ -241,8 +241,8 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
 
         case "seek":
           if (
-            this._currentContentMetadata === null ||
-            this._currentContentMetadata.mediaSourceId !== data.value.mediaSourceId
+            this.__contentMetadata__ === null ||
+            this.__contentMetadata__.mediaSourceId !== data.value.mediaSourceId
           ) {
             console.info("API: Ignoring seek due to wrong `mediaSourceId`");
             return;
@@ -256,8 +256,8 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
 
         case "attach-media-source":
           if (
-            this._currentContentMetadata === null ||
-            this._currentContentMetadata.contentId !== data.value.contentId
+            this.__contentMetadata__ === null ||
+            this.__contentMetadata__.contentId !== data.value.contentId
           ) {
             console.info(
               "API: Ignoring MediaSource attachment due to wrong `contentId`"
@@ -265,9 +265,9 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
             return;
           }
 
-          if (this._currentContentMetadata.stopPlaybackObservations !== null) {
-            this._currentContentMetadata.stopPlaybackObservations();
-            this._currentContentMetadata.stopPlaybackObservations = null;
+          if (this.__contentMetadata__.stopPlaybackObservations !== null) {
+            this.__contentMetadata__.stopPlaybackObservations();
+            this.__contentMetadata__.stopPlaybackObservations = null;
           }
 
           if (data.value.handle !== undefined) {
@@ -279,21 +279,21 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
               "Unexpected \"attach-media-source\" message: missing source"
             );
           }
-          this._currentContentMetadata.mediaSourceId = data.value.mediaSourceId;
-          this._currentContentMetadata.mediaSource = null;
-          this._currentContentMetadata.disposeMediaSource = () => {
+          this.__contentMetadata__.mediaSourceId = data.value.mediaSourceId;
+          this.__contentMetadata__.mediaSource = null;
+          this.__contentMetadata__.disposeMediaSource = () => {
             if (data.value.src !== undefined) {
               URL.revokeObjectURL(data.value.src);
             }
           };
-          this._currentContentMetadata.sourceBuffers = [];
-          this._currentContentMetadata.stopPlaybackObservations = null;
+          this.__contentMetadata__.sourceBuffers = [];
+          this.__contentMetadata__.stopPlaybackObservations = null;
           break;
 
         case "create-media-source": {
           if (
-            this._currentContentMetadata === null ||
-            this._currentContentMetadata.contentId !== data.value.contentId
+            this.__contentMetadata__ === null ||
+            this.__contentMetadata__.contentId !== data.value.contentId
           ) {
             console.info(
               "API: Ignoring MediaSource attachment due to wrong `contentId`"
@@ -319,24 +319,24 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
 
           const disposeMediaSource =
             bindMediaSource(worker, mediaSource, this.videoElement, mediaSourceId);
-          this._currentContentMetadata.mediaSourceId = data.value.mediaSourceId;
-          this._currentContentMetadata.mediaSource = mediaSource;
-          this._currentContentMetadata.disposeMediaSource = disposeMediaSource;
-          this._currentContentMetadata.sourceBuffers = [];
-          this._currentContentMetadata.stopPlaybackObservations = null;
+          this.__contentMetadata__.mediaSourceId = data.value.mediaSourceId;
+          this.__contentMetadata__.mediaSource = mediaSource;
+          this.__contentMetadata__.disposeMediaSource = disposeMediaSource;
+          this.__contentMetadata__.sourceBuffers = [];
+          this.__contentMetadata__.stopPlaybackObservations = null;
           break;
         }
 
         case "update-media-source-duration": {
           const { mediaSourceId } = data.value;
           if (
-            this._currentContentMetadata?.mediaSourceId !== mediaSourceId ||
-            this._currentContentMetadata.mediaSource === null
+            this.__contentMetadata__?.mediaSourceId !== mediaSourceId ||
+            this.__contentMetadata__.mediaSource === null
           ) {
             return;
           }
           try {
-            this._currentContentMetadata.mediaSource.duration = data.value.duration;
+            this.__contentMetadata__.mediaSource.duration = data.value.duration;
           } catch (err) {
             const { name, message } = getErrorInformation(
               err,
@@ -352,11 +352,11 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
         }
 
         case "clear-media-source": {
-          if (this._currentContentMetadata?.mediaSourceId !== data.value.mediaSourceId) {
+          if (this.__contentMetadata__?.mediaSourceId !== data.value.mediaSourceId) {
             return;
           }
           try {
-            this._currentContentMetadata.disposeMediaSource?.();
+            this.__contentMetadata__.disposeMediaSource?.();
             clearElementSrc(this.videoElement);
           } catch (err) {
             console.warn("API: Error when clearing current MediaSource:", err);
@@ -365,10 +365,10 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
         }
 
         case "create-source-buffer": {
-          if (this._currentContentMetadata?.mediaSourceId !== data.value.mediaSourceId) {
+          if (this.__contentMetadata__?.mediaSourceId !== data.value.mediaSourceId) {
             return;
           }
-          if (this._currentContentMetadata.mediaSource === null) {
+          if (this.__contentMetadata__.mediaSource === null) {
             postMessageToWorker(worker, {
               type: "create-source-buffer-error",
               value: {
@@ -382,10 +382,10 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
             return;
           }
           try {
-            const sourceBuffer = this._currentContentMetadata.mediaSource
+            const sourceBuffer = this.__contentMetadata__.mediaSource
               .addSourceBuffer(data.value.contentType);
             const queuedSourceBuffer = new QueuedSourceBuffer(sourceBuffer);
-            this._currentContentMetadata.sourceBuffers.push({
+            this.__contentMetadata__.sourceBuffers.push({
               sourceBufferId: data.value.sourceBufferId,
               queuedSourceBuffer,
             });
@@ -409,10 +409,10 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
         }
 
         case "append-buffer": {
-          if (this._currentContentMetadata?.mediaSourceId !== data.value.mediaSourceId) {
+          if (this.__contentMetadata__?.mediaSourceId !== data.value.mediaSourceId) {
             return;
           }
-          const sbObject = this._currentContentMetadata.sourceBuffers
+          const sbObject = this.__contentMetadata__.sourceBuffers
             .find(({ sourceBufferId }) => sourceBufferId === data.value.sourceBufferId);
           if (sbObject === undefined) {
             return;
@@ -444,10 +444,10 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
         }
 
         case "remove-buffer": {
-          if (this._currentContentMetadata?.mediaSourceId !== data.value.mediaSourceId) {
+          if (this.__contentMetadata__?.mediaSourceId !== data.value.mediaSourceId) {
             return;
           }
-          const sbObject = this._currentContentMetadata.sourceBuffers
+          const sbObject = this.__contentMetadata__.sourceBuffers
             .find(({ sourceBufferId }) => sourceBufferId === data.value.sourceBufferId);
           if (sbObject === undefined) {
             return;
@@ -479,14 +479,14 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
         }
 
         case "start-playback-observation": {
-          if (this._currentContentMetadata?.mediaSourceId !== data.value.mediaSourceId) {
+          if (this.__contentMetadata__?.mediaSourceId !== data.value.mediaSourceId) {
             return;
           }
-          if (this._currentContentMetadata.stopPlaybackObservations !== null) {
-            this._currentContentMetadata.stopPlaybackObservations();
-            this._currentContentMetadata.stopPlaybackObservations = null;
+          if (this.__contentMetadata__.stopPlaybackObservations !== null) {
+            this.__contentMetadata__.stopPlaybackObservations();
+            this.__contentMetadata__.stopPlaybackObservations = null;
           }
-          this._currentContentMetadata.stopPlaybackObservations = observePlayback(
+          this.__contentMetadata__.stopPlaybackObservations = observePlayback(
             this.videoElement,
             data.value.mediaSourceId,
             (value) => postMessageToWorker(worker, { type: "observation", value })
@@ -495,22 +495,22 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
         }
 
         case "stop-playback-observation": {
-          if (this._currentContentMetadata?.mediaSourceId !== data.value.mediaSourceId) {
+          if (this.__contentMetadata__?.mediaSourceId !== data.value.mediaSourceId) {
             return;
           }
-          if (this._currentContentMetadata.stopPlaybackObservations !== null) {
-            this._currentContentMetadata.stopPlaybackObservations();
-            this._currentContentMetadata.stopPlaybackObservations = null;
+          if (this.__contentMetadata__.stopPlaybackObservations !== null) {
+            this.__contentMetadata__.stopPlaybackObservations();
+            this.__contentMetadata__.stopPlaybackObservations = null;
           }
           break;
         }
 
         case "end-of-stream":
-          if (this._currentContentMetadata?.mediaSourceId !== data.value.mediaSourceId) {
+          if (this.__contentMetadata__?.mediaSourceId !== data.value.mediaSourceId) {
             return;
           }
           const { mediaSourceId } = data.value;
-          if (this._currentContentMetadata.mediaSource === null) {
+          if (this.__contentMetadata__.mediaSource === null) {
             postMessageToWorker(worker, {
               type: "end-of-stream-error",
               value: {
@@ -525,7 +525,7 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
           try {
             // TODO Maybe the best here would be a more complex logic to
             // call `endOfStream` at the right time.
-            this._currentContentMetadata.mediaSource.endOfStream();
+            this.__contentMetadata__.mediaSource.endOfStream();
           } catch (err) {
             const { name, message } = getErrorInformation(
               err,
@@ -545,21 +545,21 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
 
         case "media-offset-update":
           if (
-            this._currentContentMetadata === null ||
-            this._currentContentMetadata.contentId !== data.value.contentId
+            this.__contentMetadata__ === null ||
+            this.__contentMetadata__.contentId !== data.value.contentId
           ) {
             console.info(
               "API: Ignoring media offset update due to wrong `contentId`"
             );
             return;
           }
-          this._currentContentMetadata.mediaOffset = data.value.offset;
+          this.__contentMetadata__.mediaOffset = data.value.offset;
           break;
 
         case "content-warning":
           if (
-            this._currentContentMetadata === null ||
-            this._currentContentMetadata.contentId !== data.value.contentId
+            this.__contentMetadata__ === null ||
+            this.__contentMetadata__.contentId !== data.value.contentId
           ) {
             console.info("API: Ignoring warning due to wrong `contentId`");
             return;
@@ -574,14 +574,14 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
 
         case "content-info-update":
           if (
-            this._currentContentMetadata === null ||
-            this._currentContentMetadata.contentId !== data.value.contentId
+            this.__contentMetadata__ === null ||
+            this.__contentMetadata__.contentId !== data.value.contentId
           ) {
             console.info("API: Ignoring warning due to wrong `contentId`");
             return;
           }
-          this._currentContentMetadata.minimumPosition = data.value.minimumPosition;
-          this._currentContentMetadata.maximumPosition = data.value.maximumPosition;
+          this.__contentMetadata__.minimumPosition = data.value.minimumPosition;
+          this.__contentMetadata__.maximumPosition = data.value.maximumPosition;
           break;
       }
     };
