@@ -555,6 +555,7 @@ export function appendBuffer(
         );
       }
     } catch (err) {
+
       const msg =
         formatErrMessage(err, "Unknown error while transmuxing segment");
       return AppendBufferResult.error(

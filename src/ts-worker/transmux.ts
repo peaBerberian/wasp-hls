@@ -93,17 +93,11 @@ export function transmux(
   const subSegments : Uint8Array[] = [];
 
   // NOTE: Despite the syntax, mux.js' transmuxing is completely synchronous.
-  transmuxer.on("data", function (segment: any) {
-    const transmuxedSegment = new Uint8Array(
-      segment.initSegment.byteLength + segment.data.byteLength);
-    transmuxedSegment.set(segment.initSegment, 0);
-    transmuxedSegment.set(segment.data, segment.initSegment.byteLength);
-    subSegments.push(transmuxedSegment);
-  });
+  transmuxer.on("data", onTransmuxedData);
 
   transmuxer.push(inputSegment);
   transmuxer.flush();
-
+  transmuxer.off("data", onTransmuxedData);
   if (subSegments.length === 0) {
     return null;
   } else if (subSegments.length === 1) {
@@ -120,5 +114,13 @@ export function transmux(
       currOffset += subSegment.byteLength;
     }
     return fullSegment;
+  }
+
+  function onTransmuxedData(segment: any) {
+    const transmuxedSegment = new Uint8Array(
+      segment.initSegment.byteLength + segment.data.byteLength);
+    transmuxedSegment.set(segment.initSegment, 0);
+    transmuxedSegment.set(segment.data, segment.initSegment.byteLength);
+    subSegments.push(transmuxedSegment);
   }
 }
