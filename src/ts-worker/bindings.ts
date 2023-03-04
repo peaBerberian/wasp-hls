@@ -717,10 +717,6 @@ export function stopObservingPlayback() {
     return;
   }
   if (contentInfo.mediaSourceObj === null) {
-    Dispatcher.log(
-      LogLevel.Error,
-      "Cannot stop observing playback: No MediaSource Attached"
-    );
     return;
   }
   postMessageToMain({
