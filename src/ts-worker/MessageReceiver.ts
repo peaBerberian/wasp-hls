@@ -67,7 +67,24 @@ export default function MessageReceiver() {
         if (dispatcher === null) {
           return postUnitializedWorkerError(data.value.contentId);
         }
-        dispatcher.stop();
+        const contentInfo = playerInstance.getContentInfo();
+        if (
+          contentInfo === null ||
+          contentInfo.contentId !== data.value.contentId
+        ) {
+          return ;
+        }
+        try {
+          dispatcher.stop();
+        } catch (err) {
+          console.error("Error: when stopping the content:", err);
+        }
+        postMessageToMain({
+          type: "content-stopped",
+          value: {
+            contentId: data.value.contentId,
+          },
+        });
         break;
       }
 

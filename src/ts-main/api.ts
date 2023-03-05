@@ -14,6 +14,8 @@ import postMessageToWorker from "./postMessageToWorker";
 const generateContentId = idGenerator();
 
 interface WaspHlsPlayerEvents {
+  /** Sent when that last loaded content can start to play. */
+  loaded: null;
   warning:  {
     // code: WarningCode;
     message: string | undefined;
@@ -24,7 +26,7 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
   public initializationStatus: InitializationStatus;
   public videoElement: HTMLVideoElement;
   private __worker__ : Worker | null;
-  private __contentMetadata__ : ContentMetadata | null;
+  private __contentMetadata__: ContentMetadata | null;
 
   /**
    * Create a new WaspHlsPlayer, associating with a video element.
@@ -78,7 +80,11 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
     if (this.__worker__ === null) {
       throw new Error("The Player is not initialized or disposed.");
     }
+    if (this.__contentMetadata__ !== null) {
+      requestStopForContent(this.__contentMetadata__, this.__worker__);
+    }
     const contentId = generateContentId();
+    const loadAbortController = new AbortController();
     this.__contentMetadata__ = {
       contentId,
       mediaSourceId: null,
@@ -89,11 +95,27 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
       mediaOffset: undefined,
       minimumPosition: undefined,
       maximumPosition: undefined,
+      loadAbortController,
     };
     postMessageToWorker(this.__worker__, {
       type: "load",
       value: { contentId, url },
     });
+
+    waitForLoad(this.videoElement, loadAbortController.signal).then(
+      () => {
+        if (this.__contentMetadata__ !== null) {
+          this.__contentMetadata__.loadAbortController = undefined;
+        }
+        this.trigger("loaded", null);
+      },
+      (reason) => {
+        if (this.__contentMetadata__ !== null) {
+          this.__contentMetadata__.loadAbortController = undefined;
+        }
+        console.info("Could not load content:", reason);
+      }
+    );
   }
 
   public getPosition(): number {
@@ -145,18 +167,8 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
     if (this.__worker__ === null) {
       throw new Error("The Player is not initialized or disposed.");
     }
-    if (
-      this.__contentMetadata__ !== null &&
-      this.__contentMetadata__.stopPlaybackObservations !== null
-    ) {
-      this.__contentMetadata__.stopPlaybackObservations();
-      this.__contentMetadata__.stopPlaybackObservations = null;
-    }
     if (this.__contentMetadata__ !== null) {
-      postMessageToWorker(this.__worker__, {
-        type: "stop",
-        value: { contentId: this.__contentMetadata__.contentId },
-      });
+      requestStopForContent(this.__contentMetadata__, this.__worker__);
     }
   }
 
@@ -556,6 +568,22 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
           this.__contentMetadata__.mediaOffset = data.value.offset;
           break;
 
+        case "content-error":
+          // TODO
+          if (
+            this.__contentMetadata__ === null ||
+            this.__contentMetadata__.contentId !== data.value.contentId
+          ) {
+            console.info("API: Ignoring warning due to wrong `contentId`");
+            return;
+          }
+          if (this.__contentMetadata__.loadAbortController !== undefined) {
+            this.__contentMetadata__.loadAbortController.abort(
+              new Error("Could not load content due to an error")
+            );
+          }
+          break;
+
         case "content-warning":
           if (
             this.__contentMetadata__ === null ||
@@ -582,6 +610,23 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
           }
           this.__contentMetadata__.minimumPosition = data.value.minimumPosition;
           this.__contentMetadata__.maximumPosition = data.value.maximumPosition;
+          break;
+
+        case "content-stopped":
+          if (
+            this.__contentMetadata__ === null ||
+            this.__contentMetadata__.contentId !== data.value.contentId
+          ) {
+            console.info("API: Ignoring `content-stopped` due to wrong `contentId`");
+            return;
+          }
+          // Make sure resources are freed
+          this.__contentMetadata__.disposeMediaSource?.();
+          this.__contentMetadata__.stopPlaybackObservations?.();
+          this.__contentMetadata__.loadAbortController?.abort(
+            new Error("Content Stopped")
+          );
+          this.__contentMetadata__ = null;
           break;
       }
     };
@@ -815,4 +860,48 @@ interface ContentMetadata {
   minimumPosition : number | undefined;
 
   maximumPosition : number | undefined;
+
+  loadAbortController: AbortController | undefined;
+}
+
+function waitForLoad(
+  videoElement : HTMLMediaElement,
+  abortSignal : AbortSignal
+) : Promise<void> {
+  return new Promise<void>((res, rej) => {
+    if (videoElement.readyState >= HTMLMediaElement.HAVE_ENOUGH_DATA) {
+      res();
+    }
+    abortSignal.addEventListener("abort", onAbort);
+    videoElement.addEventListener("canplay", onCanPlay);
+    function onCanPlay() {
+      videoElement.removeEventListener("canplay", onCanPlay);
+      abortSignal.removeEventListener("abort", onAbort);
+      res();
+    }
+    function onAbort() {
+      videoElement.removeEventListener("canplay", onCanPlay);
+      abortSignal.removeEventListener("abort", onAbort);
+      if (abortSignal.reason !== null) {
+        rej(abortSignal.reason);
+      } else {
+        rej(new Error("The loading operation was aborted"));
+      }
+    }
+  });
+}
+
+function requestStopForContent(
+  metadata: ContentMetadata,
+  worker: Worker | null
+) : void {
+  // Preventively free some resource that should not impact the Worker much.
+  metadata.stopPlaybackObservations?.();
+  metadata.loadAbortController?.abort();
+  if (worker !== null) {
+    postMessageToWorker(worker, {
+      type: "stop",
+      value: { contentId: metadata.contentId },
+    });
+  }
 }

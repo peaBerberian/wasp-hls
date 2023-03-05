@@ -41,7 +41,8 @@ export type WorkerMessage =
   StartPlaybackObservationWorkerMessage |
   StopPlaybackObservationWorkerMessage |
   MediaOffsetUpdateWorkerMessage |
-  ContentInfoUpdateWorkerMessage;
+  ContentInfoUpdateWorkerMessage |
+  ContentStoppedWorkerMessage;
 
 /**
  * Error codes generated for `InitializationErrorWorkerMessage` messages.
@@ -189,6 +190,17 @@ export interface ContentInfoUpdateWorkerMessage {
   };
 }
 
+/**
+ * Message sent when the Worker has succesfully stopped a content.
+ */
+export interface ContentStoppedWorkerMessage {
+  type: "content-stopped";
+  value: {
+    /** The identifier for the content which was stopped. */
+    contentId: string;
+  };
+}
+
 /** Message sent when the Worker want to seek in the content */
 export interface SeekWorkerMessage {
   type: "seek";
@@ -284,7 +296,7 @@ export interface SetMediaSourceDurationWorkerMessage {
      * is still being used.
      */
     mediaSourceId: string;
-    /** The new `duration` to set on the  `MediaSource`, in seconds. */ 
+    /** The new `duration` to set on the  `MediaSource`, in seconds. */
     duration: number;
   };
 }
@@ -715,4 +727,4 @@ export interface EndOfStreamErrorMainMessage {
     /** The error's name. */
     name?: string | undefined;
   };
-
+}
