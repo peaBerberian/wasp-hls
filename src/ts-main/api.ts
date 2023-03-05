@@ -231,12 +231,8 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
     if (this.__worker__ === null) {
       return;
     }
-    if (
-      this.__contentMetadata__ !== null &&
-      this.__contentMetadata__.stopPlaybackObservations !== null
-    ) {
-      this.__contentMetadata__.stopPlaybackObservations();
-      this.__contentMetadata__.stopPlaybackObservations = null;
+    if (this.__contentMetadata__ !== null) {
+      requestStopForContent(this.__contentMetadata__, this.__worker__);
     }
     // TODO needed? What about GC once it is set to `null`?
     postMessageToWorker(this.__worker__, { type: "dispose", value: null });
