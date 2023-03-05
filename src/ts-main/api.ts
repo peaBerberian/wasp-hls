@@ -16,10 +16,24 @@ const generateContentId = idGenerator();
 interface WaspHlsPlayerEvents {
   /** Sent when that last loaded content can start to play. */
   loaded: null;
-  warning:  {
-    // code: WarningCode;
-    message: string | undefined;
-  };
+
+  /**
+   * Sent when a content is succesfully stopped an no content is
+   * currently left playing.
+   */
+  stopped: null;
+}
+
+/** Enumerates the various "states" the WaspHlsPlayer can be in. */
+export enum PlayerState {
+  /** No content is currently loaded or waiting to load. */
+  Stopped,
+  /** A content is currently being loaded but not ready for playback yet. */
+  Loading,
+  /** A content is loaded. */
+  Loaded,
+  /** The last content loaded failed on error. */
+  Error,
 }
 
 export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
@@ -84,7 +98,7 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
       requestStopForContent(this.__contentMetadata__, this.__worker__);
     }
     const contentId = generateContentId();
-    const loadAbortController = new AbortController();
+    const loadingAborter = new AbortController();
     this.__contentMetadata__ = {
       contentId,
       mediaSourceId: null,
@@ -95,27 +109,46 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
       mediaOffset: undefined,
       minimumPosition: undefined,
       maximumPosition: undefined,
-      loadAbortController,
+      loadingAborter,
+      error: null,
     };
     postMessageToWorker(this.__worker__, {
       type: "load",
       value: { contentId, url },
     });
 
-    waitForLoad(this.videoElement, loadAbortController.signal).then(
+    waitForLoad(this.videoElement, loadingAborter.signal).then(
       () => {
         if (this.__contentMetadata__ !== null) {
-          this.__contentMetadata__.loadAbortController = undefined;
+          this.__contentMetadata__.loadingAborter = undefined;
         }
         this.trigger("loaded", null);
       },
       (reason) => {
         if (this.__contentMetadata__ !== null) {
-          this.__contentMetadata__.loadAbortController = undefined;
+          this.__contentMetadata__.loadingAborter = undefined;
         }
         console.info("Could not load content:", reason);
       }
     );
+  }
+
+  /**
+   * Returns the "state" the `WaspHlsPlayer` is currently in.
+   * @see PlayerState
+   * @returns {PlayerState}
+   */
+  public getPlayerState() : PlayerState {
+    if (this.__contentMetadata__ === null) {
+      return PlayerState.Stopped;
+    }
+    if (this.__contentMetadata__.error !== null) {
+      return PlayerState.Error;
+    }
+    if (this.__contentMetadata__.loadingAborter !== undefined) {
+      return PlayerState.Loading;
+    }
+    return PlayerState.Loaded;
   }
 
   public getPosition(): number {
@@ -188,6 +221,10 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
 
   public getMaximumPosition() : number | undefined {
     return this.__contentMetadata__?.maximumPosition;
+  }
+
+  public getError() : Error | null {
+    return this.__contentMetadata__?.error ?? null;
   }
 
   public dispose() {
@@ -577,11 +614,17 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
             console.info("API: Ignoring warning due to wrong `contentId`");
             return;
           }
-          if (this.__contentMetadata__.loadAbortController !== undefined) {
-            this.__contentMetadata__.loadAbortController.abort(
+          if (this.__contentMetadata__.loadingAborter !== undefined) {
+            this.__contentMetadata__.loadingAborter.abort(
               new Error("Could not load content due to an error")
             );
           }
+
+          // Make sure resources are freed
+          this.__contentMetadata__.disposeMediaSource?.();
+          this.__contentMetadata__.stopPlaybackObservations?.();
+          this.__contentMetadata__.error =
+            new Error("An error arised");
           break;
 
         case "content-warning":
@@ -623,10 +666,11 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
           // Make sure resources are freed
           this.__contentMetadata__.disposeMediaSource?.();
           this.__contentMetadata__.stopPlaybackObservations?.();
-          this.__contentMetadata__.loadAbortController?.abort(
+          this.__contentMetadata__.loadingAborter?.abort(
             new Error("Content Stopped")
           );
           this.__contentMetadata__ = null;
+          this.trigger("stopped", null);
           break;
       }
     };
@@ -861,7 +905,9 @@ interface ContentMetadata {
 
   maximumPosition : number | undefined;
 
-  loadAbortController: AbortController | undefined;
+  loadingAborter: AbortController | undefined;
+
+  error: Error | null;
 }
 
 function waitForLoad(
@@ -897,7 +943,8 @@ function requestStopForContent(
 ) : void {
   // Preventively free some resource that should not impact the Worker much.
   metadata.stopPlaybackObservations?.();
-  metadata.loadAbortController?.abort();
+  metadata.loadingAborter?.abort();
+
   if (worker !== null) {
     postMessageToWorker(worker, {
       type: "stop",
