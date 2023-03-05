@@ -153,7 +153,7 @@ impl MediaElementReference {
     /// to this `MediaElementReference`.
     ///
     /// This `readyState` is linked to the last "attached" (through the
-    /// `attach_new` method) `MediaSource`.
+    /// `attach_media_source` method) `MediaSource`.
     /// The return value should be equal to `None` when no `MediaSource`
     /// is currently attached.
     ///
@@ -167,7 +167,7 @@ impl MediaElementReference {
     /// `MediaElementReference`.
     ///
     /// A `MediaSource` first need to be attached for a `SourceBuffer` to be
-    /// created (see `attach_new` method).
+    /// created (see `attach_media_source` method).
     pub(crate) fn create_source_buffer(
         &mut self,
         media_type: MediaType,
