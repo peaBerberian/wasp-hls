@@ -26,8 +26,8 @@ export type MainMessage =
 /** Message sent from the worker to the main thread. */
 export type WorkerMessage =
   InitializedWorkerMessage |
-  SeekWorkerMessage |
   InitializationErrorWorkerMessage |
+  SeekWorkerMessage |
   ContentErrorWorkerMessage |
   ContentWarningWorkerMessage |
   AttachMediaSourceWorkerMessage |
@@ -176,7 +176,15 @@ export interface ContentInfoUpdateWorkerMessage {
      * `LoadContentMainMessage`.
      */
     contentId: string;
+    /**
+     * Current minimum position, in playlist time and in seconds, for which
+     * segments are declared in the playlist.
+     */
     minimumPosition: number | undefined;
+    /**
+     * Current maximum position, in playlist time and in seconds, for which
+     * segments are declared in the playlist.
+     */
     maximumPosition: number | undefined;
   };
 }
@@ -193,6 +201,10 @@ export interface SeekWorkerMessage {
      * used.
      */
     mediaSourceId: string;
+    /**
+     * The position in seconds at which the worker wants to seek to in seconds
+     * to put on the HTMLMediaElement's `currentTime` property.
+     */
     position: number;
   };
 }
@@ -208,9 +220,27 @@ export interface SeekWorkerMessage {
 export interface AttachMediaSourceWorkerMessage {
   type: "attach-media-source";
   value: {
+    /**
+     * The identifier for the content on which an error was received.
+     * This is the same `contentId` value that on the related
+     * `LoadContentMainMessage`.
+     */
     contentId : string;
+    /**
+     * The `MediaSource`'s handle to attach to the HTMLMediaElement.
+     * Can be `undefined` in wich case a `src is provided instead.
+     */
     handle: MediaProvider | undefined;
+    /**
+     * The `MediaSource`'s local URL to link to the HTMLMediaElement.
+     * Can be `undefined` in wich case a `handle is provided instead.
+     */
     src: string | undefined;
+    /**
+     * Identify the corresponding MediaSource created by the WebWorker.
+     * The main thread should keep that value for ensuring that future messages
+     * do concern that MediaSource.
+     */
     mediaSourceId: string;
   };
 }
@@ -226,7 +256,17 @@ export interface AttachMediaSourceWorkerMessage {
 export interface CreateMediaSourceWorkerMessage {
   type: "create-media-source";
   value: {
+    /**
+     * The identifier for the content on which an error was received.
+     * This is the same `contentId` value that on the related
+     * `LoadContentMainMessage`.
+     */
     contentId : string;
+    /**
+     * Identify the corresponding MediaSource to create.
+     * The main thread should keep that value for ensuring that future messages
+     * do concern that MediaSource.
+     */
     mediaSourceId: string;
   };
 }
@@ -238,7 +278,13 @@ export interface CreateMediaSourceWorkerMessage {
 export interface SetMediaSourceDurationWorkerMessage {
   type: "update-media-source-duration";
   value: {
+    /**
+     * Identify the MediaSource currently used by the worker.
+     * The main thread should only change the duration if the same MediaSource
+     * is still being used.
+     */
     mediaSourceId: string;
+    /** The new `duration` to set on the  `MediaSource`, in seconds. */ 
     duration: number;
   };
 }
@@ -251,6 +297,11 @@ export interface SetMediaSourceDurationWorkerMessage {
 export interface ClearMediaSourceWorkerMessage {
   type: "clear-media-source";
   value: {
+    /**
+     * Identify the MediaSource currently used by the worker.
+     * The main thread should only clear the MediaSource if it is
+     * still the one being used.
+     */
     mediaSourceId: string;
   };
 }
@@ -263,6 +314,11 @@ export interface ClearMediaSourceWorkerMessage {
 export interface CreateSourceBufferWorkerMessage {
   type: "create-source-buffer";
   value: {
+    /**
+     * Identify the MediaSource currently used by the worker.
+     * The main thread should only create a SourceBuffer if it is still the
+     * MediaSource being used.
+     */
     mediaSourceId: string;
     /**
      * Id uniquely identifying this SourceBuffer.
@@ -270,6 +326,10 @@ export interface CreateSourceBufferWorkerMessage {
      * created after associated with the `mediaSourceId`.
      */
     sourceBufferId: number;
+    /**
+     * "Content-Type" associated to the SourceBuffer, that may have to be used
+     * when initializing the latter.
+     */
     contentType: string;
   };
 }
@@ -286,6 +346,11 @@ export interface CreateSourceBufferWorkerMessage {
 export interface AppendBufferWorkerMessage {
   type: "append-buffer";
   value: {
+    /**
+     * Identify the MediaSource currently used by the worker.
+     * The main thread should only push data if it is still the MediaSource
+     * being used.
+     */
     mediaSourceId: string;
     /**
      * Id uniquely identifying this SourceBuffer.
@@ -295,25 +360,6 @@ export interface AppendBufferWorkerMessage {
     sourceBufferId: number;
     /** Raw data to append to the SourceBuffer. */
     data: BufferSource;
-  };
-}
-
-/**
- * Sent when the SourceBuffer linked to the given `mediaSourceId` and
- * `SourceBufferId`, running on the main thread, succeeded to perform the last
- * operation given to it (either through an `AppendBufferWorkerMessage` or a
- * `RemoveBufferWorkerMessage`).
- */
-export interface SourceBufferOperationSuccessMainMessage {
-  type: "source-buffer-updated";
-  value: {
-    mediaSourceId: string;
-    /**
-     * Id uniquely identifying this SourceBuffer.
-     * It should be the same `sourceBufferId` than the one on the
-     * `CreateSourceBufferWorkerMessage`.
-     */
-    sourceBufferId: number;
   };
 }
 
@@ -329,6 +375,11 @@ export interface SourceBufferOperationSuccessMainMessage {
 export interface RemoveBufferWorkerMessage {
   type: "remove-buffer";
   value: {
+    /**
+     * Identify the MediaSource currently used by the worker.
+     * The main thread should only remove buffer if it is still the MediaSource
+     * being used.
+     */
     mediaSourceId: string;
     /**
      * Id uniquely identifying this SourceBuffer.
@@ -422,6 +473,10 @@ export interface MediaOffsetUpdateWorkerMessage {
      * present on the various events concerning that content.
      */
     contentId: string;
+    /**
+     * Offset that can be added to the playlist time to obtain the time on the
+     * `HTMLMediaElement` and vice-versa, in seconds.
+     */
     offset: number;
   };
 }
@@ -589,6 +644,29 @@ export interface MediaObservation {
 }
 
 /**
+ * Sent when the SourceBuffer linked to the given `mediaSourceId` and
+ * `SourceBufferId`, running on the main thread, succeeded to perform the last
+ * operation given to it (either through an `AppendBufferWorkerMessage` or a
+ * `RemoveBufferWorkerMessage`).
+ */
+export interface SourceBufferOperationSuccessMainMessage {
+  type: "source-buffer-updated";
+  value: {
+    /**
+     * Identify the MediaSource which contains the SourceBuffer concerned by
+     * this update.
+     */
+    mediaSourceId: string;
+    /**
+     * Id uniquely identifying this SourceBuffer.
+     * It should be the same `sourceBufferId` than the one on the
+     * `CreateSourceBufferWorkerMessage`.
+     */
+    sourceBufferId: number;
+  };
+}
+
+/**
  * Sent by the main thread to a Worker when the last operation performed on a
  * SourceBuffer either an "append" operation, provoked by a
  * `AppendBufferWorkerMessage` or a "remove" operation, provoked by a
@@ -637,4 +715,4 @@ export interface EndOfStreamErrorMainMessage {
     /** The error's name. */
     name?: string | undefined;
   };
-}
+
