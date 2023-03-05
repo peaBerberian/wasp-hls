@@ -17,6 +17,17 @@ export default React.memo(function ContentInput(
 ) : JSX.Element {
   // TODO better input management
   const inputElRef = React.useRef<HTMLInputElement>(null);
+  const loadContent = React.useCallback(() => {
+    if (inputElRef.current === null) {
+      return;
+    }
+    player.loadContent(inputElRef.current.value);
+  }, [player]);
+  const onKeyDown = React.useCallback((e: { key: string }) => {
+    if (e.key === "Enter") {
+      loadContent();
+    }
+  }, [loadContent]);
   return (
     <div
       className = "inputs-container"
@@ -25,6 +36,7 @@ export default React.memo(function ContentInput(
       <br />
       <input
         ref={inputElRef}
+        onKeyDown={onKeyDown}
         className="input-url"
         type="text"
         name="url"
@@ -34,12 +46,7 @@ export default React.memo(function ContentInput(
 
       <button
         id="loading-button"
-        onClick={() => {
-          if (inputElRef.current === null) {
-            return;
-          }
-          player.loadContent(inputElRef.current.value);
-        }}
+        onClick={loadContent}
       >
         Load
       </button>
