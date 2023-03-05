@@ -1,6 +1,6 @@
 import * as React from "react";
 
-export default function PlayButton({
+export default React.memo(function PlayButton({
   disabled,
   isPaused,
   onClick,
@@ -27,4 +27,4 @@ export default function PlayButton({
   >
     {svg}
   </button>;
-}
+});

@@ -7,7 +7,7 @@ import VolumeButton from "./VolumeButton";
 
 const TIME_CHECK_INTERVAL = 200;
 
-export default function VideoPlayer(
+export default React.memo(function VideoPlayer(
   {
     player,
   } : {
@@ -109,18 +109,46 @@ export default function VideoPlayer(
       setIsPaused(true);
     }
   }, [player, isPaused]);
+
+  const onVolumeButtonClick = React.useCallback(() => {
+    if (volume === 0) {
+      player.videoElement.volume = 1;
+    } else {
+      player.videoElement.volume = 0;
+    }
+  }, [player, volume]);
+
+  const onVolumeChange = React.useCallback((newVolume: number) => {
+    player.videoElement.volume = newVolume;
+  }, [player]);
+
+  const onVideoWrapperClick = React.useCallback(() => {
+    if (disableControls) {
+      return;
+    }
+    togglePlayPause();
+  }, [disableControls, togglePlayPause]);
+
+  const onStopButtonClick = React.useCallback(() => {
+    player.stop();
+  }, [player]);
+
+  const onProgressBarSeek = React.useCallback((pos: number) => {
+    player.seek(pos);
+  }, [player]);
+
   return <div className="video-container">
-    <div className="video-element-wrapper" onClick={() => {
-      if (disableControls) {
-        return;
-      }
-      togglePlayPause();
-    }} ref={containerRef} style={ disableControls ? {} : { cursor: "pointer" } } />
+    <div
+      className="video-element-wrapper"
+      onClick={onVideoWrapperClick}
+      ref={containerRef}
+      style={ disableControls ? {} : { cursor: "pointer" } }
+    />
     {
       disableControls ?
         null :
       <ProgressBar
-        seek={(pos: number) => { player.seek(pos); }}
+        seek={onProgressBarSeek}
         position={position}
         bufferGap={bufferGap}
         minimumPosition={minimumPosition}
@@ -134,21 +162,18 @@ export default function VideoPlayer(
           isPaused={isPaused}
           onClick={togglePlayPause}
         />
-        <StopButton disabled={disableControls} onClick={() => {
-          player.stop();
-        }} />
+        <StopButton
+          disabled={disableControls}
+          onClick={onStopButtonClick}
+        />
       </div>
       <div className="video-controls-right">
-        <VolumeButton volume={volume} onClick={() => {
-          if (volume === 0) {
-            player.videoElement.volume = 1;
-          } else {
-            player.videoElement.volume = 0;
-          }
-        }} onVolumeChange={(newVolume: number) => {
-          player.videoElement.volume = newVolume;
-        }} />
+        <VolumeButton
+          volume={volume}
+          onClick={onVolumeButtonClick}
+          onVolumeChange={onVolumeChange}
+        />
       </div>
     </div>
   </div>;
-}
+});

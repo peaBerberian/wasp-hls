@@ -8,7 +8,7 @@ import WaspHlsPlayer from "../../../src";
  * content will be loaded
  * @returns {Object}
  */
-export default function ContentInput(
+export default React.memo(function ContentInput(
   {
     player,
   } : {
@@ -45,4 +45,4 @@ export default function ContentInput(
       </button>
     </div>
   );
-}
+});

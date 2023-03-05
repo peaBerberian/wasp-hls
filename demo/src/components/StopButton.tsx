@@ -1,6 +1,6 @@
 import * as React from "react";
 
-export default function StopButton({
+export default React.memo(function StopButton({
   disabled,
   onClick,
 }: {
@@ -15,4 +15,4 @@ export default function StopButton({
       <rect width="12" height="12" x="4" y="4"></rect>
     </svg> :
   </button>;
-}
+});

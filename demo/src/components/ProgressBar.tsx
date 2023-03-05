@@ -10,7 +10,7 @@ import * as React from "react";
  * @param {Object} props
  * @returns {Object}
  */
-function ProgressBar(
+export default React.memo(function ProgressBar(
   {
     seek,
     position,
@@ -77,6 +77,4 @@ function ProgressBar(
       />
     </div>
   );
-}
-
-export default React.memo(ProgressBar);
+});

@@ -1,6 +1,6 @@
 import * as React from "react";
 
-export default function CreateNewPlayerButton(
+export default React.memo(function CreateNewPlayerButton(
   {
     onClick,
   } : {
@@ -15,4 +15,4 @@ export default function CreateNewPlayerButton(
       {"Create new Player"}
     </button>
   );
-}
+});

@@ -1,6 +1,6 @@
 import * as React from "react";
 
-export default function RemovePlayerButton(
+export default React.memo(function RemovePlayerButton(
   {
     onClick,
   } : {
@@ -15,5 +15,4 @@ export default function RemovePlayerButton(
       {"Remove Player"}
     </button>
   );
-}
-
+});

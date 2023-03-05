@@ -4,7 +4,7 @@ import ContentInput from "./ContentInput";
 import RemovePlayerButton from "./RemovePlayerButton";
 import VideoPlayer from "./VideoPlayer";
 
-export default function PlayerContainer(
+export default React.memo(function PlayerContainer(
   {
     onClose,
   } : {
@@ -68,4 +68,4 @@ export default function PlayerContainer(
       </div>
     </div>
   );
-}
+});
