@@ -1,6 +1,13 @@
 import * as React from "react";
 import WaspHlsPlayer from "../../../src";
+import {
+  exitFullscreen,
+  isFullscreen,
+  requestFullscreen,
+} from "../utils/fullscreen";
+import FullScreenButton from "./FullScreenButton";
 import PlayButton from "./PlayButton";
+import PositionIndicator from "./PositionIndicator";
 import ProgressBar from "./ProgressBar";
 import StopButton from "./StopButton";
 import VolumeButton from "./VolumeButton";
@@ -18,22 +25,45 @@ export default React.memo(function VideoPlayer(
   const [position, setPosition] = React.useState(0);
   const [minimumPosition, setMinimumPosition] = React.useState(0);
   const [maximumPosition, setMaximumPosition] = React.useState(Infinity);
-  const [bufferGap, setBufferGap] = React.useState(Infinity);
+  const [bufferGap, setBufferGap] = React.useState(0);
   const [isPaused, setIsPaused] = React.useState(true);
+  const [showControlBar, setShowControlBar] = React.useState(true);
   const [disableControls, setDisableControls] = React.useState(true);
 
-  // Inserting already-existing DOM into React looks a little far-fetched
-  const containerRef : React.Ref<HTMLDivElement> = React.useRef(null);
+  // Inserting already-existing DOM into React looks a little weird
+  const videoWrapperRef: React.Ref<HTMLDivElement> = React.useRef(null);
+
+  const playerContainerRef: React.Ref<HTMLDivElement> = React.useRef(null);
+
   React.useEffect(() => {
     let positionRefreshIntervalId: number|undefined;
+    let hideControlBarTimeoutId: number|undefined;
+    let isElementHovered = false;
+
     player.addEventListener("loaded", onLoaded);
     player.addEventListener("stopped", onStopped);
     player.videoElement.addEventListener("pause", onPause);
     player.videoElement.addEventListener("play", onPlay);
     player.videoElement.addEventListener("volumechange", onVolumeChange);
-    if (containerRef.current !== null) {
-      containerRef.current.appendChild(player.videoElement);
+    if (playerContainerRef.current !== null) {
+      playerContainerRef.current.addEventListener("mouseover", onMouseOver);
+      playerContainerRef.current.addEventListener("mousemove", onMouseMove);
+      playerContainerRef.current.addEventListener("mouseout", onMouseOut);
     }
+
+    if (videoWrapperRef.current !== null) {
+      videoWrapperRef.current.appendChild(player.videoElement);
+    }
+
+    const canControlBarBeHidden = (mouseY: number): boolean => {
+      if (playerContainerRef.current !== null) {
+        const rect = playerContainerRef.current.getBoundingClientRect();
+        if (rect.bottom - mouseY < 50) {
+          return false;
+        }
+      }
+      return true;
+    };
 
     return () => {
       resetTimeInfo();
@@ -42,18 +72,23 @@ export default React.memo(function VideoPlayer(
       player.videoElement.removeEventListener("pause", onPause);
       player.videoElement.removeEventListener("play", onPlay);
       player.videoElement.removeEventListener("volumechange", onVolumeChange);
-      clearInterval(positionRefreshIntervalId);
-      if (containerRef.current !== null) {
-        containerRef.current.removeChild(player.videoElement);
+      clearPositionUpdateInterval();
+      clearHideControlBarTimeout();
+      if (playerContainerRef.current !== null) {
+        playerContainerRef.current.removeEventListener("mouseover", onMouseOver);
+        playerContainerRef.current.removeEventListener("mousemove", onMouseMove);
+        playerContainerRef.current.removeEventListener("mouseout", onMouseOut);
       }
     };
 
     function onLoaded() {
+      lockControlBarOn();
+      if (!isElementHovered && player.isPlaying()) {
+        hideControlBarAfterTimeout();
+      }
       resetTimeInfo();
       setDisableControls(false);
-      if (positionRefreshIntervalId !== undefined) {
-        clearInterval(positionRefreshIntervalId);
-      }
+      clearPositionUpdateInterval();
       positionRefreshIntervalId = setInterval(() => {
         const pos = player.getPosition();
         setPosition(pos);
@@ -61,6 +96,17 @@ export default React.memo(function VideoPlayer(
         setMinimumPosition(minPos ?? 0);
         const maxPos = player.getMaximumPosition();
         setMaximumPosition(maxPos ?? Infinity);
+
+        let newBufferGap = 0;
+        const buffered = player.videoElement.buffered;
+        if (buffered.length > 0) {
+          for (let i = 0; i < buffered.length; i++) {
+            if (pos >= buffered.start(i) && pos < buffered.end(i)) {
+              newBufferGap = buffered.end(i) - pos;
+            }
+          }
+        }
+        setBufferGap(newBufferGap);
         if (!player.isPaused()) {
           if (minPos !== undefined && minPos > pos + 2) {
             console.warn("Behind minimum position, seeking...");
@@ -78,25 +124,78 @@ export default React.memo(function VideoPlayer(
     }
 
     function onStopped() {
+      lockControlBarOn();
       resetTimeInfo();
       setDisableControls(true);
       setIsPaused(true);
-      if (positionRefreshIntervalId !== undefined) {
-        clearInterval(positionRefreshIntervalId);
-        positionRefreshIntervalId = undefined;
-      }
+      clearPositionUpdateInterval();
     }
 
     function onPause() {
+      lockControlBarOn();
       setIsPaused(true);
     }
 
     function onPlay() {
+      if (!isElementHovered) {
+        hideControlBarAfterTimeout();
+      }
       setIsPaused(false);
     }
 
     function onVolumeChange() {
       setVolume(player.videoElement.volume);
+    }
+
+    function onMouseOver(evt: { clientY: number }): void {
+      isElementHovered = true;
+      lockControlBarOn();
+      if (canControlBarBeHidden(evt.clientY)) {
+        hideControlBarAfterTimeout();
+      }
+    }
+
+    function onMouseMove(evt: { clientY: number }): void {
+      if (!isElementHovered) {
+        return;
+      }
+      lockControlBarOn();
+      if (canControlBarBeHidden(evt.clientY)) {
+        hideControlBarAfterTimeout();
+      }
+    }
+
+    function onMouseOut() {
+      isElementHovered = false;
+      if (player.isPlaying()) {
+        hideControlBarAfterTimeout();
+      }
+    }
+
+    function lockControlBarOn() {
+      setShowControlBar(true);
+      clearHideControlBarTimeout();
+    }
+
+    function hideControlBarAfterTimeout() {
+      clearHideControlBarTimeout();
+      hideControlBarTimeoutId = setTimeout(() => {
+        setShowControlBar(false);
+      }, 1500);
+    }
+
+    function clearHideControlBarTimeout() {
+      if (hideControlBarTimeoutId !== undefined) {
+        clearTimeout(hideControlBarTimeoutId);
+        hideControlBarTimeoutId = undefined;
+      }
+    }
+
+    function clearPositionUpdateInterval() {
+      if (positionRefreshIntervalId !== undefined) {
+        clearInterval(positionRefreshIntervalId);
+        positionRefreshIntervalId = undefined;
+      }
     }
   }, [player]);
 
@@ -137,42 +236,64 @@ export default React.memo(function VideoPlayer(
     player.seek(pos);
   }, [player]);
 
-  return <div className="video-container">
+  return <div className="video-container" ref={playerContainerRef}>
     <div
       className="video-element-wrapper"
       onClick={onVideoWrapperClick}
-      ref={containerRef}
+      ref={videoWrapperRef}
       style={ disableControls ? {} : { cursor: "pointer" } }
     />
-    {
-      disableControls ?
-        null :
-      <ProgressBar
-        seek={onProgressBarSeek}
-        position={position}
-        bufferGap={bufferGap}
-        minimumPosition={minimumPosition}
-        maximumPosition={maximumPosition}
-      />
-    }
-    <div className="video-controls">
-      <div className="video-controls-left">
-        <PlayButton
-          disabled={disableControls}
-          isPaused={isPaused}
-          onClick={togglePlayPause}
+    <div
+      className={"control-bar " + (showControlBar ? "visible" : "hidden")}
+    >
+      {
+        disableControls ?
+          null :
+        <ProgressBar
+          seek={onProgressBarSeek}
+          position={position}
+          bufferGap={bufferGap}
+          minimumPosition={minimumPosition}
+          maximumPosition={maximumPosition}
         />
-        <StopButton
-          disabled={disableControls}
-          onClick={onStopButtonClick}
-        />
-      </div>
-      <div className="video-controls-right">
-        <VolumeButton
-          volume={volume}
-          onClick={onVolumeButtonClick}
-          onVolumeChange={onVolumeChange}
-        />
+      }
+      <div className="video-controls">
+        <div className="video-controls-left">
+          <PlayButton
+            disabled={disableControls}
+            isPaused={isPaused}
+            onClick={togglePlayPause}
+          />
+          <StopButton
+            disabled={disableControls}
+            onClick={onStopButtonClick}
+          />
+          {
+            disableControls ?
+              null :
+              <PositionIndicator position={position} duration={maximumPosition} />
+          }
+        </div>
+        <div className="video-controls-right">
+          <VolumeButton
+            volume={volume}
+            onClick={onVolumeButtonClick}
+            onVolumeChange={onVolumeChange}
+          />
+          <FullScreenButton
+            disabled={disableControls}
+            // TODO it works by luck for now, we should probably listen to an
+            // enter/exit fullscreen event and add it to the state
+            isFullScreen={isFullscreen()}
+            onClick={() => {
+              if (isFullscreen()) {
+                exitFullscreen();
+              } else if (playerContainerRef.current !== null) {
+                requestFullscreen(playerContainerRef.current);
+              }
+            }}
+          />
+        </div>
       </div>
     </div>
   </div>;

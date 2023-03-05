@@ -183,6 +183,11 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
     this.videoElement.muted = false;
   }
 
+  public isPlaying(): boolean {
+    return this.getPlayerState() === PlayerState.Loaded &&
+            !this.videoElement.paused;
+  }
+
   public isPaused(): boolean {
     return this.videoElement.paused;
   }
