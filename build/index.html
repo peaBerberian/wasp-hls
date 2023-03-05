@@ -28,7 +28,11 @@
   }
 
   .video-container {
+    margin: auto;
     width: auto;
+    position: relative;
+    max-width: 1280px;
+    max-height: 720px;
   }
 
   .input-url {
@@ -68,10 +72,12 @@
   vertical-align: inherit;
   line-height: inherit;
 }
+
 .inline-spinner {
   top: 3px;
   margin: 0 3px;
 }
+
 .inline-spinner:before {
   border-color: #807c53 #807c53 transparent transparent;
   position: absolute;
@@ -79,6 +85,137 @@
   top: -2px;
   border-style: solid;
 }
+
+.video-controls {
+  display: flex;
+  width: 100%;
+  margin-bottom: 5px;
+  position: absolute;
+  bottom: 0px;
+  height: 44px;
+}
+
+.video-controls-left {
+  margin-left: 6px;
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+  flex-grow: 1;
+}
+
+.video-controls-right {
+  margin-right: 6px;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  flex-grow: 1;
+}
+
+.video-controls-button {
+  width: 1.8rem;
+  height: 1.8rem;
+  background: none;
+  border: none;
+  cursor: pointer;
+  margin: 0px 6px;
+}
+
+.video-controls-button:disabled {
+  cursor: default;
+}
+
+.video-controls-button svg {
+  fill: #fff;
+  height: 25px;
+  width: 25px;
+}
+
+.video-controls-button:disabled svg {
+  fill: #777;
+}
+
+.volume-container {
+  position: relative;
+  display: flex;
+  padding: 1px 8px;
+  align-items: center;
+}
+
+.volume-bar-wrapper {
+  height: 6px;
+  position: relative;
+  background-color: #000;
+  cursor: pointer;
+  margin: auto;
+  margin: 0px 4px;
+  width: 60px;
+  border-radius: 10px;
+}
+
+.volume-bar-current {
+  height: 100%;
+  background-color: #333;
+  background-color: #ccc;
+  border-radius: 10px;
+}
+
+.progress-bar-wrapper {
+  height: 3px;
+  cursor: pointer;
+  display: flex;
+  background-color: #888a;
+  margin: auto;
+  transition: all 0.2s ease;
+  z-index: 9999;
+  width: 100%;
+  margin-bottom: 5px;
+  position: absolute;
+  bottom: 45px;
+}
+
+.progress-bar-wrapper:hover {
+  transform: scaleY(2.5);
+}
+
+.progress-bar-current {
+  position: absolute;
+  left: 0;
+  height: 100%;
+  background-color: #eee;
+  z-index: 3;
+  transition-duration: 0.1s;
+}
+
+.progress-bar-wrapper:hover .progress-bar-current {
+  background-color: #fff;
+}
+
+.progress-bar-buffered {
+  position: absolute;
+  height: 100%;
+  background-color: #333;
+  z-index: 2;
+  transition-duration: 0.3s;
+}
+
+.progress-current-position {
+  color: #fff;
+  display: inline-block;
+  position: relative;
+  margin: auto;
+  width: 41px;
+  text-align: center;
+}
+
+.progress-duration {
+  color: #fff;
+  display: inline-block;
+  position: relative;
+  margin: auto;
+  width: 41px;
+  text-align: center;
+}
+
 </style>
 </style>
   <body>

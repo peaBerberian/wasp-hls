@@ -18,7 +18,6 @@ export default function PlayerContainer(
     const videoElt = document.createElement("video");
     videoElt.className = "video video-small";
     videoElt.autoplay = true;
-    videoElt.controls = true;
     const waspHlsPlayer = new WaspHlsPlayer(videoElt);
     /* eslint-disable-next-line */
     (window as any).player = waspHlsPlayer;
