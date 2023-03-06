@@ -1,10 +1,11 @@
+import logger from "../ts-common/logger";
 import { WorkerMessage } from "../ts-common/types";
 
 export default function postMessageToMain(
   msg: WorkerMessage,
   transferables?: Transferable[]
 ) {
-  console.debug("<-- sending to main:", msg.type);
+  logger.debug("<-- sending to main:", msg.type);
   // Written that way due to TypeScript shenanigans
   if (transferables === undefined) {
     postMessage(msg);

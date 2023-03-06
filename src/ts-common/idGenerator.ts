@@ -1,3 +1,5 @@
+import logger from "./logger";
+
 /**
  * Creates an ID generator which generates a different string identifier each
  * time you call it.
@@ -21,7 +23,7 @@ export function numberIdGenerator() : () => number {
   return function generateNewNumberId() : number {
     currId++;
     if (currId >= Number.MAX_SAFE_INTEGER) {
-      console.warn("Exceeding `numberIdGenerator` limit. Collisions may occur");
+      logger.warn("Exceeding `numberIdGenerator` limit. Collisions may occur");
       currId = 0;
     }
     return currId;

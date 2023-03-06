@@ -1,46 +1,183 @@
+import EventEmitter from "../ts-common/EventEmitter";
 import idGenerator from "../ts-common/idGenerator";
-import QueuedSourceBuffer from "../ts-common/QueuedSourceBuffer";
-import {
-  WorkerMessage,
-  MediaSourceReadyState,
-  EndOfStreamErrorCode,
-  SourceBufferCreationErrorCode,
-} from "../ts-common/types";
+import logger, {
+  LoggerLevel,
+} from "../ts-common/logger";
+import noop from "../ts-common/noop";
+import { WorkerMessage } from "../ts-common/types";
 import InitializationError from "./errors";
-import EventEmitter from "./EventEmitter";
-import observePlayback from "./observePlayback";
 import postMessageToWorker from "./postMessageToWorker";
+import {
+  ContentMetadata,
+  PlayerState,
+} from "./types";
+import {
+  requestStopForContent,
+  waitForLoad,
+} from "./utils";
+import {
+  onAppendBufferMessage,
+  onAttachMediaSourceMessage,
+  onClearMediaSourceMessage,
+  onContentErrorMessage,
+  onContentInfoUpdateMessage,
+  onContentStoppedMessage,
+  onContentWarningMessage,
+  onCreateMediaSourceMessage,
+  onCreateSourceBufferMessage,
+  onEndOfStreamMessage,
+  onMediaOffsetUpdateMessage,
+  onRebufferingEndedMessage,
+  onRebufferingStartedMessage,
+  onRemoveBufferMessage,
+  onSeekMessage,
+  onStartPlaybackObservationMessage,
+  onStopPlaybackObservationMessage,
+  onUpdateMediaSourceDurationMessage,
+  onUpdatePlaybackRateMessage,
+} from "./worker-message-handlers";
 
+// Allows to ensure a never-seen-before identifier is used for each content.
 const generateContentId = idGenerator();
 
+/** List events triggered by a `WaspHlsPlayer` and corresponding payloads. */
 interface WaspHlsPlayerEvents {
-  /** Sent when that last loaded content can start to play. */
+  /**
+   * Sent when a new content is being loaded.
+   *
+   * The `getPlayerState` method should now return `Loading`.
+   */
+  loading: null;
+  /**
+   * Sent when that last loaded content can start to play.
+   *
+   * The `getPlayerState` method should now return `Loaded`.
+   */
   loaded: null;
-
   /**
    * Sent when a content is succesfully stopped an no content is
    * currently left playing.
+   *
+   * The `getPlayerState` method should now return `Stopped`.
    */
   stopped: null;
+  /**
+   * Playback is now paused with a loaded content.
+   *
+   * The `isPaused` method should now return `true`.
+   */
+  pause: null;
+  /**
+   * Playback is now playing at the communicated playback rate with a loaded
+   * content.
+   *
+   * The `isPlaying` method should now return `true`.
+   */
+  play: null;
+  /**
+   * Sent when an error provoked the impossibility to continue playing the
+   * content.
+   *
+   * The `getPlayerState` method should now return `Error`.
+   */
+  error: Error;
+  // TODO
+  warning: Error;
+  /**
+   * Sent when we're starting to rebuffer to build back buffer.
+   * Playback is usually not advancing while rebuffering.
+   *
+   * The `isRebuffering` method should now return `true` as long as rebuffering
+   * is still pending.
+   *
+   * Rebuffering will keep being pending until any of those events happen:
+   *   - a `rebufferingEnded` event has been sent.
+   *   - the content was stopped
+   *   - the content errored
+   */
+  rebufferingStarted: null;
+
+  /**
+   * Sent when we're ending a rebuffering period previously announced through
+   * the `rebufferingStarted` event.
+   *
+   * The `isRebuffering` method should now return `false` until the next
+   * `rebufferingStarted` event is sent.
+   */
+  rebufferingEnded: null;
 }
 
-/** Enumerates the various "states" the WaspHlsPlayer can be in. */
-export enum PlayerState {
-  /** No content is currently loaded or waiting to load. */
-  Stopped,
-  /** A content is currently being loaded but not ready for playback yet. */
-  Loading,
-  /** A content is loaded. */
-  Loaded,
-  /** The last content loaded failed on error. */
-  Error,
+/** Various statuses that may be set for a WaspHlsPlayer's initialization. */
+const enum InitializationStatus {
+  /** The WaspHlsPlayer has never been initialized. */
+  Uninitialized = "Uninitialized",
+  /** The WaspHlsPlayer is currently initializing. */
+  Initializing = "Initializing",
+  /** The WaspHlsPlayer has been initialized with success. */
+  Initialized = "Initialized",
+  /** The WaspHlsPlayer's initialization has failed. */
+  Errored = "errorred",
+  /** The WaspHlsPlayer's instance has been disposed. */
+  Disposed = "disposed",
 }
 
+/** Object to provide when calling the `initialize` method. */
+export interface InitializationOptions {
+  /** Url to the Worker JavaScript script file. */
+  workerUrl: string;
+  /** Url to the WebAssembly file. */
+  wasmUrl: string;
+}
+
+/**
+ * `WaspHlsPlayer` class allowing to play HLS contents by relying on a WebWorker
+ * and WebAssembly.
+ *
+ * @class {WaspHlsPlayer}
+ */
 export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
+  /**
+   * Current status for the `WaspHlsPlayer`'s initialization.
+   *
+   * The `WaspHlsPlayer` has to be initialized before any content can be loaded
+   * and played.
+   */
   public initializationStatus: InitializationStatus;
+
+  /**
+   * The HTMLVideoElement linked to the `WaspHlsPlayer`, on which the content
+   * will play.
+   *
+   * A `WaspHlsPlayer` instance can only be linked to a single
+   * `HTMLVideoElement`. You need to create multiple instances to be able to
+   * play on several elements.
+   *
+   * TODO Replace by HTMLMediaElement - detecting when it is an audio one and
+   * disabling the video track in that case.
+   */
   public videoElement: HTMLVideoElement;
+
+  /**
+   * WebWorker associated to this `WaspHlsPlayer` instance.
+   *
+   * `null` when this `WaspHlsPlayer` hasn't had a succesful initialization yet
+   * or if it has been disposed.
+   */
   private __worker__ : Worker | null;
+
+  /**
+   * Properties associated to the content currently playing or being loaded.
+   *
+   * `null` only when no content is loaded right now (either none have ever been
+   * loaded or the last one has been explicitely stopped).
+   */
   private __contentMetadata__: ContentMetadata | null;
+
+  /** AbortController allowing to free resources when `dispose` is called. */
+  private __destroyAbortController__: AbortController;
+
+  /** When set, keep track of a log-related callback for later clean-up. */
+  private __logLevelChangeListener__: ((logLevel: LoggerLevel) => void) | null;
 
   /**
    * Create a new WaspHlsPlayer, associating with a video element.
@@ -56,6 +193,30 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
     this.initializationStatus = InitializationStatus.Uninitialized;
     this.__worker__ = null;
     this.__contentMetadata__ = null;
+    this.__logLevelChangeListener__ = null;
+    this.__destroyAbortController__ = new AbortController();
+
+    const onPause = () => {
+      if (this.getPlayerState() === PlayerState.Loaded) {
+        this.trigger("pause", null);
+      }
+    };
+    const onPlay = () => {
+      if (
+        this.getPlayerState() === PlayerState.Loaded &&
+        this.__contentMetadata__ !== null &&
+        !this.__contentMetadata__.isRebuffering
+      ) {
+        this.trigger("play", null);
+      }
+    };
+    this.videoElement.addEventListener("pause", onPause);
+    this.videoElement.addEventListener("play", onPlay);
+
+    this.__destroyAbortController__.signal.addEventListener("abort", () => {
+      this.videoElement.removeEventListener("pause", onPause);
+      this.videoElement.removeEventListener("play", onPlay);
+    });
   }
 
   /**
@@ -73,6 +234,9 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
    */
   public initialize(opts: InitializationOptions) : Promise<void> {
     try {
+      if (this.initializationStatus !== InitializationStatus.Uninitialized) {
+        throw new Error("WaspHlsPlayer already initialized");
+      }
       this.initializationStatus = InitializationStatus.Initializing;
       const { wasmUrl, workerUrl } = opts;
       let resolveProm = noop;
@@ -90,6 +254,23 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
     }
   }
 
+  /**
+   * Loads a new HLS content whose MultiVariantPlaylist's URL is given in
+   * argument.
+   *
+   * This method can only be called if the `WaspHlsPlayer` is initialized.
+   * If that's the case, you should receive synchronously a `"loading"` event,
+   * indicating that this content is being loaded.
+   *
+   * You can know when that content is succesfully loaded through the `"loaded"`
+   * event or if it failed through the `"error"` event.
+   * Note that a loading operation can also just be cancelled because another
+   * content has been loaded in the meantime. You can also listen for new
+   * `"loading"` events to also catch this scenario.
+   *
+   * TODO return promise?
+   * @param {string} url
+   */
   public loadContent(url: string): void {
     if (this.__worker__ === null) {
       throw new Error("The Player is not initialized or disposed.");
@@ -101,18 +282,20 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
     const loadingAborter = new AbortController();
     this.__contentMetadata__ = {
       contentId,
-      wantedSpeed: 1,
       mediaSourceId: null,
       mediaSource: null,
       disposeMediaSource: null,
       sourceBuffers: [],
       stopPlaybackObservations: null,
+      isRebuffering: false,
       mediaOffset: undefined,
+      wantedSpeed: 1,
       minimumPosition: undefined,
       maximumPosition: undefined,
       loadingAborter,
       error: null,
     };
+    this.trigger("loading", null);
     postMessageToWorker(this.__worker__, {
       type: "load",
       value: { contentId, url },
@@ -129,7 +312,7 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
         if (this.__contentMetadata__ !== null) {
           this.__contentMetadata__.loadingAborter = undefined;
         }
-        console.info("Could not load content:", reason);
+        logger.info("Could not load content:", reason);
       }
     );
   }
@@ -137,7 +320,7 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
   /**
    * Returns the "state" the `WaspHlsPlayer` is currently in.
    * @see PlayerState
-   * @returns {PlayerState}
+   * @returns {string}
    */
   public getPlayerState() : PlayerState {
     if (this.__contentMetadata__ === null) {
@@ -152,6 +335,14 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
     return PlayerState.Loaded;
   }
 
+  /**
+   * Returns the current position in the content.
+   *
+   * Returns `0` if no content is loaded.
+   *
+   * This value should only be considered if a content is currently loaded.
+   * That is, the current `PlayerState` is equal to `Loaded`.
+   */
   public getPosition(): number {
     if (this.__contentMetadata__ === null) {
       return 0;
@@ -160,48 +351,112 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
     return currentTime - (this.__contentMetadata__.mediaOffset ?? 0);
   }
 
+  /**
+   * Move the position of playback to the given position.
+   *
+   * This method can only be called if a content is loaded (`Loaded`
+   * player state).
+   *
+   * @param {number} position
+   */
   public seek(position: number): void {
-    if (this.__contentMetadata__ === null) {
+    if (this.getPlayerState() !== PlayerState.Loaded) {
       throw new Error("Cannot seek: no content loaded.");
     }
     this.videoElement.currentTime = position +
-      (this.__contentMetadata__.mediaOffset ?? 0);
+      (this.__contentMetadata__?.mediaOffset ?? 0);
   }
 
   public getMediaOffset(): number | undefined {
     return this.__contentMetadata__?.mediaOffset ?? undefined;
   }
 
+  /**
+   * Updates the audio volume.
+   *
+   * `0` indicates the minimum volume, `1` the maximum volume. Values in between
+   * are not necessarily linear and may depend on the platform.
+   *
+   * TODO Remove? Might be simpler to just say to user to update it directly on
+   * the media element.
+   * @param {number} volume
+   */
   public setVolume(volume: number): void {
     this.videoElement.volume = volume;
   }
 
-  public mute(): void {
-    this.videoElement.muted = true;
-  }
-
-  public unmute(): void {
-    this.videoElement.muted = false;
-  }
-
+  /**
+   * Returns `true when there's both a content loaded and playback is not
+   * paused.
+   * @returns {boolean}
+   */
   public isPlaying(): boolean {
     return this.getPlayerState() === PlayerState.Loaded &&
             !this.videoElement.paused;
   }
 
+  /**
+   * Returns `true` when playback has been paused.
+   *
+   * Note that this may also be because no content is currently loaded.
+   * @returns {boolean}
+   */
   public isPaused(): boolean {
     return this.videoElement.paused;
   }
 
+  /**
+   * Returns `true` when playback is currently not advancing because of
+   * rebuffering.
+   * @returns {boolean}
+   */
+  public isRebuffering(): boolean {
+    return this.__contentMetadata__?.isRebuffering ?? false;
+  }
+
+  /**
+   * Pause playback of a loaded content.
+   *
+   * You should receive a `"pause"` event when and if the operation
+   * succeeds.
+   *
+   * This method can only be called if a content is loaded (`Loaded`
+   * player state).
+   */
   public pause(): void {
+    if (this.getPlayerState() !== PlayerState.Loaded) {
+      throw new Error("Cannot pause: no content loaded.");
+    }
     this.videoElement.pause();
   }
 
+  /**
+   * Play/resume playback of a loaded content.
+   *
+   * You should receive a `"resume"` event when and if the operation
+   * succeeds.
+   *
+   * This method can only be called if a content is loaded (`Loaded`
+   * player state).
+   */
   public resume(): void {
+    if (this.getPlayerState() !== PlayerState.Loaded) {
+      throw new Error("Cannot resume: no content loaded.");
+    }
     this.videoElement.play()
       .catch(() => { /* noop */});
   }
 
+  /**
+   * Stops a currently-playing content.
+   *
+   * You should receive a `"stopped"` event when the operation succeeds unless
+   * another content has been loaded in the meantime (which you can know through
+   * the `"loading"` event.
+   *
+   * This method can only be called if the `WaspHlsPlayer` has been initialized
+   * with success and not disposed.
+   */
   public stop(): void {
     if (this.__worker__ === null) {
       throw new Error("The Player is not initialized or disposed.");
@@ -229,7 +484,8 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
     //     which then sends back the order to update the playback rate.
     //     The advantages here is that the worker knows about the playback rate
     //     change before it actually happens and the core logic totally controls
-    //     the playback rate.
+    //     the playback rate, which may lead to more predictable behavior in the
+    //     core logic, which is inherently more complex.
     //
     // For now I went with the second solution even though I think the first is
     // the better one, because why making it simple when you can make it
@@ -271,6 +527,7 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
   }
 
   public dispose() {
+    this.__destroyAbortController__.abort();
     if (this.__worker__ === null) {
       return;
     }
@@ -280,6 +537,9 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
     // TODO needed? What about GC once it is set to `null`?
     postMessageToWorker(this.__worker__, { type: "dispose", value: null });
     this.__worker__ = null;
+    if (this.__logLevelChangeListener__ !== null) {
+      logger.removeEventListener("onLogLevelChange", this.__logLevelChangeListener__);
+    }
   }
 
   private __startWorker__(
@@ -298,13 +558,20 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
           /* eslint-disable-next-line */
           (MediaSource as any).canConstructInDedicatedWorker === true,
         wasmUrl,
+        logLevel: logger.getLevel(),
       },
     });
+
+    if (this.__logLevelChangeListener__ !== null) {
+      logger.removeEventListener("onLogLevelChange", this.__logLevelChangeListener__);
+    }
+    logger.addEventListener("onLogLevelChange", onLogLevelChange);
+    this.__logLevelChangeListener__ = onLogLevelChange;
 
     worker.onmessage = (evt: MessageEvent<WorkerMessage>) => {
       const { data } = evt;
       if (typeof data !== "object" || data === null || typeof data.type !== "string") {
-        console.error("unexpected Worker message");
+        logger.error("unexpected Worker message");
         return;
       }
 
@@ -314,7 +581,6 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
           mayStillReject = false;
           resolveProm();
           break;
-
         case "initialization-error":
           if (mayStillReject) {
             const error = new InitializationError(
@@ -326,673 +592,112 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
             rejectProm(error);
           }
           break;
-
         case "seek":
-          if (this.__contentMetadata__?.mediaSourceId !== data.value.mediaSourceId) {
-            console.info("API: Ignoring seek due to wrong `mediaSourceId`");
-          } else {
-            try {
-              this.videoElement.currentTime = data.value.position;
-            } catch (err) {
-              console.error("Unexpected error while seeking:", err);
-            }
-          }
+          onSeekMessage(data, this.__contentMetadata__, this.videoElement);
           break;
-
         case "update-playback-rate":
-          if (this.__contentMetadata__?.mediaSourceId !== data.value.mediaSourceId) {
-            console.info("API: Ignoring seek due to wrong `mediaSourceId`");
-          } else {
-            try {
-              this.videoElement.playbackRate = data.value.playbackRate;
-            } catch (err) {
-              console.error("Unexpected error while changing the playback rate:", err);
-            }
-          }
+          onUpdatePlaybackRateMessage(data, this.__contentMetadata__, this.videoElement);
           break;
-
         case "attach-media-source":
-          if (this.__contentMetadata__?.contentId !== data.value.contentId) {
-            console.info("API: Ignoring MediaSource attachment due to wrong `contentId`");
-          } else {
-            if (this.__contentMetadata__.stopPlaybackObservations !== null) {
-              this.__contentMetadata__.stopPlaybackObservations();
-              this.__contentMetadata__.stopPlaybackObservations = null;
-            }
-
-            if (data.value.handle !== undefined) {
-              this.videoElement.srcObject = data.value.handle;
-            } else if (data.value.src !== undefined) {
-              this.videoElement.src = data.value.src;
-            } else {
-              throw new Error(
-                "Unexpected \"attach-media-source\" message: missing source"
-              );
-            }
-            this.__contentMetadata__.mediaSourceId = data.value.mediaSourceId;
-            this.__contentMetadata__.mediaSource = null;
-            this.__contentMetadata__.disposeMediaSource = () => {
-              if (data.value.src !== undefined) {
-                URL.revokeObjectURL(data.value.src);
-              }
-            };
-            this.__contentMetadata__.sourceBuffers = [];
-            this.__contentMetadata__.stopPlaybackObservations = null;
-          }
+          onAttachMediaSourceMessage(data, this.__contentMetadata__, this.videoElement);
           break;
-
-        case "create-media-source": {
-          if (this.__contentMetadata__?.contentId !== data.value.contentId) {
-            console.info("API: Ignoring MediaSource attachment due to wrong `contentId`");
-          } else {
-            const { mediaSourceId } = data.value;
-            try {
-              this.__contentMetadata__.disposeMediaSource?.();
-              this.__contentMetadata__.stopPlaybackObservations?.();
-
-              const mediaSource = new MediaSource();
-
-              const disposeMediaSource =
-                bindMediaSource(worker, mediaSource, this.videoElement, mediaSourceId);
-              this.__contentMetadata__.mediaSourceId = data.value.mediaSourceId;
-              this.__contentMetadata__.mediaSource = mediaSource;
-              this.__contentMetadata__.disposeMediaSource = disposeMediaSource;
-              this.__contentMetadata__.sourceBuffers = [];
-              this.__contentMetadata__.stopPlaybackObservations = null;
-            } catch (err) {
-              const { name, message } = getErrorInformation(
-                err,
-                "Unknown error when creating the MediaSource"
-              );
-              postMessageToWorker(worker, {
-                type: "create-media-source-error",
-                value: { mediaSourceId, message, name },
-              });
-            }
-          }
-          break;
-        }
-
-        case "update-media-source-duration": {
-          if (this.__contentMetadata__?.mediaSourceId !== data.value.mediaSourceId) {
-            console.info("API: Ignoring duration update due to wrong `mediaSourceId`");
-          } else {
-            try {
-              if (this.__contentMetadata__.mediaSource === null) {
-                console.info("API: Ignoring duration update due to no MediaSource");
-              } else {
-                this.__contentMetadata__.mediaSource.duration = data.value.duration;
-              }
-            } catch (err) {
-              const { name, message } = getErrorInformation(
-                err,
-                "Unknown error when updating the MediaSource's duration"
-              );
-              const { mediaSourceId } = data.value;
-              postMessageToWorker(worker, {
-                type: "update-media-source-duration-error",
-                value: { mediaSourceId, message, name },
-              });
-            }
-          }
-          break;
-        }
-
-        case "clear-media-source": {
-          if (this.__contentMetadata__?.mediaSourceId !== data.value.mediaSourceId) {
-            console.info(
-              "API: Ignoring MediaSource clearing due to wrong `mediaSourceId`"
-            );
-          } else {
-            try {
-              this.__contentMetadata__.disposeMediaSource?.();
-              clearElementSrc(this.videoElement);
-            } catch (err) {
-              console.warn("API: Error when clearing current MediaSource:", err);
-            }
-          }
-          break;
-        }
-
-        case "create-source-buffer": {
-          if (this.__contentMetadata__?.mediaSourceId !== data.value.mediaSourceId) {
-            console.info(
-              "API: Ignoring SourceBuffer creation due to wrong `mediaSourceId`"
-            );
-          } else if (this.__contentMetadata__.mediaSource === null) {
-            postMessageToWorker(worker, {
-              type: "create-source-buffer-error",
-              value: {
-                mediaSourceId: data.value.mediaSourceId,
-                sourceBufferId: data.value.sourceBufferId,
-                code: SourceBufferCreationErrorCode.NoMediaSource,
-                message: "No MediaSource created on the main thread.",
-                name: undefined,
-              },
-            });
-          } else {
-            try {
-              const sourceBuffer = this.__contentMetadata__.mediaSource
-                .addSourceBuffer(data.value.contentType);
-              const queuedSourceBuffer = new QueuedSourceBuffer(sourceBuffer);
-              this.__contentMetadata__.sourceBuffers.push({
-                sourceBufferId: data.value.sourceBufferId,
-                queuedSourceBuffer,
-              });
-            } catch (err) {
-              const { name, message } = getErrorInformation(
-                err,
-                "Unknown error when adding the SourceBuffer to the MediaSource"
-              );
-              postMessageToWorker(worker, {
-                type: "create-source-buffer-error",
-                value: {
-                  mediaSourceId: data.value.mediaSourceId,
-                  sourceBufferId: data.value.sourceBufferId,
-                  code: SourceBufferCreationErrorCode.AddSourceBufferError,
-                  message,
-                  name,
-                },
-              });
-            }
-          }
-          break;
-        }
-
-        case "append-buffer": {
-          if (this.__contentMetadata__?.mediaSourceId !== data.value.mediaSourceId) {
-            return;
-          }
-          const sbObject = this.__contentMetadata__.sourceBuffers
-            .find(({ sourceBufferId }) => sourceBufferId === data.value.sourceBufferId);
-          if (sbObject === undefined) {
-            return;
-          }
-          const { mediaSourceId, sourceBufferId } = data.value;
-          try {
-            sbObject.queuedSourceBuffer.push(data.value.data)
-              .then(() => {
-                postMessageToWorker(worker, {
-                  type: "source-buffer-updated",
-                  value: { mediaSourceId, sourceBufferId },
-                });
-              })
-              .catch(handleAppendBufferError);
-          } catch (err) {
-            handleAppendBufferError(err);
-          }
-          function handleAppendBufferError(err: unknown): void {
-            const { name, message } = getErrorInformation(
-              err,
-              "Unknown error when appending data to the SourceBuffer"
-            );
-            postMessageToWorker(worker, {
-              type: "source-buffer-error",
-              value: { sourceBufferId, message, name },
-            });
-          }
-          break;
-        }
-
-        case "remove-buffer": {
-          if (this.__contentMetadata__?.mediaSourceId !== data.value.mediaSourceId) {
-            return;
-          }
-          const sbObject = this.__contentMetadata__.sourceBuffers
-            .find(({ sourceBufferId }) => sourceBufferId === data.value.sourceBufferId);
-          if (sbObject === undefined) {
-            return;
-          }
-          const { mediaSourceId, sourceBufferId } = data.value;
-          try {
-            sbObject.queuedSourceBuffer.removeBuffer(data.value.start, data.value.end)
-              .then(() => {
-                postMessageToWorker(worker, {
-                  type: "source-buffer-updated",
-                  value: { mediaSourceId, sourceBufferId },
-                });
-              })
-              .catch(handleRemoveBufferError);
-          } catch (err) {
-            handleRemoveBufferError(err);
-          }
-          function handleRemoveBufferError(err: unknown): void {
-            const { name, message } = getErrorInformation(
-              err,
-              "Unknown error when removing data to the SourceBuffer"
-            );
-            postMessageToWorker(worker, {
-              type: "source-buffer-error",
-              value: { sourceBufferId, message, name },
-            });
-          }
-          break;
-        }
-
-        case "start-playback-observation": {
-          if (this.__contentMetadata__?.mediaSourceId !== data.value.mediaSourceId) {
-            return;
-          }
-          if (this.__contentMetadata__.stopPlaybackObservations !== null) {
-            this.__contentMetadata__.stopPlaybackObservations();
-            this.__contentMetadata__.stopPlaybackObservations = null;
-          }
-          this.__contentMetadata__.stopPlaybackObservations = observePlayback(
+        case "create-media-source":
+          onCreateMediaSourceMessage(
+            data,
+            this.__contentMetadata__,
             this.videoElement,
-            data.value.mediaSourceId,
-            (value) => postMessageToWorker(worker, { type: "observation", value })
+            worker
           );
           break;
-        }
-
-        case "stop-playback-observation": {
-          if (this.__contentMetadata__?.mediaSourceId !== data.value.mediaSourceId) {
-            return;
-          }
-          if (this.__contentMetadata__.stopPlaybackObservations !== null) {
-            this.__contentMetadata__.stopPlaybackObservations();
-            this.__contentMetadata__.stopPlaybackObservations = null;
-          }
+        case "update-media-source-duration":
+          onUpdateMediaSourceDurationMessage(data, this.__contentMetadata__, worker);
           break;
-        }
-
+        case "clear-media-source":
+          onClearMediaSourceMessage(data, this.__contentMetadata__, this.videoElement);
+          break;
+        case "create-source-buffer":
+          onCreateSourceBufferMessage(data, this.__contentMetadata__, worker);
+          break;
+        case "append-buffer":
+          onAppendBufferMessage(data, this.__contentMetadata__, worker);
+          break;
+        case "remove-buffer":
+          onRemoveBufferMessage(data, this.__contentMetadata__, worker);
+          break;
+        case "start-playback-observation":
+          onStartPlaybackObservationMessage(
+            data,
+            this.__contentMetadata__,
+            this.videoElement,
+            worker
+          );
+          break;
+        case "stop-playback-observation":
+          onStopPlaybackObservationMessage(data, this.__contentMetadata__);
+          break;
         case "end-of-stream":
-          if (this.__contentMetadata__?.mediaSourceId !== data.value.mediaSourceId) {
-            return;
-          }
-          const { mediaSourceId } = data.value;
-          if (this.__contentMetadata__.mediaSource === null) {
-            postMessageToWorker(worker, {
-              type: "end-of-stream-error",
-              value: {
-                mediaSourceId,
-                code: EndOfStreamErrorCode.NoMediaSource,
-                message: "No MediaSource created on the main thread.",
-                name: undefined,
-              },
-            });
-            return;
-          }
-          try {
-            // TODO Maybe the best here would be a more complex logic to
-            // call `endOfStream` at the right time.
-            this.__contentMetadata__.mediaSource.endOfStream();
-          } catch (err) {
-            const { name, message } = getErrorInformation(
-              err,
-              "Unknown error when calling MediaSource.endOfStream()"
-            );
-            postMessageToWorker(worker, {
-              type: "end-of-stream-error",
-              value: {
-                mediaSourceId,
-                code: EndOfStreamErrorCode.EndOfStreamError,
-                message,
-                name,
-              },
-            });
-          }
+          onEndOfStreamMessage(data, this.__contentMetadata__, worker);
           break;
-
         case "media-offset-update":
-          if (
-            this.__contentMetadata__ === null ||
-            this.__contentMetadata__.contentId !== data.value.contentId
-          ) {
-            console.info(
-              "API: Ignoring media offset update due to wrong `contentId`"
-            );
-            return;
-          }
-          this.__contentMetadata__.mediaOffset = data.value.offset;
+          onMediaOffsetUpdateMessage(data, this.__contentMetadata__);
           break;
-
-        case "content-error":
-          // TODO
-          if (
-            this.__contentMetadata__ === null ||
-            this.__contentMetadata__.contentId !== data.value.contentId
-          ) {
-            console.info("API: Ignoring warning due to wrong `contentId`");
-            return;
+        case "content-error": {
+          const error = onContentErrorMessage(data, this.__contentMetadata__);
+          if (error !== null) {
+            this.trigger("error", error);
           }
-          if (this.__contentMetadata__.loadingAborter !== undefined) {
-            this.__contentMetadata__.loadingAborter.abort(
-              new Error("Could not load content due to an error")
-            );
-          }
-
-          // Make sure resources are freed
-          this.__contentMetadata__.disposeMediaSource?.();
-          this.__contentMetadata__.stopPlaybackObservations?.();
-          this.__contentMetadata__.error =
-            new Error("An error arised");
           break;
-
-        case "content-warning":
-          if (
-            this.__contentMetadata__ === null ||
-            this.__contentMetadata__.contentId !== data.value.contentId
-          ) {
-            console.info("API: Ignoring warning due to wrong `contentId`");
-            return;
+        }
+        case "content-warning": {
+          const error = onContentWarningMessage(data, this.__contentMetadata__);
+          if (error !== null) {
+            this.trigger("warning", error);
           }
-          // console.warn("Warning received", data.value.code);
-          // this.trigger("warning", {
-          //   code: data.value.code,
-          //   // TODO
-          //   message: undefined,
-          // });
           break;
-
+        }
         case "content-info-update":
-          if (
-            this.__contentMetadata__ === null ||
-            this.__contentMetadata__.contentId !== data.value.contentId
-          ) {
-            console.info("API: Ignoring warning due to wrong `contentId`");
-            return;
-          }
-          this.__contentMetadata__.minimumPosition = data.value.minimumPosition;
-          this.__contentMetadata__.maximumPosition = data.value.maximumPosition;
+          onContentInfoUpdateMessage(data, this.__contentMetadata__);
           break;
-
         case "content-stopped":
-          if (
-            this.__contentMetadata__ === null ||
-            this.__contentMetadata__.contentId !== data.value.contentId
-          ) {
-            console.info("API: Ignoring `content-stopped` due to wrong `contentId`");
-            return;
+          if (onContentStoppedMessage(data, this.__contentMetadata__)) {
+            this.__contentMetadata__ = null;
+            this.trigger("stopped", null);
           }
-          // Make sure resources are freed
-          this.__contentMetadata__.disposeMediaSource?.();
-          this.__contentMetadata__.stopPlaybackObservations?.();
-          this.__contentMetadata__.loadingAborter?.abort(
-            new Error("Content Stopped")
-          );
-          this.__contentMetadata__ = null;
-          this.trigger("stopped", null);
+          break;
+        case "rebuffering-started":
+          if (onRebufferingStartedMessage(
+            data,
+            this.__contentMetadata__,
+            this.videoElement)
+          ) {
+            this.trigger("rebufferingStarted", null);
+          }
+          break;
+        case "rebuffering-ended":
+          if (onRebufferingEndedMessage(
+            data,
+            this.__contentMetadata__,
+            this.videoElement)
+          ) {
+            this.trigger("rebufferingEnded", null);
+          }
           break;
       }
+
     };
 
     // TODO check on which case this is triggered
     worker.onerror = (ev: ErrorEvent) => {
-      console.error("API: Worker Error encountered", ev.error);
+      logger.error("API: Worker Error encountered", ev.error);
       if (mayStillReject) {
         rejectProm(ev.error);
       }
     };
-  }
-
-}
-
-function bindMediaSource(
-  worker: Worker,
-  mediaSource: MediaSource,
-  videoElement: HTMLVideoElement,
-  mediaSourceId: string
-) : () => void {
-  mediaSource.addEventListener("sourceclose", onMediaSourceClose);
-  mediaSource.addEventListener("sourceended", onMediaSourceEnded);
-  mediaSource.addEventListener("sourceopen", onMediaSourceOpen);
-
-  const objectURL = URL.createObjectURL(mediaSource);
-  videoElement.src = objectURL;
-
-  function onMediaSourceEnded() {
-    postMessageToWorker(worker, {
-      type: "media-source-state-changed",
-      value: { mediaSourceId, state: MediaSourceReadyState.Ended },
-    });
-  }
-  function onMediaSourceOpen() {
-    postMessageToWorker(worker, {
-      type: "media-source-state-changed",
-      value: { mediaSourceId, state: MediaSourceReadyState.Open },
-    });
-  }
-  function onMediaSourceClose() {
-    postMessageToWorker(worker, {
-      type: "media-source-state-changed",
-      value: { mediaSourceId, state: MediaSourceReadyState.Closed },
-    });
-  }
-
-  return () => {
-    mediaSource.removeEventListener("sourceclose", onMediaSourceClose);
-    mediaSource.removeEventListener("sourceended", onMediaSourceEnded);
-    mediaSource.removeEventListener("sourceopen", onMediaSourceOpen);
-    URL.revokeObjectURL(objectURL);
-
-    if (mediaSource.readyState !== "closed") {
-      // TODO should probably wait until updates finish and whatnot
-      const { readyState, sourceBuffers } = mediaSource;
-      for (let i = sourceBuffers.length - 1; i >= 0; i--) {
-        const sourceBuffer = sourceBuffers[i];
-
-        // TODO what if not? Is the current code useful at all?
-        if (!sourceBuffer.updating) {
-          try {
-            if (readyState === "open") {
-              sourceBuffer.abort();
-            }
-            mediaSource.removeSourceBuffer(sourceBuffer);
-          }
-          catch (_e) {
-            // TODO
-          }
-        }
-      }
+    function onLogLevelChange(level: LoggerLevel): void {
+      postMessageToWorker(worker, {
+        type: "update-logger-level",
+        value: level,
+      });
     }
-
-    // TODO copy logic and comment of RxPlayer for proper stop
-    videoElement.src = "";
-    videoElement.removeAttribute("src");
-  };
-}
-
-const enum InitializationStatus {
-  Uninitialized = "Uninitialized",
-  Initializing = "Initializing",
-  Initialized = "Initialized",
-  Errored = "errorred",
-  Disposed = "disposed",
-}
-
-export interface InitializationOptions {
-  workerUrl: string;
-  wasmUrl: string;
-}
-
-function noop() {
-  /* do nothing! */
-}
-
-/**
- * Clear element's src attribute.
- * @param {HTMLMediaElement} element
- */
-function clearElementSrc(element: HTMLMediaElement): void {
-  // On some browsers, we first have to make sure the textTracks elements are
-  // both disabled and removed from the DOM.
-  // If we do not do that, we may be left with displayed text tracks on the
-  // screen, even if the track elements are properly removed, due to browser
-  // issues.
-  // Bug seen on Firefox (I forgot which version) and Chrome 96.
-  const { textTracks } = element;
-  if (textTracks != null) {
-    for (let i = 0; i < textTracks.length; i++) {
-      textTracks[i].mode = "disabled";
-    }
-    if (element.hasChildNodes()) {
-      const { childNodes } = element;
-      for (let j = childNodes.length - 1; j >= 0; j--) {
-        if (childNodes[j].nodeName === "track") {
-          try {
-            element.removeChild(childNodes[j]);
-          } catch (err) {
-            // TODO
-          }
-        }
-      }
-    }
-  }
-  element.src = "";
-
-  // On IE11, element.src = "" is not sufficient as it
-  // does not clear properly the current MediaKey Session.
-  // Microsoft recommended to use element.removeAttr("src").
-  element.removeAttribute("src");
-}
-
-function getErrorInformation(err: unknown, defaultMsg: string) : {
-  name: string | undefined;
-  message: string;
-} {
-  if (err instanceof Error) {
-    return { message: err.message, name: err.name };
-  } else {
-    return { message: defaultMsg, name: undefined };
-  }
-}
-
-/**
- * Structure storing metadata associated to a content being played by a
- * `WaspHlsPlayer`.
- */
-interface ContentMetadata {
-  /**
-   * Unique identifier identifying the loaded content.
-   *
-   * This identifier should be unique for any instances of `WaspHlsPlayer`
-   * created in the current JavaScript realm.
-   *
-   * Identifying a loaded content this way allows to ensure that messages
-   * exchanged with a Worker concern the same content, mostly in cases of race
-   * conditions.
-   */
-  contentId: string;
-
-  wantedSpeed: number;
-
-  /**
-   * Unique identifier identifying a MediaSource attached to the
-   * HTMLVideoElement.
-   *
-   * This identifier should be unique for the worker in question.
-   *
-   * Identifying a MediaSource this way allows to ensure that messages
-   * exchanged with a Worker concern the same MediaSource instance.
-   *
-   * `null` when no `MediaSource` is created now.
-   */
-  mediaSourceId: string | null;
-
-  /**
-   * `MediaSource` instance linked to the current content being played.
-   *
-   * `null` when either:
-   *   - no `MediaSource` instance is active for now
-   *   - the `MediaSource` has been created on the Worker side.
-   *
-   * You can know whether a `MediaSource` is currently created at all by
-   * refering to `mediaSourceId` instead.
-   */
-  mediaSource: MediaSource | null;
-
-  /**
-   * Callback that should be called when the `MediaSource` linked to the current
-   * content becomes unattached - whether the `MediaSource` has been created in
-   * this realm or in the worker.
-   */
-  disposeMediaSource: (() => void) | null;
-
-  /**
-   * Describe `SourceBuffer` instances currently associated to the current
-   * `MediaSource` that have been created in this realm (and not in the Worker).
-   */
-  sourceBuffers: Array<{
-    /**
-     * Id uniquely identifying this SourceBuffer.
-     * It is generated from the Worker and it is unique for all SourceBuffers
-     * created after associated with the linked `mediaSourceId`.
-     */
-    sourceBufferId: number;
-    /**
-     * QueuedSourceBuffer associated to this SourceBuffers.
-     * This is the abstraction used to push and remove data to the SourceBuffer.
-     */
-    queuedSourceBuffer: QueuedSourceBuffer;
-  }>;
-
-  /**
-   * Callback allowing to stop playback observations currently pending.
-   * `null` if no "playback observation" is currently pending.
-   */
-  stopPlaybackObservations: null | (() => void);
-
-  /**
-   * Offset allowing to convert from the position as announced by the media
-   * element's `currentTime` property, to the actual content's position.
-   *
-   * To obtain the content's position from the `currentTime` property, just
-   * remove `mediaOffset` (seconds) from the latter.
-   *
-   * To obtain the media element's time from a content's time, just add
-   * `mediaOffset` to the latter.
-   */
-  mediaOffset: number | undefined;
-
-  minimumPosition : number | undefined;
-
-  maximumPosition : number | undefined;
-
-  loadingAborter: AbortController | undefined;
-
-  error: Error | null;
-}
-
-function waitForLoad(
-  videoElement : HTMLMediaElement,
-  abortSignal : AbortSignal
-) : Promise<void> {
-  return new Promise<void>((res, rej) => {
-    if (videoElement.readyState >= HTMLMediaElement.HAVE_ENOUGH_DATA) {
-      res();
-    }
-    abortSignal.addEventListener("abort", onAbort);
-    videoElement.addEventListener("canplay", onCanPlay);
-    function onCanPlay() {
-      videoElement.removeEventListener("canplay", onCanPlay);
-      abortSignal.removeEventListener("abort", onAbort);
-      res();
-    }
-    function onAbort() {
-      videoElement.removeEventListener("canplay", onCanPlay);
-      abortSignal.removeEventListener("abort", onAbort);
-      if (abortSignal.reason !== null) {
-        rej(abortSignal.reason);
-      } else {
-        rej(new Error("The loading operation was aborted"));
-      }
-    }
-  });
-}
-
-function requestStopForContent(
-  metadata: ContentMetadata,
-  worker: Worker | null
-) : void {
-  // Preventively free some resource that should not impact the Worker much.
-  metadata.stopPlaybackObservations?.();
-  metadata.loadingAborter?.abort();
-
-  if (worker !== null) {
-    postMessageToWorker(worker, {
-      type: "stop",
-      value: { contentId: metadata.contentId },
-    });
   }
 }

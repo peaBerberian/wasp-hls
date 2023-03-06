@@ -1,4 +1,5 @@
 import { numberIdGenerator } from "../ts-common/idGenerator";
+import logger from "../ts-common/logger";
 import QueuedSourceBuffer from "../ts-common/QueuedSourceBuffer";
 import { Dispatcher } from "../wasm/wasp_hls";
 
@@ -34,7 +35,7 @@ class PlayerInstance {
   ) {
     if (this._instanceInfo === null) {
       // TODO
-      console.error();
+      logger.error();
       return ;
     }
     jsMemoryResources.freeEverything();

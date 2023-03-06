@@ -90,8 +90,8 @@ export default React.memo(function VideoPlayer(
 
     player.addEventListener("loaded", onLoaded);
     player.addEventListener("stopped", onStopped);
-    player.videoElement.addEventListener("pause", onPause);
-    player.videoElement.addEventListener("play", onPlay);
+    player.addEventListener("pause", onPause);
+    player.addEventListener("play", onPlay);
     player.videoElement.addEventListener("volumechange", onVideoVolumeChange);
     if (playerContainerRef.current !== null) {
       playerContainerRef.current.addEventListener("mouseover", onMouseOver);
@@ -107,8 +107,8 @@ export default React.memo(function VideoPlayer(
       resetTimeInfo();
       player.removeEventListener("loaded", onLoaded);
       player.removeEventListener("stopped", onStopped);
-      player.videoElement.removeEventListener("pause", onPause);
-      player.videoElement.removeEventListener("play", onPlay);
+      player.removeEventListener("pause", onPause);
+      player.removeEventListener("play", onPlay);
       player.videoElement.removeEventListener("volumechange", onVideoVolumeChange);
       clearPositionUpdateInterval();
       if (playerContainerRef.current !== null) {

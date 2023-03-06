@@ -2,6 +2,7 @@ import {
   MediaSourceReadyState,
   PlaybackTickReason,
 } from "../wasm/wasp_hls";
+import { LoggerLevel } from "./logger";
 
 export {
   MediaSourceReadyState,
@@ -22,7 +23,8 @@ export type MainMessage =
   SourceBufferOperationErrorMainMessage |
   SourceBufferOperationSuccessMainMessage |
   EndOfStreamErrorMainMessage |
-  UpdateWantedSpeedMainMessage;
+  UpdateWantedSpeedMainMessage |
+  UpdateLoggerLevelMainMessage;
 
 /** Message sent from the worker to the main thread. */
 export type WorkerMessage =
@@ -40,6 +42,8 @@ export type WorkerMessage =
   AppendBufferWorkerMessage |
   RemoveBufferWorkerMessage |
   EndOfStreamWorkerMessage |
+  RebufferingStartedWorkerMessage |
+  RebufferingEndedWorkerMessage |
   StartPlaybackObservationWorkerMessage |
   StopPlaybackObservationWorkerMessage |
   MediaOffsetUpdateWorkerMessage |
@@ -440,7 +444,7 @@ export interface StartPlaybackObservationWorkerMessage {
      * Adding such identifier to this seemlingly unrelated event allows to
      * protect against potential race conditions.
      *
-     * If `mediaSourceId` don't match, the message will be ignored.
+     * If `mediaSourceId` don't match, the message should be ignored.
      */
     mediaSourceId: string;
   };
@@ -463,7 +467,7 @@ export interface StopPlaybackObservationWorkerMessage {
      * Adding such identifier to this seemlingly unrelated event allows to
      * protect against potential race conditions.
      *
-     * If `mediaSourceId` don't match, the message will be ignored.
+     * If `mediaSourceId` don't match, the message should be ignored.
      */
     mediaSourceId: string;
   };
@@ -483,7 +487,53 @@ export interface EndOfStreamWorkerMessage {
      * Adding such identifier to this seemlingly unrelated event allows to
      * protect against potential race conditions.
      *
-     * If `mediaSourceId` don't match, the message will be ignored.
+     * If `mediaSourceId` don't match, the message should be ignored.
+     */
+    mediaSourceId: string;
+  };
+}
+
+/**
+ * Sent when the worker wants to enter a rebuffering period, to build back
+ * buffer.
+ */
+export interface RebufferingStartedWorkerMessage {
+  type: "rebuffering-started";
+  value: {
+    /**
+     * This `mediaSourceId` should be the same `mediaSourceId` than the one on
+     * the `CreateMediaSourceWorkerMessage` for it.
+     *
+     * Adding such identifier to this seemlingly unrelated event allows to
+     * protect against potential race conditions.
+     *
+     * If `mediaSourceId` don't match, the message should be ignored.
+     */
+    mediaSourceId: string;
+
+    /**
+     * If `true`, the playback rate has to be set to `0` as long as rebuffering
+     * is pending.
+     */
+    updatePlaybackRate: boolean;
+  };
+}
+
+/**
+ * Sent when the worker wants to exit a rebuffering period previously started
+ * through a `RebufferingStartedWorkerMessage`.
+ */
+export interface RebufferingEndedWorkerMessage {
+  type: "rebuffering-ended";
+  value: {
+    /**
+     * This `mediaSourceId` should be the same `mediaSourceId` than the one on
+     * the `CreateMediaSourceWorkerMessage` for it.
+     *
+     * Adding such identifier to this seemlingly unrelated event allows to
+     * protect against potential race conditions.
+     *
+     * If `mediaSourceId` don't match, the message should be ignored.
      */
     mediaSourceId: string;
   };
@@ -527,6 +577,9 @@ export interface InitializationMainMessage {
 
     /** Url to the WASM part of the WaspHlsPlayer */
     wasmUrl: string;
+
+    /** The initial logger level to set. */
+    logLevel: LoggerLevel;
   };
 }
 
@@ -759,4 +812,9 @@ export interface UpdateWantedSpeedMainMessage {
     /** The wanted speed in question. */
     wantedSpeed: number;
   };
+}
+
+export interface UpdateLoggerLevelMainMessage {
+  type: "update-logger-level";
+  value: LoggerLevel;
 }

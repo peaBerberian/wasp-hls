@@ -1,3 +1,4 @@
+import logger from "../ts-common/logger";
 import {
   MainMessage,
   InitializationErrorCode,
@@ -19,12 +20,12 @@ let wasInitializedCalled = false;
 export default function MessageReceiver() {
   onmessage = function(evt: MessageEvent<MainMessage>) {
     if (evt.origin !== "") {
-      console.error("Unexpected trans-origin message");
+      logger.error("Unexpected trans-origin message");
       return;
     }
     const { data } = evt;
     if (typeof data !== "object" || data === null || typeof data.type !== "string") {
-      console.error("unexpected main message");
+      logger.error("unexpected main message");
       return;
     }
 
@@ -37,6 +38,7 @@ export default function MessageReceiver() {
             InitializationErrorCode.AlreadyInitializedError
           );
         }
+        logger.setLevel(data.value.logLevel);
         wasInitializedCalled = true;
         const { wasmUrl, hasWorkerMse } = data.value;
         initialize(wasmUrl, hasWorkerMse);
@@ -77,7 +79,7 @@ export default function MessageReceiver() {
         try {
           dispatcher.stop();
         } catch (err) {
-          console.error("Error: when stopping the content:", err);
+          logger.error("Error: when stopping the content:", err);
         }
         postMessageToMain({
           type: "content-stopped",
@@ -162,7 +164,7 @@ export default function MessageReceiver() {
           return;
         }
         // TODO this should proably not be sent
-        console.error("Error: when setting the MediaSource's duration");
+        logger.error("Error: when setting the MediaSource's duration");
         break;
       }
 
@@ -195,6 +197,10 @@ export default function MessageReceiver() {
         dispatcher.set_wanted_speed(data.value.wantedSpeed);
         break;
       }
+
+      case "update-logger-level":
+        logger.setLevel(data.value);
+        break;
     }
   };
 }

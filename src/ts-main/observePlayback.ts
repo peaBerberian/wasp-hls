@@ -28,7 +28,7 @@ const OBSERVATION_EVENTS = [
 ] as const;
 
 export default function observePlayback(
-  videoElement: HTMLVideoElement,
+  videoElement: HTMLMediaElement,
   mediaSourceId: string,
   onNewObservation: (observation: MediaObservation) => void
 ): () => void {

@@ -9,6 +9,7 @@
 /* eslint-disable @typescript-eslint/restrict-plus-operands */
 
 import muxjs from "mux.js";
+import logger from "../ts-common/logger.js";
 import { MediaType } from "../wasm/wasp_hls.js";
 
 let transmuxer : any;
@@ -63,7 +64,7 @@ export function getTransmuxedType(
       newProfile = "4d00";
     } else {
       if (profile !== "100") {
-        console.error("Impossible regex catch");
+        logger.error("Impossible regex catch");
       }
       newProfile = "6400";
     }
@@ -71,7 +72,7 @@ export function getTransmuxedType(
     // Convert the level to hex and append to the codec string.
     const level = Number(match[2]);
     if (level >= 256) {
-      console.error("Invalid legacy avc1 level number.");
+      logger.error("Invalid legacy avc1 level number.");
     }
     const newLevel = (level >> 4).toString(16) + (level & 0xf).toString(16);
     mimeType = `avc1.${newProfile}${newLevel}`;

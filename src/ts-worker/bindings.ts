@@ -1,4 +1,5 @@
 import idGenerator from "../ts-common/idGenerator.js";
+import logger from "../ts-common/logger.js";
 import QueuedSourceBuffer from "../ts-common/QueuedSourceBuffer.js";
 import {
   Dispatcher,
@@ -64,16 +65,16 @@ export function log(logLevel: LogLevel, logStr: string) {
   const now = performance.now().toFixed(2);
   switch (logLevel) {
     case LogLevel.Error:
-      console.error(now, logStr);
+      logger.error(now, logStr);
       break;
     case LogLevel.Warn:
-      console.warn(now, logStr);
+      logger.warn(now, logStr);
       break;
     case LogLevel.Info:
-      console.info(now, logStr);
+      logger.info(now, logStr);
       break;
     case LogLevel.Debug:
-      console.debug(now, logStr);
+      logger.debug(now, logStr);
       break;
   }
 }
@@ -182,7 +183,7 @@ export function abortRequest(id: RequestId) : boolean {
 export function seek(position: number): void {
   const contentInfo = playerInstance.getContentInfo();
   if (contentInfo === null || contentInfo.mediaSourceObj === null) {
-    console.error("Attempting to seek when no MediaSource is created");
+    logger.error("Attempting to seek when no MediaSource is created");
     return ;
   }
   postMessageToMain({
@@ -200,7 +201,7 @@ export function seek(position: number): void {
 export function setPlaybackRate(position: number): void {
   const contentInfo = playerInstance.getContentInfo();
   if (contentInfo === null || contentInfo.mediaSourceObj === null) {
-    console.error("Attempting to set playback rate when no MediaSource is created");
+    logger.error("Attempting to set playback rate when no MediaSource is created");
     return ;
   }
   postMessageToMain({
@@ -603,14 +604,14 @@ export function appendBuffer(
           try {
             playerInstance.getDispatcher()?.on_source_buffer_update(sourceBufferId);
           } catch (err) {
-            console.error("Error when calling `on_source_buffer_update`", err);
+            logger.error("Error when calling `on_source_buffer_update`", err);
           }
         })
         .catch(() => {
           try {
             playerInstance.getDispatcher()?.on_source_buffer_error(sourceBufferId);
           } catch (err) {
-            console.error("Error when calling `on_source_buffer_error`", err);
+            logger.error("Error when calling `on_source_buffer_error`", err);
           }
         });
     } else {
@@ -664,14 +665,14 @@ export function removeBuffer(
           try {
             playerInstance.getDispatcher()?.on_source_buffer_update(sourceBufferId);
           } catch (err) {
-            console.error("Error when calling `on_source_buffer_update`", err);
+            logger.error("Error when calling `on_source_buffer_update`", err);
           }
         })
         .catch(() => {
           try {
             playerInstance.getDispatcher()?.on_source_buffer_error(sourceBufferId);
           } catch (err) {
-            console.error("Error when calling `on_source_buffer_error`", err);
+            logger.error("Error when calling `on_source_buffer_error`", err);
           }
         });
     } else {

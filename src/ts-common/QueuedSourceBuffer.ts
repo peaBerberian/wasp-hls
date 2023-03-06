@@ -1,3 +1,5 @@
+import logger from "./logger";
+
 enum SourceBufferOperation {
   Push,
   Remove,
@@ -127,7 +129,7 @@ export default class QueuedSourceBuffer {
    * @returns {Promise}
    */
   public push(data: BufferSource) : Promise<void> {
-    console.debug("QSB: receiving order to push data to the SourceBuffer");
+    logger.debug("QSB: receiving order to push data to the SourceBuffer");
     return this._addToQueue({ type: SourceBufferOperation.Push, value: data });
   }
 
@@ -138,7 +140,7 @@ export default class QueuedSourceBuffer {
    * @returns {Promise}
    */
   public removeBuffer(start : number, end : number) : Promise<void> {
-    console.debug(
+    logger.debug(
       "QSB: receiving order to remove data from the SourceBuffer",
       start,
       end
@@ -182,7 +184,7 @@ export default class QueuedSourceBuffer {
     // try {
     //   this._sourceBuffer.abort();
     // } catch (e) {
-    //   console.warn(
+    //   logger.warn(
     //     `QSB: Failed to abort a SourceBuffer:`,
     //     e instanceof Error ? e : "Unknown error"
     //   );
@@ -259,13 +261,13 @@ export default class QueuedSourceBuffer {
             this._flush();
             return;
           }
-          console.debug("QSB: pushing data");
+          logger.debug("QSB: pushing data");
           this._sourceBuffer.appendBuffer(segmentData);
           break;
 
         case SourceBufferOperation.Remove:
           const { start, end } = this._pendingTask.value;
-          console.debug(
+          logger.debug(
             "QSB: removing data from SourceBuffer",
             start,
             end

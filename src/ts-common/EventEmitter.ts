@@ -1,3 +1,5 @@
+import logger from "./logger";
+
 export interface IEventEmitter<T> {
   addEventListener<TEventName extends keyof T>(evt : TEventName,
                                                fn : IListener<T, TEventName>) :
@@ -112,9 +114,8 @@ export default class EventEmitter<T> implements IEventEmitter<T> {
       try {
         listener(arg);
       } catch (e) {
-        console.error("EventEmitter: listener error", e instanceof Error ? e : null);
+        logger.error("EventEmitter: listener error", e instanceof Error ? e : null);
       }
     });
   }
 }
-

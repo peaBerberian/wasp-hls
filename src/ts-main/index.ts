@@ -1,5 +1,3 @@
-import WaspHlsPlayer, {
-  PlayerState,
-} from "./api";
-export { PlayerState };
+import WaspHlsPlayer from "./api";
+export { PlayerState } from "./types";
 export default WaspHlsPlayer;
