@@ -181,6 +181,11 @@ extern "C" {
     // `WaspHlsPlayer`.
     pub fn jsFreeResource(resource_id: ResourceId) -> bool;
 
+    // Method called to change the playback rate (speed of playback).
+    // This can be both in response to API input or to start/exit buffering by
+    // example.
+    pub fn jsSetPlaybackRate(playbackRate: f64);
+
     // Call the `HTMLMediaElement.prototype.seek` API, allowing to move the current
     // playback's playhead.
     pub fn jsSeek(position: f64);

@@ -59,6 +59,10 @@ impl Dispatcher {
         })
     }
 
+    pub fn set_wanted_speed(&mut self, speed: f64) {
+        self.media_element_ref.update_wanted_speed(speed);
+    }
+
     /// Stop the currently loaded content.
     pub fn stop(&mut self) {
         self.internal_stop();

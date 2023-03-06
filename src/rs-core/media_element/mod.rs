@@ -6,7 +6,7 @@ use crate::bindings::{
     JsResult,
     MediaObservation,
     jsRemoveMediaSource,
-    jsSetMediaOffset, AttachMediaSourceErrorCode,
+    jsSetMediaOffset, AttachMediaSourceErrorCode, jsSetPlaybackRate,
 };
 use crate::dispatcher::MediaSourceReadyState;
 use crate::Logger;
@@ -55,6 +55,13 @@ pub(crate) struct MediaElementReference {
     /// Audio SourceBuffer currently created for audio data.
     /// `None` if no SourceBuffer has been created for that type.
     audio_buffer: Option<source_buffers::SourceBuffer>,
+
+    /// The wanted playback rate:
+    /// 1. == playback at "normal" speed
+    /// 2. == playback at two times the normal speed
+    /// -1. == playback in reverse direction but at normal speed
+    /// and so on
+    wanted_speed: f64,
 }
 
 impl MediaElementReference {
@@ -71,6 +78,7 @@ impl MediaElementReference {
             media_offset: None,
             video_buffer: None,
             audio_buffer: None,
+            wanted_speed: 1.,
         }
     }
 
@@ -86,6 +94,18 @@ impl MediaElementReference {
         self.media_offset = None;
         self.video_buffer = None;
         self.audio_buffer = None;
+    }
+
+    /// Returns the wanted playback rate
+    pub(crate) fn wanted_speed(&self) -> f64 {
+        self.wanted_speed
+    }
+
+    /// Updates the wanted playback rate
+    /// Note that playback effects will only happen asynchronously
+    pub(crate) fn update_wanted_speed(&mut self, new_speed: f64) {
+        self.wanted_speed = new_speed;
+        jsSetPlaybackRate(new_speed);
     }
 
     /// Attach a new `MediaSource` to the media element linked to this `MediaElementReference`.

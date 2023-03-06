@@ -101,6 +101,7 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
     const loadingAborter = new AbortController();
     this.__contentMetadata__ = {
       contentId,
+      wantedSpeed: 1,
       mediaSourceId: null,
       mediaSource: null,
       disposeMediaSource: null,
@@ -211,13 +212,50 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
   }
 
   public setSpeed(speed: number): void {
-    // TODO playbackRate  may be used to implement force rebuffering in the
-    // future, in which case another solution will need to be found.
-    this.videoElement.playbackRate = speed;
+    // There's two ways in which we could do this:
+    //
+    //   - We could mutate directly the HTMLMediaElement's `playbackRate`
+    //     attribute in the main thread, unless the content is currently
+    //     rebuffering (in which case it is set when we exit rebuffering).
+    //     The core logic then knows about it through the usual
+    //     `MediaObservation`.
+    //
+    //     This has the advantage of being simpler, allowing direct feedback,
+    //     being persisted between contents and being able to update it even
+    //     when no content is playing. We also don't need to introduce a
+    //     supplementary option to update the speed at loading time.
+    //
+    //   - We could send the order to update the playback rate to the worker
+    //     which then sends back the order to update the playback rate.
+    //     The advantages here is that the worker knows about the playback rate
+    //     change before it actually happens and the core logic totally controls
+    //     the playback rate.
+    //
+    // For now I went with the second solution even though I think the first is
+    // the better one, because why making it simple when you can make it
+    // complex?
+    if (this.__worker__ === null) {
+      throw new Error("The Player is not initialized or disposed.");
+    }
+    if (
+      this.__contentMetadata__ === null ||
+      this.__contentMetadata__.mediaSourceId === null
+    ) {
+      throw new Error("No content is loaded");
+    }
+
+    this.__contentMetadata__.wantedSpeed = speed;
+    postMessageToWorker(this.__worker__, {
+      type: "update-wanted-speed",
+      value: {
+        mediaSourceId: this.__contentMetadata__.mediaSourceId,
+        wantedSpeed: speed,
+      },
+    });
   }
 
   public getSpeed(): number {
-    return this.videoElement.playbackRate;
+    return this.__contentMetadata__?.wantedSpeed ?? 1;
   }
 
   public getMinimumPosition() : number | undefined {
@@ -290,135 +328,138 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
           break;
 
         case "seek":
-          if (
-            this.__contentMetadata__ === null ||
-            this.__contentMetadata__.mediaSourceId !== data.value.mediaSourceId
-          ) {
+          if (this.__contentMetadata__?.mediaSourceId !== data.value.mediaSourceId) {
             console.info("API: Ignoring seek due to wrong `mediaSourceId`");
-            return;
+          } else {
+            try {
+              this.videoElement.currentTime = data.value.position;
+            } catch (err) {
+              console.error("Unexpected error while seeking:", err);
+            }
           }
-          try {
-            this.videoElement.currentTime = data.value.position;
-          } catch (err) {
-            console.error("Unexpected error while seeking:", err);
+          break;
+
+        case "update-playback-rate":
+          if (this.__contentMetadata__?.mediaSourceId !== data.value.mediaSourceId) {
+            console.info("API: Ignoring seek due to wrong `mediaSourceId`");
+          } else {
+            try {
+              this.videoElement.playbackRate = data.value.playbackRate;
+            } catch (err) {
+              console.error("Unexpected error while changing the playback rate:", err);
+            }
           }
           break;
 
         case "attach-media-source":
-          if (
-            this.__contentMetadata__ === null ||
-            this.__contentMetadata__.contentId !== data.value.contentId
-          ) {
-            console.info(
-              "API: Ignoring MediaSource attachment due to wrong `contentId`"
-            );
-            return;
-          }
+          if (this.__contentMetadata__?.contentId !== data.value.contentId) {
+            console.info("API: Ignoring MediaSource attachment due to wrong `contentId`");
+          } else {
+            if (this.__contentMetadata__.stopPlaybackObservations !== null) {
+              this.__contentMetadata__.stopPlaybackObservations();
+              this.__contentMetadata__.stopPlaybackObservations = null;
+            }
 
-          if (this.__contentMetadata__.stopPlaybackObservations !== null) {
-            this.__contentMetadata__.stopPlaybackObservations();
+            if (data.value.handle !== undefined) {
+              this.videoElement.srcObject = data.value.handle;
+            } else if (data.value.src !== undefined) {
+              this.videoElement.src = data.value.src;
+            } else {
+              throw new Error(
+                "Unexpected \"attach-media-source\" message: missing source"
+              );
+            }
+            this.__contentMetadata__.mediaSourceId = data.value.mediaSourceId;
+            this.__contentMetadata__.mediaSource = null;
+            this.__contentMetadata__.disposeMediaSource = () => {
+              if (data.value.src !== undefined) {
+                URL.revokeObjectURL(data.value.src);
+              }
+            };
+            this.__contentMetadata__.sourceBuffers = [];
             this.__contentMetadata__.stopPlaybackObservations = null;
           }
-
-          if (data.value.handle !== undefined) {
-            this.videoElement.srcObject = data.value.handle;
-          } else if (data.value.src !== undefined) {
-            this.videoElement.src = data.value.src;
-          } else {
-            throw new Error(
-              "Unexpected \"attach-media-source\" message: missing source"
-            );
-          }
-          this.__contentMetadata__.mediaSourceId = data.value.mediaSourceId;
-          this.__contentMetadata__.mediaSource = null;
-          this.__contentMetadata__.disposeMediaSource = () => {
-            if (data.value.src !== undefined) {
-              URL.revokeObjectURL(data.value.src);
-            }
-          };
-          this.__contentMetadata__.sourceBuffers = [];
-          this.__contentMetadata__.stopPlaybackObservations = null;
           break;
 
         case "create-media-source": {
-          if (
-            this.__contentMetadata__ === null ||
-            this.__contentMetadata__.contentId !== data.value.contentId
-          ) {
-            console.info(
-              "API: Ignoring MediaSource attachment due to wrong `contentId`"
-            );
-            return;
-          }
-          const { mediaSourceId } = data.value;
+          if (this.__contentMetadata__?.contentId !== data.value.contentId) {
+            console.info("API: Ignoring MediaSource attachment due to wrong `contentId`");
+          } else {
+            const { mediaSourceId } = data.value;
+            try {
+              this.__contentMetadata__.disposeMediaSource?.();
+              this.__contentMetadata__.stopPlaybackObservations?.();
 
-          let mediaSource : MediaSource;
-          try {
-            mediaSource = new MediaSource();
-          } catch (err) {
-            const { name, message } = getErrorInformation(
-              err,
-              "Unknown error when creating the MediaSource"
-            );
-            postMessageToWorker(worker, {
-              type: "create-media-source-error",
-              value: { mediaSourceId, message, name },
-            });
-            return;
-          }
+              const mediaSource = new MediaSource();
 
-          const disposeMediaSource =
-            bindMediaSource(worker, mediaSource, this.videoElement, mediaSourceId);
-          this.__contentMetadata__.mediaSourceId = data.value.mediaSourceId;
-          this.__contentMetadata__.mediaSource = mediaSource;
-          this.__contentMetadata__.disposeMediaSource = disposeMediaSource;
-          this.__contentMetadata__.sourceBuffers = [];
-          this.__contentMetadata__.stopPlaybackObservations = null;
+              const disposeMediaSource =
+                bindMediaSource(worker, mediaSource, this.videoElement, mediaSourceId);
+              this.__contentMetadata__.mediaSourceId = data.value.mediaSourceId;
+              this.__contentMetadata__.mediaSource = mediaSource;
+              this.__contentMetadata__.disposeMediaSource = disposeMediaSource;
+              this.__contentMetadata__.sourceBuffers = [];
+              this.__contentMetadata__.stopPlaybackObservations = null;
+            } catch (err) {
+              const { name, message } = getErrorInformation(
+                err,
+                "Unknown error when creating the MediaSource"
+              );
+              postMessageToWorker(worker, {
+                type: "create-media-source-error",
+                value: { mediaSourceId, message, name },
+              });
+            }
+          }
           break;
         }
 
         case "update-media-source-duration": {
-          const { mediaSourceId } = data.value;
-          if (
-            this.__contentMetadata__?.mediaSourceId !== mediaSourceId ||
-            this.__contentMetadata__.mediaSource === null
-          ) {
-            return;
-          }
-          try {
-            this.__contentMetadata__.mediaSource.duration = data.value.duration;
-          } catch (err) {
-            const { name, message } = getErrorInformation(
-              err,
-              "Unknown error when updating the MediaSource's duration"
-            );
-            postMessageToWorker(worker, {
-              type: "update-media-source-duration-error",
-              value: { mediaSourceId, message, name },
-            });
-            return;
+          if (this.__contentMetadata__?.mediaSourceId !== data.value.mediaSourceId) {
+            console.info("API: Ignoring duration update due to wrong `mediaSourceId`");
+          } else {
+            try {
+              if (this.__contentMetadata__.mediaSource === null) {
+                console.info("API: Ignoring duration update due to no MediaSource");
+              } else {
+                this.__contentMetadata__.mediaSource.duration = data.value.duration;
+              }
+            } catch (err) {
+              const { name, message } = getErrorInformation(
+                err,
+                "Unknown error when updating the MediaSource's duration"
+              );
+              const { mediaSourceId } = data.value;
+              postMessageToWorker(worker, {
+                type: "update-media-source-duration-error",
+                value: { mediaSourceId, message, name },
+              });
+            }
           }
           break;
         }
 
         case "clear-media-source": {
           if (this.__contentMetadata__?.mediaSourceId !== data.value.mediaSourceId) {
-            return;
-          }
-          try {
-            this.__contentMetadata__.disposeMediaSource?.();
-            clearElementSrc(this.videoElement);
-          } catch (err) {
-            console.warn("API: Error when clearing current MediaSource:", err);
+            console.info(
+              "API: Ignoring MediaSource clearing due to wrong `mediaSourceId`"
+            );
+          } else {
+            try {
+              this.__contentMetadata__.disposeMediaSource?.();
+              clearElementSrc(this.videoElement);
+            } catch (err) {
+              console.warn("API: Error when clearing current MediaSource:", err);
+            }
           }
           break;
         }
 
         case "create-source-buffer": {
           if (this.__contentMetadata__?.mediaSourceId !== data.value.mediaSourceId) {
-            return;
-          }
-          if (this.__contentMetadata__.mediaSource === null) {
+            console.info(
+              "API: Ignoring SourceBuffer creation due to wrong `mediaSourceId`"
+            );
+          } else if (this.__contentMetadata__.mediaSource === null) {
             postMessageToWorker(worker, {
               type: "create-source-buffer-error",
               value: {
@@ -429,31 +470,31 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
                 name: undefined,
               },
             });
-            return;
-          }
-          try {
-            const sourceBuffer = this.__contentMetadata__.mediaSource
-              .addSourceBuffer(data.value.contentType);
-            const queuedSourceBuffer = new QueuedSourceBuffer(sourceBuffer);
-            this.__contentMetadata__.sourceBuffers.push({
-              sourceBufferId: data.value.sourceBufferId,
-              queuedSourceBuffer,
-            });
-          } catch (err) {
-            const { name, message } = getErrorInformation(
-              err,
-              "Unknown error when adding the SourceBuffer to the MediaSource"
-            );
-            postMessageToWorker(worker, {
-              type: "create-source-buffer-error",
-              value: {
-                mediaSourceId: data.value.mediaSourceId,
+          } else {
+            try {
+              const sourceBuffer = this.__contentMetadata__.mediaSource
+                .addSourceBuffer(data.value.contentType);
+              const queuedSourceBuffer = new QueuedSourceBuffer(sourceBuffer);
+              this.__contentMetadata__.sourceBuffers.push({
                 sourceBufferId: data.value.sourceBufferId,
-                code: SourceBufferCreationErrorCode.AddSourceBufferError,
-                message,
-                name,
-              },
-            });
+                queuedSourceBuffer,
+              });
+            } catch (err) {
+              const { name, message } = getErrorInformation(
+                err,
+                "Unknown error when adding the SourceBuffer to the MediaSource"
+              );
+              postMessageToWorker(worker, {
+                type: "create-source-buffer-error",
+                value: {
+                  mediaSourceId: data.value.mediaSourceId,
+                  sourceBufferId: data.value.sourceBufferId,
+                  code: SourceBufferCreationErrorCode.AddSourceBufferError,
+                  message,
+                  name,
+                },
+              });
+            }
           }
           break;
         }
@@ -833,6 +874,8 @@ interface ContentMetadata {
    * conditions.
    */
   contentId: string;
+
+  wantedSpeed: number;
 
   /**
    * Unique identifier identifying a MediaSource attached to the

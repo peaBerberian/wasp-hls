@@ -181,6 +181,20 @@ export default function MessageReceiver() {
         // TODO re-dispatch ContentError
         break;
       }
+
+      case "update-wanted-speed": {
+        const dispatcher = playerInstance.getDispatcher();
+        const contentInfo = playerInstance.getContentInfo();
+        if (
+          dispatcher === null ||
+          contentInfo === null ||
+          contentInfo.mediaSourceObj?.mediaSourceId !== data.value.mediaSourceId
+        ) {
+          return;
+        }
+        dispatcher.set_wanted_speed(data.value.wantedSpeed);
+        break;
+      }
     }
   };
 }

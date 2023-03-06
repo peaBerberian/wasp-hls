@@ -21,13 +21,15 @@ export type MainMessage =
   MediaObservationMainMessage |
   SourceBufferOperationErrorMainMessage |
   SourceBufferOperationSuccessMainMessage |
-  EndOfStreamErrorMainMessage;
+  EndOfStreamErrorMainMessage |
+  UpdateWantedSpeedMainMessage;
 
 /** Message sent from the worker to the main thread. */
 export type WorkerMessage =
   InitializedWorkerMessage |
   InitializationErrorWorkerMessage |
   SeekWorkerMessage |
+  UpdatePlaybackRateWorkerMessage |
   ContentErrorWorkerMessage |
   ContentWarningWorkerMessage |
   AttachMediaSourceWorkerMessage |
@@ -204,8 +206,6 @@ export interface ContentStoppedWorkerMessage {
 /** Message sent when the Worker want to seek in the content */
 export interface SeekWorkerMessage {
   type: "seek";
-
-  /** The position to seek to, in seconds. */
   value: {
     /**
      * Identify the MediaSource currently used by the worker.
@@ -218,6 +218,24 @@ export interface SeekWorkerMessage {
      * to put on the HTMLMediaElement's `currentTime` property.
      */
     position: number;
+  };
+}
+
+/** Message sent when the Worker wants to change the media element's playback rate. */
+export interface UpdatePlaybackRateWorkerMessage {
+  type: "update-playback-rate";
+  value: {
+    /**
+     * Identify the MediaSource currently used by the worker.
+     * The main thread should only change the playback rate if the same
+     * MediaSource is still being used.
+     */
+    mediaSourceId: string;
+    /**
+     * The position in seconds at which the worker wants to seek to in seconds
+     * to put on the HTMLMediaElement's `currentTime` property.
+     */
+    playbackRate: number;
   };
 }
 
@@ -726,5 +744,19 @@ export interface EndOfStreamErrorMainMessage {
     message: string;
     /** The error's name. */
     name?: string | undefined;
+  };
+}
+
+/**
+ * Sent by the main thread to a Worker when the user wanted to update the
+ * playback rate.
+ */
+export interface UpdateWantedSpeedMainMessage {
+  type: "update-wanted-speed";
+  value: {
+    /** Identify the MediaSource in question. */
+    mediaSourceId: string;
+    /** The wanted speed in question. */
+    wantedSpeed: number;
   };
 }

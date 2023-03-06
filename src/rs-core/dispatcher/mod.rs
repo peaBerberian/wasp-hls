@@ -50,7 +50,7 @@ pub struct Dispatcher {
     segment_selectors: NextSegmentSelectors,
 
     // TODO move to content_tracker?
-    playlist_refresh_timers: Vec<(TimerId, Url, PlaylistFileType)>
+    playlist_refresh_timers: Vec<(TimerId, Url, PlaylistFileType)>,
 }
 
 /// Identify the JavaScript `readyState` of a created `MediaSource` instance.

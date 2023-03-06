@@ -195,6 +195,24 @@ export function seek(position: number): void {
 }
 
 /**
+ * @param {number} position
+ */
+export function setPlaybackRate(position: number): void {
+  const contentInfo = playerInstance.getContentInfo();
+  if (contentInfo === null || contentInfo.mediaSourceObj === null) {
+    console.error("Attempting to set playback rate when no MediaSource is created");
+    return ;
+  }
+  postMessageToMain({
+    type: "update-playback-rate",
+    value: {
+      mediaSourceId: contentInfo.mediaSourceObj.mediaSourceId,
+      playbackRate: position,
+    },
+  });
+}
+
+/**
  * @returns {Object}
  */
 export function attachMediaSource(): AttachMediaSourceResult {
@@ -838,4 +856,5 @@ global.jsStartObservingPlayback = startObservingPlayback;
 global.jsStopObservingPlayback = stopObservingPlayback;
 global.jsTimer = timer;
 global.jsUpdateContentInfo = updateContentInfo;
+global.jsSetPlaybackRate = setPlaybackRate;
 // global.jsWarning = warning;
