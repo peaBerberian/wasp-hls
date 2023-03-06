@@ -31,6 +31,7 @@ export default React.memo(function VideoPlayer(
   const [isPaused, setIsPaused] = React.useState(true);
   const [isControlBarEnabled, setIsControlBarEnabled] = React.useState(true);
   const [areControlsDisabled, setAreControlsDisabled] = React.useState(true);
+  const [isInFullScreenMode, setIsInFullscreenMode] = React.useState(isFullscreen());
   const lastMouseY = React.useRef(0);
   const isPlayerElementHovered = React.useRef(false);
   const hideControlBarTimeoutId = React.useRef<number|undefined>(undefined);
@@ -49,6 +50,15 @@ export default React.memo(function VideoPlayer(
   // Clear Timeout on unmount
   React.useEffect(() => clearHideControlBarTimeout, [clearHideControlBarTimeout]);
 
+  React.useEffect(() => {
+    const onFullScreenChange = () => {
+      setIsInFullscreenMode(isFullscreen());
+    };
+    document.addEventListener("fullscreenchange", onFullScreenChange);
+    return () => {
+      document.removeEventListener("fullscreenchange", onFullScreenChange);
+    };
+  }, []);
   const startControlBarHideTimeout = React.useCallback(() => {
     clearHideControlBarTimeout();
     if (!player.isPlaying()) {
@@ -333,7 +343,7 @@ export default React.memo(function VideoPlayer(
             disabled={areControlsDisabled}
             // TODO it works by luck for now, we should probably listen to an
             // enter/exit fullscreen event and add it to the state
-            isFullScreen={isFullscreen()}
+            isFullScreen={isInFullScreenMode}
             onClick={() => {
               if (isFullscreen()) {
                 exitFullscreen();
