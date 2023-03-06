@@ -84,6 +84,7 @@ impl SourceBuffer {
         metadata: PushMetadata,
         parse_time_info: bool
     ) -> Result<Option<ParsedSegmentInfo>, PushSegmentError> {
+        self.last_segment_pushed = false;
         self.was_used = true;
         let segment_id = metadata.segment_data.get_id();
         self.queue.push(SourceBufferQueueElement::Push(metadata));
@@ -106,7 +107,6 @@ impl SourceBuffer {
 
     /// Indicate to this `SourceBuffer` that the last chronological segment has been pushed.
     pub(super) fn announce_last_segment_pushed(&mut self) {
-        // TODO reset to `false` if later segment is then pushed?
         self.last_segment_pushed = true;
     }
 

@@ -480,6 +480,10 @@ export function onEndOfStreamMessage(
       });
       return;
     }
+    if (contentMetadata.mediaSource.readyState === "ended") {
+      logger.info("Ignoring redundant end-of-stream order");
+      return;
+    }
     try {
       // TODO Maybe the best here would be a more complex logic to
       // call `endOfStream` at the right time.
