@@ -1,0 +1,28 @@
+{
+  "logo": {
+    "srcPath": "./images/logo.png",
+    "link": "https://github.com/peaBerberian/wasp-hls"
+  },
+  "linksLeft": [
+    {
+      "type": "local-doc",
+      "path": "./Getting_Started",
+      "displayName": "Getting Started"
+    },
+    {
+      "type": "link",
+      "link": "https://peaberberian.github.io/wasp-hls/index.html",
+      "displayName": "Demo"
+    },
+    {
+      "type": "search"
+    }
+  ],
+  "linksRight": [
+    {
+      "type": "github-link",
+      "link": "https://github.com/peaBerberian/wasp-hls"
+    }
+  ]
+}
+
