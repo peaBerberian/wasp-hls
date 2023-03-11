@@ -52,8 +52,10 @@ export default React.memo(function PlayerContainer(
           player === null ?
             (
               <>
-                <RemovePlayerButton onClick={onClose} />
                 <div className="inline-spinner" />
+                <br></br>
+                <br></br>
+                <RemovePlayerButton onClick={onClose} />
               </>
             ) :
             (
