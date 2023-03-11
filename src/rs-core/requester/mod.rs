@@ -203,7 +203,11 @@ impl Requester {
     }
 
     pub fn reset(&mut self) {
+        self.segment_request_locked = true;
         self.abort_all();
+        self.pending_playlist_requests.clear();
+        self.pending_segment_requests.clear();
+        self.segment_waiting_queue.clear();
         self.base_position = None;
         self.segment_request_locked = false;
     }

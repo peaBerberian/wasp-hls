@@ -525,6 +525,7 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
     if (this.__logLevelChangeListener__ !== null) {
       logger.removeEventListener("onLogLevelChange", this.__logLevelChangeListener__);
     }
+    this.videoElement.src = "";
   }
 
   private __startWorker__(
@@ -679,6 +680,7 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
       if (mayStillReject) {
         rejectProm(ev.error);
       }
+      this.dispose();
     };
     function onLogLevelChange(level: LoggerLevel): void {
       postMessageToWorker(worker, {
