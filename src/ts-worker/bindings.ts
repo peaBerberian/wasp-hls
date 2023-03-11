@@ -863,30 +863,3 @@ export function stopRebuffering() : void {
     },
   });
 }
-
-// TODO real way of binding
-/* eslint-disable */
-const global = self as any;
-global.jsAbortRequest = abortRequest;
-global.jsAddSourceBuffer = addSourceBuffer;
-global.jsAppendBuffer = appendBuffer;
-global.jsAttachMediaSource = attachMediaSource;
-global.jsClearTimer = clearTimer;
-global.jsEndOfStream = endOfStream;
-global.jsFetch = doFetch;
-global.jsFreeResource = freeResource;
-global.jsGetResourceData = getResourceData;
-global.jsLog = log;
-global.jsRemoveBuffer = removeBuffer;
-global.jsRemoveMediaSource = removeMediaSource;
-global.jsSeek = seek;
-global.jsSetMediaOffset = setMediaOffset;
-global.jsSetMediaSourceDuration = setMediaSourceDuration;
-global.jsStartObservingPlayback = startObservingPlayback;
-global.jsStopObservingPlayback = stopObservingPlayback;
-global.jsTimer = timer;
-global.jsUpdateContentInfo = updateContentInfo;
-global.jsSetPlaybackRate = setPlaybackRate;
-global.jsStartRebuffering = startRebuffering;
-global.jsStopRebuffering = stopRebuffering;
-// global.jsWarning = warning;
