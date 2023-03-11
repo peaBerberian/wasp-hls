@@ -52,6 +52,10 @@
     max-height: 100%;
   }
 
+  .clickable {
+    cursor: pointer;
+  }
+
   .input-url {
     margin: 5px;
     width: 90%;
@@ -189,7 +193,7 @@
   }
 
   .progress-bar-wrapper {
-    height: 3px;
+    height: 5px;
     cursor: pointer;
     display: flex;
     background-color: #5d5c5caa;
@@ -197,7 +201,7 @@
     transition: all 0.2s ease;
     z-index: 9999;
     width: 100%;
-    margin-bottom: 5px;
+    margin-bottom: 7px;
     position: absolute;
     bottom: 40px;
   }
@@ -250,6 +254,25 @@
     font-size: 14px;
     font-family: Arial,Helvetica,sans-serif;
     margin: 0px 5px;
+  }
+
+  .spinner-wrapper {
+    transform-origin: center;
+    animation: spinner_anim 1.3s infinite linear;
+    height: 100%;
+    position: absolute;
+    fill: #e2ff00;
+    width: 50px;
+    margin-left: -25px;
+  }
+  .spinner {
+    transform-origin: center;
+    animation: spinner_anim 1.3s infinite linear;
+  }
+  @keyframes spinner_anim{
+    100%{
+      transform:rotate(360deg)
+    }
   }
 </style>
 </style>
