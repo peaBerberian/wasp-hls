@@ -75,7 +75,8 @@ impl Dispatcher {
                 self.internal_stop();
             },
             RetryResult::Failed(FinishedRequestType::Playlist(_)) => {
-                // TODO error
+                jsSendOtherError(true, crate::bindings::OtherErrorCode::Unknown,
+                    Some(&"Failed to fetch Playlist"));
                 self.internal_stop();
             },
             _ => {},
@@ -131,7 +132,6 @@ impl Dispatcher {
         data: Vec<u8>,
         playlist_url: Url
     ) {
-
         match MultiVariantPlaylist::parse(data.as_ref(), playlist_url) {
             Err(e) => {
                 jsSendPlaylistParsingError(
