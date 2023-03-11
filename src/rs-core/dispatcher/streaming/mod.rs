@@ -89,7 +89,9 @@ impl Dispatcher {
         if content_tracker.all_curr_media_playlists_ready() {
             self.ready_state = PlayerReadyState::AwaitingSegments;
             let start_time = content_tracker.get_expected_start_time();
-            self.media_element_ref.seek(start_time);
+            if start_time > 0. {
+                self.media_element_ref.seek(start_time);
+            }
             if let Some(duration) = content_tracker.curr_duration() {
                 jsSetMediaSourceDuration(duration);
             } else {
