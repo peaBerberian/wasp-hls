@@ -46,8 +46,12 @@ impl Dispatcher {
     /// * `request_id` - The identifier given by the JavaScript when the request
     ///   was started. This allows the `Dispatcher` to identify which request
     ///   is actually finished
-    pub fn on_request_failed(&mut self, request_id: RequestId) {
-        Dispatcher::on_request_failed_inner(self, request_id);
+    pub fn on_request_failed(&mut self,
+        request_id: RequestId,
+        has_timeouted: bool,
+        status: Option<u32>
+    ) {
+        Dispatcher::on_request_failed_inner(self, request_id, has_timeouted, status);
     }
 
     /// Called by the JavaScript code when the MediaSource's readyState changed.
@@ -110,6 +114,8 @@ impl Dispatcher {
         match reason {
             TimerReason::MediaPlaylistRefresh =>
                 Dispatcher::on_playlist_refresh_timer_ended(self, id),
+            TimerReason::RetryRequest =>
+                Dispatcher::on_retry_request(self, id),
         }
     }
 }

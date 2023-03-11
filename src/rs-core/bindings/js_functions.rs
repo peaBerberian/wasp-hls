@@ -214,6 +214,8 @@ extern "C" {
 
     pub fn jsStartRebuffering();
     pub fn jsStopRebuffering();
+
+    pub fn jsGetRandom() -> f64;
 }
 
 // TODO some macro-based metaprogramming, instead of just repeating the same boilerplate for each
@@ -671,6 +673,9 @@ pub enum TimerReason {
     /// The timer is linked to the MediaPlaylistRefresh's mechanism, meaning
     /// that the wanted MediaPlaylist may have to be reloaded.
     MediaPlaylistRefresh = 0,
+
+    /// The timer is linked to a failed request that has to be retried.
+    RetryRequest = 1,
 }
 
 /// Levels with which a log can be emitted.

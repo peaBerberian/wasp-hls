@@ -83,10 +83,9 @@ Request Scheduling:
   - [x] Parallel audio and video segment loading
   - [X] Priorization between audio and video segment requests (to e.g. stop
     doing audio segment requests when video ones become urgent).
+  - [X] Retry of failed requests with an exponential backoff.
   - [ ] Perform range requests for segments (rare use case).
     _Priority: low_
-  - [ ] Retry of failed requests with an exponential backoff.
-    _Priority: high_
 
 Buffers:
   - [x] End of stream support (as in: actually end when playback reached the end!)

@@ -108,16 +108,36 @@ export function clearTimer(id: TimerId): void {
  * @param {string} url
  * @returns {number}
  */
-export function doFetch(url: string): RequestId {
+export function doFetch(
+  url: string,
+  timeout?: number
+): RequestId {
+  let timeouted = false;
   const abortController = new AbortController();
   const currentRequestId = requestsStore.create({ abortController });
   const timestampBef = performance.now();
+
+  let timeoutTimeoutId : number | undefined;
+  if (timeout !== undefined) {
+    timeoutTimeoutId = setTimeout(() => {
+      timeouted = true;
+      abortController.abort();
+    }, timeout);
+  }
   fetch(url, { signal: abortController.signal })
     .then(async res => {
+      if (timeoutTimeoutId !== undefined) {
+        clearTimeout(timeoutTimeoutId);
+      }
+      const dispatcher = playerInstance.getDispatcher();
+      if (res.status >= 300) {
+        dispatcher?.on_request_failed(currentRequestId, false, res.status);
+        return;
+      }
+
       const arrRes = await res.arrayBuffer();
       const elapsedMs = performance.now() - timestampBef;
       requestsStore.delete(currentRequestId);
-      const dispatcher = playerInstance.getDispatcher();
       if (dispatcher !== null) {
         const segmentArray = new Uint8Array(arrRes);
         const currentResourceId = jsMemoryResources.create(segmentArray);
@@ -132,10 +152,15 @@ export function doFetch(url: string): RequestId {
     })
     .catch(err => {
       requestsStore.delete(currentRequestId);
+      const dispatcher = playerInstance.getDispatcher();
+      if (timeouted) {
+        dispatcher?.on_request_failed(currentRequestId, true, undefined);
+        return;
+      }
       if (err instanceof Error && err.name === "AbortError") {
         return;
       }
-      // Here call the right WASM callback
+      dispatcher?.on_request_failed(currentRequestId, false, undefined);
     });
   return currentRequestId;
 }
@@ -862,4 +887,8 @@ export function stopRebuffering() : void {
       mediaSourceId: contentInfo.mediaSourceObj.mediaSourceId,
     },
   });
+}
+
+export function getRandom(): number {
+  return Math.random();
 }

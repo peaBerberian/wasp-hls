@@ -6,7 +6,7 @@ import MessageReceiver from "./MessageReceiver";
 Object.keys(Bindings).forEach((binding) => {
   /* eslint-disable */
   const global = self as any;
-  if (binding === "doFetch") {
+  if (binding === "doFetch") { // notable exception
     global.jsFetch = Bindings[binding];
   }
   const capitalized = binding.charAt(0).toUpperCase() + binding.slice(1);

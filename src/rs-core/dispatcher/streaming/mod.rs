@@ -22,6 +22,7 @@ use crate::{
         SegmentRequestInfo,
         PlaylistRequestInfo,
         FinishedRequestType,
+        RetryResult,
     },
     media_element::{PushMetadata, SourceBufferCreationError},
     utils::url::Url,
@@ -41,7 +42,7 @@ impl Dispatcher {
         resource_size: u32,
         duration_ms: f64,
     ) {
-        match self.requester.end_pending_request(request_id) {
+        match self.requester.on_pending_request_success(request_id) {
             Some(FinishedRequestType::Segment(seg_info)) =>
                 self.on_segment_fetch_success(seg_info, data, resource_size, duration_ms),
             Some(FinishedRequestType::Playlist(pl_info)) =>
@@ -52,14 +53,17 @@ impl Dispatcher {
 
     pub(crate) fn on_request_failed_inner(&mut self,
         request_id: RequestId,
+        has_timeouted: bool,
+        status: Option<u32>
     ) {
-        // TODO retry and whatnot
-        match self.requester.end_pending_request(request_id) {
-            Some(FinishedRequestType::Segment(_seg_info)) =>
-                self.fail_on_error("A segment request failed."),
-            Some(FinishedRequestType::Playlist(_pl_info)) =>
-                self.fail_on_error("A Playlist request failed."),
-            _ => Logger::warn("Unknown request finished"),
+        match self.requester.on_pending_request_failure(request_id, has_timeouted, status) {
+            RetryResult::NotFound => {
+                self.internal_stop();
+            },
+            RetryResult::Failed(_) => {
+                self.internal_stop();
+            },
+            _ => {},
         }
     }
 
@@ -386,6 +390,10 @@ impl Dispatcher {
             let url = url.clone();
             self.requester.fetch_playlist(url, playlist_type);
         }
+    }
+
+    pub fn on_retry_request(&mut self, id: TimerId) {
+        self.requester.on_timer_finished(id);
     }
 }
 

@@ -4,6 +4,9 @@ use crate::{
         jsFetch,
         RequestId,
         jsAbortRequest,
+        jsTimer,
+        TimerReason,
+        TimerId, jsGetRandom,
     },
     Logger,
     content_tracker::MediaPlaylistPermanentId,
@@ -68,6 +71,8 @@ pub struct Requester {
     /// the `pending_segment_requests` vector) or waiting at the same time.
     segment_waiting_queue: Vec<WaitingSegmentInfo>,
 
+    segment_retry_timers: Vec<(TimerId, RequestId)>,
+
     /// If `true`, no new requests will be started (they all will be pushed in
     /// `segment_waiting_queue` instead) until it is set to `false` again.
     ///
@@ -111,6 +116,16 @@ pub struct PlaylistRequestInfo {
 
     /// Type of the Playlist that is requested
     pub playlist_type: PlaylistFileType,
+
+    /// Number of time the request has already been attempted.
+    pub attempts_failed: u32,
+
+    /// If `true` the request is not really pending, we're currently pending for some
+    /// timer to finish before retrying it.
+    ///
+    /// In that case, the `request_id` corresponds to the one of the previous request
+    /// and should not be relied on.
+    pub is_waiting_for_retry: bool,
 }
 
 /// Metadata associated with a pending media segment request.
@@ -184,11 +199,27 @@ pub struct SegmentRequestInfo {
     /// Start and end of the requested segment.
     /// `None` if the segment contains no media data, such as initialization segments
     pub time_info: Option<(f64, f64)>,
+
+    /// Number of time the request has already been attempted.
+    pub attempts_failed: u32,
+
+    /// If `true` the request is not really pending, we're currently pending for some
+    /// timer to finish before retrying it.
+    ///
+    /// In that case, the `request_id` corresponds to the one of the previous request
+    /// and should not be relied on.
+    pub is_waiting_for_retry: bool,
 }
 
 pub enum FinishedRequestType {
     Playlist(PlaylistRequestInfo),
     Segment(SegmentRequestInfo),
+}
+
+pub enum RetryResult {
+    NotFound,
+    Retried,
+    Failed(FinishedRequestType),
 }
 
 impl Requester {
@@ -199,6 +230,7 @@ impl Requester {
             segment_waiting_queue: vec![],
             segment_request_locked: false,
             base_position: None,
+            segment_retry_timers: vec![],
         }
     }
 
@@ -208,6 +240,7 @@ impl Requester {
         self.pending_playlist_requests.clear();
         self.pending_segment_requests.clear();
         self.segment_waiting_queue.clear();
+        self.segment_retry_timers.clear();
         self.base_position = None;
         self.segment_request_locked = false;
     }
@@ -231,9 +264,15 @@ impl Requester {
     ///
     /// Once it succeeds, the `on_request_finished` function will be called.
     pub(crate) fn fetch_playlist(&mut self, url: Url, playlist_type: PlaylistFileType) {
-        Logger::info(&format!("Fetching playlist {}", url.get_ref()));
         let request_id = jsFetch(url.get_ref());
-        self.pending_playlist_requests.push(PlaylistRequestInfo { request_id, url, playlist_type });
+        Logger::info(&format!("Req: Fetching playlist u:{}, id:{}", url.get_ref(), request_id));
+        self.pending_playlist_requests.push(PlaylistRequestInfo {
+            request_id,
+            url,
+            playlist_type,
+            attempts_failed: 0,
+            is_waiting_for_retry: false,
+        });
     }
 
     /// Fetch the initialization segment whose metadata is given here add its
@@ -241,13 +280,15 @@ impl Requester {
     ///
     /// Once it succeeds, the `on_request_finished` function will be called.
     pub(crate) fn request_init_segment(&mut self, media_type: MediaType, url: Url) {
-        Logger::info(&format!("Requesting {} initialization segment", media_type));
         let request_id = jsFetch(url.get_ref());
+        Logger::info(&format!("Req: Fetching init segment u:{}, id:{}", url.get_ref(), request_id));
         self.pending_segment_requests.push(SegmentRequestInfo {
             request_id,
             media_type,
             url,
             time_info: None,
+            attempts_failed: 0,
+            is_waiting_for_retry: false,
         });
     }
 
@@ -276,13 +317,16 @@ impl Requester {
                 time_info,
             });
         } else {
-            Logger::debug("Req: Performing request right away");
             let request_id = jsFetch(seg.url.get_ref());
+            Logger::debug(&format!("Req: Performing request right away. u:{} id:{}",
+                    seg.url.get_ref(), request_id));
             self.pending_segment_requests.push(SegmentRequestInfo {
                 request_id,
                 media_type,
                 url: seg.url.clone(),
                 time_info,
+                attempts_failed: 0,
+                is_waiting_for_retry: false,
             });
         }
     }
@@ -306,15 +350,75 @@ impl Requester {
         })
     }
 
-    pub(crate) fn end_pending_request(&mut self,
+    pub(crate) fn on_pending_request_success(&mut self,
         request_id: RequestId
     ) -> Option<FinishedRequestType> {
-        if let Some(res) = self.end_pending_segment_request(request_id) {
-            Some(FinishedRequestType::Segment(res))
+        self.end_pending_request(request_id)
+    }
+
+    pub(crate) fn on_pending_request_failure(&mut self,
+        request_id: RequestId,
+        has_timeouted: bool,
+        status: Option<u32>
+    ) -> RetryResult {
+        let can_retry = match (has_timeouted, status) {
+            (true, _) => true,
+            (false, Some(x)) if x == 404 || x == 412 || x >= 500 => true,
+            _ => false
+        };
+        if can_retry {
+            if let Some(pos) = self.pending_segment_requests
+                .iter()
+                .position(|x| x.request_id == request_id)
+            {
+                self.retry_pending_segment_request(pos)
+            } else {
+                if let Some(pos) = self.pending_playlist_requests
+                    .iter()
+                    .position(|x| x.request_id == request_id)
+                {
+                    self.retry_playlist_segment_request(pos)
+                } else {
+                    Logger::info(&format!("Req: Request to retry not found, id:{}", request_id));
+                    RetryResult::NotFound
+                }
+            }
         } else {
-            Some(
-                FinishedRequestType::Playlist(self.end_pending_playlist_request(request_id)?)
-            )
+            Logger::info(&format!("Req: Cannot retry request id:{}", request_id));
+            match  self.end_pending_request(request_id) {
+                None => RetryResult::NotFound,
+                Some(req) => RetryResult::Failed(req)
+            }
+        }
+    }
+
+    pub(crate) fn on_timer_finished(&mut self,
+        timer_id: TimerId
+    ) {
+        let mut i = 0;
+        while i < self.segment_retry_timers.len() {
+            if self.segment_retry_timers[i].0 == timer_id {
+                let timer = self.segment_retry_timers.remove(i);
+                let seg = self.pending_segment_requests.iter_mut().find(|s| {
+                    s.request_id == timer.1
+                });
+                if let Some(seg) = seg {
+                    seg.is_waiting_for_retry = false;
+                    let request_id = jsFetch(seg.url.get_ref());
+                    seg.request_id = request_id;
+                } else {
+                    let pla = self.pending_playlist_requests.iter_mut().find(|p| {
+                            p.request_id == timer.1
+                    });
+                    if let Some(pla) = pla {
+                        pla.is_waiting_for_retry = false;
+                        let request_id = jsFetch(pla.url.get_ref());
+                        pla.request_id = request_id;
+                    }
+                }
+            } else {
+                i += 1;
+            }
         }
     }
 
@@ -367,6 +471,18 @@ impl Requester {
 
     }
 
+    fn end_pending_request(&mut self,
+        request_id: RequestId
+    ) -> Option<FinishedRequestType> {
+        if let Some(res) = self.end_pending_segment_request(request_id) {
+            Some(FinishedRequestType::Segment(res))
+        } else {
+            Some(
+                FinishedRequestType::Playlist(self.end_pending_playlist_request(request_id)?)
+            )
+        }
+    }
+
     fn end_pending_playlist_request(&mut self,
         request_id: RequestId
     ) -> Option<PlaylistRequestInfo> {
@@ -396,6 +512,60 @@ impl Requester {
             }
         }
         None
+    }
+
+    fn retry_pending_segment_request(&mut self, pos: usize) -> RetryResult {
+       let req = &mut self.pending_segment_requests[pos];
+       if req.attempts_failed >= 3 {
+           Logger::info(&format!("Req: Too much attempts for segment request id:{} a:{}", req.request_id, req.attempts_failed));
+           let seg = self.pending_segment_requests.remove(pos);
+           RetryResult::Failed(FinishedRequestType::Segment(seg))
+       } else {
+           req.attempts_failed += 1;
+           req.is_waiting_for_retry = true;
+           let retry_delay = get_waiting_delay(req.attempts_failed);
+           Logger::info(&format!("Req: Retrying segment request after timer id:{} d:{} a:{}",
+                   req.request_id, retry_delay, req.attempts_failed));
+           let timer_id = jsTimer(retry_delay, TimerReason::RetryRequest);
+           self.segment_retry_timers.push((timer_id, req.request_id));
+           RetryResult::Retried
+       }
+    }
+
+    fn retry_playlist_segment_request(&mut self, pos: usize) -> RetryResult {
+       let req = &mut self.pending_playlist_requests[pos];
+       if req.attempts_failed >= 3 {
+           Logger::info(&format!("Req: Too much attempts for playlist request id:{} a:{}", req.request_id, req.attempts_failed));
+           let pl = self.pending_playlist_requests.remove(pos);
+           RetryResult::Failed(FinishedRequestType::Playlist(pl))
+       } else {
+           req.attempts_failed += 1;
+           req.is_waiting_for_retry = true;
+           let retry_delay = get_waiting_delay(req.attempts_failed);
+           Logger::info(&format!("Req: Retrying playlist request after timer id:{} d:{} a:{}",
+                   req.request_id, retry_delay, req.attempts_failed));
+           let timer_id = jsTimer(retry_delay, TimerReason::RetryRequest);
+           self.segment_retry_timers.push((timer_id, req.request_id));
+           RetryResult::Retried
+       }
+    }
+
+    fn retry_pending_playlist_request(&mut self, request_id: RequestId) -> RetryResult {
+       let pos = self.pending_playlist_requests.iter_mut().position(|x| x.request_id == request_id);
+       if let Some(pos) = pos {
+           if self.pending_playlist_requests[pos].attempts_failed >= 3 {
+               let seg = self.pending_playlist_requests.remove(pos);
+               RetryResult::Failed(FinishedRequestType::Playlist(seg))
+           } else {
+               self.pending_playlist_requests[pos].attempts_failed += 1;
+               self.pending_playlist_requests[pos].is_waiting_for_retry = true;
+               let timer_id = jsTimer(1000., TimerReason::RetryRequest);
+               self.segment_retry_timers.push((timer_id, self.pending_playlist_requests[pos].request_id));
+               RetryResult::Retried
+           }
+       } else {
+           RetryResult::NotFound
+       }
     }
 
     fn check_segment_queue(&mut self) {
@@ -436,26 +606,32 @@ impl Requester {
                     })
                 .for_each(|seg| {
                     // TODO indicate which segment in log
-                    Logger::debug("Req: Performing request of queued segment");
                     let request_id = jsFetch(seg.url.get_ref());
+                    Logger::debug(&format!("Req: Performing request of queued segment u:{} id:{}",
+                            seg.url().get_ref(), request_id));
                     self.pending_segment_requests.push(SegmentRequestInfo {
                         request_id,
                         media_type: seg.media_type,
                         url: seg.url,
                         time_info: seg.time_info,
+                        attempts_failed: 0,
+                        is_waiting_for_retry: false,
                     });
                 });
             }
         } else {
             while let Some(seg) = self.segment_waiting_queue.pop() {
                 // TODO indicate which segment in log
-                Logger::debug("Req: Performing request of queued segment");
                 let request_id = jsFetch(seg.url.get_ref());
+                Logger::debug(&format!("Req: Performing request of queued segment u:{} id:{}",
+                        seg.url().get_ref(), request_id));
                 self.pending_segment_requests.push(SegmentRequestInfo {
                     request_id,
                     media_type: seg.media_type,
                     url: seg.url,
                     time_info: seg.time_info,
+                    attempts_failed: 0,
+                    is_waiting_for_retry: false,
                 });
             }
         }
@@ -506,8 +682,20 @@ fn log_segment_abort(seg: &impl RequesterSegmentInfo) {
         let media_type = seg.media_type();
         match (seg.start_time(), seg.duration()) {
             (Some(start), Some(duration)) =>
-                format!("Aborting {} segment: t: {}, d: {}", media_type, start, duration),
-            _ => format!("Aborting {} init segment", media_type),
+                format!("Req: Aborting {} segment: t: {}, d: {}", media_type, start, duration),
+            _ => format!("Req: Aborting {} init segment", media_type),
         }
     });
+}
+
+const BASE_RETRY_DELAY: f64 = 300.;
+const MAX_RETRY_DELAY: f64 = 3000.;
+
+fn get_waiting_delay(retry_attempt: u32) -> f64 {
+    let delay = f64::min(
+        BASE_RETRY_DELAY * u64::pow(2, retry_attempt - 1) as f64,
+        MAX_RETRY_DELAY
+    );
+    let fuzzing_factor = (jsGetRandom() * 2. - 1.) * 0.3; // Max 1.3 Min 0.7
+    delay * (fuzzing_factor + 1.)
 }
