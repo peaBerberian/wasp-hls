@@ -21,6 +21,9 @@ import {
   RemoveBufferErrorCode,
   EndOfStreamResult,
   EndOfStreamErrorCode,
+  RequestErrorReason,
+  OtherErrorCode,
+  PlaylistType,
 } from "../wasm/wasp_hls.js";
 import {
   jsMemoryResources,
@@ -46,6 +49,92 @@ import {
 import { formatErrMessage } from "./utils.js";
 
 const generateMediaSourceId = idGenerator();
+
+export function sendSegmentRequestError(
+  fatal: boolean,
+  url: string,
+  isInit: boolean,
+  timeInfo: [number, number] | undefined,
+  mediaType: MediaType,
+  reason: RequestErrorReason,
+  status: number | undefined
+): void {
+  const contentId = playerInstance.getContentInfo()?.contentId;
+  if (contentId === undefined) {
+    logger.error("Cannot send error, no contentId");
+    return;
+  }
+  postMessageToMain({
+    type: fatal ? "error" as const : "warning" as const,
+    value: {
+      contentId,
+      errorInfo: {
+        type: "segment-request",
+        value: {
+          url,
+          isInit,
+          start: timeInfo?.[0],
+          duration: timeInfo?.[1],
+          mediaType,
+          reason,
+          status,
+        },
+      },
+    },
+  });
+}
+
+export function sendOtherError(
+  fatal: boolean,
+  code: OtherErrorCode,
+  message: string | undefined
+): void {
+  const contentId = playerInstance.getContentInfo()?.contentId;
+  if (contentId === undefined) {
+    logger.error("Cannot send error, no contentId");
+    return;
+  }
+  postMessageToMain({
+    type: fatal ? "error" as const : "warning" as const,
+    value: {
+      contentId,
+      message,
+      errorInfo: {
+        type: "other-error",
+        value: {
+          code,
+        },
+      },
+    },
+  });
+}
+
+export function sendPlaylistParsingError(
+  fatal: boolean,
+  playlistType: PlaylistType,
+  mediaType: MediaType | undefined,
+  message: string | undefined
+): void {
+  const contentId = playerInstance.getContentInfo()?.contentId;
+  if (contentId === undefined) {
+    logger.error("Cannot send error, no contentId");
+    return;
+  }
+  postMessageToMain({
+    type: fatal ? "error" as const : "warning" as const,
+    value: {
+      contentId,
+      message,
+      errorInfo: {
+        type: "playlist-parse" as const,
+        value: {
+          type: playlistType,
+          mediaType,
+        },
+      },
+    },
+  });
+}
 
 /**
  * @param {number} resourceId

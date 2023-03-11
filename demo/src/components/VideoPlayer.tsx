@@ -23,6 +23,7 @@ export default React.memo(function VideoPlayer(
   const [shouldShowSpinner, setShouldShowSpinner] = React.useState(
     player.getPlayerState() === PlayerState.Loading || player.isRebuffering()
   );
+  const [error, setError] = React.useState<Error|null>(null);
 
   // Inserting already-existing DOM into React looks a little weird
   const videoWrapperRef: React.Ref<HTMLDivElement> = React.useRef(null);
@@ -41,30 +42,47 @@ export default React.memo(function VideoPlayer(
     let spinnerTimeout: number | null = null;
     const enableClickableVideo = () => setIsVideoClickable(true);
     const disableClickableVideo = () => setIsVideoClickable(false);
-    player.addEventListener("loaded", enableClickableVideo);
-    player.addEventListener("error", disableClickableVideo);
-    player.addEventListener("stopped", disableClickableVideo);
+    player.addEventListener("loaded", onLoaded);
+    player.addEventListener("error", onError);
+    player.addEventListener("stopped", onStopped);
     player.addEventListener("loading", onLoading);
-    player.addEventListener("loaded", disableSpinner);
-    player.addEventListener("error", disableSpinner);
-    player.addEventListener("stopped", disableSpinner);
+    player.addEventListener("stopped", onStopped);
     player.addEventListener("rebufferingStarted", onRebuffering);
     player.addEventListener("rebufferingEnded", disableSpinner);
     return () => {
-      player.removeEventListener("loaded", enableClickableVideo);
-      player.removeEventListener("error", disableClickableVideo);
-      player.removeEventListener("stopped", disableClickableVideo);
+      player.removeEventListener("loaded", onLoaded);
+      player.removeEventListener("error", onError);
+      player.removeEventListener("stopped", onStopped);
       player.removeEventListener("loading", onLoading);
       player.removeEventListener("rebufferingStarted", onRebuffering);
       player.removeEventListener("rebufferingEnded", disableSpinner);
     };
 
+    function onLoaded() {
+      disableSpinner();
+      enableClickableVideo();
+      setError(null);
+    }
+
+    function onStopped() {
+      disableSpinner();
+      disableClickableVideo();
+      setError(null);
+    }
+
     function onLoading() {
       enableSpinnerAfterTimeout(30);
+      setError(null);
     }
 
     function onRebuffering() {
       enableSpinnerAfterTimeout(500);
+    }
+
+    function onError(err: Error) {
+      disableSpinner();
+      disableClickableVideo();
+      setError(err);
     }
 
     function enableSpinnerAfterTimeout(timeout: number) {
@@ -120,6 +138,18 @@ export default React.memo(function VideoPlayer(
       onClick={onVideoWrapperClick}
       ref={videoWrapperRef}
     />
+    {
+      error !== null ?
+        <div className="video-element-error">
+          <div className="video-element-error-name">
+            {error.name}
+          </div>
+          <div className="video-element-error-message">
+            {error.message}
+          </div>
+        </div> :
+        null
+    }
     {
       shouldShowSpinner ?
         <Spinner /> :

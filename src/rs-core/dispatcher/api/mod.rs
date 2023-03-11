@@ -1,6 +1,6 @@
 use crate::{
     wasm_bindgen,
-    bindings::LogLevel,
+    bindings::{LogLevel, OtherErrorCode, jsSendOtherError},
     Logger,
     media_element::MediaElementReference,
     utils::url::Url,
@@ -43,7 +43,11 @@ impl Dispatcher {
         self.requester.fetch_playlist(content_url, PlaylistFileType::Unknown);
         Logger::info("Attaching MediaSource");
         if let Err(x) = self.media_element_ref.attach_media_source() {
-            self.fail_on_error(&x.to_string());
+            jsSendOtherError(
+                true,
+                OtherErrorCode::MediaSourceAttachmentError,
+                Some(&x.to_string()));
+            self.internal_stop();
         }
     }
 

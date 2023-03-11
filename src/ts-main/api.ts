@@ -5,7 +5,9 @@ import logger, {
 } from "../ts-common/logger";
 import noop from "../ts-common/noop";
 import { WorkerMessage } from "../ts-common/types";
-import InitializationError from "./errors";
+import {
+  WaspInitializationError,
+} from "./errors";
 import postMessageToWorker from "./postMessageToWorker";
 import {
   ContentMetadata,
@@ -19,10 +21,9 @@ import {
   onAppendBufferMessage,
   onAttachMediaSourceMessage,
   onClearMediaSourceMessage,
-  onContentErrorMessage,
+  onErrorMessage,
   onContentInfoUpdateMessage,
   onContentStoppedMessage,
-  onContentWarningMessage,
   onCreateMediaSourceMessage,
   onCreateSourceBufferMessage,
   onEndOfStreamMessage,
@@ -35,6 +36,7 @@ import {
   onStopPlaybackObservationMessage,
   onUpdateMediaSourceDurationMessage,
   onUpdatePlaybackRateMessage,
+  onWarningMessage,
 } from "./worker-message-handlers";
 
 // Allows to ensure a never-seen-before identifier is used for each content.
@@ -227,8 +229,8 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
    *   - Resolves once the initialization is finished with success.
    *     From that point on, you can begin to load contents.
    *
-   *   - Rejects if the initialization failed, with a `InitializationError`
-   *     describing the error encountered.
+   *   - Rejects if the initialization failed, with a
+   *    `WaspInitializationError` describing the error encountered.
    * @param {Object} opts
    * @returns {Promise}
    */
@@ -569,7 +571,7 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
           break;
         case "initialization-error":
           if (mayStillReject) {
-            const error = new InitializationError(
+            const error = new WaspInitializationError(
               data.value.code,
               data.value.wasmHttpStatus,
               data.value.message ?? "Error while initializing the WaspHlsPlayer"
@@ -629,15 +631,16 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
         case "media-offset-update":
           onMediaOffsetUpdateMessage(data, this.__contentMetadata__);
           break;
-        case "content-error": {
-          const error = onContentErrorMessage(data, this.__contentMetadata__);
+        case "error": {
+          const error = onErrorMessage(data, this.__contentMetadata__);
           if (error !== null) {
+            logger.error("API: sending fatal error", error);
             this.trigger("error", error);
           }
           break;
         }
-        case "content-warning": {
-          const error = onContentWarningMessage(data, this.__contentMetadata__);
+        case "warning": {
+          const error = onWarningMessage(data, this.__contentMetadata__);
           if (error !== null) {
             this.trigger("warning", error);
           }

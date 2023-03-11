@@ -19,11 +19,17 @@ import {
   StopPlaybackObservationWorkerMessage,
   UpdatePlaybackRateWorkerMessage,
   MediaOffsetUpdateWorkerMessage,
-  ContentErrorWorkerMessage,
-  ContentWarningWorkerMessage,
+  ErrorWorkerMessage,
   ContentInfoUpdateWorkerMessage,
   ContentStoppedWorkerMessage,
+  WarningWorkerMessage,
 } from "../ts-common/types";
+import {
+  WaspOtherError,
+  WaspPlaylistParsingError,
+  WaspSegmentRequestError,
+  WaspSourceBufferCreationError,
+} from "./errors";
 import observePlayback from "./observePlayback";
 import postMessageToWorker from "./postMessageToWorker";
 import { ContentMetadata } from "./types";
@@ -594,7 +600,7 @@ export function onRebufferingEndedMessage(
 }
 
 /**
- * Handles `ContentErrorWorkerMessage` messages.
+ * Handles `ErrorWorkerMessage` messages.
  * Returns either `null` if the error was ignored or the produced error if it
  * wasn't. Such error may then be used for example for the corresponding event.
  * @param {Object} msg - The worker's message received.
@@ -603,8 +609,8 @@ export function onRebufferingEndedMessage(
  * This object may be mutated.
  * @returns {Error|null}
  */
-export function onContentErrorMessage(
-  msg: ContentErrorWorkerMessage,
+export function onErrorMessage(
+  msg: ErrorWorkerMessage,
   contentMetadata: ContentMetadata | null
 ): Error|null {
   // TODO
@@ -621,13 +627,44 @@ export function onContentErrorMessage(
   // Make sure resources are freed
   contentMetadata.disposeMediaSource?.();
   contentMetadata.stopPlaybackObservations?.();
-  const error = new Error("An error arised");
+  let error: Error;
+  switch (msg.value.errorInfo.type) {
+    case "segment-request":
+      error = new WaspSegmentRequestError(
+        msg.value.errorInfo.value,
+        msg.value.message
+      );
+      break;
+    case "other-error":
+      error = new WaspOtherError(
+        msg.value.errorInfo.value.code,
+        msg.value.message
+      );
+      break;
+    case "source-buffer-creation-error":
+      error = new WaspSourceBufferCreationError(
+        msg.value.errorInfo.value.code,
+        msg.value.message
+      );
+      break;
+    case "playlist-parse":
+      error = new WaspPlaylistParsingError(
+        msg.value.errorInfo.value.type,
+        msg.value.errorInfo.value.mediaType,
+        msg.value.message
+      );
+      break;
+    default:
+      error = new Error(msg.value.message ?? "An error arised");
+      break;
+  }
+
   contentMetadata.error = error;
   return error;
 }
 
 /**
- * Handles `ContentWarningWorkerMessage` messages.
+ * Handles `WarningWorkerMessage` messages.
  * Returns either `null` if the error was ignored or the produced error if it
  * wasn't. Such error may then be used for example for the corresponding event.
  * @param {Object} msg - The worker's message received.
@@ -636,8 +673,8 @@ export function onContentErrorMessage(
  * This object may be mutated.
  * @returns {Warning|null}
  */
-export function onContentWarningMessage(
-  msg: ContentWarningWorkerMessage,
+export function onWarningMessage(
+  msg: WarningWorkerMessage,
   contentMetadata: ContentMetadata | null
 ): Error|null {
   // TODO

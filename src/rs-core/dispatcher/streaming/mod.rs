@@ -13,6 +13,12 @@ use crate::{
         jsStopObservingPlayback,
         jsTimer,
         jsUpdateContentInfo,
+        jsSendSegmentRequestError,
+        RequestErrorReason,
+        jsSendSourceBufferCreationError,
+        jsSendPlaylistParsingError,
+        PlaylistType,
+        jsSendOtherError,
     },
     Logger,
     content_tracker::{MediaPlaylistPermanentId, ContentTracker},
@@ -57,19 +63,23 @@ impl Dispatcher {
         status: Option<u32>
     ) {
         match self.requester.on_pending_request_failure(request_id, has_timeouted, status) {
-            RetryResult::NotFound => {
+            RetryResult::Failed(FinishedRequestType::Segment(s)) => {
+                jsSendSegmentRequestError(
+                    true,
+                    s.url.get_ref(),
+                    s.time_info.is_none(),
+                    s.time_info.map(|t| vec![t.0, t.1]),
+                    s.media_type,
+                    RequestErrorReason::Other, // TODO
+                    None);
                 self.internal_stop();
             },
-            RetryResult::Failed(_) => {
+            RetryResult::Failed(FinishedRequestType::Playlist(_)) => {
+                // TODO error
                 self.internal_stop();
             },
             _ => {},
         }
-    }
-
-    pub(super) fn fail_on_error(&mut self, error: &str) {
-        Logger::error(error);
-        self.internal_stop();
     }
 
     /// Method called on various events that could lead to start loading segments.
@@ -103,11 +113,13 @@ impl Dispatcher {
             }
 
             if let Some(Err(e)) = self.init_source_buffer(MediaType::Audio) {
-                self.fail_on_error(&format!("Error while creating audio SourceBuffer: {:?}", e));
+                handle_source_buffer_creation_error(e);
+                self.internal_stop();
                 return;
             }
             if let Some(Err(e)) = self.init_source_buffer(MediaType::Video) {
-                self.fail_on_error(&format!("Error while creating video SourceBuffer: {:?}", e));
+                handle_source_buffer_creation_error(e);
+                self.internal_stop();
                 return;
             }
             jsStartObservingPlayback();
@@ -122,15 +134,26 @@ impl Dispatcher {
 
         match MultiVariantPlaylist::parse(data.as_ref(), playlist_url) {
             Err(e) => {
-                self.fail_on_error(format!("Error while parsing MultiVariantPlaylist: {:?}", e).as_ref());
+                jsSendPlaylistParsingError(
+                    true,
+                    PlaylistType::MultiVariantPlaylist,
+                    None,
+                    Some(&e.to_string())
+                );
+                self.internal_stop();
             },
             Ok(pl) => {
                 Logger::info("MultiVariant Playlist parsed successfully");
                 self.content_tracker = Some(ContentTracker::new(pl));
                 let content_tracker = self.content_tracker.as_mut().unwrap();
                 if content_tracker.variants().is_empty() {
-                    self.fail_on_error(
-                        "Error while parsing MultiVariantPlaylist: no variant found.");
+                    jsSendPlaylistParsingError(
+                        true,
+                        PlaylistType::MultiVariantPlaylist,
+                        None,
+                        Some("Error while parsing MultiVariantPlaylist: no variant found.")
+                    );
+                    self.internal_stop();
                     return;
                 }
 
@@ -160,7 +183,15 @@ impl Dispatcher {
         Logger::info(&format!("Media playlist loaded successfully: {}", playlist_url.get_ref()));
         if let Some(ref mut content_tracker) = self.content_tracker.as_mut() {
             match content_tracker.update_media_playlist(&playlist_id, data.as_ref(), playlist_url) {
-                Err(e) => self.fail_on_error(&format!("Failed to parse MediaPlaylist: {:?}", e)),
+                Err(e) => {
+                    jsSendPlaylistParsingError(
+                        true,
+                        PlaylistType::MediaPlaylist,
+                        None, // TODO? Or maybe at least the URL
+                        Some(&e.to_string())
+                    );
+                    self.internal_stop();
+                },
                 Ok(p) => {
                     if !p.end_list {
                         let target_duration = p.target_duration;
@@ -182,7 +213,11 @@ impl Dispatcher {
                     }
                 },
             }
-        } else { self.fail_on_error("Media playlist loaded but no MultiVariantPlaylist"); }
+        } else {
+            jsSendOtherError(true, crate::bindings::OtherErrorCode::Unknown,
+                Some(&"Media playlist loaded but no MultiVariantPlaylist"));
+            self.internal_stop();
+        }
     }
 
     fn init_source_buffer(&mut self,
@@ -216,7 +251,10 @@ impl Dispatcher {
         _source_buffer_id: SourceBufferId
     ) {
         // TODO check QuotaExceededError and so on...
-        self.fail_on_error("A SourceBuffer emitted an error");
+        // TODO better error
+        jsSendOtherError(true, crate::bindings::OtherErrorCode::Unknown,
+            Some("A SourceBuffer emitted an error"));
+        self.internal_stop();
     }
 
     pub fn on_observation(&mut self, observation: MediaObservation) {
@@ -315,8 +353,9 @@ impl Dispatcher {
         let md = PushMetadata::new(data, time_info);
         match self.media_element_ref.push_segment(media_type, md) {
             Err(x) => {
-                let err = &format!("Can't push {} segment: {:?}", media_type, x);
-                self.fail_on_error(err);
+                jsSendOtherError(true, crate::bindings::OtherErrorCode::Unknown,
+                    Some(&format!("Can't push {} segment: {:?}", media_type, x)));
+                self.internal_stop();
                 return;
             }
             Ok(()) => if let Some(ti) = time_info {
@@ -414,3 +453,44 @@ fn was_last_segment(
         },
     }
 }
+
+fn handle_source_buffer_creation_error(err: SourceBufferCreationError) {
+    match err {
+        SourceBufferCreationError::EmptyMimeType =>
+            jsSendSourceBufferCreationError(
+                crate::bindings::SourceBufferCreationErrorCode::EmptyMimeType,
+                Some(&err.to_string())
+            ),
+        SourceBufferCreationError::NoMediaSourceAttached { .. } =>
+            jsSendSourceBufferCreationError(
+                crate::bindings::SourceBufferCreationErrorCode::NoMediaSourceAttached,
+                Some(&err.to_string())
+            ),
+        SourceBufferCreationError::MediaSourceIsClosed =>
+            jsSendSourceBufferCreationError(
+                crate::bindings::SourceBufferCreationErrorCode::MediaSourceIsClosed,
+                Some(&err.to_string())
+            ),
+        SourceBufferCreationError::QuotaExceededError { .. } =>
+            jsSendSourceBufferCreationError(
+                crate::bindings::SourceBufferCreationErrorCode::QuotaExceededError,
+                Some(&err.to_string())
+            ),
+        SourceBufferCreationError::CantPlayType { .. } =>
+            jsSendSourceBufferCreationError(
+                crate::bindings::SourceBufferCreationErrorCode::CantPlayType,
+                Some(&err.to_string())
+            ),
+        SourceBufferCreationError::AlreadyCreatedWithSameType { .. } =>
+            jsSendSourceBufferCreationError(
+                crate::bindings::SourceBufferCreationErrorCode::AlreadyCreatedWithSameType,
+                Some(&err.to_string())
+            ),
+        SourceBufferCreationError::UnknownError { .. } =>
+            jsSendSourceBufferCreationError(
+                crate::bindings::SourceBufferCreationErrorCode::Unknown,
+                Some(&err.to_string())
+            ),
+    }
+}
+

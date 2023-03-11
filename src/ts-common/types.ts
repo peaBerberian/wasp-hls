@@ -1,6 +1,11 @@
 import {
   MediaSourceReadyState,
+  MediaType,
+  OtherErrorCode,
   PlaybackTickReason,
+  PlaylistType,
+  RequestErrorReason,
+  SourceBufferCreationErrorCode as WasmSourceBufferCreationErrorCode,
 } from "../wasm/wasp_hls";
 import { LoggerLevel } from "./logger";
 
@@ -32,8 +37,8 @@ export type WorkerMessage =
   InitializationErrorWorkerMessage |
   SeekWorkerMessage |
   UpdatePlaybackRateWorkerMessage |
-  ContentErrorWorkerMessage |
-  ContentWarningWorkerMessage |
+  ErrorWorkerMessage |
+  WarningWorkerMessage |
   AttachMediaSourceWorkerMessage |
   CreateMediaSourceWorkerMessage |
   SetMediaSourceDurationWorkerMessage |
@@ -78,20 +83,6 @@ export const enum InitializationErrorCode {
   UnknownError,
 }
 
-export const enum ContentErrorCode {
-  UnitializedError,
-  // /**
-  //  * A `LoadContentMainMessage` messaage was received on a non-initialized
-  //  * worker.
-  //  */
-  // UnitializedLoadError,
-  // /**
-  //  * A `StopContentMainMessage` message was received on a non-initialized
-  //  * worker.
-  //  */
-  // UnitializedStopError,
-}
-
 /**
  * Message sent when the Worker has loaded the WASM code and everything is ready
  * to begin loading content.
@@ -122,22 +113,29 @@ export interface InitializationErrorWorkerMessage {
 }
 
 /**
- * Message sent when the Worker has encountered a error linked to a specific
- * content which consequenly has been stopped and disposed.
+ * Message sent when the Worker has encountered a major error which provoked the
+ * end of the current content.
  */
-export interface ContentErrorWorkerMessage {
-  type: "content-error";
+export interface ErrorWorkerMessage {
+  type: "error";
   value: {
     /**
      * The identifier for the content on which an error was received.
      * This is the same `contentId` value that on the related
      * `LoadContentMainMessage`.
+     *
+     * Unset if the error is not linked to a content or if no content
+     * are loaded yet.
      */
     contentId: string;
-    /**
-     * Code describing the error encountered.
-     */
-    code: ContentErrorCode;
+
+    errorInfo: UnitializedErrorWorkerInfo |
+      PlaylistParsingErrorWorkerInfo |
+      PlaylistRequestErrorWorkerInfo |
+      SegmentRequestErrorWorkerInfo |
+      SourceBufferCreationErrorWorkerInfo |
+      OtherErrorWorkerInfo;
+
     /**
      * If set, human-readable string describing the error, for debugging
      * purposes.
@@ -147,27 +145,103 @@ export interface ContentErrorWorkerMessage {
 }
 
 /**
- * Message sent when the Worker has encountered a minor error linked to a
- * specific content which did not interrupt playback;
+ * Message sent when the Worker has encountered a minor error.
+ * If a content was playing, we're still able to continue playback.
  */
-export interface ContentWarningWorkerMessage {
-  type: "content-warning";
+export interface WarningWorkerMessage {
+  type: "warning";
   value: {
     /**
      * The identifier for the content on which an error was received.
      * This is the same `contentId` value that on the related
      * `LoadContentMainMessage`.
+     *
+     * Unset if the error is not linked to a content or if no content
+     * are loaded yet.
      */
-    contentId: string;
-    /**
-     * Code describing the error encountered.
-     */
-    // code: WarningCode;
+    contentId?: string;
+
+    errorInfo: UnitializedErrorWorkerInfo |
+      PlaylistParsingErrorWorkerInfo |
+      PlaylistRequestErrorWorkerInfo |
+      SegmentRequestErrorWorkerInfo |
+      SourceBufferCreationErrorWorkerInfo |
+      OtherErrorWorkerInfo;
+
     /**
      * If set, human-readable string describing the error, for debugging
      * purposes.
      */
     message?: string | undefined;
+  };
+}
+
+/**
+ * Error sent when the worker received an order despite not being initialized.
+ */
+export interface UnitializedErrorWorkerInfo {
+  type: "unitialized";
+  value: {
+    call?: string;
+  };
+}
+
+/**
+ * Error linked to an error while parsing a MultiVariant playlist or media
+ * playlist.
+ */
+export interface PlaylistParsingErrorWorkerInfo {
+  type: "playlist-parse";
+  value: {
+    type: PlaylistType;
+    mediaType?: MediaType | undefined;
+  };
+}
+
+/**
+ * Error linked to a MultiVariant playlist or media playlist HTTP(S) request's
+ * failure.
+ */
+export interface PlaylistRequestErrorWorkerInfo {
+  type: "playlist-request";
+  value: {
+    type: PlaylistType;
+    url: string;
+    mediaType?: MediaType;
+    reason: RequestErrorReason;
+    status?: number;
+  };
+}
+
+/**
+ * Error linked to a segment HTTP(S) request's failure.
+ */
+export interface SegmentRequestErrorWorkerInfo {
+  type: "segment-request";
+  value: {
+    url: string;
+    isInit: boolean;
+    start?: number | undefined;
+    duration?: number | undefined;
+    mediaType: MediaType;
+    byteRange?: [number, number] | undefined;
+    reason: RequestErrorReason;
+    status?: number | undefined;
+  };
+}
+
+export interface SourceBufferCreationErrorWorkerInfo {
+  type: "source-buffer-creation-error";
+  value: {
+    code: WasmSourceBufferCreationErrorCode;
+  };
+}
+
+/** Errors that do not corresponds to other Error categorizations. */
+export interface OtherErrorWorkerInfo {
+  type: "other-error";
+  value: {
+    code: OtherErrorCode;
   };
 }
 

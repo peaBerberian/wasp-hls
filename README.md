@@ -85,7 +85,7 @@ Request Scheduling:
     doing audio segment requests when video ones become urgent).
   - [X] Retry of failed requests with an exponential backoff.
   - [ ] Perform range requests for segments (rare use case).
-    _Priority: low_
+    _Priority: average_
 
 Buffers:
   - [x] End of stream support (as in: actually end when playback reached the end!)
@@ -113,14 +113,14 @@ Decryption:
     _Priority: very low_
 
 Miscellaneous:
-  - [ ] Proper Error API (high priority but that does not look like fun for
-    now!).
-    _Priority: high_
+  - [x] Error API
   - [ ] WebAssembly-based mpeg-ts transcoder.
     _Priority: very low_
   - [ ] Delta playlist handling.
     _Priority: low_
   - [ ] Content Steering handling.
+    _Priority: low_
+  - [ ] Discontinuity handling.
     _Priority: low_
 
 Playlist tags specifically considered (unchecked ones are mainly just ignored,

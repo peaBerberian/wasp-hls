@@ -27,7 +27,7 @@ export default React.memo(function ControlBar(
   }
 ) : JSX.Element {
   const [volume, setVolume] = React.useState(player.videoElement.volume);
-  const [position, setPosition] = React.useState(0);
+  const [position, setPosition] = React.useState<number | undefined>(undefined);
   const [minimumPosition, setMinimumPosition] = React.useState(0);
   const [maximumPosition, setMaximumPosition] = React.useState(Infinity);
   const [bufferGap, setBufferGap] = React.useState(0);
@@ -149,15 +149,16 @@ export default React.memo(function ControlBar(
     }
 
     function resetTimeInfo() {
-      setPosition(0);
+      setPosition(undefined);
       setMinimumPosition(0);
       setMaximumPosition(Infinity);
       setBufferGap(0);
     }
 
     function onError() {
+      resetTimeInfo();
       displayControlBar(true);
-      setAreControlsDisabled(true);
+      setAreControlsDisabled(false);
       setIsPlayPauseDisabled(true);
       setIsPaused(true);
       clearPositionUpdateInterval();
@@ -296,7 +297,7 @@ export default React.memo(function ControlBar(
     className={"control-bar " + (isControlBarDisplayed ? "visible" : "hidden")}
   >
     {
-      areControlsDisabled ?
+      areControlsDisabled || position === undefined ?
         null :
       <ProgressBar
         seek={onProgressBarSeek}
@@ -318,7 +319,7 @@ export default React.memo(function ControlBar(
           onClick={onStopButtonClick}
         />
         {
-          areControlsDisabled ?
+          areControlsDisabled || position === undefined ?
             null :
             <PositionIndicator position={position} duration={maximumPosition} />
         }

@@ -2,7 +2,6 @@ import logger from "../ts-common/logger";
 import {
   MainMessage,
   InitializationErrorCode,
-  ContentErrorCode,
 } from "../ts-common/types";
 import initializeWasm, {
   MediaObservation,
@@ -225,11 +224,14 @@ function handleInitializationError(err: unknown, code: InitializationErrorCode) 
 
 function postUnitializedWorkerError(contentId: string): void {
   postMessageToMain({
-    type: "content-error",
+    type: "error",
     value: {
       contentId,
       message: "Error: Worker not initialized.",
-      code: ContentErrorCode.UnitializedError,
+      errorInfo: {
+        type: "unitialized",
+        value: {},
+      },
     },
   });
 }

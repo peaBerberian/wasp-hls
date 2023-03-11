@@ -216,6 +216,65 @@ extern "C" {
     pub fn jsStopRebuffering();
 
     pub fn jsGetRandom() -> f64;
+
+    pub fn jsSendSegmentRequestError(
+        fatal: bool,
+        url: &str,
+        isInit: bool,
+        timeInfo: Option<Vec<f64>>,
+        mediaType: MediaType,
+        reason: RequestErrorReason,
+        status: Option<u32>
+    );
+
+    pub fn jsSendOtherError(
+        fatal: bool,
+        code: OtherErrorCode,
+        message: Option<&str>
+    );
+
+    pub fn jsSendSourceBufferCreationError(
+        code: SourceBufferCreationErrorCode,
+        message: Option<&str>
+    );
+
+    pub fn jsSendPlaylistParsingError(
+        fatal: bool,
+        playlist_type: PlaylistType,
+        media_type: Option<MediaType>,
+        message: Option<&str>
+    );
+}
+
+#[wasm_bindgen]
+pub enum PlaylistType {
+    MultiVariantPlaylist,
+    MediaPlaylist,
+}
+
+#[wasm_bindgen]
+pub enum OtherErrorCode {
+    MediaSourceAttachmentError,
+    Unknown,
+}
+
+#[wasm_bindgen]
+pub enum SourceBufferCreationErrorCode {
+    AlreadyCreatedWithSameType,
+    CantPlayType,
+    EmptyMimeType,
+    MediaSourceIsClosed,
+    NoMediaSourceAttached,
+    QuotaExceededError,
+    Unknown,
+}
+
+#[wasm_bindgen]
+pub enum RequestErrorReason {
+    Timeout,
+    Status,
+    Error,
+    Other,
 }
 
 // TODO some macro-based metaprogramming, instead of just repeating the same boilerplate for each
