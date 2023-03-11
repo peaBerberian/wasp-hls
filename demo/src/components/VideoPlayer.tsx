@@ -1,11 +1,14 @@
 import * as React from "react";
-import WaspHlsPlayer from "../../../src";
+import WaspHlsPlayer, {
+  PlayerState,
+} from "../../../src";
 import {
   exitFullscreen,
   isFullscreen,
   requestFullscreen,
 } from "../utils/fullscreen";
 import ControlBar from "./ControlBar";
+import Spinner from "./Spinner";
 
 export default React.memo(function VideoPlayer(
   {
@@ -17,6 +20,9 @@ export default React.memo(function VideoPlayer(
   const playerContainerRef = React.useRef<HTMLDivElement|null>(null);
   const [isInFullScreenMode, setIsInFullscreenMode] = React.useState(isFullscreen());
   const [isVideoClickable, setIsVideoClickable] = React.useState(false);
+  const [shouldShowSpinner, setShouldShowSpinner] = React.useState(
+    player.getPlayerState() === PlayerState.Loading || player.isRebuffering()
+  );
 
   // Inserting already-existing DOM into React looks a little weird
   const videoWrapperRef: React.Ref<HTMLDivElement> = React.useRef(null);
@@ -32,16 +38,43 @@ export default React.memo(function VideoPlayer(
   }, []);
 
   React.useEffect(() => {
+    let spinnerTimeout: number | null = null;
     const enableClickableVideo = () => setIsVideoClickable(true);
     const disableClickableVideo = () => setIsVideoClickable(false);
     player.addEventListener("loaded", enableClickableVideo);
     player.addEventListener("error", disableClickableVideo);
     player.addEventListener("stopped", disableClickableVideo);
+    player.addEventListener("loading", enableSpinnerAfterTimeout);
+    player.addEventListener("loaded", disableSpinner);
+    player.addEventListener("error", disableSpinner);
+    player.addEventListener("stopped", disableSpinner);
+    player.addEventListener("rebufferingStarted", enableSpinnerAfterTimeout);
+    player.addEventListener("rebufferingEnded", disableSpinner);
     return () => {
       player.removeEventListener("loaded", enableClickableVideo);
       player.removeEventListener("error", disableClickableVideo);
       player.removeEventListener("stopped", disableClickableVideo);
+      player.removeEventListener("loading", enableSpinnerAfterTimeout);
+      player.removeEventListener("rebufferingStarted", enableSpinnerAfterTimeout);
+      player.removeEventListener("rebufferingEnded", disableSpinner);
     };
+
+    function enableSpinnerAfterTimeout() {
+      if (spinnerTimeout !== null) {
+        clearTimeout(spinnerTimeout);
+      }
+      spinnerTimeout = setTimeout(() => {
+        setShouldShowSpinner(true);
+      }, 500);
+    }
+
+    function disableSpinner() {
+      if (spinnerTimeout !== null) {
+        clearTimeout(spinnerTimeout);
+        spinnerTimeout = null;
+      }
+      setShouldShowSpinner(false);
+    }
   }, [player]);
 
   React.useEffect(() => {
@@ -79,6 +112,11 @@ export default React.memo(function VideoPlayer(
       onClick={onVideoWrapperClick}
       ref={videoWrapperRef}
     />
+    {
+      shouldShowSpinner ?
+        <Spinner /> :
+        null
+    }
     <ControlBar
       player={player}
       playerContainerRef={playerContainerRef}

@@ -300,21 +300,6 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
       type: "load",
       value: { contentId, url },
     });
-
-    waitForLoad(this.videoElement, loadingAborter.signal).then(
-      () => {
-        if (this.__contentMetadata__ !== null) {
-          this.__contentMetadata__.loadingAborter = undefined;
-        }
-        this.trigger("loaded", null);
-      },
-      (reason) => {
-        if (this.__contentMetadata__ !== null) {
-          this.__contentMetadata__.loadingAborter = undefined;
-        }
-        logger.info("Could not load content:", reason);
-      }
-    );
   }
 
   /**
@@ -600,6 +585,7 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
           break;
         case "attach-media-source":
           onAttachMediaSourceMessage(data, this.__contentMetadata__, this.videoElement);
+          this.__startListeningToLoadedEvent__();
           break;
         case "create-media-source":
           onCreateMediaSourceMessage(
@@ -608,6 +594,7 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
             this.videoElement,
             worker
           );
+          this.__startListeningToLoadedEvent__();
           break;
         case "update-media-source-duration":
           onUpdateMediaSourceDurationMessage(data, this.__contentMetadata__, worker);
@@ -699,5 +686,28 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
         value: level,
       });
     }
+  }
+
+  private __startListeningToLoadedEvent__() {
+    const contentMetadata = this.__contentMetadata__;
+    if (contentMetadata === null) {
+      return;
+    } else if (contentMetadata.loadingAborter === undefined) {
+      return;
+    }
+    waitForLoad(this.videoElement, contentMetadata.loadingAborter.signal).then(
+      () => {
+        if (this.__contentMetadata__ !== null) {
+          this.__contentMetadata__.loadingAborter = undefined;
+        }
+        this.trigger("loaded", null);
+      },
+      (reason) => {
+        if (this.__contentMetadata__ !== null) {
+          this.__contentMetadata__.loadingAborter = undefined;
+        }
+        logger.info("Could not load content:", reason);
+      }
+    );
   }
 }

@@ -211,6 +211,9 @@ extern "C" {
         minimum_position : Option<f64>,
         maximum_position : Option<f64>,
     );
+
+    pub fn jsStartRebuffering();
+    pub fn jsStopRebuffering();
 }
 
 // TODO some macro-based metaprogramming, instead of just repeating the same boilerplate for each

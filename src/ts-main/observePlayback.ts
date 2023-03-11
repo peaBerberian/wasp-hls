@@ -81,7 +81,14 @@ export default function observePlayback(
       buffered[offset + 1] = videoElement.buffered.end(i);
     }
 
-    const { currentTime, readyState, paused, seeking } = videoElement;
+    const {
+      currentTime,
+      readyState,
+      paused,
+      seeking,
+      ended,
+      duration,
+    } = videoElement;
     onNewObservation({
       mediaSourceId,
       reason,
@@ -90,6 +97,8 @@ export default function observePlayback(
       buffered,
       paused,
       seeking,
+      ended,
+      duration,
     });
 
     timeoutId = window.setTimeout(() => {

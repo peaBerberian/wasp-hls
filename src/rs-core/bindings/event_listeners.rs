@@ -165,6 +165,8 @@ pub struct MediaObservation {
     buffered: Vec<(f64, f64)>,
     paused: bool,
     seeking: bool,
+    ended: bool,
+    duration: f64,
 }
 
 
@@ -178,6 +180,8 @@ impl MediaObservation {
         buffered: &[f64],
         paused: bool,
         seeking: bool,
+        ended: bool,
+        duration: f64,
     ) -> Self {
         assert!(buffered.len() % 2 == 0);
         let mut new_buf = Vec::with_capacity(buffered.len() / 2);
@@ -192,6 +196,8 @@ impl MediaObservation {
             buffered: new_buf,
             paused,
             seeking,
+            ended,
+            duration,
         }
     }
 }
@@ -225,5 +231,15 @@ impl MediaObservation {
     #[inline(always)]
     pub fn seeking(&self) -> bool {
         self.seeking
+    }
+
+    #[inline(always)]
+    pub fn ended(&self) -> bool {
+        self.ended
+    }
+
+    #[inline(always)]
+    pub fn duration(&self) -> f64 {
+        self.duration
     }
 }

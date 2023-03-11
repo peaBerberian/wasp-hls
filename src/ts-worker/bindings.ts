@@ -835,6 +835,35 @@ export function updateContentInfo(
   });
 }
 
+export function startRebuffering() : void {
+  const contentInfo = playerInstance.getContentInfo();
+  if (contentInfo === null || contentInfo.mediaSourceObj === null) {
+    logger.error("Attempting to start rebuffering when no MediaSource is created");
+    return ;
+  }
+  postMessageToMain({
+    type: "rebuffering-started",
+    value: {
+      mediaSourceId: contentInfo.mediaSourceObj.mediaSourceId,
+      updatePlaybackRate: true,
+    },
+  });
+}
+
+export function stopRebuffering() : void {
+  const contentInfo = playerInstance.getContentInfo();
+  if (contentInfo === null || contentInfo.mediaSourceObj === null) {
+    logger.error("Attempting to stop rebuffering when no MediaSource is created");
+    return ;
+  }
+  postMessageToMain({
+    type: "rebuffering-ended",
+    value: {
+      mediaSourceId: contentInfo.mediaSourceObj.mediaSourceId,
+    },
+  });
+}
+
 // TODO real way of binding
 /* eslint-disable */
 const global = self as any;
@@ -858,4 +887,6 @@ global.jsStopObservingPlayback = stopObservingPlayback;
 global.jsTimer = timer;
 global.jsUpdateContentInfo = updateContentInfo;
 global.jsSetPlaybackRate = setPlaybackRate;
+global.jsStartRebuffering = startRebuffering;
+global.jsStopRebuffering = stopRebuffering;
 // global.jsWarning = warning;

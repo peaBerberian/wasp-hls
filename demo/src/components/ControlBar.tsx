@@ -34,6 +34,7 @@ export default React.memo(function ControlBar(
   const [isPaused, setIsPaused] = React.useState(true);
   const [isControlBarDisplayed, setIsControlBarDisplayed] = React.useState(true);
   const [areControlsDisabled, setAreControlsDisabled] = React.useState(true);
+  const [isPlayPauseDisabled, setIsPlayPauseDisabled] = React.useState(true);
   const lastMouseY = React.useRef(0);
   const isPlayerElementHovered = React.useRef(false);
   const hideControlBarTimeoutId = React.useRef<number|undefined>(undefined);
@@ -77,6 +78,7 @@ export default React.memo(function ControlBar(
     let positionRefreshIntervalId: number|undefined;
 
     player.addEventListener("loaded", onLoaded);
+    player.addEventListener("loading", onLoading);
     player.addEventListener("stopped", onStopped);
     player.addEventListener("error", onError);
     player.addEventListener("pause", onPause);
@@ -91,6 +93,7 @@ export default React.memo(function ControlBar(
     return () => {
       resetTimeInfo();
       player.removeEventListener("loaded", onLoaded);
+      player.removeEventListener("loading", onLoading);
       player.removeEventListener("stopped", onStopped);
       player.removeEventListener("error", onError);
       player.removeEventListener("pause", onPause);
@@ -104,10 +107,19 @@ export default React.memo(function ControlBar(
       }
     };
 
+    function onLoading() {
+      setAreControlsDisabled(false);
+      setIsPlayPauseDisabled(true);
+      resetTimeInfo();
+      setIsPlayPauseDisabled(true);
+      clearPositionUpdateInterval();
+    }
+
     function onLoaded() {
       displayControlBar(false);
       resetTimeInfo();
       setAreControlsDisabled(false);
+      setIsPlayPauseDisabled(false);
       clearPositionUpdateInterval();
       positionRefreshIntervalId = setInterval(() => {
         const pos = player.getPosition();
@@ -146,6 +158,7 @@ export default React.memo(function ControlBar(
     function onError() {
       displayControlBar(true);
       setAreControlsDisabled(true);
+      setIsPlayPauseDisabled(true);
       setIsPaused(true);
       clearPositionUpdateInterval();
     }
@@ -154,6 +167,7 @@ export default React.memo(function ControlBar(
       displayControlBar(true);
       resetTimeInfo();
       setAreControlsDisabled(true);
+      setIsPlayPauseDisabled(true);
       setIsPaused(true);
       clearPositionUpdateInterval();
     }
@@ -295,7 +309,7 @@ export default React.memo(function ControlBar(
     <div className="video-controls">
       <div className="video-controls-left">
         <PlayButton
-          disabled={areControlsDisabled}
+          disabled={areControlsDisabled || isPlayPauseDisabled}
           isPaused={isPaused}
           onClick={togglePlayPause}
         />

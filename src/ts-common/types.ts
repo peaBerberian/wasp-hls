@@ -724,6 +724,8 @@ export interface MediaObservation {
   buffered: Float64Array;
   paused: boolean;
   seeking: boolean;
+  ended: boolean;
+  duration: number;
 }
 
 /**

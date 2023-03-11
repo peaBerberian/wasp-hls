@@ -6,7 +6,7 @@ use crate::bindings::{
     JsResult,
     MediaObservation,
     jsRemoveMediaSource,
-    jsSetMediaOffset, AttachMediaSourceErrorCode, jsSetPlaybackRate,
+    jsSetMediaOffset, AttachMediaSourceErrorCode, jsSetPlaybackRate, jsStartRebuffering, jsStopRebuffering,
 };
 use crate::dispatcher::MediaSourceReadyState;
 use crate::Logger;
@@ -35,6 +35,8 @@ pub(crate) struct MediaElementReference {
 
     /// Stores the last `MediaObservation` received.
     last_observation: Option<MediaObservation>,
+
+    is_rebuffering: bool,
 
     /// Offset used to convert the media position on the HTMLMediaElement (ultimately linked to
     /// pushed segments and the browser's internal logic) to the playlist position as found in a
@@ -73,6 +75,7 @@ impl MediaElementReference {
     pub(crate) fn new() -> Self {
         Self {
             awaiting_seek: None,
+            is_rebuffering: false,
             last_observation: None,
             media_source_ready_state: None,
             media_offset: None,
@@ -284,7 +287,54 @@ impl MediaElementReference {
     /// Method to call once a `MediaObservation` has been received.
     pub(crate) fn on_observation(&mut self, observation: MediaObservation) {
         self.last_observation = Some(observation);
-self.check_awaiting_seek();
+        if !self.check_awaiting_seek() {
+            let last_observation = self.last_observation.as_ref().unwrap();
+            let buffer_gap = get_buffer_gap(last_observation);
+            if !self.is_rebuffering {
+                if !last_observation.ended() {
+                    match buffer_gap {
+                        None => {
+                            Logger::info("Starting rebuffering period due to no buffer gap");
+                            self.is_rebuffering = true;
+                            jsStartRebuffering();
+                        },
+                        Some(buffer_gap) if buffer_gap < 0.5 => {
+                            let current_time = last_observation.current_time();
+                            let duration = last_observation.duration();
+                            if current_time + buffer_gap < duration - 0.001 {
+                                Logger::info(
+                                    &format!("Starting rebuffering period. bg: {}", buffer_gap)
+                                );
+                                self.is_rebuffering = true;
+                                jsStartRebuffering();
+                            }
+                        },
+                        _ => {},
+                    }
+                }
+            } else {
+                let mut quit_rebuffering = false;
+                if let Some(buffer_gap) = buffer_gap {
+                    if buffer_gap > 2. {
+                        Logger::info(
+                            &format!("Quitting rebuffering period. bg: {}", buffer_gap)
+                        );
+                        quit_rebuffering = true;
+                    } else {
+                        let current_time = last_observation.current_time();
+                        let duration = last_observation.duration();
+                        if current_time + buffer_gap >= duration - 0.001 {
+                            quit_rebuffering = true;
+                        }
+                    }
+                }
+
+                if quit_rebuffering || last_observation.ended() {
+                    self.is_rebuffering = false;
+                    jsStopRebuffering();
+                }
+            }
+        }
     }
 
     /// Update the current `readyState` of the `MediaSource`.
@@ -392,15 +442,19 @@ self.check_awaiting_seek();
     /// If both are true, perform the seek.
     ///
     /// To call when any of its condition might have changed.
-    fn check_awaiting_seek(&mut self) {
+    ///
+    /// Returns `true` if a seek has been performed
+    fn check_awaiting_seek(&mut self) -> bool {
         if self.awaiting_seek.is_some() && self.last_observation.as_ref().unwrap().ready_state() >= 1 {
             let awaiting_seek = self.awaiting_seek.unwrap();
             if let Some(media_pos) = self.to_media_position(awaiting_seek) {
                 Logger::info(&format!("Perform awaited seek to {} ({})", awaiting_seek, media_pos));
                 jsSeek(media_pos);
                 self.awaiting_seek = None;
+                return true;
             }
         }
+        false
     }
 
     /// Convert a media position, which is the position as played on the
@@ -485,4 +539,12 @@ impl From<(AttachMediaSourceErrorCode, Option<String>)> for AttachMediaSourceErr
                 }
         }
     }
+}
+
+fn get_buffer_gap(observation: &MediaObservation) -> Option<f64> {
+    let current_time = observation.current_time();
+    let current_buffered = observation.buffered().iter().find(|b| {
+        current_time >= b.0 && current_time < b.1
+    });
+    Some(current_buffered?.1 - current_time)
 }

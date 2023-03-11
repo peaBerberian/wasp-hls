@@ -132,7 +132,9 @@ export default function MessageReceiver() {
           data.value.readyState,
           data.value.buffered,
           data.value.paused,
-          data.value.seeking
+          data.value.seeking,
+          data.value.ended,
+          data.value.duration
         );
         dispatcher.on_playback_tick(mediaObservation);
         break;
