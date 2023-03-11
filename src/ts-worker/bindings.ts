@@ -280,7 +280,8 @@ export function attachMediaSource(): AttachMediaSourceResult {
       const handle = (mediaSource as any).handle;
       let objectURL;
       if (handle === undefined || handle === null) {
-        objectURL = URL.createObjectURL(mediaSource);
+        // Weird typing for TypeScript
+        objectURL = URL.createObjectURL(mediaSource as unknown as Blob);
       }
       const mediaSourceId = generateMediaSourceId();
       contentInfo.mediaSourceObj = {

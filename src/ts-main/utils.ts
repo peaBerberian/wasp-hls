@@ -46,15 +46,16 @@ export function waitForLoad(
     function onAbort() {
       videoElement.removeEventListener("canplay", onCanPlay);
       abortSignal.removeEventListener("abort", onAbort);
-      if (abortSignal.reason !== null) {
-        rej(abortSignal.reason);
+
+      // Typing needed because of a weird TypeScript issue
+      if ((abortSignal as unknown as { reason: unknown }).reason !== null) {
+        rej((abortSignal as unknown as { reason: unknown }).reason);
       } else {
         rej(new Error("The loading operation was aborted"));
       }
     }
   });
 }
-
 /**
  * Clear element's src attribute.
  * @param {HTMLMediaElement} element
