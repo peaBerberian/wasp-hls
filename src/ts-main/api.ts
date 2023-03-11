@@ -68,14 +68,13 @@ interface WaspHlsPlayerEvents {
    *
    * The `isPaused` method should now return `true`.
    */
-  pause: null;
+  paused: null;
   /**
-   * Playback is now playing at the communicated playback rate with a loaded
-   * content.
+   * Playback is now playing as long as there's data in the buffer.
    *
    * The `isPlaying` method should now return `true`.
    */
-  play: null;
+  playing: null;
   /**
    * Sent when an error provoked the impossibility to continue playing the
    * content.
@@ -200,24 +199,23 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
 
     const onPause = () => {
       if (this.getPlayerState() === PlayerState.Loaded) {
-        this.trigger("pause", null);
+        this.trigger("paused", null);
       }
     };
     const onPlay = () => {
       if (
         this.getPlayerState() === PlayerState.Loaded &&
-        this.__contentMetadata__ !== null &&
-        !this.__contentMetadata__.isRebuffering
+        this.__contentMetadata__ !== null
       ) {
-        this.trigger("play", null);
+        this.trigger("playing", null);
       }
     };
-    this.videoElement.addEventListener("pause", onPause);
-    this.videoElement.addEventListener("play", onPlay);
+    this.videoElement.addEventListener("paused", onPause);
+    this.videoElement.addEventListener("playing", onPlay);
 
     this.__destroyAbortController__.signal.addEventListener("abort", () => {
-      this.videoElement.removeEventListener("pause", onPause);
-      this.videoElement.removeEventListener("play", onPlay);
+      this.videoElement.removeEventListener("paused", onPause);
+      this.videoElement.removeEventListener("playing", onPlay);
     });
   }
 
@@ -375,6 +373,8 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
   /**
    * Returns `true when there's both a content loaded and playback is not
    * paused.
+   * Note that `isPlaying` returns true even if playback is stalled due to
+   * rebuffering (you can check `isRebuffering` for this).
    * @returns {boolean}
    */
   public isPlaying(): boolean {

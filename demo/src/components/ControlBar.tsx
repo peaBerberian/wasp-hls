@@ -81,8 +81,8 @@ export default React.memo(function ControlBar(
     player.addEventListener("loading", onLoading);
     player.addEventListener("stopped", onStopped);
     player.addEventListener("error", onError);
-    player.addEventListener("pause", onPause);
-    player.addEventListener("play", onPlay);
+    player.addEventListener("paused", onPaused);
+    player.addEventListener("playing", onPlaying);
     player.videoElement.addEventListener("volumechange", onVideoVolumeChange);
     if (playerContainerRef.current !== null) {
       playerContainerRef.current.addEventListener("mouseover", onMouseOver);
@@ -96,8 +96,8 @@ export default React.memo(function ControlBar(
       player.removeEventListener("loading", onLoading);
       player.removeEventListener("stopped", onStopped);
       player.removeEventListener("error", onError);
-      player.removeEventListener("pause", onPause);
-      player.removeEventListener("play", onPlay);
+      player.removeEventListener("paused", onPaused);
+      player.removeEventListener("playing", onPlaying);
       player.videoElement.removeEventListener("volumechange", onVideoVolumeChange);
       clearPositionUpdateInterval();
       if (playerContainerRef.current !== null) {
@@ -173,12 +173,12 @@ export default React.memo(function ControlBar(
       clearPositionUpdateInterval();
     }
 
-    function onPause() {
+    function onPaused() {
       displayControlBar(true);
       setIsPaused(true);
     }
 
-    function onPlay() {
+    function onPlaying() {
       startControlBarHideTimeout();
       setIsPaused(false);
     }
