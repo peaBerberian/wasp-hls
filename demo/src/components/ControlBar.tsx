@@ -108,6 +108,7 @@ export default React.memo(function ControlBar(
     };
 
     function onLoading() {
+      setIsPaused(true);
       setAreControlsDisabled(false);
       setIsPlayPauseDisabled(true);
       resetTimeInfo();
