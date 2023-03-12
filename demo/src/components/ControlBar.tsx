@@ -193,6 +193,7 @@ export default React.memo(function ControlBar(
       resetTimeInfo();
       displayControlBar(true);
       setAreControlsDisabled(false);
+      setShouldDisplaySettings(false);
       setIsPlayPauseDisabled(true);
       setIsPaused(true);
       clearPositionUpdateInterval();
@@ -204,6 +205,7 @@ export default React.memo(function ControlBar(
       displayControlBar(true);
       resetTimeInfo();
       setAreControlsDisabled(true);
+      setShouldDisplaySettings(false);
       setIsPlayPauseDisabled(true);
       setIsPaused(true);
       clearPositionUpdateInterval();
@@ -345,7 +347,7 @@ export default React.memo(function ControlBar(
 
   return <>
     {
-      shouldDisplaySettings ?
+      !areControlsDisabled && shouldDisplaySettings ?
         <div className="settings">
           <VariantSetting
             variant={variant}

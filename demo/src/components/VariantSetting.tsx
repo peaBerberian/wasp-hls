@@ -15,10 +15,16 @@ function VariantSetting({
   variantsList: VariantInfo[];
   isAuto: boolean;
   updateVariant: (v: VariantInfo | undefined) => void;
-}): JSX.Element {
+}): JSX.Element | null {
+  if (variantsList.length < 1) {
+    return null;
+  }
   const onSelectChange = React.useCallback((
     evt: React.SyntheticEvent<HTMLSelectElement>
   ) => {
+    if (variantsList.length < 2) {
+      return;
+    }
     const index = +(evt.target as HTMLSelectElement).value;
     if (index === 0) {
       updateVariant(undefined);
@@ -28,11 +34,19 @@ function VariantSetting({
     }
   }, [variantsList]);
 
-  const selectedIndex = isAuto ?
+  const selectedIndex = variantsList.length < 2 || isAuto ?
     0 :
     variantsList.findIndex(v => v.id === variant?.id) + 1;
 
   const optionsEl = React.useMemo(() => {
+    const variantChoices = variantsList.map((v, index) => {
+      return <option key={index + 1} value={index + 1}>
+        {getVariantLine(v)}
+      </option>;
+    });
+    if (variantsList.length < 2) {
+      return variantChoices;
+    }
     const autoString = isAuto && variant !== undefined ?
       "auto (" + getVariantLine(variant) + ")" :
       "auto";
@@ -40,11 +54,7 @@ function VariantSetting({
       <option key={0} value={0}>
         {autoString}
       </option>,
-      variantsList.map((v, index) => {
-        return <option key={index + 1} value={index + 1}>
-          {getVariantLine(v)}
-        </option>;
-      }),
+      variantChoices,
     ];
   }, [isAuto, variant, variantsList]);
 
@@ -54,6 +64,7 @@ function VariantSetting({
         {"Quality"}
       </span>
       <select
+        disabled={variantsList.length < 2}
         aria-label="Update the current playback variant"
         name="Quality"
         className="setting-value"
