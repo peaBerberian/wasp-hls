@@ -1,3 +1,4 @@
+/// Abstraction allowing to help with the handling of URLs
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Url {
     inner: String,

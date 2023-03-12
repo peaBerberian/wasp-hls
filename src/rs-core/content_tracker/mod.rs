@@ -37,8 +37,10 @@ pub struct ContentTracker {
     /// Set to `None` if no audio playlist is chosen.
     curr_audio_idx: Option<MediaPlaylistPermanentId>,
 
+    /// If `true` a variant is being manually locked and as such, cannot change.
     is_variant_locked: bool,
 
+    /// Store the last communicated bandwidth
     last_bandwidth: f64,
 }
 
@@ -238,9 +240,16 @@ impl ContentTracker {
                 Some(variants.len() - 1)
             }
         });
-        self.change_variant_from_index(best_variant_idx)
+        self.update_variant(best_variant_idx)
     }
 
+    /// Force a given variant and prevent it from changing, by communicating its `id`.
+    ///
+    /// To be able to change again the variant, you can call `lock_variant` again or
+    /// you can call the `unlock_variant` method.
+    ///
+    /// The returned option is `None` if the `variant_id` given is not found to correspond
+    /// to any existing variant and contains the corresponding update when set.
     pub(crate) fn lock_variant(&mut self,
         variant_id: u32
     ) -> Option<VariantUpdateResult> {
@@ -257,24 +266,31 @@ impl ContentTracker {
 
         if let Some(pos) = pos {
             self.is_variant_locked = true;
-            Some(self.change_variant_from_index(Some(pos)))
+            Some(self.update_variant(Some(pos)))
         } else {
             self.is_variant_locked = false;
             None
         }
     }
 
+    /// Disable a variant lock, previously created through the `lock_variant` method, to
+    /// let adaptive streaming choose the right one instead.
     pub(crate) fn unlock_variant(&mut self) -> VariantUpdateResult {
         self.is_variant_locked = false;
         self.update_curr_bandwidth(self.last_bandwidth)
     }
 
+    /// Returns `true` if a variant is currently locked, preventing adaptive streaming
+    /// from choosing the more adapted one. Such lock can be enabled through the
+    /// lock_variant` method.
     pub(crate) fn is_variant_locked(&self) -> bool {
         self.is_variant_locked
     }
 
     /// Returns the metadata allowing to load and the update the MediaPlaylist of the given
     /// `MediaType`.
+    ///
+    /// Returns `None` if there's no active MediaPlaylist for the given MediaType.
     pub(crate) fn curr_media_playlist_request_info(&self,
         media_type: MediaType
     ) -> Option<(&Url, &MediaPlaylistPermanentId)> {
@@ -361,29 +377,8 @@ impl ContentTracker {
         }
     }
 
-    // pub(crate) fn refresh_time(&self) -> Option<f64> {
-    //     let media_playlists = self.curr_media_playlists();
-    //     if media_playlists.is_empty() ||
-    //         media_playlists.iter().all(|p| { p.1.end_list })
-    //     {
-    //         None
-    //     } else {
-    //         media_playlists.iter().fold(None, |acc, p| {
-    //             let target_duration = p.1.target_duration();
-    //             if let Some(acc_dur) = acc {
-    //                 if let Some(p_dur) = target_duration {
-    //                     Some(acc_dur.min(p_dur))
-    //                 } else {
-    //                     Some(acc_dur)
-    //                 }
-    //             } else {
-    //                 target_duration
-    //             }
-    //         })
-    //     }
-    // }
-
-    fn change_variant_from_index(&mut self,
+    /// Run the variant update logic from its index in the variants array and return the result of doing so
+    fn update_variant(&mut self,
         index: Option<usize>
     ) -> VariantUpdateResult {
         if index != self.curr_variant_idx {
