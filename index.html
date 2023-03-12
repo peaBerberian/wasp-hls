@@ -54,7 +54,6 @@
   .video-container {
     width: 80%;
     min-width: 500px;
-    min-height: 675px;
     position: relative;
     max-width: 1280px;
     max-height: 720px;
@@ -318,6 +317,37 @@
   .canvas-buffer-size {
     padding: 10px;
     border: 1px dashed black;
+  }
+
+  .settings {
+    position: absolute;
+    color: white;
+    font-size: 0.95em;
+    background-color: #1c1c1cad;
+    bottom: 55px;
+    right: 10px;
+    padding: 10px;
+  }
+  .video-setting {
+    margin: 5px 0 5px 0;
+    display: flex;
+    justify-content: space-between;
+    min-width: 230px;
+  }
+  .setting-name {
+    margin-right: 10px;
+  }
+  .setting-value {
+    background-color: transparent;
+    border: none;
+    color: #fff;
+    font-weight: bold;
+    text-align: left;
+    cursor: pointer;
+  }
+  .setting-value option {
+    background-color: #000;
+    color: #fff;
   }
 </style>
 </style>
