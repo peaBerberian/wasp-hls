@@ -84,7 +84,7 @@ export class WaspSegmentRequestError extends Error {
 }
 
 export class WaspOtherError extends Error {
-  public readonly name: "WaspRequestError";
+  public readonly name: "WaspOtherError";
   public readonly message : string;
   public readonly code : number;
 
@@ -99,7 +99,7 @@ export class WaspOtherError extends Error {
     // @see https://stackoverflow.com/questions/41102060/typescript-extending-error-class
     Object.setPrototypeOf(this, WaspOtherError.prototype);
 
-    this.name = "WaspRequestError";
+    this.name = "WaspOtherError";
     this.code = code;
     this.message = message ?? "Unknown error";
   }
