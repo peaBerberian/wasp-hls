@@ -14,7 +14,6 @@ use crate::{
         jsTimer,
         jsUpdateContentInfo,
         jsSendSegmentRequestError,
-        RequestErrorReason,
         jsSendSourceBufferCreationError,
         jsSendPlaylistParsingError,
         PlaylistType,
@@ -63,18 +62,18 @@ impl Dispatcher {
         status: Option<u32>
     ) {
         match self.requester.on_pending_request_failure(request_id, has_timeouted, status) {
-            RetryResult::Failed(FinishedRequestType::Segment(s)) => {
+            RetryResult::Failed((FinishedRequestType::Segment(s), reason)) => {
                 jsSendSegmentRequestError(
                     true,
                     s.url.get_ref(),
                     s.time_info.is_none(),
                     s.time_info.map(|t| vec![t.0, t.1]),
                     s.media_type,
-                    RequestErrorReason::Other, // TODO
-                    None);
+                    reason,
+                    None); // TODO status
                 self.internal_stop();
             },
-            RetryResult::Failed(FinishedRequestType::Playlist(_)) => {
+            RetryResult::Failed((FinishedRequestType::Playlist(_), _reason)) => {
                 jsSendOtherError(true, crate::bindings::OtherErrorCode::Unknown,
                     Some(&"Failed to fetch Playlist"));
                 self.internal_stop();

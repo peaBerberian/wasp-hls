@@ -6,7 +6,7 @@ use crate::{
         jsAbortRequest,
         jsTimer,
         TimerReason,
-        TimerId, jsGetRandom,
+        TimerId, jsGetRandom, RequestErrorReason,
     },
     Logger,
     content_tracker::MediaPlaylistPermanentId,
@@ -234,7 +234,7 @@ pub enum FinishedRequestType {
 pub enum RetryResult {
     NotFound,
     Retried,
-    Failed(FinishedRequestType),
+    Failed((FinishedRequestType, RequestErrorReason)),
 }
 
 impl Requester {
@@ -315,7 +315,7 @@ impl Requester {
 
     #[inline(always)]
     pub fn media_playlist_request_timeout(&mut self) -> Option<f64> {
-        self.media_playlist_request_timeout 
+        self.media_playlist_request_timeout
     }
 
     #[inline(always)]
@@ -482,23 +482,24 @@ impl Requester {
         has_timeouted: bool,
         status: Option<u32>
     ) -> RetryResult {
-        let can_retry = match (has_timeouted, status) {
-            (true, _) => true,
-            (false, Some(x)) if x == 404 || x == 412 || x >= 500 => true,
-            _ => false
+        let reason = match (has_timeouted, status) {
+            (true, _) => Some(RequestErrorReason::Timeout),
+            (false, Some(x)) if x == 404 || x == 412 || x >= 500 =>
+                Some(RequestErrorReason::Status),
+            _ => None
         };
-        if can_retry {
+        if let Some(reason) = reason {
             if let Some(pos) = self.pending_segment_requests
                 .iter()
                 .position(|x| x.request_id == request_id)
             {
-                self.retry_pending_segment_request(pos)
+                self.retry_pending_segment_request(pos, reason)
             } else {
                 if let Some(pos) = self.pending_playlist_requests
                     .iter()
                     .position(|x| x.request_id == request_id)
                 {
-                    self.retry_playlist_segment_request(pos)
+                    self.retry_playlist_segment_request(pos, reason)
                 } else {
                     Logger::info(&format!("Req: Request to retry not found, id:{}", request_id));
                     RetryResult::NotFound
@@ -508,7 +509,7 @@ impl Requester {
             Logger::info(&format!("Req: Cannot retry request id:{}", request_id));
             match  self.end_pending_request(request_id) {
                 None => RetryResult::NotFound,
-                Some(req) => RetryResult::Failed(req)
+                Some(req) => RetryResult::Failed((req, RequestErrorReason::Error))
             }
         }
     }
@@ -642,12 +643,12 @@ impl Requester {
         None
     }
 
-    fn retry_pending_segment_request(&mut self, pos: usize) -> RetryResult {
+    fn retry_pending_segment_request(&mut self, pos: usize, reason: RequestErrorReason) -> RetryResult {
        let req = &mut self.pending_segment_requests[pos];
        if req.attempts_failed >= 3 {
            Logger::info(&format!("Req: Too much attempts for segment request id:{} a:{}", req.request_id, req.attempts_failed));
            let seg = self.pending_segment_requests.remove(pos);
-           RetryResult::Failed(FinishedRequestType::Segment(seg))
+           RetryResult::Failed((FinishedRequestType::Segment(seg), reason))
        } else {
            req.attempts_failed += 1;
            req.is_waiting_for_retry = true;
@@ -661,12 +662,12 @@ impl Requester {
        }
     }
 
-    fn retry_playlist_segment_request(&mut self, pos: usize) -> RetryResult {
+    fn retry_playlist_segment_request(&mut self, pos: usize, reason: RequestErrorReason) -> RetryResult {
        let req = &mut self.pending_playlist_requests[pos];
        if req.attempts_failed >= 3 {
            Logger::info(&format!("Req: Too much attempts for playlist request id:{} a:{}", req.request_id, req.attempts_failed));
            let pl = self.pending_playlist_requests.remove(pos);
-           RetryResult::Failed(FinishedRequestType::Playlist(pl))
+           RetryResult::Failed((FinishedRequestType::Playlist(pl), reason))
        } else {
            req.attempts_failed += 1;
            req.is_waiting_for_retry = true;
@@ -688,12 +689,12 @@ impl Requester {
        }
     }
 
-    fn retry_pending_playlist_request(&mut self, request_id: RequestId) -> RetryResult {
+    fn retry_pending_playlist_request(&mut self, request_id: RequestId, reason: RequestErrorReason) -> RetryResult {
        let pos = self.pending_playlist_requests.iter_mut().position(|x| x.request_id == request_id);
        if let Some(pos) = pos {
            if self.pending_playlist_requests[pos].attempts_failed >= 3 {
                let seg = self.pending_playlist_requests.remove(pos);
-               RetryResult::Failed(FinishedRequestType::Playlist(seg))
+               RetryResult::Failed((FinishedRequestType::Playlist(seg), reason))
            } else {
                self.pending_playlist_requests[pos].attempts_failed += 1;
                self.pending_playlist_requests[pos].is_waiting_for_retry = true;
