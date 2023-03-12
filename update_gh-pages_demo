@@ -28,10 +28,11 @@ if ! [ "$current_branch" == "main" ]; then
 fi
 
 # Generate demo
+npm install
 npm run build:release
 npm run build:demo:release
 
-if [ -n "$(git status --porcelain doc)" ]; then
+if [ -n "$(git status --porcelain)" ]; then
   echo "ERROR: Please commit your modifications to main"
   exit 1;
 fi
