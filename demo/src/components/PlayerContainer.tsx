@@ -1,5 +1,6 @@
 import * as React from "react";
-import WaspHlsPlayer from "../../../src";
+import WaspHlsPlayer, {PlayerState} from "../../../src";
+import BufferSizeChart from "./BufferSizeChart";
 import ContentInput from "./ContentInput";
 import RemovePlayerButton from "./RemovePlayerButton";
 import VideoPlayer from "./VideoPlayer";
@@ -12,6 +13,11 @@ export default React.memo(function PlayerContainer(
   }
 ) {
   const [player, setPlayer] = React.useState<WaspHlsPlayer|null>(null);
+  const [shouldShowBufferGaps, setShouldShowBufferGaps] = React.useState(false);
+  const [bufferGaps, setBufferGaps] = React.useState<Array<{
+    date: number;
+    value: number;
+  }>>([]);
 
   React.useEffect(() => {
     let isRemoved = false;
@@ -45,6 +51,74 @@ export default React.memo(function PlayerContainer(
     };
   }, []);
 
+  React.useEffect(() => {
+    if(player === null || !shouldShowBufferGaps) {
+      return;
+    }
+    let bufferGapIntervalId: number | undefined;
+
+    if (
+      player.getPlayerState() === PlayerState.Loaded ||
+      player.getPlayerState() === PlayerState.Loading
+    ) {
+      startBufferGapInterval();
+    }
+    player.addEventListener("loading", startBufferGapInterval);
+    player.addEventListener("loaded", startBufferGapInterval);
+    player.addEventListener("stopped", stopBufferGapInterval);
+    player.addEventListener("error", stopBufferGapInterval);
+
+    function startBufferGapInterval() {
+      if (bufferGapIntervalId !== undefined) {
+        return;
+      }
+      bufferGapIntervalId = setInterval(() => {
+        if (player === null) {
+          stopBufferGapInterval();
+          return;
+        }
+        const buffered = player.videoElement.buffered;
+        const currentTime = player.videoElement.currentTime;
+        let bufferGap = 0;
+        for (let i = 0; i < buffered.length; i++) {
+          if (buffered.start(i) <= currentTime && buffered.end(i) > currentTime) {
+            bufferGap = buffered.end(i) - currentTime;
+            break;
+          }
+        }
+        setBufferGaps((oldBufferGaps) => {
+          const newVal = { date: performance.now(), value: bufferGap };
+          if (oldBufferGaps.length >= 500) {
+            return [...oldBufferGaps.slice(1), newVal];
+          }
+          return [...oldBufferGaps, newVal];
+        });
+      }, 150);
+    }
+    function stopBufferGapInterval() {
+      if (bufferGapIntervalId !== undefined) {
+        clearInterval(bufferGapIntervalId);
+        bufferGapIntervalId = undefined;
+        setBufferGaps([]);
+      }
+    }
+
+    return () => {
+      stopBufferGapInterval();
+      player.removeEventListener("loading", startBufferGapInterval);
+      player.removeEventListener("loaded", startBufferGapInterval);
+      player.removeEventListener("stopped", stopBufferGapInterval);
+      player.removeEventListener("error", stopBufferGapInterval);
+    };
+  }, [player, shouldShowBufferGaps]);
+
+  const onBufferSizeCheckBoxChange = React.useCallback(
+    (evt: React.ChangeEvent<HTMLInputElement>) => {
+      setShouldShowBufferGaps(evt.target.checked);
+    },
+    []
+  );
+
   return (
     <div className="player-container">
       <div className="player-parent">
@@ -52,18 +126,28 @@ export default React.memo(function PlayerContainer(
           player === null ?
             (
               <>
-                <div className="inline-spinner" />
-                <br></br>
-                <br></br>
                 <RemovePlayerButton onClick={onClose} />
+                <div className="inline-spinner" />
               </>
             ) :
             (
               <>
-                <ContentInput player={player} />
-                <br />
-                <VideoPlayer player={player} />
                 <RemovePlayerButton onClick={onClose} />
+                <ContentInput player={player} />
+                <VideoPlayer player={player} />
+                <input
+                  type="checkbox"
+                  id="buffer-size"
+                  name="buffer-size"
+                  onChange={onBufferSizeCheckBoxChange}
+                />
+                <label htmlFor="buffer-size">Enable Buffer Size Chart (below when available)</label>
+                {
+                  shouldShowBufferGaps && bufferGaps.length > 0 ?
+                    <BufferSizeChart data={bufferGaps} /> :
+                    null
+                }
+                <br />
               </>
             )
         }

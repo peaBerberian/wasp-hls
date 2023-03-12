@@ -9,10 +9,10 @@ export default React.memo(function RemovePlayerButton(
 ) : JSX.Element {
   return (
     <button
-      className="remove-player"
+      className="remove-player white-button"
       onClick={onClick}
     >
-      {"Remove Player"}
+      {"Close X"}
     </button>
   );
 });

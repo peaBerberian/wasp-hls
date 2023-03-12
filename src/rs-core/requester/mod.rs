@@ -61,7 +61,7 @@ fn get_segment_priority(start_time: Option<f64>, current_time: f64) -> PriorityL
 /// has both a request-scheduling mechanism, allowing to perform more urgent
 /// request first, and a retry mechanism based on an exponential backoff delay,
 /// to retry requesting resources without overloading the server serving them.
-pub struct Requester {
+pub(crate) struct Requester {
     /// List information on the current playlist requests awaited, by chronological order
     /// (from the time the request was made).
     pending_playlist_requests: Vec<PlaylistRequestInfo>,
@@ -194,7 +194,7 @@ pub struct Requester {
 }
 
 #[derive(PartialEq)]
-pub enum PlaylistFileType {
+pub(crate) enum PlaylistFileType {
     MultiVariantPlaylist,
     MediaPlaylist { id: MediaPlaylistPermanentId },
     Unknown,
@@ -202,41 +202,41 @@ pub enum PlaylistFileType {
 
 /// Metadata associated with a pending Playlist (either a MultiVariant Playlist or a Media
 /// Playlist request.
-pub struct PlaylistRequestInfo {
+pub(crate) struct PlaylistRequestInfo {
     /// ID identifying the request on the JavaScript-side.
     request_id: RequestId,
 
     /// Url on which the request is done
-    pub url: Url,
+    pub(crate) url: Url,
 
     /// Type of the Playlist that is requested
-    pub playlist_type: PlaylistFileType,
+    pub(crate) playlist_type: PlaylistFileType,
 
     /// Number of time the request has already been attempted.
-    pub attempts_failed: u32,
+    pub(crate) attempts_failed: u32,
 
     /// If `true` the request is not really pending, we're currently pending for some
     /// timer to finish before retrying it.
     ///
     /// In that case, the `request_id` corresponds to the one of the previous request
     /// and should not be relied on.
-    pub is_waiting_for_retry: bool,
+    pub(crate) is_waiting_for_retry: bool,
 }
 
 /// Metadata associated with a pending media segment request.
 pub struct WaitingSegmentInfo {
     /// type of media of the segment requested
-    pub media_type: MediaType,
+    pub(crate) media_type: MediaType,
 
     /// Url on which the request is done
-    pub url: Url,
+    pub(crate) url: Url,
 
     /// Start and end of the requested segment.
     /// `None` if the segment contains no media data, such as initialization segments
-    pub time_info: Option<(f64, f64)>,
+    pub(crate) time_info: Option<(f64, f64)>,
 }
 
-pub trait RequesterSegmentInfo {
+pub(crate) trait RequesterSegmentInfo {
     fn media_type(&self) -> MediaType;
     fn start_time(&self) -> Option<f64>;
     fn duration(&self) -> Option<f64>;
@@ -281,44 +281,44 @@ impl RequesterSegmentInfo for WaitingSegmentInfo {
 
 
 /// Metadata associated with a pending media segment request.
-pub struct SegmentRequestInfo {
+pub(crate) struct SegmentRequestInfo {
     /// ID identifying the request on the JavaScript-side.
     request_id: RequestId,
 
     /// type of media of the segment requested
-    pub media_type: MediaType,
+    pub(crate) media_type: MediaType,
 
     /// Url on which the request is done
-    pub url: Url,
+    pub(crate) url: Url,
 
     /// Start and end of the requested segment.
     /// `None` if the segment contains no media data, such as initialization segments
-    pub time_info: Option<(f64, f64)>,
+    pub(crate) time_info: Option<(f64, f64)>,
 
     /// Number of time the request has already been attempted.
-    pub attempts_failed: u32,
+    pub(crate) attempts_failed: u32,
 
     /// If `true` the request is not really pending, we're currently pending for some
     /// timer to finish before retrying it.
     ///
     /// In that case, the `request_id` corresponds to the one of the previous request
     /// and should not be relied on.
-    pub is_waiting_for_retry: bool,
+    pub(crate) is_waiting_for_retry: bool,
 }
 
-pub enum FinishedRequestType {
+pub(crate) enum FinishedRequestType {
     Playlist(PlaylistRequestInfo),
     Segment(SegmentRequestInfo),
 }
 
-pub enum RetryResult {
+pub(crate) enum RetryResult {
     NotFound,
     Retried,
     Failed((FinishedRequestType, RequestErrorReason)),
 }
 
 impl Requester {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             pending_playlist_requests: vec![],
             pending_segment_requests: vec![],
@@ -338,7 +338,7 @@ impl Requester {
         }
     }
 
-    pub fn reset(&mut self) {
+    pub(crate) fn reset(&mut self) {
         self.segment_request_locked = true;
         self.abort_all();
         self.pending_playlist_requests.clear();
@@ -358,98 +358,98 @@ impl Requester {
     /// be priorized (i.e. started sooner) compared to requests for the latter.
     ///
     /// For an optimal `Requester` behavior, it should be set to the wanted playback position.
-    pub fn update_base_position(&mut self, time: Option<f64>) {
+    pub(crate) fn update_base_position(&mut self, time: Option<f64>) {
         self.base_position = time;
         self.check_segment_queue();
     }
 
     #[inline(always)]
-    pub fn segment_request_timeout(&mut self) -> Option<f64> {
+    pub(crate) fn segment_request_timeout(&mut self) -> Option<f64> {
         self.segment_request_timeout
     }
 
     #[inline(always)]
-    pub fn segment_backoff_base(&mut self) -> f64 {
+    pub(crate) fn segment_backoff_base(&mut self) -> f64 {
         self.segment_backoff_base
     }
 
     #[inline(always)]
-    pub fn segment_backoff_max(&mut self) -> f64 {
+    pub(crate) fn segment_backoff_max(&mut self) -> f64 {
         self.segment_backoff_max
     }
 
     #[inline(always)]
-    pub fn multi_variant_playlist_request_timeout(&mut self) -> Option<f64> {
+    pub(crate) fn multi_variant_playlist_request_timeout(&mut self) -> Option<f64> {
         self.multi_variant_playlist_request_timeout
     }
 
     #[inline(always)]
-    pub fn multi_variant_playlist_backoff_base(&mut self) -> f64 {
+    pub(crate) fn multi_variant_playlist_backoff_base(&mut self) -> f64 {
         self.multi_variant_playlist_backoff_base
     }
 
     #[inline(always)]
-    pub fn multi_variant_playlist_backoff_max(&mut self) -> f64 {
+    pub(crate) fn multi_variant_playlist_backoff_max(&mut self) -> f64 {
         self.multi_variant_playlist_backoff_max
     }
 
     #[inline(always)]
-    pub fn media_playlist_request_timeout(&mut self) -> Option<f64> {
+    pub(crate) fn media_playlist_request_timeout(&mut self) -> Option<f64> {
         self.media_playlist_request_timeout
     }
 
     #[inline(always)]
-    pub fn media_playlist_backoff_base(&mut self) -> f64 {
+    pub(crate) fn media_playlist_backoff_base(&mut self) -> f64 {
         self.media_playlist_backoff_base
     }
 
     #[inline(always)]
-    pub fn media_playlist_backoff_max(&mut self) -> f64 {
+    pub(crate) fn media_playlist_backoff_max(&mut self) -> f64 {
         self.media_playlist_backoff_max
     }
 
     #[inline(always)]
-    pub fn update_segment_request_timeout(&mut self, timeout: Option<f64>) {
+    pub(crate) fn update_segment_request_timeout(&mut self, timeout: Option<f64>) {
         self.segment_request_timeout = timeout;
     }
 
     #[inline(always)]
-    pub fn update_segment_backoff_base(&mut self, base: f64) {
+    pub(crate) fn update_segment_backoff_base(&mut self, base: f64) {
         self.segment_backoff_base = base;
     }
 
     #[inline(always)]
-    pub fn update_segment_backoff_max(&mut self, max: f64) {
+    pub(crate) fn update_segment_backoff_max(&mut self, max: f64) {
         self.segment_backoff_max = max;
     }
 
     #[inline(always)]
-    pub fn update_multi_variant_playlist_request_timeout(&mut self, timeout: Option<f64>) {
+    pub(crate) fn update_multi_variant_playlist_request_timeout(&mut self, timeout: Option<f64>) {
         self.multi_variant_playlist_request_timeout = timeout;
     }
 
     #[inline(always)]
-    pub fn update_multi_variant_playlist_backoff_base(&mut self, base: f64) {
+    pub(crate) fn update_multi_variant_playlist_backoff_base(&mut self, base: f64) {
         self.multi_variant_playlist_backoff_base = base;
     }
 
     #[inline(always)]
-    pub fn update_multi_variant_playlist_backoff_max(&mut self, max: f64) {
+    pub(crate) fn update_multi_variant_playlist_backoff_max(&mut self, max: f64) {
         self.multi_variant_playlist_backoff_max = max;
     }
 
     #[inline(always)]
-    pub fn update_media_playlist_request_timeout(&mut self, timeout: Option<f64>) {
+    pub(crate) fn update_media_playlist_request_timeout(&mut self, timeout: Option<f64>) {
         self.media_playlist_request_timeout = timeout;
     }
 
     #[inline(always)]
-    pub fn update_media_playlist_backoff_base(&mut self, base: f64) {
+    pub(crate) fn update_media_playlist_backoff_base(&mut self, base: f64) {
         self.media_playlist_backoff_base = base;
     }
 
     #[inline(always)]
-    pub fn update_media_playlist_backoff_max(&mut self, max: f64) {
+    pub(crate) fn update_media_playlist_backoff_max(&mut self, max: f64) {
         self.media_playlist_backoff_max = max;
     }
 

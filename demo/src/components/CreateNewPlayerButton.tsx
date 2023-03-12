@@ -9,7 +9,7 @@ export default React.memo(function CreateNewPlayerButton(
 ) : JSX.Element {
   return (
     <button
-      className="create-new-player"
+      className="create-new-player white-button"
       onClick={onClick}
     >
       {"Create new Player"}

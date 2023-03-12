@@ -45,7 +45,7 @@ export default React.memo(function ContentInput(
       />
 
       <button
-        id="loading-button"
+        className="loading-button white-button"
         onClick={loadContent}
       >
         Load
