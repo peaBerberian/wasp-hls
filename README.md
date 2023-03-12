@@ -84,8 +84,7 @@ Request Scheduling:
   - [X] Priorization between audio and video segment requests (to e.g. stop
     doing audio segment requests when video ones become urgent).
   - [X] Retry of failed requests with an exponential backoff.
-  - [ ] Perform range requests for segments (rare use case).
-    _Priority: average_
+  - [X] Perform range requests for segments if needed
 
 Buffers:
   - [x] End of stream support (as in: actually end when playback reached the end!)
@@ -136,10 +135,10 @@ most do not prevent playback):
     media time once the corresponding segment is pushed.
     The units/scale indicated by this tag will be preferred over the real media
     time in the player APIs.
+  - [X] EXT-X-BYTERANGE: Used for range requests
   - EXT-X-MAP:
     - [X] URI: Used to fetch the initialization segment if one is present
-    - [ ] BYTERANGE: No Range request implementation for now, though this should
-      not be hard.
+    - [X] BYTERANGE: To perform a range request for the initialization segment
   - EXT-X-MEDIA:
     - [X] TYPE: Both AUDIO and VIDEO are handled. SUBTITLES and CLOSED-CAPTIONS
       are just ignored for now.
@@ -199,7 +198,6 @@ most do not prevent playback):
   - [ ] EXT-X-I-FRAMES-ONLY: To handle one day, perhaps (very low priority)
   - [ ] EXT-X-PART-INF
   - [ ] EXT-X-SERVER-CONTROL
-  - [ ] EXT-X-BYTERANGE: Should probably be handled soon
   - [ ] EXT-X-DISCONTINUITY
   - [ ] EXT-X-KEY: decryption and related tags are very low priority
   - [ ] EXT-X-GAP

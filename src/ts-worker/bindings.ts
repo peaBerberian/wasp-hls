@@ -193,13 +193,17 @@ export function clearTimer(id: TimerId): void {
 }
 
 /**
- * TODO failure cases
  * @param {string} url
+ * @param {number|undefined} rangeStart
+ * @param {number|undefined} rangeEnd
+ * @param {number|undefined} timeout
  * @returns {number}
  */
 export function doFetch(
   url: string,
-  timeout?: number
+  rangeStart: number | undefined,
+  rangeEnd: number | undefined,
+  timeout: number | undefined
 ): RequestId {
   let timeouted = false;
   const abortController = new AbortController();
@@ -213,7 +217,11 @@ export function doFetch(
       abortController.abort();
     }, timeout);
   }
-  fetch(url, { signal: abortController.signal })
+  const headers: Array<[string, string]> = [];
+  if (rangeStart !== undefined) {
+    headers.push(["Range", `${rangeStart}-${rangeEnd ?? ""}`]);
+  }
+  fetch(url, { signal: abortController.signal, headers })
     .then(async res => {
       if (timeoutTimeoutId !== undefined) {
         clearTimeout(timeoutTimeoutId);

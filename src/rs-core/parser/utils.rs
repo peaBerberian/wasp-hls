@@ -287,6 +287,71 @@ pub fn parse_iso_8601_date(value : &str, base_offset: usize) -> Option<f64> {
     Some(result)
 }
 
+#[derive(Clone, Debug)]
+pub struct ByteRange {
+    pub first_byte: usize,
+    pub last_byte: usize,
+}
+
+// TODO return Result with more descriptive errors?
+pub fn parse_byte_range(
+    value: &str,
+    base_offset: usize,
+    prev_byte_base: Option<usize>
+) -> Option<ByteRange> {
+    let value = value.as_bytes();
+    let mut base = base_offset;
+    if base >= value.len() {
+        return None;
+    }
+
+    let mut i = base;
+    while i < value.len() && value[i] != b'@' {
+        i += 1;
+    }
+    let range_size = match std::str::from_utf8(&value[base..i]) {
+        Ok(s) => match s.parse::<usize>() {
+            Ok(s) => s,
+            Err(_) => { return None; },
+        },
+        Err(_) => { return None; },
+    };
+
+    if range_size == 0 {
+        return None;
+    }
+
+    if i + 1 >= value.len() {
+        if let Some(base) = prev_byte_base {
+            return Some(ByteRange {
+                first_byte: base,
+                last_byte: base + range_size - 1,
+            });
+        } else {
+            return None;
+        }
+    }
+    i += 1;
+    base = i;
+
+    while i < value.len() {
+        i += 1;
+    }
+
+    let range_base = match std::str::from_utf8(&value[base..i]) {
+        Ok(s) => match s.parse::<usize>() {
+            Ok(s) => s,
+            Err(_) => { return None; },
+        },
+        Err(_) => { return None; },
+    };
+
+    return Some(ByteRange {
+        first_byte: range_base,
+        last_byte: range_base + range_size - 1,
+    });
+}
+
 fn read_integer_until(
     value: &[u8],
     base_offset: usize,

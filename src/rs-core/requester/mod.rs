@@ -10,7 +10,7 @@ use crate::{
     },
     Logger,
     content_tracker::MediaPlaylistPermanentId,
-    parser::SegmentInfo,
+    parser::{SegmentInfo, ByteRange},
     utils::url::Url,
 };
 
@@ -231,6 +231,8 @@ pub struct WaitingSegmentInfo {
     /// Url on which the request is done
     pub(crate) url: Url,
 
+    pub(crate) byte_range: Option<ByteRange>,
+
     /// Start and end of the requested segment.
     /// `None` if the segment contains no media data, such as initialization segments
     pub(crate) time_info: Option<(f64, f64)>,
@@ -290,6 +292,8 @@ pub(crate) struct SegmentRequestInfo {
 
     /// Url on which the request is done
     pub(crate) url: Url,
+
+    pub(crate) byte_range: Option<ByteRange>,
 
     /// Start and end of the requested segment.
     /// `None` if the segment contains no media data, such as initialization segments
@@ -465,7 +469,7 @@ impl Requester {
                 self.media_playlist_request_timeout,
             _ => None,
         };
-        let request_id = jsFetch(url.get_ref(), timeout);
+        let request_id = jsFetch(url.get_ref(), None, None, timeout);
         Logger::info(&format!("Req: Fetching playlist u:{}, id:{}", url.get_ref(), request_id));
         self.pending_playlist_requests.push(PlaylistRequestInfo {
             request_id,
@@ -480,13 +484,18 @@ impl Requester {
     /// `request_id` to `pending_segment_requests`.
     ///
     /// Once it succeeds, the `on_request_finished` function will be called.
-    pub(crate) fn request_init_segment(&mut self, media_type: MediaType, url: Url) {
-        let request_id = jsFetch(url.get_ref(), self.segment_request_timeout);
+    pub(crate) fn request_init_segment(&mut self, media_type: MediaType, url: Url, byte_range: Option<&ByteRange>) {
+        let (range_start, range_end) = format_range_for_js(byte_range);
+        let request_id = jsFetch(
+            url.get_ref(),
+            range_start, range_end,
+            self.segment_request_timeout);
         Logger::info(&format!("Req: Fetching init segment u:{}, id:{}", url.get_ref(), request_id));
         self.pending_segment_requests.push(SegmentRequestInfo {
             request_id,
             media_type,
             url,
+            byte_range: byte_range.map(|b| b.clone()),
             time_info: None,
             attempts_failed: 0,
             is_waiting_for_retry: false,
@@ -515,16 +524,21 @@ impl Requester {
             self.segment_waiting_queue.push(WaitingSegmentInfo {
                 media_type,
                 url: seg.url.clone(),
+                byte_range: seg.byte_range.clone(),
                 time_info,
             });
         } else {
-            let request_id = jsFetch(seg.url.get_ref(), self.segment_request_timeout);
+            let (range_start, range_end) = format_range_for_js(seg.byte_range.as_ref());
+            let request_id = jsFetch(seg.url.get_ref(),
+                range_start, range_end,
+                self.segment_request_timeout);
             Logger::debug(&format!("Req: Performing request right away. u:{} id:{}",
                     seg.url.get_ref(), request_id));
             self.pending_segment_requests.push(SegmentRequestInfo {
                 request_id,
                 media_type,
                 url: seg.url.clone(),
+                byte_range: seg.byte_range.clone(),
                 time_info,
                 attempts_failed: 0,
                 is_waiting_for_retry: false,
@@ -606,7 +620,10 @@ impl Requester {
                 });
                 if let Some(seg) = seg {
                     seg.is_waiting_for_retry = false;
-                    let request_id = jsFetch(seg.url.get_ref(), self.segment_request_timeout);
+                    let (range_start, range_end) = format_range_for_js(seg.byte_range.as_ref());
+                    let request_id = jsFetch(seg.url.get_ref(),
+                        range_start, range_end,
+                        self.segment_request_timeout);
                     seg.request_id = request_id;
                 } else {
                     let pla = self.pending_playlist_requests.iter_mut().find(|p| {
@@ -621,7 +638,7 @@ impl Requester {
                                 self.media_playlist_request_timeout,
                             PlaylistFileType::Unknown => None,
                         };
-                        let request_id = jsFetch(pla.url.get_ref(), timeout);
+                        let request_id = jsFetch(pla.url.get_ref(), None, None, timeout);
                         pla.request_id = request_id;
                     }
                 }
@@ -824,14 +841,18 @@ impl Requester {
                         self.segment_waiting_queue.remove(idx - idx_idx)
                     })
                 .for_each(|seg| {
-                    // TODO indicate which segment in log
-                    let request_id = jsFetch(seg.url.get_ref(), self.segment_request_timeout);
+                    let (range_start, range_end) = format_range_for_js(seg.byte_range.as_ref());
+                    let request_id = jsFetch(
+                        seg.url.get_ref(),
+                        range_start, range_end,
+                        self.segment_request_timeout);
                     Logger::debug(&format!("Req: Performing request of queued segment u:{} id:{}",
                             seg.url().get_ref(), request_id));
                     self.pending_segment_requests.push(SegmentRequestInfo {
                         request_id,
                         media_type: seg.media_type,
                         url: seg.url,
+                        byte_range: seg.byte_range,
                         time_info: seg.time_info,
                         attempts_failed: 0,
                         is_waiting_for_retry: false,
@@ -840,14 +861,17 @@ impl Requester {
             }
         } else {
             while let Some(seg) = self.segment_waiting_queue.pop() {
-                // TODO indicate which segment in log
-                let request_id = jsFetch(seg.url.get_ref(), self.segment_request_timeout);
+                let (range_start, range_end) = format_range_for_js(seg.byte_range.as_ref());
+                let request_id = jsFetch(seg.url.get_ref(),
+                    range_start, range_end,
+                    self.segment_request_timeout);
                 Logger::debug(&format!("Req: Performing request of queued segment u:{} id:{}",
                         seg.url().get_ref(), request_id));
                 self.pending_segment_requests.push(SegmentRequestInfo {
                     request_id,
                     media_type: seg.media_type,
                     url: seg.url,
+                    byte_range: seg.byte_range,
                     time_info: seg.time_info,
                     attempts_failed: 0,
                     is_waiting_for_retry: false,
@@ -914,4 +938,15 @@ fn get_waiting_delay(retry_attempt: u32, base: f64, max: f64) -> f64 {
     );
     let fuzzing_factor = (jsGetRandom() * 2. - 1.) * 0.3; // Max 1.3 Min 0.7
     delay * (fuzzing_factor + 1.)
+}
+
+fn format_range_for_js(
+    original: Option<&ByteRange>
+) -> (Option<usize>, Option<usize>) {
+    match original {
+        None => (None, None),
+        Some(ByteRange { first_byte, last_byte }) => {
+            (Some(*first_byte), Some(*last_byte))
+        }
+    }
 }

@@ -7,7 +7,10 @@ use super::utils::{
     parse_decimal_floating_point,
     parse_enumerated_string,
     parse_iso_8601_date,
+    parse_byte_range,
  };
+
+pub use super::utils::ByteRange;
 
 /// Structure representing the concept of the `Media Playlist` in HLS.
 #[derive(Clone, Debug)]
@@ -33,14 +36,14 @@ pub struct MediaPlaylist {
 #[derive(Clone, Debug)]
 pub struct MapInfo {
     pub uri: Url,
-    pub byte_range: Option<(u32, u32)>
+    pub byte_range: Option<ByteRange>,
 }
 
 #[derive(Clone, Debug)]
 pub struct SegmentInfo {
     pub start: f64,
     pub duration: f64,
-    pub byte_range: Option<(u32, u32)>,
+    pub byte_range: Option<ByteRange>,
     pub url: Url,
 }
 
@@ -74,6 +77,7 @@ pub struct SegmentList {
 #[derive(Debug)]
 pub enum MediaPlaylistParsingError {
     UnparsableExtInf,
+    UnparsableByteRange,
     UriMissingInMap,
     MissingTargetDuration,
     UriWithoutExtInf,
@@ -90,6 +94,8 @@ impl fmt::Display for MediaPlaylistParsingError {
                write!(f, "Missing mandatory TARGETDURATION attribute"),
            MediaPlaylistParsingError::UriWithoutExtInf =>
                write!(f, "One of the uri was not linked to any #EXTINF"),
+           MediaPlaylistParsingError::UnparsableByteRange =>
+               write!(f, "One of the uri had an Unparsable BYTERANGE"),
         }
     }
 }
@@ -117,6 +123,8 @@ impl MediaPlaylist {
         let mut curr_start_time = 0.;
         let mut segment_list: Vec<SegmentInfo> = vec![];
         let mut next_segment_duration: Option<f64> = None;
+        let mut current_byte: Option<usize> = None;
+        let mut next_segment_byte_range: Option<ByteRange> = None;
 
         while let Some(line) = lines.next() {
             let str_line = line.unwrap();
@@ -146,6 +154,13 @@ impl MediaPlaylist {
                         Ok(d) => next_segment_duration = Some(d),
                         Err(_) => return Err(MediaPlaylistParsingError::UnparsableExtInf),
                     },
+                    "-X-BYTERANGE" => match parse_byte_range(&str_line, 5 + "-X-BYTERANGE".len(), current_byte) {
+                        Some(br) => {
+                            current_byte = Some(br.last_byte + 1);
+                            next_segment_byte_range = Some(br);
+                        },
+                        _ => { return Err(MediaPlaylistParsingError::UnparsableByteRange); },
+                    },
                     "-X-MEDIA-SEQUENCE" => match parse_decimal_integer(&str_line, colon_idx + 1).0 {
                         Ok(s) => media_sequence = s as u32,
                         Err(_) => Logger::warn("Unparsable MEDIA-SEQUENCE value"),
@@ -168,6 +183,7 @@ impl MediaPlaylist {
                     "-X-I-FRAMES-ONLY" => i_frames_only = true,
                     "-X-MAP" => {
                         let mut map_info_url: Option<Url> = None;
+                        let mut map_info_byte_range: Option<ByteRange> = None;
                         let mut base_offset = colon_idx + 1;
                         loop {
                             if base_offset >= str_line.len() {
@@ -195,14 +211,29 @@ impl MediaPlaylist {
                                             }
 
                                         },
-                                        // TODO byte_range
+
+                                        "BYTERANGE" => {
+                                            let (parsed, end_offset) = parse_quoted_string(
+                                                &str_line, base_offset + idx + 1);
+                                            base_offset = end_offset + 1;
+                                            if let Ok(val) = parsed {
+                                                match parse_byte_range(val, 0, None) {
+                                                    Some(br) => {
+                                                        current_byte = Some(br.last_byte + 1);
+                                                        map_info_byte_range = Some(br);
+                                                    },
+                                                    _ => return Err(MediaPlaylistParsingError::UnparsableByteRange),
+                                                };
+                                            }
+
+                                        },
                                         _ => {}
                                     }
                                 }
                             }
                         }
                         if let Some(url) = map_info_url {
-                            map = Some(MapInfo { uri: url, byte_range: None });
+                            map = Some(MapInfo { uri: url, byte_range: map_info_byte_range });
                         } else {
                             return Err(MediaPlaylistParsingError::UriMissingInMap);
                         }
@@ -224,12 +255,13 @@ impl MediaPlaylist {
                     let seg = SegmentInfo {
                         start: curr_start_time,
                         duration,
-                        byte_range: None,
+                        byte_range: next_segment_byte_range,
                         url: seg_url,
                     };
                     segment_list.push(seg);
                     curr_start_time = curr_start_time + duration;
                     next_segment_duration = None;
+                    next_segment_byte_range = None;
                 } else {
                     return Err(MediaPlaylistParsingError::UriWithoutExtInf);
                 }

@@ -10,6 +10,7 @@ pub use multi_variant_playlist::{
 };
 pub use media_tag::MediaTagType;
 pub use media_playlist::{
+    ByteRange,
     MapInfo,
     MediaPlaylist,
     SegmentInfo,

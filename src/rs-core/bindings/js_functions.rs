@@ -59,7 +59,11 @@ extern "C" {
     //
     // In that last scenario, you will receive a corresponding error when trying to use that
     // `ResourceId` in the JavaScript functions receiving it.
-    pub fn jsFetch(url: &str, timeout: Option<f64>) -> RequestId;
+    pub fn jsFetch(url: &str,
+        range_base: Option<usize>,
+        range_end: Option<usize>,
+        timeout: Option<f64>
+        ) -> RequestId;
 
     // Abort a request started with `jsFetch`` based on its
     // `request_id`.

@@ -304,7 +304,7 @@ impl Dispatcher {
                             match self.segment_selectors.get_mut(mt).get_next_segment_info(pl) {
                                 NextSegmentInfo::None => {},
                                 NextSegmentInfo::InitSegment(i) =>
-                                    self.requester.request_init_segment(mt, i.uri.clone()),
+                                    self.requester.request_init_segment(mt, i.uri.clone(), i.byte_range.as_ref()),
                                 NextSegmentInfo::MediaSegment(seg) =>
                                     self.requester.request_media_segment(mt, seg),
                             }
