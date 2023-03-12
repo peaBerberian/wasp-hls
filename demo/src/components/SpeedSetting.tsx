@@ -50,7 +50,6 @@ function SpeedSetting({
       </span>
       <select
         aria-label="Update the current playback speed"
-        name="Speed"
         className="setting-value"
         onChange={onSelectChange}
         value={selectedIndex || 0}

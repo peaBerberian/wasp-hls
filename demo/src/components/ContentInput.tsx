@@ -15,6 +15,8 @@ export default React.memo(function ContentInput(
     player : WaspHlsPlayer;
   }
 ) : JSX.Element {
+  const nameEltId = React.useId();
+
   // TODO better input management
   const inputElRef = React.useRef<HTMLInputElement>(null);
   const loadContent = React.useCallback(() => {
@@ -32,14 +34,17 @@ export default React.memo(function ContentInput(
     <div
       className = "inputs-container"
     >
-      <label htmlFor= "url" >{"URL to HLS MultiVariant (a.k.a. Master) Playlist:"}</label>
+      <label htmlFor={`url${nameEltId}`} >
+        {"URL to HLS MultiVariant (a.k.a. Master) Playlist:"}
+      </label>
       <br />
       <input
         ref={inputElRef}
         onKeyDown={onKeyDown}
         className="input-url"
         type="text"
-        name="url"
+        name={`url${nameEltId}`}
+        id={`url${nameEltId}`}
         /* eslint-disable-next-line max-len */
         defaultValue="https://storage.googleapis.com/shaka-demo-assets/angel-one-hls/hls.m3u8"
       />

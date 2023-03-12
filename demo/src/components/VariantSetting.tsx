@@ -66,7 +66,6 @@ function VariantSetting({
       <select
         disabled={variantsList.length < 2}
         aria-label="Update the current playback variant"
-        name="Quality"
         className="setting-value"
         onChange={onSelectChange}
         value={selectedIndex || 0}

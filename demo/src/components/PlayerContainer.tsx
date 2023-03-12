@@ -14,6 +14,7 @@ export default React.memo(function PlayerContainer(
     onClose : () => void;
   }
 ) {
+  const checkBoxId = React.useId();
   const [player, setPlayer] = React.useState<WaspHlsPlayer|null>(null);
   const [shouldShowBufferGaps, setShouldShowBufferGaps] = React.useState(false);
   const [bufferGaps, setBufferGaps] = React.useState<Array<{
@@ -139,12 +140,13 @@ export default React.memo(function PlayerContainer(
                 <VideoPlayer player={player} />
                 <input
                   type="checkbox"
-                  id="buffer-size"
-                  name="buffer-size"
+                  className="buffer-size"
+                  name={`buffer-size${checkBoxId}`}
+                  id={`buffer-size${checkBoxId}`}
                   onChange={onBufferSizeCheckBoxChange}
                 />
                 <label
-                  htmlFor="buffer-size"
+                  htmlFor={`buffer-size${checkBoxId}`}
                 >
                   Enable Buffer Size Chart (below when available)
                 </label>

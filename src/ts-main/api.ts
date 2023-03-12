@@ -149,7 +149,7 @@ export interface InitializationOptions {
 }
 
 const DEFAULT_CONFIG: WaspHlsPlayerConfig = {
-  bufferGoal: 30,
+  bufferGoal: 15,
 
   segmentRequestTimeout: 20000,
   segmentBackoffBase: 300,
