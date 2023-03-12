@@ -7,6 +7,7 @@ use crate::{
         jsTimer,
         TimerReason,
         TimerId, jsGetRandom, RequestErrorReason,
+        formatters::format_range_for_js,
     },
     Logger,
     content_tracker::MediaPlaylistPermanentId,
@@ -938,15 +939,4 @@ fn get_waiting_delay(retry_attempt: u32, base: f64, max: f64) -> f64 {
     );
     let fuzzing_factor = (jsGetRandom() * 2. - 1.) * 0.3; // Max 1.3 Min 0.7
     delay * (fuzzing_factor + 1.)
-}
-
-fn format_range_for_js(
-    original: Option<&ByteRange>
-) -> (Option<usize>, Option<usize>) {
-    match original {
-        None => (None, None),
-        Some(ByteRange { first_byte, last_byte }) => {
-            (Some(*first_byte), Some(*last_byte))
-        }
-    }
 }

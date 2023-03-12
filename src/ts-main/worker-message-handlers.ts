@@ -20,9 +20,11 @@ import {
   UpdatePlaybackRateWorkerMessage,
   MediaOffsetUpdateWorkerMessage,
   ErrorWorkerMessage,
-  ContentInfoUpdateWorkerMessage,
+  ContentTimeBoundsUpdateWorkerMessage,
   ContentStoppedWorkerMessage,
   WarningWorkerMessage,
+  MultiVariantPlaylistParsedWorkerMessage,
+  VariantUpdateWorkerMessage,
 } from "../ts-common/types";
 import {
   WaspOtherError,
@@ -692,14 +694,14 @@ export function onWarningMessage(
 }
 
 /**
- * Handles `ContentInfoUpdateWorkerMessage` messages.
+ * Handles `ContentTimeBoundsUpdateWorkerMessage` messages.
  * @param {Object} msg - The worker's message received.
  * @param {Object|null} contentMetadata - Metadata of the content currently
  * playing. `null` if no content is currently playing.
  * This object may be mutated.
  */
-export function onContentInfoUpdateMessage(
-  msg: ContentInfoUpdateWorkerMessage,
+export function onContentTimeBoundsUpdateMessage(
+  msg: ContentTimeBoundsUpdateWorkerMessage,
   contentMetadata: ContentMetadata | null
 ): void {
   if (contentMetadata?.contentId !== msg.value.contentId) {
@@ -708,6 +710,53 @@ export function onContentInfoUpdateMessage(
   }
   contentMetadata.minimumPosition = msg.value.minimumPosition;
   contentMetadata.maximumPosition = msg.value.maximumPosition;
+}
+
+/**
+ * Handles `MultiVariantPlaylistParsedWorkerMessage` messages.
+ * @param {Object} msg - The worker's message received.
+ * @param {Object|null} contentMetadata - Metadata of the content currently
+ * playing. `null` if no content is currently playing.
+ * This object may be mutated.
+ * @returns {boolean} - `true` if the message concerned the current content.
+ */
+export function onMultiVariantPlaylistParsedMessage(
+  msg: MultiVariantPlaylistParsedWorkerMessage,
+  contentMetadata: ContentMetadata | null
+): boolean {
+  if (contentMetadata?.contentId !== msg.value.contentId) {
+    logger.info("API: Ignoring warning due to wrong `contentId`");
+    return false;
+  }
+  contentMetadata.variants = msg.value.variants;
+  return true;
+}
+
+/**
+ * Handles `VariantUpdateWorkerMessage` messages.
+ * @param {Object} msg - The worker's message received.
+ * @param {Object|null} contentMetadata - Metadata of the content currently
+ * playing. `null` if no content is currently playing.
+ * This object may be mutated.
+ * @returns {boolean} - `true` if the current variant has been updated.
+ */
+export function onVariantUpdateMessage(
+  msg: VariantUpdateWorkerMessage,
+  contentMetadata: ContentMetadata | null
+): boolean {
+  if (contentMetadata?.contentId !== msg.value.contentId) {
+    logger.info("API: Ignoring warning due to wrong `contentId`");
+    return false;
+  }
+  const variant = contentMetadata.variants.find(v => v.id === msg.value.variantId);
+  if (variant === undefined) {
+    logger.warn("API: VariantUpdate for an unfound variant");
+  }
+  if (variant !== contentMetadata.currVariant) {
+    contentMetadata.currVariant = variant;
+    return true;
+  }
+  return false;
 }
 
 /**

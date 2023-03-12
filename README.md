@@ -61,7 +61,7 @@ Type of contents:
   - [x] Play HLS VoD contents
   - [x] Transcode mpeg-ts (thanks to mux.js for now)
   - [x] Play HLS live contents _(for now require presence of
-        `EXT-X-PROGRAM-DATE-TIME` tag in media playlist)_
+    `EXT-X-PROGRAM-DATE-TIME` tag in media playlist)_
   - [ ] Proper support of HLS low-latency contents.
     _Priority: average_
 
@@ -72,6 +72,8 @@ Worker-related features:
 
 Adaptive BitRate:
   - [x] Choose variant based on throughtput-based estimates
+  - [x] Allow application to list and select its own variant (quality) and know
+    the current one
   - [ ] Also choose variant based on buffer-based estimates.
     _Priority: low_
 

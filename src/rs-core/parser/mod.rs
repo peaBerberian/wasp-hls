@@ -16,4 +16,7 @@ pub use media_playlist::{
     SegmentInfo,
     SegmentList,
 };
-pub use variant_stream::VariantStream;
+pub use variant_stream::{
+    VariantStream,
+    VideoResolution,
+};

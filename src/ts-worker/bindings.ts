@@ -1,6 +1,7 @@
 import idGenerator from "../ts-common/idGenerator.js";
 import logger from "../ts-common/logger.js";
 import QueuedSourceBuffer from "../ts-common/QueuedSourceBuffer.js";
+import { VariantInfo } from "../ts-common/types.js";
 import {
   Dispatcher,
   LogLevel,
@@ -949,11 +950,70 @@ export function updateContentInfo(
     return ;
   }
   postMessageToMain({
-    type: "content-info-update",
+    type: "content-time-update",
     value: {
       contentId: contentInfo.contentId,
       minimumPosition,
       maximumPosition,
+    },
+  });
+}
+
+export function announceFetchedContent(
+  variantInfo: Uint32Array
+): void {
+  const contentInfo = playerInstance.getContentInfo();
+  if (contentInfo === null) {
+    return ;
+  }
+  const variantInfoObj : VariantInfo[] = [];
+  let i = 0;
+  i++; // Skip number of variants
+  while (i < variantInfo.length) {
+    const id = variantInfo[i];
+    i++;
+
+    const height = variantInfo[i];
+    i++;
+
+    const width = variantInfo[i];
+    i++;
+
+    const frameRate = variantInfo[i];
+    i++;
+
+    const bandwidth = variantInfo[i];
+    i++;
+
+    variantInfoObj.push({
+      id,
+      height,
+      width,
+      frameRate,
+      bandwidth,
+    });
+  }
+  postMessageToMain({
+    type: "multivariant-parsed",
+    value: {
+      contentId: contentInfo.contentId,
+      variants: variantInfoObj,
+    },
+  });
+}
+
+export function announceVariantUpdate(
+  variantId: number | undefined
+): void {
+  const contentInfo = playerInstance.getContentInfo();
+  if (contentInfo === null) {
+    return ;
+  }
+  postMessageToMain({
+    type: "variant-update",
+    value: {
+      contentId: contentInfo.contentId,
+      variantId,
     },
   });
 }

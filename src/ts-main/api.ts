@@ -5,6 +5,7 @@ import logger, {
 } from "../ts-common/logger";
 import noop from "../ts-common/noop";
 import {
+  VariantInfo,
   WaspHlsPlayerConfig,
   WorkerMessage,
 } from "../ts-common/types";
@@ -25,7 +26,7 @@ import {
   onAttachMediaSourceMessage,
   onClearMediaSourceMessage,
   onErrorMessage,
-  onContentInfoUpdateMessage,
+  onContentTimeBoundsUpdateMessage,
   onContentStoppedMessage,
   onCreateMediaSourceMessage,
   onCreateSourceBufferMessage,
@@ -40,6 +41,8 @@ import {
   onUpdateMediaSourceDurationMessage,
   onUpdatePlaybackRateMessage,
   onWarningMessage,
+  onMultiVariantPlaylistParsedMessage,
+  onVariantUpdateMessage,
 } from "./worker-message-handlers";
 
 // Allows to ensure a never-seen-before identifier is used for each content.
@@ -115,6 +118,12 @@ interface WaspHlsPlayerEvents {
    * `rebufferingStarted` event is sent.
    */
   rebufferingEnded: null;
+
+  variantUpdate: VariantInfo | undefined;
+
+  variantsListUpdate: VariantInfo[];
+
+  VariantUpdateWorkerMessage: VariantInfo;
 }
 
 /** Various statuses that may be set for a WaspHlsPlayer's initialization. */
@@ -337,6 +346,9 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
       mediaSource: null,
       disposeMediaSource: null,
       sourceBuffers: [],
+      variants: [],
+      currVariant: undefined,
+      lockedVariant: null,
       stopPlaybackObservations: null,
       isRebuffering: false,
       mediaOffset: undefined,
@@ -572,6 +584,52 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
     return this.__contentMetadata__?.error ?? null;
   }
 
+  public getCurrentVariant(): VariantInfo | undefined {
+    return this.__contentMetadata__?.currVariant ?? undefined;
+  }
+
+  public getVariantsList(): VariantInfo[] {
+    return this.__contentMetadata__?.variants ?? [];
+  }
+
+  public lockVariant(variantId: number) {
+    if (this.__worker__ === null) {
+      throw new Error("The Player is not initialized or disposed.");
+    }
+    if (this.__contentMetadata__ === null) {
+      throw new Error("No content loaded");
+    }
+    this.__contentMetadata__.lockedVariant = variantId;
+    postMessageToWorker(this.__worker__, {
+      type: "lock-variant",
+      value: {
+        contentId: this.__contentMetadata__.contentId,
+        variantId,
+      },
+    });
+  }
+
+  public unlockVariant() {
+    if (this.__worker__ === null) {
+      throw new Error("The Player is not initialized or disposed.");
+    }
+    if (this.__contentMetadata__ === null) {
+      throw new Error("No content loaded");
+    }
+    this.__contentMetadata__.lockedVariant = null;
+    postMessageToWorker(this.__worker__, {
+      type: "lock-variant",
+      value: {
+        contentId: this.__contentMetadata__.contentId,
+        variantId: null,
+      },
+    });
+  }
+
+  public getLockedVariant(): number | null {
+    return this.__contentMetadata__?.lockedVariant ?? null;
+  }
+
   public dispose() {
     this.__destroyAbortController__.abort();
     if (this.__worker__ === null) {
@@ -691,6 +749,16 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
         case "media-offset-update":
           onMediaOffsetUpdateMessage(data, this.__contentMetadata__);
           break;
+        case "multivariant-parsed":
+          if (onMultiVariantPlaylistParsedMessage(data, this.__contentMetadata__)) {
+            this.trigger("variantsListUpdate", this.getVariantsList());
+          }
+          break;
+        case "variant-update":
+          if (onVariantUpdateMessage(data, this.__contentMetadata__)) {
+            this.trigger("variantUpdate", this.getCurrentVariant());
+          }
+          break;
         case "error": {
           const error = onErrorMessage(data, this.__contentMetadata__);
           if (error !== null) {
@@ -706,8 +774,8 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
           }
           break;
         }
-        case "content-info-update":
-          onContentInfoUpdateMessage(data, this.__contentMetadata__);
+        case "content-time-update":
+          onContentTimeBoundsUpdateMessage(data, this.__contentMetadata__);
           break;
         case "content-stopped":
           if (onContentStoppedMessage(data, this.__contentMetadata__)) {

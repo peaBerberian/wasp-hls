@@ -124,6 +124,14 @@ impl Dispatcher {
         self.requester.update_media_playlist_backoff_max(max);
     }
 
+    pub fn lock_variant(&mut self, variant_id: u32) {
+        self.inner_lock_variant(variant_id)
+    }
+
+    pub fn unlock_variant(&mut self) {
+        self.inner_unlock_variant()
+    }
+
 //     pub fn available_audio_tracks(&self) -> Vec<u8> {
 //         match self.content_tracker {
 //             None => vec![],

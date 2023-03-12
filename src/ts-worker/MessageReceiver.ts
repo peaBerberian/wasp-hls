@@ -205,14 +205,34 @@ export default function MessageReceiver() {
         logger.setLevel(data.value);
         break;
 
-      case "update-config":
+      case "update-config": {
         const dispatcher = playerInstance.getDispatcher();
         if (dispatcher === null) {
           return;
         }
         updateDispatcherConfig(dispatcher, data.value);
         break;
+      }
 
+      case "lock-variant": {
+        const dispatcher = playerInstance.getDispatcher();
+        if (dispatcher === null) {
+          return postUnitializedWorkerError(data.value.contentId);
+        }
+        const contentInfo = playerInstance.getContentInfo();
+        if (
+          contentInfo === null ||
+          contentInfo.contentId !== data.value.contentId
+        ) {
+          return ;
+        }
+        if (data.value.variantId === null) {
+          dispatcher.unlock_variant();
+        } else {
+          dispatcher.lock_variant(data.value.variantId);
+        }
+        break;
+      }
     }
   };
 }

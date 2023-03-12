@@ -36,6 +36,15 @@ pub struct ContentTracker {
     ///
     /// Set to `None` if no audio playlist is chosen.
     curr_audio_idx: Option<MediaPlaylistPermanentId>,
+
+    is_variant_locked: bool,
+
+    last_bandwidth: f64,
+}
+
+pub enum VariantUpdateResult {
+    Unchanged,
+    Changed(Vec<MediaType>),
 }
 
 impl ContentTracker {
@@ -46,6 +55,8 @@ impl ContentTracker {
             curr_variant_idx: None,
             curr_audio_idx: None,
             curr_video_idx: None,
+            is_variant_locked: false,
+            last_bandwidth: 0.,
         }
     }
 
@@ -185,8 +196,13 @@ impl ContentTracker {
     /// Returns an empty vec if this new bandwidth estimate did not have any effect on any selected
     /// MediaPlaylist.
     pub(crate) fn update_curr_bandwidth(
-        &mut self, bandwidth: f64
-    ) -> Vec<MediaType> {
+        &mut self,
+        bandwidth: f64
+    ) -> VariantUpdateResult {
+        self.last_bandwidth = bandwidth;
+        if self.is_variant_locked() {
+            return VariantUpdateResult::Unchanged;
+        }
         let variants = self.playlist.variants();
         let best_variant_idx = variants.iter().position(|x| {
             (x.bandwidth as f64) > bandwidth
@@ -197,30 +213,39 @@ impl ContentTracker {
                 Some(variants.len() - 1)
             }
         });
+        self.change_variant_from_index(best_variant_idx)
+    }
 
-        if best_variant_idx != self.curr_variant_idx {
-            if let Some(idx) = best_variant_idx {
-                let prev_audio_idx = self.curr_audio_idx.clone();
-                let prev_video_idx = self.curr_video_idx.clone();
-                self.set_curr_variant(idx);
-
-                let mut updates = vec![];
-                if self.curr_audio_idx != prev_audio_idx {
-                    updates.push(MediaType::Audio);
-                }
-                if self.curr_video_idx != prev_video_idx {
-                    updates.push(MediaType::Video);
-                }
-                updates
+    pub(crate) fn lock_variant(&mut self,
+        variant_id: u32
+    ) -> Option<VariantUpdateResult> {
+        let variants = self.playlist.variants();
+        let pos = variants.iter().position(|x| {
+            x.id() == variant_id
+        }).or_else(|| {
+            if variants.len() == 0 {
+                None
             } else {
-                self.curr_variant_idx = None;
-                self.curr_video_idx = None;
-                self.curr_audio_idx = None;
-                vec![MediaType::Audio, MediaType::Video]
+                Some(variants.len() - 1)
             }
+        });
+
+        if let Some(pos) = pos {
+            self.is_variant_locked = true;
+            Some(self.change_variant_from_index(Some(pos)))
         } else {
-            vec![]
+            self.is_variant_locked = false;
+            None
         }
+    }
+
+    pub(crate) fn unlock_variant(&mut self) -> VariantUpdateResult {
+        self.is_variant_locked = false;
+        self.update_curr_bandwidth(self.last_bandwidth)
+    }
+
+    pub(crate) fn is_variant_locked(&self) -> bool {
+        self.is_variant_locked
     }
 
     /// Returns the metadata allowing to load and the update the MediaPlaylist of the given
@@ -332,6 +357,34 @@ impl ContentTracker {
     //         })
     //     }
     // }
+
+    fn change_variant_from_index(&mut self,
+        index: Option<usize>
+    ) -> VariantUpdateResult {
+        if index != self.curr_variant_idx {
+            if let Some(idx) = index {
+                let prev_audio_idx = self.curr_audio_idx.clone();
+                let prev_video_idx = self.curr_video_idx.clone();
+                self.set_curr_variant(idx);
+
+                let mut updates = vec![];
+                if self.curr_audio_idx != prev_audio_idx {
+                    updates.push(MediaType::Audio);
+                }
+                if self.curr_video_idx != prev_video_idx {
+                    updates.push(MediaType::Video);
+                }
+                VariantUpdateResult::Changed(updates)
+            } else {
+                self.curr_variant_idx = None;
+                self.curr_video_idx = None;
+                self.curr_audio_idx = None;
+                VariantUpdateResult::Changed(vec![MediaType::Audio, MediaType::Video])
+            }
+        } else {
+            VariantUpdateResult::Unchanged
+        }
+    }
 
     fn set_curr_variant(&mut self, variant_idx: usize) {
         let variants = self.playlist.variants();

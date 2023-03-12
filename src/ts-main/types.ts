@@ -1,4 +1,5 @@
 import QueuedSourceBuffer from "../ts-common/QueuedSourceBuffer";
+import { VariantInfo } from "../ts-common/types";
 
 /**
  * Structure storing metadata associated to a content being played by a
@@ -96,6 +97,12 @@ export interface ContentMetadata {
   minimumPosition : number | undefined;
 
   maximumPosition : number | undefined;
+
+  currVariant : VariantInfo | undefined;
+
+  variants : VariantInfo[];
+
+  lockedVariant: number | null;
 
   loadingAborter: AbortController | undefined;
 

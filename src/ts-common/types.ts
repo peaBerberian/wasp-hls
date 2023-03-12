@@ -30,16 +30,28 @@ export type MainMessage =
   EndOfStreamErrorMainMessage |
   UpdateWantedSpeedMainMessage |
   UpdateLoggerLevelMainMessage |
+  LockVariantMainMessage |
   UpdateConfigMainMessage;
 
 /** Message sent from the worker to the main thread. */
 export type WorkerMessage =
+
+  // Related to WebWorker initialization
+
   InitializedWorkerMessage |
   InitializationErrorWorkerMessage |
+
+  // Related to content information
+
+  MultiVariantPlaylistParsedWorkerMessage |
+  ContentTimeBoundsUpdateWorkerMessage |
+  MediaOffsetUpdateWorkerMessage |
+  VariantUpdateWorkerMessage |
+
+  // HTMLMediaElement/MSE actions
+
   SeekWorkerMessage |
   UpdatePlaybackRateWorkerMessage |
-  ErrorWorkerMessage |
-  WarningWorkerMessage |
   AttachMediaSourceWorkerMessage |
   CreateMediaSourceWorkerMessage |
   SetMediaSourceDurationWorkerMessage |
@@ -48,12 +60,18 @@ export type WorkerMessage =
   AppendBufferWorkerMessage |
   RemoveBufferWorkerMessage |
   EndOfStreamWorkerMessage |
-  RebufferingStartedWorkerMessage |
-  RebufferingEndedWorkerMessage |
+
+  // Playback conditions
+
   StartPlaybackObservationWorkerMessage |
   StopPlaybackObservationWorkerMessage |
-  MediaOffsetUpdateWorkerMessage |
-  ContentInfoUpdateWorkerMessage |
+  RebufferingStartedWorkerMessage |
+  RebufferingEndedWorkerMessage |
+
+  // Misc
+
+  ErrorWorkerMessage |
+  WarningWorkerMessage |
   ContentStoppedWorkerMessage;
 
 /**
@@ -249,8 +267,8 @@ export interface OtherErrorWorkerInfo {
 /**
  * Message sent when the Worker has new information on the content being played.
  */
-export interface ContentInfoUpdateWorkerMessage {
-  type: "content-info-update";
+export interface ContentTimeBoundsUpdateWorkerMessage {
+  type: "content-time-update";
   value: {
     /**
      * The identifier for the content on which an error was received.
@@ -269,6 +287,27 @@ export interface ContentInfoUpdateWorkerMessage {
      */
     maximumPosition: number | undefined;
   };
+}
+
+export interface MultiVariantPlaylistParsedWorkerMessage {
+  type: "multivariant-parsed";
+  value: {
+    /**
+     * The identifier for the content on which an error was received.
+     * This is the same `contentId` value that on the related
+     * `LoadContentMainMessage`.
+     */
+    contentId: string;
+    variants: VariantInfo[];
+  };
+}
+
+export interface VariantInfo {
+  id: number;
+  width: number;
+  height: number;
+  frameRate: number;
+  bandwidth: number;
 }
 
 /**
@@ -636,6 +675,18 @@ export interface MediaOffsetUpdateWorkerMessage {
   };
 }
 
+export interface VariantUpdateWorkerMessage {
+  type: "variant-update";
+  value: {
+    /**
+     * A unique identifier for the content being loaded, that will have to be
+     * present on the various events concerning that content.
+     */
+    contentId: string;
+    variantId: number | undefined;
+  };
+}
+
 /**
  * First message sent by the main thread to a worker, to initialize it.
  * Once a worker has been initialized, it should send back an
@@ -902,6 +953,19 @@ export interface UpdateLoggerLevelMainMessage {
 export interface UpdateConfigMainMessage {
   type: "update-config";
   value: Partial<WaspHlsPlayerConfig>;
+}
+
+export interface LockVariantMainMessage {
+  type: "lock-variant";
+  value: {
+    /**
+     * The identifier for the content that should be stopped.
+     * This is the same `contentId` value that on the related
+     * `LoadContentMainMessage`.
+     */
+    contentId: string;
+    variantId: number | null;
+  };
 }
 
 export interface WaspHlsPlayerConfig {

@@ -131,6 +131,7 @@ impl MultiVariantPlaylist {
             variants: vec![],
             media_playlist_context: MediaPlaylistContext {},
         };
+        let mut curr_variant_id: u32 = 0;
 
         let mut lines = playlist.lines();
         while let Some(line) = lines.next() {
@@ -159,7 +160,8 @@ impl MultiVariantPlaylist {
                             Url::from_relative(playlist_base_url, variant_url)
                         };
 
-                        let variant = VariantStream::create_from_stream_inf(&str_line, variant_url)?;
+                        let variant = VariantStream::create_from_stream_inf(&str_line, variant_url, curr_variant_id)?;
+                        curr_variant_id += 1;
                         ret.variants.push(variant);
                     },
                     "-X-MEDIA" => {

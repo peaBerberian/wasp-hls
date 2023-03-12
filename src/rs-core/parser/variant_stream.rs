@@ -21,6 +21,8 @@ use super::{
 /// Stucture representing the HLS concept of a "variant stream".
 #[derive(Debug)]
 pub struct VariantStream {
+    id: u32,
+
     /// Url of the "Media Playlist" corresponding to the main rendition of this
     /// variant stream.
     url: Url,
@@ -181,11 +183,25 @@ pub struct VariantStream {
 
 /// Pixel resolution of a video content
 #[derive(Copy, Clone, Debug)]
-struct VideoResolution {
+pub struct VideoResolution {
     /// Height of the video in pixels
     height: u32,
     /// Width of the video in pixels
     width: u32,
+}
+
+impl VideoResolution {
+    pub const fn new(width: u32, height: u32) -> Self {
+        Self { height, width }
+    }
+
+    pub fn height(&self) -> u32 {
+        self.height
+    }
+
+    pub fn width(&self) -> u32 {
+        self.width
+    }
 }
 
 /// Indicate the HDCP level typically enforced by the concerned content.
@@ -260,6 +276,18 @@ impl VariantStream {
         }
     }
 
+    pub(crate) fn resolution(&self) -> Option<&VideoResolution> {
+        self.resolution.as_ref()
+    }
+
+    pub(crate) fn frame_rate(&self) -> Option<f64> {
+        self.frame_rate
+    }
+
+    pub(crate) fn id(&self) -> u32 {
+        self.id
+    }
+
     pub(crate) fn url(&self) -> &Url {
         &self.url
     }
@@ -280,7 +308,8 @@ impl VariantStream {
 
     pub(super) fn create_from_stream_inf(
         variant_line: &str,
-        url: Url
+        url: Url,
+        id: u32
     ) -> Result<Self, VariantParsingError> {
         let mut bandwidth : Option<u64> = None;
         let mut resolution : Option<VideoResolution> = None;
@@ -472,6 +501,7 @@ impl VariantStream {
 
         if let Some(bandwidth) = bandwidth {
             Ok(VariantStream {
+                id,
                 audio,
                 average_bandwitdh,
                 bandwidth,

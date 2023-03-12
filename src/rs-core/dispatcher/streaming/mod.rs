@@ -18,9 +18,11 @@ use crate::{
         jsSendPlaylistParsingError,
         PlaylistType,
         jsSendOtherError,
+        jsAnnounceFetchedContent,
+        formatters::format_variants_info_for_js, jsAnnounceVariantUpdate,
     },
     Logger,
-    content_tracker::{MediaPlaylistPermanentId, ContentTracker},
+    content_tracker::{MediaPlaylistPermanentId, ContentTracker, VariantUpdateResult},
     parser::MultiVariantPlaylist,
     requester::{
         PlaylistFileType,
@@ -155,6 +157,8 @@ impl Dispatcher {
                     self.internal_stop();
                     return;
                 }
+                let variants_info = format_variants_info_for_js(content_tracker.variants());
+                jsAnnounceFetchedContent(variants_info);
 
                 use PlaylistFileType::*;
                 // TODO lowest/latest bandwidth first?
@@ -169,6 +173,7 @@ impl Dispatcher {
                     let url = url.clone();
                     self.requester.fetch_playlist(url, MediaPlaylist { id });
                 }
+                jsAnnounceVariantUpdate(content_tracker.curr_variant().map(|v| v.id()));
             },
         }
     }
@@ -377,24 +382,56 @@ impl Dispatcher {
         if let Some(ctnt) = self.content_tracker.as_mut() {
             if let Some(bandwidth) = self.adaptive_selector.get_estimate() {
                 Logger::debug(&format!("New bandwidth estimate: {}", bandwidth));
-                ctnt.update_curr_bandwidth(bandwidth).iter().for_each(|mt| {
-                    let mt = *mt;
-                    Logger::info(&format!("{} MediaPlaylist changed", mt));
-                    self.requester.abort_segments_with_type(mt);
-                    let selector = self.segment_selectors.get_mut(mt);
-                    selector.rollback();
-                    selector.reset_init_segment();
-                    if ctnt.curr_media_playlist(mt).is_none() {
-                        if let Some((url, id)) = ctnt.curr_media_playlist_request_info(mt) {
-                            use PlaylistFileType::*;
-                            Logger::debug("Media changed, requesting its media playlist");
-                            let id = id.clone();
-                            let url = url.clone();
-                            self.requester.fetch_playlist(url, MediaPlaylist { id });
-                        }
-                    }
-                })
+                if let VariantUpdateResult::Changed(media_types) = ctnt.update_curr_bandwidth(bandwidth) {
+                    self.on_media_playlist_changed(media_types.as_ref());
+                }
             }
+        }
+    }
+
+    pub(super) fn inner_lock_variant(&mut self,
+        variant_id: u32
+    ) {
+        if let Some(ctnt) = self.content_tracker.as_mut() {
+            match ctnt.lock_variant(variant_id) {
+                None => Logger::warn("Locked variant not found"),
+                Some(VariantUpdateResult::Changed(mt)) =>
+                    self.on_media_playlist_changed(mt.as_ref()),
+                _ => {},
+            }
+        }
+    }
+
+    pub(super) fn inner_unlock_variant(&mut self) {
+        if let Some(ctnt) = self.content_tracker.as_mut() {
+            if let VariantUpdateResult::Changed(media_types) = ctnt.unlock_variant() {
+                self.on_media_playlist_changed(media_types.as_ref());
+            }
+        }
+    }
+
+    fn on_media_playlist_changed(&mut self,
+        media_types: &[MediaType]
+    ) {
+        if let Some(ctnt) = self.content_tracker.as_mut() {
+            media_types.iter().for_each(|mt| {
+                let mt = *mt;
+                Logger::info(&format!("{} MediaPlaylist changed", mt));
+                self.requester.abort_segments_with_type(mt);
+                let selector = self.segment_selectors.get_mut(mt);
+                selector.rollback();
+                selector.reset_init_segment();
+                if ctnt.curr_media_playlist(mt).is_none() {
+                    if let Some((url, id)) = ctnt.curr_media_playlist_request_info(mt) {
+                        use PlaylistFileType::*;
+                        Logger::debug("Media changed, requesting its media playlist");
+                        let id = id.clone();
+                        let url = url.clone();
+                        self.requester.fetch_playlist(url, MediaPlaylist { id });
+                    }
+                }
+            });
+            jsAnnounceVariantUpdate(ctnt.curr_variant().map(|v| v.id()));
         }
     }
 
@@ -492,4 +529,3 @@ fn handle_source_buffer_creation_error(err: SourceBufferCreationError) {
             ),
     }
 }
-
