@@ -2,6 +2,7 @@ import * as React from "react";
 import WaspHlsPlayer, {
   PlayerState,
 } from "../../../src";
+import { VariantInfo } from "../../../src/ts-main";
 import FullScreenButton from "./FullScreenButton";
 import PlayButton from "./PlayButton";
 import PositionIndicator from "./PositionIndicator";
@@ -9,6 +10,7 @@ import ProgressBar from "./ProgressBar";
 import SettingsButton from "./SettingsButton";
 import SpeedSetting from "./SpeedSetting";
 import StopButton from "./StopButton";
+import VariantSetting from "./VariantSetting";
 import VolumeButton from "./VolumeButton";
 
 const TIME_CHECK_INTERVAL = 200;
@@ -38,6 +40,11 @@ export default React.memo(function ControlBar(
   const [areControlsDisabled, setAreControlsDisabled] = React.useState(true);
   const [isPlayPauseDisabled, setIsPlayPauseDisabled] = React.useState(true);
   const [speed, setSpeed] = React.useState(1);
+  const [isAutoVariant, setIsAutoVariant] = React.useState(
+    player.getLockedVariant() === null
+  );
+  const [variant, setVariant] = React.useState<VariantInfo|undefined>(undefined);
+  const [variantsList, setVariantsList] = React.useState<VariantInfo[]>([]);
   const [shouldDisplaySettings, setShouldDisplaySettings] = React.useState(false);
   const lastMouseY = React.useRef(0);
   const isPlayerElementHovered = React.useRef(false);
@@ -87,6 +94,8 @@ export default React.memo(function ControlBar(
   React.useEffect(() => {
     let positionRefreshIntervalId: number|undefined;
 
+    player.addEventListener("variantUpdate", onVariantUpdate);
+    player.addEventListener("variantsListUpdate", onVariantsListUpdate);
     player.addEventListener("loaded", onLoaded);
     player.addEventListener("loading", onLoading);
     player.addEventListener("stopped", onStopped);
@@ -102,6 +111,8 @@ export default React.memo(function ControlBar(
 
     return () => {
       resetTimeInfo();
+      player.removeEventListener("variantUpdate", onVariantUpdate);
+      player.removeEventListener("variantsListUpdate", onVariantsListUpdate);
       player.removeEventListener("loaded", onLoaded);
       player.removeEventListener("loading", onLoading);
       player.removeEventListener("stopped", onStopped);
@@ -117,7 +128,17 @@ export default React.memo(function ControlBar(
       }
     };
 
+    function onVariantUpdate(v: VariantInfo | undefined) {
+      setVariant(v);
+    }
+
+    function onVariantsListUpdate(vl: VariantInfo[]) {
+      setVariantsList(vl);
+    }
+
     function onLoading() {
+      setVariant(undefined);
+      setVariantsList([]);
       setIsPaused(true);
       setAreControlsDisabled(false);
       setIsPlayPauseDisabled(true);
@@ -167,6 +188,8 @@ export default React.memo(function ControlBar(
     }
 
     function onError() {
+      setVariant(undefined);
+      setVariantsList([]);
       resetTimeInfo();
       displayControlBar(true);
       setAreControlsDisabled(false);
@@ -176,6 +199,8 @@ export default React.memo(function ControlBar(
     }
 
     function onStopped() {
+      setVariant(undefined);
+      setVariantsList([]);
       displayControlBar(true);
       resetTimeInfo();
       setAreControlsDisabled(true);
@@ -308,10 +333,26 @@ export default React.memo(function ControlBar(
     setShouldDisplaySettings(s => !s);
   }, []);
 
+  const updateVariant = React.useCallback((v: VariantInfo | undefined) => {
+    if (v === undefined) {
+      player.unlockVariant();
+      setIsAutoVariant(true);
+    } else {
+      player.lockVariant(v.id);
+      setIsAutoVariant(false);
+    }
+  }, [player]);
+
   return <>
     {
       shouldDisplaySettings ?
         <div className="settings">
+          <VariantSetting
+            variant={variant}
+            variantsList={variantsList}
+            isAuto={isAutoVariant}
+            updateVariant={updateVariant}
+          />
           <SpeedSetting
             speed={speed}
             updateSpeed={setSpeed}

@@ -44,13 +44,13 @@ function SpeedSetting({
   }, []);
 
   return (
-    <div className={"video-setting speed-setting"}>
+    <div className="video-setting speed-setting">
       <span className="setting-name" >
-        {"Playback Speed"}
+        {"Speed"}
       </span>
       <select
         aria-label="Update the current playback speed"
-        name="Playback Speed"
+        name="Speed"
         className="setting-value"
         onChange={onSelectChange}
         value={selectedIndex || 0}

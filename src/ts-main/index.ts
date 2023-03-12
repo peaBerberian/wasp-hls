@@ -1,3 +1,3 @@
 import WaspHlsPlayer from "./api";
-export { PlayerState } from "./types";
+export { PlayerState, VariantInfo } from "./types";
 export default WaspHlsPlayer;

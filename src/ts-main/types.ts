@@ -120,3 +120,5 @@ export const enum PlayerState {
   /** The last content loaded failed on error. */
   Error="Error",
 }
+
+export { VariantInfo };
