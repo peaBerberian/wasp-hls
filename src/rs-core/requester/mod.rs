@@ -16,8 +16,8 @@ use crate::{
 
 const PRIORITY_STEPS : [f64; 6] = [2., 4., 8., 12., 18., 25.];
 
-const BASE_RETRY_DELAY: f64 = 300.;
-const MAX_RETRY_DELAY: f64 = 3000.;
+const DEFAULT_BACKOFF_BASE: f64 = 300.;
+const DEFAULT_BACKOFF_MAX: f64 = 3000.;
 
 #[derive(Clone, Copy, Debug, PartialEq, PartialOrd, Eq, Ord)]
 enum PriorityLevel {
@@ -55,6 +55,12 @@ fn get_segment_priority(start_time: Option<f64>, current_time: f64) -> PriorityL
     }
 }
 
+/// The `Requester` is the module performing HTTP(s) requests.
+///
+/// Depending on the nature of the resource and on its configuration, it also
+/// has both a request-scheduling mechanism, allowing to perform more urgent
+/// request first, and a retry mechanism based on an exponential backoff delay,
+/// to retry requesting resources without overloading the server serving them.
 pub struct Requester {
     /// List information on the current playlist requests awaited, by chronological order
     /// (from the time the request was made).
@@ -74,7 +80,18 @@ pub struct Requester {
     /// the `pending_segment_requests` vector) or waiting at the same time.
     segment_waiting_queue: Vec<WaitingSegmentInfo>,
 
-    segment_retry_timers: Vec<(TimerId, RequestId)>,
+    /// Depending the nature of the failure, failed requests might be retried.
+    ///
+    /// To avoid overloading the server serving those resources, retried
+    /// requests are actually performed after a timer.
+    /// This variable allows to store and link here a timer's TimerId (which
+    /// will be communicated back when the timer has elapsed) to the RequestId.
+    ///
+    /// Note that retried segment requests stay in the
+    /// `pending_segment_requests` vector and retried playlist requests stay in
+    /// the `pending_playlist_requests` vector, even when the request is not
+    /// really pending.
+    retry_timers: Vec<(TimerId, RequestId)>,
 
     /// If `true`, no new requests will be started (they all will be pushed in
     /// `segment_waiting_queue` instead) until it is set to `false` again.
@@ -100,16 +117,79 @@ pub struct Requester {
     /// priority.
     base_position: Option<f64>,
 
+    /// Timeout, in milliseconds, used for segment requests.
+    ///
+    /// If that timeout is exceeded, the corresponding request will fail.
+    ///
+    /// To set to `None` to disable.
     segment_request_timeout: Option<f64>,
+
+    /// When a request is retried, a timeout is awaited to avoid overloading the
+    /// server.
+    /// That timeout then grows exponentially the more the request has to be
+    /// retried (in the case it fails multiple time consecutively).
+    ///
+    /// This is roughly the initial delay, in milliseconds, the initial backoff
+    /// for a retried segment request should be.
     segment_backoff_base: f64,
+
+    /// When a request is retried, a timeout is awaited to avoid overloading the
+    /// server.
+    /// That timeout then grows exponentially the more the request has to be
+    /// retried (in the case it fails multiple time consecutively).
+    ///
+    /// This is roughly the maximum delay, in milliseconds, the backoff delay
+    /// for a retried segment request should be.
     segment_backoff_max: f64,
 
+    /// Timeout, in milliseconds, used for MultiVariant playlist requests.
+    ///
+    /// If that timeout is exceeded, the corresponding request will fail.
+    ///
+    /// To set to `None` to disable.
     multi_variant_playlist_request_timeout: Option<f64>,
+
+    /// When a request is retried, a timeout is awaited to avoid overloading the
+    /// server.
+    /// That timeout then grows exponentially the more the request has to be
+    /// retried (in the case it fails multiple time consecutively).
+    ///
+    /// This is roughly the initial delay, in milliseconds, the initial backoff
+    /// for a retried MultiVariant Playlist request should be.
     multi_variant_playlist_backoff_base: f64,
+
+    /// When a request is retried, a timeout is awaited to avoid overloading the
+    /// server.
+    /// That timeout then grows exponentially the more the request has to be
+    /// retried (in the case it fails multiple time consecutively).
+    ///
+    /// This is roughly the maximum delay, in milliseconds, the backoff delay
+    /// for a retried MultiVariant Playlist request should be.
     multi_variant_playlist_backoff_max: f64,
 
+    /// Timeout, in milliseconds, used for Media playlist requests.
+    ///
+    /// If that timeout is exceeded, the corresponding request will fail.
+    ///
+    /// To set to `None` to disable.
     media_playlist_request_timeout: Option<f64>,
+
+    /// When a request is retried, a timeout is awaited to avoid overloading the
+    /// server.
+    /// That timeout then grows exponentially the more the request has to be
+    /// retried (in the case it fails multiple time consecutively).
+    ///
+    /// This is roughly the initial delay, in milliseconds, the initial backoff
+    /// for a retried Media Playlist request should be.
     media_playlist_backoff_base: f64,
+
+    /// When a request is retried, a timeout is awaited to avoid overloading the
+    /// server.
+    /// That timeout then grows exponentially the more the request has to be
+    /// retried (in the case it fails multiple time consecutively).
+    ///
+    /// This is roughly the maximum delay, in milliseconds, the backoff delay
+    /// for a retried Media Playlist request should be.
     media_playlist_backoff_max: f64,
 }
 
@@ -245,16 +325,16 @@ impl Requester {
             segment_waiting_queue: vec![],
             segment_request_locked: false,
             base_position: None,
-            segment_retry_timers: vec![],
+            retry_timers: vec![],
             segment_request_timeout: None,
             multi_variant_playlist_request_timeout: None,
             media_playlist_request_timeout: None,
-            segment_backoff_base: BASE_RETRY_DELAY,
-            segment_backoff_max: MAX_RETRY_DELAY,
-            multi_variant_playlist_backoff_base: BASE_RETRY_DELAY,
-            multi_variant_playlist_backoff_max: MAX_RETRY_DELAY,
-            media_playlist_backoff_base: BASE_RETRY_DELAY,
-            media_playlist_backoff_max: MAX_RETRY_DELAY,
+            segment_backoff_base: DEFAULT_BACKOFF_BASE,
+            segment_backoff_max: DEFAULT_BACKOFF_MAX,
+            multi_variant_playlist_backoff_base: DEFAULT_BACKOFF_BASE,
+            multi_variant_playlist_backoff_max: DEFAULT_BACKOFF_MAX,
+            media_playlist_backoff_base: DEFAULT_BACKOFF_BASE,
+            media_playlist_backoff_max: DEFAULT_BACKOFF_MAX,
         }
     }
 
@@ -264,7 +344,7 @@ impl Requester {
         self.pending_playlist_requests.clear();
         self.pending_segment_requests.clear();
         self.segment_waiting_queue.clear();
-        self.segment_retry_timers.clear();
+        self.retry_timers.clear();
         self.base_position = None;
         self.segment_request_locked = false;
     }
@@ -518,9 +598,9 @@ impl Requester {
         timer_id: TimerId
     ) {
         let mut i = 0;
-        while i < self.segment_retry_timers.len() {
-            if self.segment_retry_timers[i].0 == timer_id {
-                let timer = self.segment_retry_timers.remove(i);
+        while i < self.retry_timers.len() {
+            if self.retry_timers[i].0 == timer_id {
+                let timer = self.retry_timers.remove(i);
                 let seg = self.pending_segment_requests.iter_mut().find(|s| {
                     s.request_id == timer.1
                 });
@@ -657,7 +737,7 @@ impl Requester {
            Logger::info(&format!("Req: Retrying segment request after timer id:{} d:{} a:{}",
                    req.request_id, retry_delay, req.attempts_failed));
            let timer_id = jsTimer(retry_delay, TimerReason::RetryRequest);
-           self.segment_retry_timers.push((timer_id, req.request_id));
+           self.retry_timers.push((timer_id, req.request_id));
            RetryResult::Retried
        }
     }
@@ -678,13 +758,13 @@ impl Requester {
                 PlaylistFileType::MediaPlaylist { .. } => (
                     self.media_playlist_backoff_base,
                     self.media_playlist_backoff_max),
-                _ => (BASE_RETRY_DELAY, MAX_RETRY_DELAY),
+                _ => (DEFAULT_BACKOFF_BASE, DEFAULT_BACKOFF_MAX),
            };
            let retry_delay = get_waiting_delay(req.attempts_failed, base, max);
            Logger::info(&format!("Req: Retrying playlist request after timer id:{} d:{} a:{}",
                    req.request_id, retry_delay, req.attempts_failed));
            let timer_id = jsTimer(retry_delay, TimerReason::RetryRequest);
-           self.segment_retry_timers.push((timer_id, req.request_id));
+           self.retry_timers.push((timer_id, req.request_id));
            RetryResult::Retried
        }
     }
@@ -699,7 +779,7 @@ impl Requester {
                self.pending_playlist_requests[pos].attempts_failed += 1;
                self.pending_playlist_requests[pos].is_waiting_for_retry = true;
                let timer_id = jsTimer(1000., TimerReason::RetryRequest);
-               self.segment_retry_timers.push((timer_id, self.pending_playlist_requests[pos].request_id));
+               self.retry_timers.push((timer_id, self.pending_playlist_requests[pos].request_id));
                RetryResult::Retried
            }
        } else {
