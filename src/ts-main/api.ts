@@ -210,12 +210,12 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
         this.trigger("playing", null);
       }
     };
-    this.videoElement.addEventListener("paused", onPause);
-    this.videoElement.addEventListener("playing", onPlay);
+    this.videoElement.addEventListener("pause", onPause);
+    this.videoElement.addEventListener("play", onPlay);
 
     this.__destroyAbortController__.signal.addEventListener("abort", () => {
-      this.videoElement.removeEventListener("paused", onPause);
-      this.videoElement.removeEventListener("playing", onPlay);
+      this.videoElement.removeEventListener("pause", onPause);
+      this.videoElement.removeEventListener("play", onPlay);
     });
   }
 
