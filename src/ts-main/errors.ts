@@ -33,7 +33,7 @@ export class WaspInitializationError extends Error {
 }
 
 export class WaspSegmentRequestError extends Error {
-  public readonly name: "WaspRequestError";
+  public readonly name: "WaspSegmentRequestError";
   public readonly message : string;
   public readonly url : string | undefined;
   public readonly isInit : boolean | undefined;
@@ -50,7 +50,7 @@ export class WaspSegmentRequestError extends Error {
     // @see https://stackoverflow.com/questions/41102060/typescript-extending-error-class
     Object.setPrototypeOf(this, WaspSegmentRequestError.prototype);
 
-    this.name = "WaspRequestError";
+    this.name = "WaspSegmentRequestError";
     this.reason = args.reason;
     this.url = args.url;
     this.isInit = args.isInit;
