@@ -24,10 +24,30 @@ export default React.memo(function VideoPlayer(
     player.getPlayerState() === PlayerState.Loading || player.isRebuffering()
   );
   const [error, setError] = React.useState<Error|null>(null);
+  const [wrapperStyle, setWrapperStyle] = React.useState({});
 
   // Inserting already-existing DOM into React looks a little weird
   const videoWrapperRef: React.Ref<HTMLDivElement> = React.useRef(null);
 
+  React.useEffect(() => {
+    if (playerContainerRef.current === null) {
+      return;
+    }
+    const observer = new ResizeObserver(() => {
+      if (playerContainerRef.current === null) {
+        return;
+      }
+      const { clientWidth } = playerContainerRef.current;
+      const ratio = 16 / 9;
+      setWrapperStyle({
+        height: `${clientWidth / ratio}px`,
+      });
+    });
+    observer.observe(playerContainerRef.current);
+    return () => {
+      observer.disconnect();
+    };
+  }, [player]);
   React.useEffect(() => {
     const onFullScreenChange = () => {
       setIsInFullscreenMode(isFullscreen());
@@ -132,6 +152,7 @@ export default React.memo(function VideoPlayer(
   return <div
     className="video-container"
     ref={playerContainerRef}
+    style={wrapperStyle}
   >
     <div
       className={"video-element-wrapper " + (isVideoClickable ? "clickable" : "")}

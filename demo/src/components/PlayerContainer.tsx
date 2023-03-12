@@ -143,7 +143,11 @@ export default React.memo(function PlayerContainer(
                   name="buffer-size"
                   onChange={onBufferSizeCheckBoxChange}
                 />
-                <label htmlFor="buffer-size">Enable Buffer Size Chart (below when available)</label>
+                <label
+                  htmlFor="buffer-size"
+                >
+                  Enable Buffer Size Chart (below when available)
+                </label>
                 {
                   shouldShowBufferGaps && bufferGaps.length > 0 ?
                     <BufferSizeChart data={bufferGaps} /> :
