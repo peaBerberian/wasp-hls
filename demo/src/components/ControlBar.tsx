@@ -348,7 +348,7 @@ export default React.memo(function ControlBar(
   return <>
     {
       !areControlsDisabled && shouldDisplaySettings ?
-        <div className="settings">
+        <div className="settings visible">
           <VariantSetting
             variant={variant}
             variantsList={variantsList}
