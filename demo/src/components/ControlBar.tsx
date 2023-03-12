@@ -6,6 +6,8 @@ import FullScreenButton from "./FullScreenButton";
 import PlayButton from "./PlayButton";
 import PositionIndicator from "./PositionIndicator";
 import ProgressBar from "./ProgressBar";
+import SettingsButton from "./SettingsButton";
+import SpeedSetting from "./SpeedSetting";
 import StopButton from "./StopButton";
 import VolumeButton from "./VolumeButton";
 
@@ -35,6 +37,8 @@ export default React.memo(function ControlBar(
   const [isControlBarDisplayed, setIsControlBarDisplayed] = React.useState(true);
   const [areControlsDisabled, setAreControlsDisabled] = React.useState(true);
   const [isPlayPauseDisabled, setIsPlayPauseDisabled] = React.useState(true);
+  const [speed, setSpeed] = React.useState(1);
+  const [shouldDisplaySettings, setShouldDisplaySettings] = React.useState(false);
   const lastMouseY = React.useRef(0);
   const isPlayerElementHovered = React.useRef(false);
   const hideControlBarTimeoutId = React.useRef<number|undefined>(undefined);
@@ -45,6 +49,12 @@ export default React.memo(function ControlBar(
       hideControlBarTimeoutId.current = undefined;
     }
   }, []);
+
+  React.useEffect(() => {
+    if (speed !== player.getSpeed()) {
+      player.setSpeed(speed);
+    }
+  }, [speed, player]);
 
   // Clear Timeout on unmount
   React.useEffect(() => clearHideControlBarTimeout, [clearHideControlBarTimeout]);
@@ -294,51 +304,71 @@ export default React.memo(function ControlBar(
     hideControlBarTimeoutId,
   ]);
 
-  return <div
-    className={"control-bar " + (isControlBarDisplayed ? "visible" : "hidden")}
-  >
+  const toggleSettings = React.useCallback(() => {
+    setShouldDisplaySettings(s => !s);
+  }, []);
+
+  return <>
     {
-      areControlsDisabled || position === undefined ?
-        null :
-      <ProgressBar
-        seek={onProgressBarSeek}
-        position={position}
-        bufferGap={bufferGap}
-        minimumPosition={minimumPosition}
-        maximumPosition={maximumPosition}
-      />
+      shouldDisplaySettings ?
+        <div className="settings">
+          <SpeedSetting
+            speed={speed}
+            updateSpeed={setSpeed}
+          />
+        </div> :
+        null
     }
-    <div className="video-controls">
-      <div className="video-controls-left">
-        <PlayButton
-          disabled={areControlsDisabled || isPlayPauseDisabled}
-          isPaused={isPaused}
-          onClick={togglePlayPause}
+    <div
+      className={"control-bar " + (isControlBarDisplayed ? "visible" : "hidden")}
+    >
+      {
+        areControlsDisabled || position === undefined ?
+          null :
+        <ProgressBar
+          seek={onProgressBarSeek}
+          position={position}
+          bufferGap={bufferGap}
+          minimumPosition={minimumPosition}
+          maximumPosition={maximumPosition}
         />
-        <StopButton
-          disabled={areControlsDisabled}
-          onClick={onStopButtonClick}
-        />
-        {
-          areControlsDisabled || position === undefined ?
-            null :
-            <PositionIndicator position={position} duration={maximumPosition} />
-        }
-      </div>
-      <div className="video-controls-right">
-        <VolumeButton
-          volume={volume}
-          onClick={onVolumeButtonClick}
-          onVolumeChange={onVolumeChange}
-        />
-        <FullScreenButton
-          disabled={areControlsDisabled}
-          // TODO it works by luck for now, we should probably listen to an
-          // enter/exit fullscreen event and add it to the state
-          isFullScreen={isInFullScreenMode}
-          onClick={toggleFullScreen}
-        />
+      }
+      <div className="video-controls">
+        <div className="video-controls-left">
+          <PlayButton
+            disabled={areControlsDisabled || isPlayPauseDisabled}
+            isPaused={isPaused}
+            onClick={togglePlayPause}
+          />
+          <StopButton
+            disabled={areControlsDisabled}
+            onClick={onStopButtonClick}
+          />
+          {
+            areControlsDisabled || position === undefined ?
+              null :
+              <PositionIndicator position={position} duration={maximumPosition} />
+          }
+        </div>
+        <div className="video-controls-right">
+          <VolumeButton
+            volume={volume}
+            onClick={onVolumeButtonClick}
+            onVolumeChange={onVolumeChange}
+          />
+          <SettingsButton
+            disabled={areControlsDisabled}
+            onClick={toggleSettings}
+          />
+          <FullScreenButton
+            disabled={areControlsDisabled}
+            // TODO it works by luck for now, we should probably listen to an
+            // enter/exit fullscreen event and add it to the state
+            isFullScreen={isInFullScreenMode}
+            onClick={toggleFullScreen}
+          />
+        </div>
       </div>
     </div>
-  </div>;
+  </>;
 });

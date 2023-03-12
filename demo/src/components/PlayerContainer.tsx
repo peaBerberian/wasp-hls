@@ -1,5 +1,7 @@
 import * as React from "react";
-import WaspHlsPlayer, {PlayerState} from "../../../src";
+import WaspHlsPlayer, {
+  PlayerState,
+} from "../../../src";
 import BufferSizeChart from "./BufferSizeChart";
 import ContentInput from "./ContentInput";
 import RemovePlayerButton from "./RemovePlayerButton";
