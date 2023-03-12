@@ -382,9 +382,8 @@ impl Dispatcher {
         if let Some(ctnt) = self.content_tracker.as_mut() {
             if let Some(bandwidth) = self.adaptive_selector.get_estimate() {
                 Logger::debug(&format!("New bandwidth estimate: {}", bandwidth));
-                if let VariantUpdateResult::Changed(media_types) = ctnt.update_curr_bandwidth(bandwidth) {
-                    self.on_multivariant_playlist_changed(media_types.as_ref(), false);
-                }
+                let update = ctnt.update_curr_bandwidth(bandwidth);
+                self.handle_variant_update(update, false);
             }
         }
     }
@@ -395,31 +394,35 @@ impl Dispatcher {
         if let Some(ctnt) = self.content_tracker.as_mut() {
             match ctnt.lock_variant(variant_id) {
                 None => Logger::warn("Locked variant not found"),
-                Some(VariantUpdateResult::Changed(mt)) => {
-                    self.on_multivariant_playlist_changed(mt.as_ref(), true);
-                }
-                Some(VariantUpdateResult::Unchanged) => {},
+                Some(update) => self.handle_variant_update(update, true),
             }
         }
     }
 
     pub(super) fn inner_unlock_variant(&mut self) {
         if let Some(ctnt) = self.content_tracker.as_mut() {
-            if let VariantUpdateResult::Changed(media_types) = ctnt.unlock_variant() {
-                self.on_multivariant_playlist_changed(media_types.as_ref(), false);
-            }
+            let update = ctnt.unlock_variant();
+            self.handle_variant_update(update, false);
         }
     }
 
-    fn on_multivariant_playlist_changed(&mut self,
-        changed_media_types: &[MediaType],
-        urgent_switch: bool
+    fn handle_variant_update(&mut self,
+        result: VariantUpdateResult,
+        force_urgent: bool
     ) {
+        let (changed_media_types, has_improved) = match result {
+            VariantUpdateResult::Improved(mt) => (mt, true),
+            VariantUpdateResult::EqualOrUnknown(mt) => (mt, false),
+            VariantUpdateResult::Worsened(mt) => (mt, false),
+            VariantUpdateResult::Unchanged => {
+                return;
+            }
+        };
         if let Some(ctnt) = self.content_tracker.as_mut() {
             changed_media_types.iter().for_each(|mt| {
                 let mt = *mt;
                 Logger::info(&format!("{} MediaPlaylist changed", mt));
-                if urgent_switch {
+                if has_improved || force_urgent {
                     self.requester.abort_segments_with_type(mt);
                     self.segment_selectors.reset_position_for_type(mt, self.last_position);
                 }

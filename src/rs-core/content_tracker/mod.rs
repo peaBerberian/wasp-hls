@@ -42,9 +42,34 @@ pub struct ContentTracker {
     last_bandwidth: f64,
 }
 
+/// Response returned by `ContentTracker` method which may update the current
+/// variant and as a consequence, linked media playlists.
 pub enum VariantUpdateResult {
+    /// No MediaPlaylist was updated
     Unchanged,
-    Changed(Vec<MediaType>),
+
+    /// At least one MediaPlaylist was updated for a better one.
+    ///
+    /// The `MediaType` in argument designates the media type whose playlist
+    /// was updated. There can only be one item of the same type in that
+    /// vector.
+    Improved(Vec<MediaType>),
+
+    /// At least one MediaPlaylist was updated for a worse one.
+    ///
+    /// The `MediaType` in argument designates the media type whose playlist
+    /// was updated. There can only be one item of the same type in that
+    /// vector.
+    Worsened(Vec<MediaType>),
+
+
+    /// At least one MediaPlaylist was updated, but for either an as-good or
+    /// for a quality that could not be compared.
+    ///
+    /// The `MediaType` in argument designates the media type whose playlist
+    /// was updated. There can only be one item of the same type in that
+    /// vector.
+    EqualOrUnknown(Vec<MediaType>),
 }
 
 impl ContentTracker {
@@ -363,6 +388,8 @@ impl ContentTracker {
     ) -> VariantUpdateResult {
         if index != self.curr_variant_idx {
             if let Some(idx) = index {
+                let prev_bandwidth = self.curr_variant().map(|v| v.bandwidth);
+                let new_bandwidth = self.variants().get(idx).map(|v| v.bandwidth);
                 let prev_audio_idx = self.curr_audio_idx.clone();
                 let prev_video_idx = self.curr_video_idx.clone();
                 self.set_curr_variant(idx);
@@ -374,12 +401,21 @@ impl ContentTracker {
                 if self.curr_video_idx != prev_video_idx {
                     updates.push(MediaType::Video);
                 }
-                VariantUpdateResult::Changed(updates)
+                match (prev_bandwidth, new_bandwidth) {
+                    (Some(p), Some(n)) => if p > n {
+                        VariantUpdateResult::Worsened(updates)
+                    } else if p == n {
+                        VariantUpdateResult::EqualOrUnknown(updates)
+                    } else {
+                        VariantUpdateResult::Improved(updates)
+                    },
+                    _ => VariantUpdateResult::EqualOrUnknown(updates),
+                }
             } else {
                 self.curr_variant_idx = None;
                 self.curr_video_idx = None;
                 self.curr_audio_idx = None;
-                VariantUpdateResult::Changed(vec![MediaType::Audio, MediaType::Video])
+                VariantUpdateResult::EqualOrUnknown(vec![MediaType::Audio, MediaType::Video])
             }
         } else {
             VariantUpdateResult::Unchanged
