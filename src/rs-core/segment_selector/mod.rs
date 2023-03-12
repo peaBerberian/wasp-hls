@@ -19,6 +19,11 @@ impl NextSegmentSelectors {
         }
     }
 
+    pub fn update_buffer_goal(&mut self, buffer_goal: f64) {
+        self.audio.buffer_goal = buffer_goal;
+        self.video.buffer_goal = buffer_goal;
+    }
+
     pub fn get(&self, media_type: MediaType) -> &NextSegmentSelector {
         match media_type {
             MediaType::Audio => &self.audio,

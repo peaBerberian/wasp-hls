@@ -4,7 +4,10 @@ import logger, {
   LoggerLevel,
 } from "../ts-common/logger";
 import noop from "../ts-common/noop";
-import { WorkerMessage } from "../ts-common/types";
+import {
+  WaspHlsPlayerConfig,
+  WorkerMessage,
+} from "../ts-common/types";
 import {
   WaspInitializationError,
 } from "./errors";
@@ -76,6 +79,12 @@ interface WaspHlsPlayerEvents {
    */
   playing: null;
   /**
+   * We reached the end of the content.
+   *
+   * The `isEnded` method should now return `true`.
+   */
+  ended: null;
+  /**
    * Sent when an error provoked the impossibility to continue playing the
    * content.
    *
@@ -130,6 +139,20 @@ export interface InitializationOptions {
   wasmUrl: string;
 }
 
+const DEFAULT_CONFIG: WaspHlsPlayerConfig = {
+  bufferGoal: 30,
+
+  segmentRequestTimeout: 20000,
+  segmentBackoffBase: 300,
+  segmentBackoffMax: 2000,
+  multiVariantPlaylistRequestTimeout: 15000,
+  multiVariantPlaylistBackoffBase: 300,
+  multiVariantPlaylistBackoffMax: 2000,
+  mediaPlaylistRequestTimeout: 15000,
+  mediaPlaylistBackoffBase: 300,
+  mediaPlaylistBackoffMax: 2000,
+};
+
 /**
  * `WaspHlsPlayer` class allowing to play HLS contents by relying on a WebWorker
  * and WebAssembly.
@@ -180,6 +203,8 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
   /** When set, keep track of a log-related callback for later clean-up. */
   private __logLevelChangeListener__: ((logLevel: LoggerLevel) => void) | null;
 
+  private __config__: WaspHlsPlayerConfig;
+
   /**
    * Create a new WaspHlsPlayer, associating with a video element.
    *
@@ -188,7 +213,10 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
    *
    * @param {HTMLVideoElement} videoElement
    */
-  constructor(videoElement: HTMLVideoElement) {
+  constructor(
+    videoElement: HTMLVideoElement,
+    config?: Partial<WaspHlsPlayerConfig>
+  ) {
     super();
     this.videoElement = videoElement;
     this.initializationStatus = InitializationStatus.Uninitialized;
@@ -196,10 +224,16 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
     this.__contentMetadata__ = null;
     this.__logLevelChangeListener__ = null;
     this.__destroyAbortController__ = new AbortController();
+    this.__config__ = { ...DEFAULT_CONFIG, ...(config ?? {}) };
 
     const onPause = () => {
       if (this.getPlayerState() === PlayerState.Loaded) {
         this.trigger("paused", null);
+      }
+    };
+    const onEnded = () => {
+      if (this.getPlayerState() === PlayerState.Loaded) {
+        this.trigger("ended", null);
       }
     };
     const onPlay = () => {
@@ -212,10 +246,12 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
     };
     this.videoElement.addEventListener("pause", onPause);
     this.videoElement.addEventListener("play", onPlay);
+    this.videoElement.addEventListener("ended", onEnded);
 
     this.__destroyAbortController__.signal.addEventListener("abort", () => {
       this.videoElement.removeEventListener("pause", onPause);
       this.videoElement.removeEventListener("play", onPlay);
+      this.videoElement.removeEventListener("ended", onEnded);
     });
   }
 
@@ -252,6 +288,21 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
       this.initializationStatus = InitializationStatus.Errored;
       return Promise.reject(err);
     }
+  }
+
+  public getConfig(): WaspHlsPlayerConfig {
+    return this.__config__;
+  }
+
+  public updateConfig(overwrite: Partial<WaspHlsPlayerConfig>): void {
+    if (this.__worker__ === null) {
+      throw new Error("The Player is not initialized or disposed.");
+    }
+    this.__config__ = { ...this.__config__, ...overwrite };
+    postMessageToWorker(this.__worker__, {
+      type: "update-config",
+      value: this.__config__,
+    });
   }
 
   /**
@@ -390,6 +441,14 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
    */
   public isPaused(): boolean {
     return this.videoElement.paused;
+  }
+
+  /**
+   * Returns `true` when playback has ended.
+   * @returns {boolean}
+   */
+  public isEnded(): boolean {
+    return this.videoElement.ended;
   }
 
   /**
@@ -547,6 +606,7 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
           (MediaSource as any).canConstructInDedicatedWorker === true,
         wasmUrl,
         logLevel: logger.getLevel(),
+        initialConfig: this.__config__,
       },
     });
 

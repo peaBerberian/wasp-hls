@@ -29,7 +29,8 @@ export type MainMessage =
   SourceBufferOperationSuccessMainMessage |
   EndOfStreamErrorMainMessage |
   UpdateWantedSpeedMainMessage |
-  UpdateLoggerLevelMainMessage;
+  UpdateLoggerLevelMainMessage |
+  UpdateConfigMainMessage;
 
 /** Message sent from the worker to the main thread. */
 export type WorkerMessage =
@@ -654,6 +655,9 @@ export interface InitializationMainMessage {
 
     /** The initial logger level to set. */
     logLevel: LoggerLevel;
+
+    /** Initial configuration for the player. */
+    initialConfig: WaspHlsPlayerConfig;
   };
 }
 
@@ -893,4 +897,25 @@ export interface UpdateWantedSpeedMainMessage {
 export interface UpdateLoggerLevelMainMessage {
   type: "update-logger-level";
   value: LoggerLevel;
+}
+
+export interface UpdateConfigMainMessage {
+  type: "update-config";
+  value: Partial<WaspHlsPlayerConfig>;
+}
+
+export interface WaspHlsPlayerConfig {
+  bufferGoal: number;
+
+  // Request options
+
+  segmentRequestTimeout: number | null | undefined;
+  segmentBackoffBase: number;
+  segmentBackoffMax: number;
+  multiVariantPlaylistRequestTimeout: number | null | undefined;
+  multiVariantPlaylistBackoffBase: number;
+  multiVariantPlaylistBackoffMax: number;
+  mediaPlaylistRequestTimeout: number;
+  mediaPlaylistBackoffBase: number;
+  mediaPlaylistBackoffMax: number;
 }

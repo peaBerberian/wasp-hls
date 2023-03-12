@@ -1,6 +1,7 @@
 import { numberIdGenerator } from "../ts-common/idGenerator";
 import logger from "../ts-common/logger";
 import QueuedSourceBuffer from "../ts-common/QueuedSourceBuffer";
+import { WaspHlsPlayerConfig } from "../ts-common/types";
 import { Dispatcher } from "../wasm/wasp_hls";
 
 export interface WorkerInfo {
@@ -16,10 +17,12 @@ class PlayerInstance {
     this.hasWorkerMse = undefined;
   }
 
-  public start(hasWorkerMse: boolean) {
+  public start(hasWorkerMse: boolean, config: WaspHlsPlayerConfig) {
     this.hasWorkerMse = hasWorkerMse;
+    const dispatcher = new Dispatcher();
+    updateDispatcherConfig(dispatcher, config);
     this._instanceInfo = {
-      dispatcher: new Dispatcher(),
+      dispatcher,
       content: null,
     };
   }
@@ -129,6 +132,56 @@ export interface ContentInfo {
 export const playerInstance = new PlayerInstance();
 export const jsMemoryResources = new GenericStore<Uint8Array>();
 export const requestsStore = new GenericStore<RequestObject>();
+
+export function updateDispatcherConfig(
+  dispatcher: Dispatcher,
+  config: Partial<WaspHlsPlayerConfig>
+): void {
+  if (config.bufferGoal !== undefined) {
+    dispatcher.set_buffer_goal(config.bufferGoal);
+  }
+  if (config.segmentRequestTimeout !== undefined) {
+    dispatcher.set_segment_request_timeout(
+      config.segmentRequestTimeout ?? undefined
+    );
+  }
+  if (config.segmentBackoffBase !== undefined) {
+    dispatcher.set_segment_backoff_base(config.segmentBackoffBase);
+  }
+  if (config.segmentBackoffMax !== undefined) {
+    dispatcher.set_segment_backoff_max(config.segmentBackoffMax);
+  }
+  if (config.multiVariantPlaylistRequestTimeout !== undefined) {
+    dispatcher.set_multi_variant_playlist_request_timeout(
+      config.multiVariantPlaylistRequestTimeout ?? undefined
+    );
+  }
+  if (config.multiVariantPlaylistBackoffBase !== undefined) {
+    dispatcher.set_multi_variant_playlist_backoff_base(
+      config.multiVariantPlaylistBackoffBase
+    );
+  }
+  if (config.multiVariantPlaylistBackoffMax !== undefined) {
+    dispatcher.set_multi_variant_playlist_backoff_max(
+      config.multiVariantPlaylistBackoffMax
+    );
+  }
+  if (config.multiVariantPlaylistRequestTimeout !== undefined) {
+    dispatcher.set_media_playlist_request_timeout(
+      config.multiVariantPlaylistRequestTimeout ?? undefined
+    );
+  }
+  if (config.multiVariantPlaylistBackoffBase !== undefined) {
+    dispatcher.set_media_playlist_backoff_base(
+      config.multiVariantPlaylistBackoffBase
+    );
+  }
+  if (config.multiVariantPlaylistBackoffMax !== undefined) {
+    dispatcher.set_media_playlist_backoff_max(
+      config.multiVariantPlaylistBackoffMax
+    );
+  }
+}
 
 export function getMediaSourceObj(
 ) : MainMediaSourceInstanceInfo | WorkerMediaSourceInstanceInfo | undefined {

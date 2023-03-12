@@ -9,6 +9,10 @@ That video element has to be provided on instanciation like this:
 const player = new WaspHlsPlayer(videoElement);
 ```
 
+The `WaspHlsPlayer` optionally can take a second argument, which allows to
+overwrite its initial configuration. More information on this is available
+[in the API documentation (TODO)](TODO).
+
 Before being ready to load contents on that new instance, we now have to
 "initialize" it, which is an operation described in the next chapter.
 

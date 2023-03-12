@@ -16,6 +16,9 @@ use crate::{
 
 const PRIORITY_STEPS : [f64; 6] = [2., 4., 8., 12., 18., 25.];
 
+const BASE_RETRY_DELAY: f64 = 300.;
+const MAX_RETRY_DELAY: f64 = 3000.;
+
 #[derive(Clone, Copy, Debug, PartialEq, PartialOrd, Eq, Ord)]
 enum PriorityLevel {
     ExtremelyHigh = 0,
@@ -96,6 +99,18 @@ pub struct Requester {
     /// When `None`, all segment requests will have the highest possible
     /// priority.
     base_position: Option<f64>,
+
+    segment_request_timeout: Option<f64>,
+    segment_backoff_base: f64,
+    segment_backoff_max: f64,
+
+    multi_variant_playlist_request_timeout: Option<f64>,
+    multi_variant_playlist_backoff_base: f64,
+    multi_variant_playlist_backoff_max: f64,
+
+    media_playlist_request_timeout: Option<f64>,
+    media_playlist_backoff_base: f64,
+    media_playlist_backoff_max: f64,
 }
 
 #[derive(PartialEq)]
@@ -231,6 +246,15 @@ impl Requester {
             segment_request_locked: false,
             base_position: None,
             segment_retry_timers: vec![],
+            segment_request_timeout: None,
+            multi_variant_playlist_request_timeout: None,
+            media_playlist_request_timeout: None,
+            segment_backoff_base: BASE_RETRY_DELAY,
+            segment_backoff_max: MAX_RETRY_DELAY,
+            multi_variant_playlist_backoff_base: BASE_RETRY_DELAY,
+            multi_variant_playlist_backoff_max: MAX_RETRY_DELAY,
+            media_playlist_backoff_base: BASE_RETRY_DELAY,
+            media_playlist_backoff_max: MAX_RETRY_DELAY,
         }
     }
 
@@ -259,12 +283,109 @@ impl Requester {
         self.check_segment_queue();
     }
 
+    #[inline(always)]
+    pub fn segment_request_timeout(&mut self) -> Option<f64> {
+        self.segment_request_timeout
+    }
+
+    #[inline(always)]
+    pub fn segment_backoff_base(&mut self) -> f64 {
+        self.segment_backoff_base
+    }
+
+    #[inline(always)]
+    pub fn segment_backoff_max(&mut self) -> f64 {
+        self.segment_backoff_max
+    }
+
+    #[inline(always)]
+    pub fn multi_variant_playlist_request_timeout(&mut self) -> Option<f64> {
+        self.multi_variant_playlist_request_timeout
+    }
+
+    #[inline(always)]
+    pub fn multi_variant_playlist_backoff_base(&mut self) -> f64 {
+        self.multi_variant_playlist_backoff_base
+    }
+
+    #[inline(always)]
+    pub fn multi_variant_playlist_backoff_max(&mut self) -> f64 {
+        self.multi_variant_playlist_backoff_max
+    }
+
+    #[inline(always)]
+    pub fn media_playlist_request_timeout(&mut self) -> Option<f64> {
+        self.media_playlist_request_timeout 
+    }
+
+    #[inline(always)]
+    pub fn media_playlist_backoff_base(&mut self) -> f64 {
+        self.media_playlist_backoff_base
+    }
+
+    #[inline(always)]
+    pub fn media_playlist_backoff_max(&mut self) -> f64 {
+        self.media_playlist_backoff_max
+    }
+
+    #[inline(always)]
+    pub fn update_segment_request_timeout(&mut self, timeout: Option<f64>) {
+        self.segment_request_timeout = timeout;
+    }
+
+    #[inline(always)]
+    pub fn update_segment_backoff_base(&mut self, base: f64) {
+        self.segment_backoff_base = base;
+    }
+
+    #[inline(always)]
+    pub fn update_segment_backoff_max(&mut self, max: f64) {
+        self.segment_backoff_max = max;
+    }
+
+    #[inline(always)]
+    pub fn update_multi_variant_playlist_request_timeout(&mut self, timeout: Option<f64>) {
+        self.multi_variant_playlist_request_timeout = timeout;
+    }
+
+    #[inline(always)]
+    pub fn update_multi_variant_playlist_backoff_base(&mut self, base: f64) {
+        self.multi_variant_playlist_backoff_base = base;
+    }
+
+    #[inline(always)]
+    pub fn update_multi_variant_playlist_backoff_max(&mut self, max: f64) {
+        self.multi_variant_playlist_backoff_max = max;
+    }
+
+    #[inline(always)]
+    pub fn update_media_playlist_request_timeout(&mut self, timeout: Option<f64>) {
+        self.media_playlist_request_timeout = timeout;
+    }
+
+    #[inline(always)]
+    pub fn update_media_playlist_backoff_base(&mut self, base: f64) {
+        self.media_playlist_backoff_base = base;
+    }
+
+    #[inline(always)]
+    pub fn update_media_playlist_backoff_max(&mut self, max: f64) {
+        self.media_playlist_backoff_max = max;
+    }
+
     /// Fetch either the MultiVariantPlaylist or a MediaPlaylist reachable
     /// through the given `url` and add its `request_id` to `pending_playlist_requests`.
     ///
     /// Once it succeeds, the `on_request_finished` function will be called.
     pub(crate) fn fetch_playlist(&mut self, url: Url, playlist_type: PlaylistFileType) {
-        let request_id = jsFetch(url.get_ref());
+        let timeout = match playlist_type {
+            PlaylistFileType::MultiVariantPlaylist =>
+                self.multi_variant_playlist_request_timeout,
+            PlaylistFileType::MediaPlaylist { .. } =>
+                self.media_playlist_request_timeout,
+            _ => None,
+        };
+        let request_id = jsFetch(url.get_ref(), timeout);
         Logger::info(&format!("Req: Fetching playlist u:{}, id:{}", url.get_ref(), request_id));
         self.pending_playlist_requests.push(PlaylistRequestInfo {
             request_id,
@@ -280,7 +401,7 @@ impl Requester {
     ///
     /// Once it succeeds, the `on_request_finished` function will be called.
     pub(crate) fn request_init_segment(&mut self, media_type: MediaType, url: Url) {
-        let request_id = jsFetch(url.get_ref());
+        let request_id = jsFetch(url.get_ref(), self.segment_request_timeout);
         Logger::info(&format!("Req: Fetching init segment u:{}, id:{}", url.get_ref(), request_id));
         self.pending_segment_requests.push(SegmentRequestInfo {
             request_id,
@@ -317,7 +438,7 @@ impl Requester {
                 time_info,
             });
         } else {
-            let request_id = jsFetch(seg.url.get_ref());
+            let request_id = jsFetch(seg.url.get_ref(), self.segment_request_timeout);
             Logger::debug(&format!("Req: Performing request right away. u:{} id:{}",
                     seg.url.get_ref(), request_id));
             self.pending_segment_requests.push(SegmentRequestInfo {
@@ -404,7 +525,7 @@ impl Requester {
                 });
                 if let Some(seg) = seg {
                     seg.is_waiting_for_retry = false;
-                    let request_id = jsFetch(seg.url.get_ref());
+                    let request_id = jsFetch(seg.url.get_ref(), self.segment_request_timeout);
                     seg.request_id = request_id;
                 } else {
                     let pla = self.pending_playlist_requests.iter_mut().find(|p| {
@@ -412,7 +533,14 @@ impl Requester {
                     });
                     if let Some(pla) = pla {
                         pla.is_waiting_for_retry = false;
-                        let request_id = jsFetch(pla.url.get_ref());
+                        let timeout = match pla.playlist_type {
+                            PlaylistFileType::MultiVariantPlaylist =>
+                                self.multi_variant_playlist_request_timeout,
+                            PlaylistFileType::MediaPlaylist { .. } =>
+                                self.media_playlist_request_timeout,
+                            PlaylistFileType::Unknown => None,
+                        };
+                        let request_id = jsFetch(pla.url.get_ref(), timeout);
                         pla.request_id = request_id;
                     }
                 }
@@ -523,7 +651,8 @@ impl Requester {
        } else {
            req.attempts_failed += 1;
            req.is_waiting_for_retry = true;
-           let retry_delay = get_waiting_delay(req.attempts_failed);
+           let retry_delay = get_waiting_delay(
+               req.attempts_failed, self.segment_backoff_base, self.segment_backoff_max);
            Logger::info(&format!("Req: Retrying segment request after timer id:{} d:{} a:{}",
                    req.request_id, retry_delay, req.attempts_failed));
            let timer_id = jsTimer(retry_delay, TimerReason::RetryRequest);
@@ -541,7 +670,16 @@ impl Requester {
        } else {
            req.attempts_failed += 1;
            req.is_waiting_for_retry = true;
-           let retry_delay = get_waiting_delay(req.attempts_failed);
+           let (base, max) = match req.playlist_type {
+                PlaylistFileType::MultiVariantPlaylist => (
+                    self.multi_variant_playlist_backoff_base,
+                    self.multi_variant_playlist_backoff_max),
+                PlaylistFileType::MediaPlaylist { .. } => (
+                    self.media_playlist_backoff_base,
+                    self.media_playlist_backoff_max),
+                _ => (BASE_RETRY_DELAY, MAX_RETRY_DELAY),
+           };
+           let retry_delay = get_waiting_delay(req.attempts_failed, base, max);
            Logger::info(&format!("Req: Retrying playlist request after timer id:{} d:{} a:{}",
                    req.request_id, retry_delay, req.attempts_failed));
            let timer_id = jsTimer(retry_delay, TimerReason::RetryRequest);
@@ -606,7 +744,7 @@ impl Requester {
                     })
                 .for_each(|seg| {
                     // TODO indicate which segment in log
-                    let request_id = jsFetch(seg.url.get_ref());
+                    let request_id = jsFetch(seg.url.get_ref(), self.segment_request_timeout);
                     Logger::debug(&format!("Req: Performing request of queued segment u:{} id:{}",
                             seg.url().get_ref(), request_id));
                     self.pending_segment_requests.push(SegmentRequestInfo {
@@ -622,7 +760,7 @@ impl Requester {
         } else {
             while let Some(seg) = self.segment_waiting_queue.pop() {
                 // TODO indicate which segment in log
-                let request_id = jsFetch(seg.url.get_ref());
+                let request_id = jsFetch(seg.url.get_ref(), self.segment_request_timeout);
                 Logger::debug(&format!("Req: Performing request of queued segment u:{} id:{}",
                         seg.url().get_ref(), request_id));
                 self.pending_segment_requests.push(SegmentRequestInfo {
@@ -688,13 +826,10 @@ fn log_segment_abort(seg: &impl RequesterSegmentInfo) {
     });
 }
 
-const BASE_RETRY_DELAY: f64 = 300.;
-const MAX_RETRY_DELAY: f64 = 3000.;
-
-fn get_waiting_delay(retry_attempt: u32) -> f64 {
+fn get_waiting_delay(retry_attempt: u32, base: f64, max: f64) -> f64 {
     let delay = f64::min(
-        BASE_RETRY_DELAY * u64::pow(2, retry_attempt - 1) as f64,
-        MAX_RETRY_DELAY
+        base * u64::pow(2, retry_attempt - 1) as f64,
+        max
     );
     let fuzzing_factor = (jsGetRandom() * 2. - 1.) * 0.3; // Max 1.3 Min 0.7
     delay * (fuzzing_factor + 1.)

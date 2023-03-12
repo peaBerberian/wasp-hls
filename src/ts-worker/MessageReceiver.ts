@@ -2,6 +2,7 @@ import logger from "../ts-common/logger";
 import {
   MainMessage,
   InitializationErrorCode,
+  WaspHlsPlayerConfig,
 } from "../ts-common/types";
 import initializeWasm, {
   MediaObservation,
@@ -10,6 +11,7 @@ import { stopObservingPlayback } from "./bindings";
 import {
   ContentInfo,
   playerInstance,
+  updateDispatcherConfig,
 } from "./globals";
 import postMessageToMain from "./postMessage";
 import { resetTransmuxer } from "./transmux";
@@ -40,7 +42,7 @@ export default function MessageReceiver() {
         logger.setLevel(data.value.logLevel);
         wasInitializedCalled = true;
         const { wasmUrl, hasWorkerMse } = data.value;
-        initialize(wasmUrl, hasWorkerMse);
+        initialize(wasmUrl, hasWorkerMse, data.value.initialConfig);
         break;
 
       case "dispose":
@@ -202,6 +204,15 @@ export default function MessageReceiver() {
       case "update-logger-level":
         logger.setLevel(data.value);
         break;
+
+      case "update-config":
+        const dispatcher = playerInstance.getDispatcher();
+        if (dispatcher === null) {
+          return;
+        }
+        updateDispatcherConfig(dispatcher, data.value);
+        break;
+
     }
   };
 }
@@ -238,10 +249,11 @@ function postUnitializedWorkerError(contentId: string): void {
 
 function initialize(
   wasmUrl: string,
-  hasWorkerMse: boolean
+  hasWorkerMse: boolean,
+  config: WaspHlsPlayerConfig
 ) {
   initializeWasm(fetch(wasmUrl)).then(() => {
-    playerInstance.start(hasWorkerMse);
+    playerInstance.start(hasWorkerMse, config);
     postMessageToMain({ type: "initialized", value: null });
   }).catch(err => {
     handleInitializationError(err, InitializationErrorCode.WasmRequestError);

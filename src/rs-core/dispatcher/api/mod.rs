@@ -67,6 +67,12 @@ impl Dispatcher {
         self.media_element_ref.update_wanted_speed(speed);
     }
 
+    pub fn set_buffer_goal(&mut self, buffer_goal: f64) {
+        self.buffer_goal = buffer_goal;
+        self.segment_selectors.update_buffer_goal(buffer_goal);
+        self.check_segments_to_request();
+    }
+
     /// Stop the currently loaded content.
     pub fn stop(&mut self) {
         self.internal_stop();
@@ -80,6 +86,42 @@ impl Dispatcher {
             LogLevel::Info => Logger::info(msg),
             LogLevel::Debug => Logger::debug(msg),
         }
+    }
+
+    pub fn set_segment_request_timeout(&mut self, timeout: Option<f64>) {
+        self.requester.update_segment_request_timeout(timeout);
+    }
+
+    pub fn set_segment_backoff_base(&mut self, base: f64) {
+        self.requester.update_segment_backoff_base(base);
+    }
+
+    pub fn set_segment_backoff_max(&mut self, max: f64) {
+        self.requester.update_segment_backoff_max(max);
+    }
+
+    pub fn set_multi_variant_playlist_request_timeout(&mut self, timeout: Option<f64>) {
+        self.requester.update_multi_variant_playlist_request_timeout(timeout);
+    }
+
+    pub fn set_multi_variant_playlist_backoff_base(&mut self, base: f64) {
+        self.requester.update_multi_variant_playlist_backoff_base(base);
+    }
+
+    pub fn set_multi_variant_playlist_backoff_max(&mut self, max: f64) {
+        self.requester.update_multi_variant_playlist_backoff_max(max);
+    }
+
+    pub fn set_media_playlist_request_timeout(&mut self, timeout: Option<f64>) {
+        self.requester.update_media_playlist_request_timeout(timeout);
+    }
+
+    pub fn set_media_playlist_backoff_base(&mut self, base: f64) {
+        self.requester.update_media_playlist_backoff_base(base);
+    }
+
+    pub fn set_media_playlist_backoff_max(&mut self, max: f64) {
+        self.requester.update_media_playlist_backoff_max(max);
     }
 
 //     pub fn available_audio_tracks(&self) -> Vec<u8> {
