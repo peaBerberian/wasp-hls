@@ -47,6 +47,13 @@ impl NextSegmentSelectors {
         self.audio.reset_position(pos);
         self.video.reset_position(pos);
     }
+
+    pub fn reset_position_for_type(&mut self, mt: MediaType, pos: f64) {
+        match mt {
+            MediaType::Audio => self.audio.reset_position(pos),
+            MediaType::Video => self.video.reset_position(pos),
+        }
+    }
 }
 
 pub struct NextSegmentSelector {

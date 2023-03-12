@@ -383,7 +383,7 @@ impl Dispatcher {
             if let Some(bandwidth) = self.adaptive_selector.get_estimate() {
                 Logger::debug(&format!("New bandwidth estimate: {}", bandwidth));
                 if let VariantUpdateResult::Changed(media_types) = ctnt.update_curr_bandwidth(bandwidth) {
-                    self.on_media_playlist_changed(media_types.as_ref());
+                    self.on_multivariant_playlist_changed(media_types.as_ref(), false);
                 }
             }
         }
@@ -395,9 +395,10 @@ impl Dispatcher {
         if let Some(ctnt) = self.content_tracker.as_mut() {
             match ctnt.lock_variant(variant_id) {
                 None => Logger::warn("Locked variant not found"),
-                Some(VariantUpdateResult::Changed(mt)) =>
-                    self.on_media_playlist_changed(mt.as_ref()),
-                _ => {},
+                Some(VariantUpdateResult::Changed(mt)) => {
+                    self.on_multivariant_playlist_changed(mt.as_ref(), true);
+                }
+                Some(VariantUpdateResult::Unchanged) => {},
             }
         }
     }
@@ -405,18 +406,23 @@ impl Dispatcher {
     pub(super) fn inner_unlock_variant(&mut self) {
         if let Some(ctnt) = self.content_tracker.as_mut() {
             if let VariantUpdateResult::Changed(media_types) = ctnt.unlock_variant() {
-                self.on_media_playlist_changed(media_types.as_ref());
+                self.on_multivariant_playlist_changed(media_types.as_ref(), false);
             }
         }
     }
 
-    fn on_media_playlist_changed(&mut self,
-        media_types: &[MediaType]
+    fn on_multivariant_playlist_changed(&mut self,
+        changed_media_types: &[MediaType],
+        urgent_switch: bool
     ) {
         if let Some(ctnt) = self.content_tracker.as_mut() {
-            media_types.iter().for_each(|mt| {
+            changed_media_types.iter().for_each(|mt| {
                 let mt = *mt;
                 Logger::info(&format!("{} MediaPlaylist changed", mt));
+                if urgent_switch {
+                    self.requester.abort_segments_with_type(mt);
+                    self.segment_selectors.reset_position_for_type(mt, self.last_position);
+                }
                 self.requester.abort_segments_with_type(mt);
                 let selector = self.segment_selectors.get_mut(mt);
                 selector.rollback();
@@ -432,6 +438,7 @@ impl Dispatcher {
                 }
             });
             jsAnnounceVariantUpdate(ctnt.curr_variant().map(|v| v.id()));
+            self.check_segments_to_request();
         }
     }
 
