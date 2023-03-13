@@ -9,7 +9,7 @@ pub struct AdaptiveQualitySelector {
     bandwidth_estimator: BandwithEstimator,
 }
 
-const ADAPTIVE_FACTOR : f64 = 0.8;
+const ADAPTIVE_FACTOR: f64 = 0.8;
 
 impl AdaptiveQualitySelector {
     /// Creates new `AdaptiveQualitySelector`.
@@ -30,9 +30,9 @@ impl AdaptiveQualitySelector {
     ///
     /// Returns `None` if it does not have enough data to produce an estimate yet.
     pub fn get_estimate(&self) -> Option<f64> {
-        self.bandwidth_estimator.get_estimate().map(|x| {
-            x * ADAPTIVE_FACTOR
-        })
+        self.bandwidth_estimator
+            .get_estimate()
+            .map(|x| x * ADAPTIVE_FACTOR)
     }
 
     pub fn reset(&mut self) {

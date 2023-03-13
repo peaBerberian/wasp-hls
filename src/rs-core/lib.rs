@@ -2,10 +2,10 @@
 
 use wasm_bindgen::prelude::*;
 
-pub mod dispatcher;
 mod adaptive;
 mod bindings;
 mod content_tracker;
+pub mod dispatcher;
 mod media_element;
 mod parser;
 mod requester;

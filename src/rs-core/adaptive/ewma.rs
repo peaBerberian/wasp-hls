@@ -1,6 +1,6 @@
 /// Exponentially-weighted moving average.
 ///
-/// Average considering a "weight" for each estimates and prioritizing the last samples added. 
+/// Average considering a "weight" for each estimates and prioritizing the last samples added.
 /// This is useful in media streaming where you want to calculate a continuous bandwidth
 /// average, while putting more importance to the last loaded data.
 pub struct Ewma {
@@ -23,8 +23,7 @@ impl Ewma {
     /// weight.
     pub fn add_sample(&mut self, weight: f64, val: f64) {
         let adj_alpha = self.alpha.powf(weight);
-        let new_estimate = val * (1. - adj_alpha) +
-            adj_alpha * self.last_estimate;
+        let new_estimate = val * (1. - adj_alpha) + adj_alpha * self.last_estimate;
         self.last_estimate = new_estimate;
         self.total_weight += weight;
     }

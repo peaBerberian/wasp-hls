@@ -18,14 +18,18 @@ impl Url {
             } else {
                 format!("{}{}", base_url, relative_url.inner)
             };
-            Url { inner: complete_url }
+            Url {
+                inner: complete_url,
+            }
         } else {
             let complete_url = if relative_url.inner.starts_with('/') {
                 format!("{}{}", base_url, relative_url.inner)
             } else {
                 format!("{}/{}", base_url, relative_url.inner)
             };
-            Url { inner: complete_url }
+            Url {
+                inner: complete_url,
+            }
         }
     }
 
@@ -45,8 +49,8 @@ impl Url {
             if bytes.len() < offset + 1 {
                 return false;
             }
-            if (bytes[offset] >= b'A' && bytes[offset] <= b'Z') ||
-                (bytes[offset] >= b'a' && bytes[offset] <= b'z')
+            if (bytes[offset] >= b'A' && bytes[offset] <= b'Z')
+                || (bytes[offset] >= b'a' && bytes[offset] <= b'z')
             {
                 offset += 1;
                 continue;
@@ -61,7 +65,7 @@ impl Url {
             }
         }
 
-        if bytes.len() < offset +  2 {
+        if bytes.len() < offset + 2 {
             false
         } else {
             &bytes[offset..offset + 2] == b"//"

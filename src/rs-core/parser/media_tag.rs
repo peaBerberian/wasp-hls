@@ -1,14 +1,10 @@
-use std::io::BufRead;
-use crate::{utils::url::Url, Logger};
 use super::{
-    MediaPlaylist,
-    utils::{
-        parse_enumerated_string,
-        parse_quoted_string,
-        skip_attribute_list_value,
-    },
     media_playlist::MediaPlaylistParsingError,
+    utils::{parse_enumerated_string, parse_quoted_string, skip_attribute_list_value},
+    MediaPlaylist,
 };
+use crate::{utils::url::Url, Logger};
+use std::io::BufRead;
 
 /// Structure describing a "Media tag" in the HLS Multivariant Playlist.
 #[derive(Debug)]
@@ -86,7 +82,6 @@ pub struct MediaTag {
     /// then the `channels` attribute is REQUIRED; otherwise, it is
     /// OPTIONAL.
     channels: Option<u32>,
-
     // TODO
     // instream_id
     // characteristics
@@ -111,9 +106,10 @@ pub enum MediaTagParsingError {
 
 impl MediaTag {
     /// TODO real update
-    pub fn update(&mut self,
+    pub fn update(
+        &mut self,
         playlist: impl BufRead,
-        url: Url
+        url: Url,
     ) -> Result<&MediaPlaylist, MediaPlaylistParsingError> {
         let new_mp = MediaPlaylist::create(playlist, url)?;
         self.media_playlist = Some(new_mp);
@@ -122,21 +118,21 @@ impl MediaTag {
 
     pub(super) fn create(
         media_line: &str,
-        multi_variant_playlist_url: &Url
+        multi_variant_playlist_url: &Url,
     ) -> Result<Self, MediaTagParsingError> {
         let playlist_base_url = multi_variant_playlist_url.pathname();
-        let mut typ : Option<MediaTagType> = None;
-        let mut url : Option<Url> = None;
-        let mut group_id : Option<String> = None;
-        let mut language : Option<String> = None;
-        let mut assoc_language : Option<String> = None;
-        let mut name : Option<String> = None;
-        let mut stable_rendition_id : Option<String> = None;
+        let mut typ: Option<MediaTagType> = None;
+        let mut url: Option<Url> = None;
+        let mut group_id: Option<String> = None;
+        let mut language: Option<String> = None;
+        let mut assoc_language: Option<String> = None;
+        let mut name: Option<String> = None;
+        let mut stable_rendition_id: Option<String> = None;
         let mut default = false;
         let mut autoselect = false;
         let mut forced = false;
 
-        let channels : Option<u32> = None;
+        let channels: Option<u32> = None;
 
         let mut offset = "#EXT-X-MEDIA:".len();
         loop {
@@ -151,7 +147,8 @@ impl MediaTag {
                 Some(idx) => {
                     match &media_line[offset..offset + idx] {
                         "TYPE" => {
-                            let (parsed, end_offset) = parse_enumerated_string(media_line, offset + idx + 1);
+                            let (parsed, end_offset) =
+                                parse_enumerated_string(media_line, offset + idx + 1);
                             offset = end_offset + 1;
                             match parsed {
                                 "AUDIO" => typ = Some(MediaTagType::Audio),
@@ -161,104 +158,120 @@ impl MediaTag {
                                 x => {
                                     Logger::warn(&format!("Unrecognized media type: {}", x));
                                     typ = Some(MediaTagType::Other);
-                                },
+                                }
                             };
-                        },
+                        }
                         "URI" => {
-                            let (parsed, end_offset) = parse_quoted_string(media_line, offset + idx + 1);
+                            let (parsed, end_offset) =
+                                parse_quoted_string(media_line, offset + idx + 1);
                             offset = end_offset + 1;
                             if let Ok(parsed) = parsed {
                                 url = Some(Url::new(parsed.to_owned()));
                             } else {
                                 Logger::warn("Unparsable URI value");
                             }
-                        },
+                        }
                         "GROUP-ID" => {
-                            let (parsed, end_offset) = parse_quoted_string(media_line, offset + idx + 1);
+                            let (parsed, end_offset) =
+                                parse_quoted_string(media_line, offset + idx + 1);
                             offset = end_offset + 1;
                             if let Ok(val) = parsed {
                                 group_id = Some(val.to_owned());
                             } else {
                                 Logger::warn("Unparsable GROUP-ID value");
                             }
-                        },
+                        }
                         "LANGUAGE" => {
-                            let (parsed, end_offset) = parse_quoted_string(media_line, offset + idx + 1);
+                            let (parsed, end_offset) =
+                                parse_quoted_string(media_line, offset + idx + 1);
                             offset = end_offset + 1;
                             if let Ok(val) = parsed {
                                 language = Some(val.to_owned());
                             } else {
                                 Logger::warn("Unparsable LANGUAGE value");
                             }
-                        },
+                        }
                         "ASSOC-LANGUAGE" => {
-                            let (parsed, end_offset) = parse_quoted_string(media_line, offset + idx + 1);
+                            let (parsed, end_offset) =
+                                parse_quoted_string(media_line, offset + idx + 1);
                             offset = end_offset + 1;
                             if let Ok(val) = parsed {
                                 assoc_language = Some(val.to_owned());
                             } else {
                                 Logger::warn("Unparsable ASSOC-LANGUAGE value");
                             }
-                        },
+                        }
                         "NAME" => {
-                            let (parsed, end_offset) = parse_quoted_string(media_line, offset + idx + 1);
+                            let (parsed, end_offset) =
+                                parse_quoted_string(media_line, offset + idx + 1);
                             offset = end_offset + 1;
                             if let Ok(val) = parsed {
                                 name = Some(val.to_owned());
                             } else {
                                 Logger::warn("Unparsable NAME value");
                             }
-                        },
+                        }
                         "STABLE-RENDITION-ID" => {
-                            let (parsed, end_offset) = parse_quoted_string(media_line, offset + idx + 1);
+                            let (parsed, end_offset) =
+                                parse_quoted_string(media_line, offset + idx + 1);
                             offset = end_offset + 1;
                             if let Ok(val) = parsed {
                                 stable_rendition_id = Some(val.to_owned());
                             } else {
                                 Logger::warn("Unparsable STABLE-RENDITION-ID value");
                             }
-                        },
+                        }
                         "DEFAULT" => {
-                            let end_offset = skip_attribute_list_value(media_line, offset + idx + 1);
+                            let end_offset =
+                                skip_attribute_list_value(media_line, offset + idx + 1);
                             offset = end_offset + 1;
                             default = true;
                         }
                         "AUTOSELECT" => {
-                            let end_offset = skip_attribute_list_value(media_line, offset + idx + 1);
+                            let end_offset =
+                                skip_attribute_list_value(media_line, offset + idx + 1);
                             offset = end_offset + 1;
                             autoselect = true;
                         }
                         "FORCED" => {
-                            let end_offset = skip_attribute_list_value(media_line, offset + idx + 1);
+                            let end_offset =
+                                skip_attribute_list_value(media_line, offset + idx + 1);
                             offset = end_offset + 1;
                             forced = true;
-                        },
+                        }
                         "CHANNELS" => {
                             // TODO
                             offset = skip_attribute_list_value(media_line, offset + idx + 1) + 1;
-                        },
+                        }
                         _ => offset = skip_attribute_list_value(media_line, offset + idx + 1) + 1,
                     }
                 }
             }
         }
 
-        let typ = if let Some(x) = typ { x } else {
+        let typ = if let Some(x) = typ {
+            x
+        } else {
             return Err(MediaTagParsingError::MissingType);
         };
-        let group_id = if let Some(x) = group_id { x } else {
+        let group_id = if let Some(x) = group_id {
+            x
+        } else {
             return Err(MediaTagParsingError::MissingGroupId);
         };
-        let name = if let Some(x) = name { x } else {
+        let name = if let Some(x) = name {
+            x
+        } else {
             return Err(MediaTagParsingError::MissingName);
         };
 
-        let id = stable_rendition_id.or_else(||
-            url.as_ref().map(|u| u.clone().take()));
-        url = url.map(|u| if u.is_absolute() {
-            u
-        } else {
-            Url::from_relative(playlist_base_url, u)
+        let id = stable_rendition_id.or_else(|| url.as_ref().map(|u| u.clone().take()));
+        url = url.map(|u| {
+            if u.is_absolute() {
+                u
+            } else {
+                Url::from_relative(playlist_base_url, u)
+            }
         });
         Ok(MediaTag {
             id,

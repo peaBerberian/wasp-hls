@@ -1,23 +1,14 @@
 use crate::bindings::{
-    jsSeek,
-    MediaType,
-    jsAttachMediaSource,
-    jsEndOfStream,
-    JsResult,
-    MediaObservation,
-    jsRemoveMediaSource,
-    jsSetMediaOffset, AttachMediaSourceErrorCode, jsSetPlaybackRate, jsStartRebuffering, jsStopRebuffering,
+    jsAttachMediaSource, jsEndOfStream, jsRemoveMediaSource, jsSeek, jsSetMediaOffset,
+    jsSetPlaybackRate, jsStartRebuffering, jsStopRebuffering, AttachMediaSourceErrorCode, JsResult,
+    MediaObservation, MediaType,
 };
 use crate::dispatcher::MediaSourceReadyState;
 use crate::Logger;
 
 mod source_buffers;
 
-use source_buffers::{
-    SourceBufferId,
-    PushSegmentError,
-    RemoveDataError,
-};
+use source_buffers::{PushSegmentError, RemoveDataError, SourceBufferId};
 
 pub(crate) use source_buffers::PushMetadata;
 
@@ -132,13 +123,14 @@ impl MediaElementReference {
         match self.awaiting_seek {
             Some(awaiting_seek) => awaiting_seek,
             None => {
-                let last_media_pos = self.last_observation
+                let last_media_pos = self
+                    .last_observation
                     .as_ref()
                     .map(|o| o.current_time())
                     .unwrap_or(0.);
                 self.media_pos_to_playlist_pos(last_media_pos)
                     .unwrap_or(last_media_pos)
-            },
+            }
         }
     }
 
@@ -152,23 +144,21 @@ impl MediaElementReference {
     /// synchronously.
     pub(crate) fn seek(&mut self, position: f64) -> bool {
         match &self.last_observation {
-            Some(obs) if obs.ready_state() >= 1 => {
-                match self.playlist_pos_to_media_pos(position) {
-                    Some(media_pos) => {
-                        self.awaiting_seek = None;
-                        jsSeek(media_pos);
-                        true
-                    },
-                    None => {
-                        self.awaiting_seek = Some(position);
-                        false
-                    },
+            Some(obs) if obs.ready_state() >= 1 => match self.playlist_pos_to_media_pos(position) {
+                Some(media_pos) => {
+                    self.awaiting_seek = None;
+                    jsSeek(media_pos);
+                    true
+                }
+                None => {
+                    self.awaiting_seek = Some(position);
+                    false
                 }
             },
             _ => {
                 self.awaiting_seek = Some(position);
                 false
-            },
+            }
         }
     }
 
@@ -195,20 +185,18 @@ impl MediaElementReference {
         &mut self,
         media_type: MediaType,
         mime_type: &str,
-        codec: &str
+        codec: &str,
     ) -> Result<(), SourceBufferCreationError> {
         match self.media_source_ready_state {
             Some(MediaSourceReadyState::Closed) => {
                 return Err(SourceBufferCreationError::MediaSourceIsClosed);
-            },
+            }
             None => {
-                return Err(
-                    SourceBufferCreationError::NoMediaSourceAttached {
-                        message: "The MediaSource does not seem to be attached".to_string()
-                    }
-                );
-            },
-            _ => {},
+                return Err(SourceBufferCreationError::NoMediaSourceAttached {
+                    message: "The MediaSource does not seem to be attached".to_string(),
+                });
+            }
+            _ => {}
         }
         let sb_codec = format!("{};codecs=\"{}\"", mime_type, codec);
         match media_type {
@@ -216,7 +204,8 @@ impl MediaElementReference {
                 if self.audio_buffer.is_some() {
                     Err(SourceBufferCreationError::AlreadyCreatedWithSameType { media_type })
                 } else {
-                    self.audio_buffer = Some(source_buffers::SourceBuffer::new(media_type, sb_codec)?);
+                    self.audio_buffer =
+                        Some(source_buffers::SourceBuffer::new(media_type, sb_codec)?);
                     Ok(())
                 }
             }
@@ -224,7 +213,8 @@ impl MediaElementReference {
                 if self.video_buffer.is_some() {
                     Err(SourceBufferCreationError::AlreadyCreatedWithSameType { media_type })
                 } else {
-                    self.video_buffer = Some(source_buffers::SourceBuffer::new(media_type, sb_codec)?);
+                    self.video_buffer =
+                        Some(source_buffers::SourceBuffer::new(media_type, sb_codec)?);
                     Ok(())
                 }
             }
@@ -239,28 +229,30 @@ impl MediaElementReference {
     pub(crate) fn push_segment(
         &mut self,
         media_type: MediaType,
-        metadata: PushMetadata
+        metadata: PushMetadata,
     ) -> Result<(), PushSegmentError> {
         let has_media_offset = self.media_offset.is_some();
         match self.get_buffer_mut(media_type) {
             None => Err(PushSegmentError::NoSourceBuffer(media_type)),
             Some(sb) => {
-                let do_time_parsing = !has_media_offset &&
-                    (media_type == MediaType::Audio ||
-                     media_type == MediaType::Video) &&
-                    metadata.time_info.is_some();
+                let do_time_parsing = !has_media_offset
+                    && (media_type == MediaType::Audio || media_type == MediaType::Video)
+                    && metadata.time_info.is_some();
                 let start = metadata.time_info.map(|t| t.0);
                 let parsed = sb.append_buffer(metadata, do_time_parsing)?;
                 let media_start = parsed.and_then(|p| p.start);
                 if let (Some(segment_start), Some(media_start)) = (start, media_start) {
                     let media_offset = media_start - segment_start;
-                    Logger::info(&format!("Setting media offset: {}", media_start - segment_start));
+                    Logger::info(&format!(
+                        "Setting media offset: {}",
+                        media_start - segment_start
+                    ));
                     self.media_offset = Some(media_offset);
                     jsSetMediaOffset(media_offset);
                     self.check_awaiting_seek();
                 }
                 Ok(())
-            },
+            }
         }
     }
 
@@ -273,14 +265,14 @@ impl MediaElementReference {
         &mut self,
         media_type: MediaType,
         start: f64,
-        end: f64
+        end: f64,
     ) -> Result<(), RemoveDataError> {
         match self.get_buffer_mut(media_type) {
             None => Err(RemoveDataError::NoSourceBuffer(media_type)),
             Some(sb) => {
                 sb.remove_buffer(start, end);
                 Ok(())
-            },
+            }
         }
     }
 
@@ -297,28 +289,27 @@ impl MediaElementReference {
                             Logger::info("Starting rebuffering period due to no buffer gap");
                             self.is_rebuffering = true;
                             jsStartRebuffering();
-                        },
+                        }
                         Some(buffer_gap) if buffer_gap < 0.5 => {
                             let current_time = last_observation.current_time();
                             let duration = last_observation.duration();
                             if current_time + buffer_gap < duration - 0.001 {
-                                Logger::info(
-                                    &format!("Starting rebuffering period. bg: {}", buffer_gap)
-                                );
+                                Logger::info(&format!(
+                                    "Starting rebuffering period. bg: {}",
+                                    buffer_gap
+                                ));
                                 self.is_rebuffering = true;
                                 jsStartRebuffering();
                             }
-                        },
-                        _ => {},
+                        }
+                        _ => {}
                     }
                 }
             } else {
                 let mut quit_rebuffering = false;
                 if let Some(buffer_gap) = buffer_gap {
                     if buffer_gap > 2. {
-                        Logger::info(
-                            &format!("Quitting rebuffering period. bg: {}", buffer_gap)
-                        );
+                        Logger::info(&format!("Quitting rebuffering period. bg: {}", buffer_gap));
                         quit_rebuffering = true;
                     } else {
                         let current_time = last_observation.current_time();
@@ -369,7 +360,6 @@ impl MediaElementReference {
         }
     }
 
-
     /// Announce that the last chronological segment has been pushed to the buffer of a
     /// given `media_type`.
     ///
@@ -380,9 +370,10 @@ impl MediaElementReference {
     /// has been pushed.
     pub(crate) fn end_buffer(&mut self, media_type: MediaType) {
         match self.get_buffer_mut(media_type) {
-            None => {
-                Logger::warn(&format!("Asked to end a non existent {} buffer", media_type))
-            },
+            None => Logger::warn(&format!(
+                "Asked to end a non existent {} buffer",
+                media_type
+            )),
             Some(sb) => {
                 sb.announce_last_segment_pushed();
             }
@@ -397,7 +388,7 @@ impl MediaElementReference {
     fn get_buffer(&self, media_type: MediaType) -> Option<&source_buffers::SourceBuffer> {
         match media_type {
             MediaType::Audio => self.audio_buffer.as_ref(),
-            MediaType::Video => self.video_buffer.as_ref()
+            MediaType::Video => self.video_buffer.as_ref(),
         }
     }
 
@@ -405,10 +396,13 @@ impl MediaElementReference {
     /// `media_type`.
     ///
     /// `None` if no SourceBuffer has been created for this `MediaType`
-    fn get_buffer_mut(&mut self, media_type: MediaType) -> Option<&mut source_buffers::SourceBuffer> {
+    fn get_buffer_mut(
+        &mut self,
+        media_type: MediaType,
+    ) -> Option<&mut source_buffers::SourceBuffer> {
         match media_type {
             MediaType::Audio => self.audio_buffer.as_mut(),
-            MediaType::Video => self.video_buffer.as_mut()
+            MediaType::Video => self.video_buffer.as_mut(),
         }
     }
 
@@ -420,9 +414,9 @@ impl MediaElementReference {
         if self.video_buffer.is_none() && self.audio_buffer.is_none() {
             return;
         }
-        if self.is_buffer_ended(MediaType::Audio) &&
-            self.is_buffer_ended(MediaType::Video) &&
-            self.media_source_ready_state != Some(MediaSourceReadyState::Closed)
+        if self.is_buffer_ended(MediaType::Audio)
+            && self.is_buffer_ended(MediaType::Video)
+            && self.media_source_ready_state != Some(MediaSourceReadyState::Closed)
         {
             jsEndOfStream();
         }
@@ -445,10 +439,15 @@ impl MediaElementReference {
     ///
     /// Returns `true` if a seek has been performed
     fn check_awaiting_seek(&mut self) -> bool {
-        if self.awaiting_seek.is_some() && self.last_observation.as_ref().unwrap().ready_state() >= 1 {
+        if self.awaiting_seek.is_some()
+            && self.last_observation.as_ref().unwrap().ready_state() >= 1
+        {
             let awaiting_seek = self.awaiting_seek.unwrap();
             if let Some(media_pos) = self.playlist_pos_to_media_pos(awaiting_seek) {
-                Logger::info(&format!("Perform awaited seek to {} ({})", awaiting_seek, media_pos));
+                Logger::info(&format!(
+                    "Perform awaited seek to {} ({})",
+                    awaiting_seek, media_pos
+                ));
                 jsSeek(media_pos);
                 self.awaiting_seek = None;
                 return true;
@@ -501,23 +500,26 @@ pub(crate) enum SourceBufferCreationError {
 use source_buffers::AddSourceBufferError;
 
 impl From<AddSourceBufferError> for SourceBufferCreationError {
-  fn from(src: AddSourceBufferError) -> Self {
-    match src {
-        AddSourceBufferError::NoMediaSourceAttached { message } =>
-            SourceBufferCreationError::NoMediaSourceAttached { message },
-        AddSourceBufferError::MediaSourceIsClosed =>
-            SourceBufferCreationError::MediaSourceIsClosed,
-        AddSourceBufferError::QuotaExceededError { message } =>
-            SourceBufferCreationError::QuotaExceededError { message },
-        AddSourceBufferError::TypeNotSupportedError { mime_type, message } =>
-            SourceBufferCreationError::CantPlayType { mime_type, message },
-        AddSourceBufferError::EmptyMimeType =>
-            SourceBufferCreationError::EmptyMimeType,
-        AddSourceBufferError::UnknownError { message } =>
-            SourceBufferCreationError::UnknownError { message },
-
+    fn from(src: AddSourceBufferError) -> Self {
+        match src {
+            AddSourceBufferError::NoMediaSourceAttached { message } => {
+                SourceBufferCreationError::NoMediaSourceAttached { message }
+            }
+            AddSourceBufferError::MediaSourceIsClosed => {
+                SourceBufferCreationError::MediaSourceIsClosed
+            }
+            AddSourceBufferError::QuotaExceededError { message } => {
+                SourceBufferCreationError::QuotaExceededError { message }
+            }
+            AddSourceBufferError::TypeNotSupportedError { mime_type, message } => {
+                SourceBufferCreationError::CantPlayType { mime_type, message }
+            }
+            AddSourceBufferError::EmptyMimeType => SourceBufferCreationError::EmptyMimeType,
+            AddSourceBufferError::UnknownError { message } => {
+                SourceBufferCreationError::UnknownError { message }
+            }
+        }
     }
-  }
 }
 
 #[derive(Error, Debug)]
@@ -531,20 +533,19 @@ pub(crate) enum AttachMediaSourceError {
 impl From<(AttachMediaSourceErrorCode, Option<String>)> for AttachMediaSourceError {
     fn from(x: (AttachMediaSourceErrorCode, Option<String>)) -> Self {
         match x.0 {
-            AttachMediaSourceErrorCode::NoContentLoaded =>
-                AttachMediaSourceError::NoContentLoaded,
-            AttachMediaSourceErrorCode::UnknownError =>
-                AttachMediaSourceError::UnknownError {
-                    message: x.1.unwrap_or_else(|| "Unknown Error.".to_string())
-                }
+            AttachMediaSourceErrorCode::NoContentLoaded => AttachMediaSourceError::NoContentLoaded,
+            AttachMediaSourceErrorCode::UnknownError => AttachMediaSourceError::UnknownError {
+                message: x.1.unwrap_or_else(|| "Unknown Error.".to_string()),
+            },
         }
     }
 }
 
 fn get_buffer_gap(observation: &MediaObservation) -> Option<f64> {
     let current_time = observation.current_time();
-    let current_buffered = observation.buffered().iter().find(|b| {
-        current_time >= b.0 && current_time < b.1
-    });
+    let current_buffered = observation
+        .buffered()
+        .iter()
+        .find(|b| current_time >= b.0 && current_time < b.1);
     Some(current_buffered?.1 - current_time)
 }

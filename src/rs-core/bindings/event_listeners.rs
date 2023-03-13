@@ -1,9 +1,14 @@
 use crate::{
+    dispatcher::{Dispatcher, MediaSourceReadyState},
+    utils::url::Url,
     wasm_bindgen,
-    dispatcher::{MediaSourceReadyState, Dispatcher}, utils::url::Url,
 };
 
-use super::{js_functions::{self, RequestId, SourceBufferId}, TimerReason, TimerId, jsGetResourceData, ResourceId};
+use super::{
+    jsGetResourceData,
+    js_functions::{self, RequestId, SourceBufferId},
+    ResourceId, TimerId, TimerReason,
+};
 
 /// Methods triggered on JavaScript events by the JavaScript code
 ///
@@ -32,19 +37,23 @@ impl Dispatcher {
     ///
     /// * `duration_ms` - Number of millisceconds taken to perform the request
     ///   from start to finish.
-    pub fn on_request_finished(&mut self,
+    pub fn on_request_finished(
+        &mut self,
         request_id: RequestId,
         resource_id: ResourceId,
         resource_size: u32,
         final_url: String,
-        duration_ms: f64 // TODO Rust-side?
+        duration_ms: f64, // TODO Rust-side?
     ) {
         let resource_handle = JsMemoryBlob::from_resource_id(resource_id);
-        Dispatcher::on_request_succeeded(self, request_id,
+        Dispatcher::on_request_succeeded(
+            self,
+            request_id,
             resource_handle,
             Url::new(final_url),
             resource_size,
-            duration_ms);
+            duration_ms,
+        );
     }
 
     /// Called by the JavaScript code each time an HTTP(S) request started with
@@ -62,10 +71,11 @@ impl Dispatcher {
     /// * `has_timeouted` - If set, the issue was due to a non-satisfying HTTP
     ///   status being received.
     ///   TODO actually categorize that in Rust?
-    pub fn on_request_failed(&mut self,
+    pub fn on_request_failed(
+        &mut self,
         request_id: RequestId,
         has_timeouted: bool,
-        status: Option<u32>
+        status: Option<u32>,
     ) {
         Dispatcher::on_request_failed_inner(self, request_id, has_timeouted, status);
     }
@@ -128,10 +138,10 @@ impl Dispatcher {
     ///   to simplify the logic handling a resolved timer.
     pub fn on_timer_ended(&mut self, id: TimerId, reason: TimerReason) {
         match reason {
-            TimerReason::MediaPlaylistRefresh =>
-                Dispatcher::on_playlist_refresh_timer_ended(self, id),
-            TimerReason::RetryRequest =>
-                Dispatcher::on_retry_request(self, id),
+            TimerReason::MediaPlaylistRefresh => {
+                Dispatcher::on_playlist_refresh_timer_ended(self, id)
+            }
+            TimerReason::RetryRequest => Dispatcher::on_retry_request(self, id),
         }
     }
 }
@@ -216,7 +226,6 @@ pub struct MediaObservation {
     ended: bool,
     duration: f64,
 }
-
 
 #[wasm_bindgen]
 impl MediaObservation {

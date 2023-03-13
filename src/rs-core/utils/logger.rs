@@ -1,6 +1,6 @@
 use std::sync::atomic::AtomicU8;
 
-use crate::bindings::{LogLevel, jsLog};
+use crate::bindings::{jsLog, LogLevel};
 
 pub static MAX_LOG_LEVEL: AtomicU8 = AtomicU8::new(4);
 

@@ -1,15 +1,11 @@
-use std::{io::BufRead, cmp::Ordering};
 use crate::{
     bindings::MediaType,
     parser::{
-        VariantStream,
-        MediaPlaylist,
-        MultiVariantPlaylist,
-        MediaTagType,
-        MediaPlaylistUpdateError,
+        MediaPlaylist, MediaPlaylistUpdateError, MediaTagType, MultiVariantPlaylist, VariantStream,
     },
     utils::url::Url,
 };
+use std::{cmp::Ordering, io::BufRead};
 
 /// Stores information about the current loaded playlist:
 ///   - The playlist itself.
@@ -64,7 +60,6 @@ pub enum VariantUpdateResult {
     /// vector.
     Worsened(Vec<MediaType>),
 
-
     /// At least one MediaPlaylist was updated, but for either an as-good or
     /// for a quality that could not be compared.
     ///
@@ -115,10 +110,9 @@ impl ContentTracker {
 
     /// Returns `true` only if all media playlists currently selected have been loaded.
     pub(crate) fn all_curr_media_playlists_ready(&self) -> bool {
-        [MediaType::Audio, MediaType::Video].into_iter().all(|t|
-            !self.has_media_type(t) ||
-            self.curr_media_playlist_ready(t)
-        )
+        [MediaType::Audio, MediaType::Video]
+            .into_iter()
+            .all(|t| !self.has_media_type(t) || self.curr_media_playlist_ready(t))
     }
 
     /// Returns true if a MediaPlaylist for the given `MediaType` has been selected, regardless if
@@ -131,16 +125,19 @@ impl ContentTracker {
     }
 
     /// Initialize or update a `MediaPlaylist`, based on its `MediaPlaylistPermanentId`.
-    pub(crate) fn update_media_playlist(&mut self,
+    pub(crate) fn update_media_playlist(
+        &mut self,
         id: &MediaPlaylistPermanentId,
         media_playlist_data: impl BufRead,
-        url: Url
+        url: Url,
     ) -> Result<&MediaPlaylist, MediaPlaylistUpdateError> {
         match id {
-            MediaPlaylistPermanentId::VariantStreamUrl(idx) =>
-                self.playlist.update_variant_media_playlist(*idx, media_playlist_data, url),
-            MediaPlaylistPermanentId::MediaTagUrl(idx) =>
-                self.playlist.update_media_tag_media_playlist(*idx, media_playlist_data, url),
+            MediaPlaylistPermanentId::VariantStreamUrl(idx) => self
+                .playlist
+                .update_variant_media_playlist(*idx, media_playlist_data, url),
+            MediaPlaylistPermanentId::MediaTagUrl(idx) => self
+                .playlist
+                .update_media_tag_media_playlist(*idx, media_playlist_data, url),
         }
     }
 
@@ -155,15 +152,17 @@ impl ContentTracker {
     /// Returns `None` if there's not enough data to produce that estimate (e.g. no audio or video
     /// media playlist selected or they are not loaded).
     pub(crate) fn curr_duration(&self) -> Option<f64> {
-        let audio_duration = self.curr_media_playlist(MediaType::Audio)
+        let audio_duration = self
+            .curr_media_playlist(MediaType::Audio)
             .and_then(|a| a.duration());
-        let video_duration = self.curr_media_playlist(MediaType::Video)
+        let video_duration = self
+            .curr_media_playlist(MediaType::Video)
             .and_then(|v| v.duration());
         match (audio_duration, video_duration) {
             (None, None) => None,
             (Some(a), Some(v)) => Some(f64::min(a, v)),
             (Some(a), None) => Some(a),
-            (None, Some(v)) => Some(v)
+            (None, Some(v)) => Some(v),
         }
     }
 
@@ -175,17 +174,17 @@ impl ContentTracker {
     /// Returns `None` if there's not enough data to produce that value (e.g. no audio
     /// or video media playlist selected or they are not loaded).
     pub(crate) fn curr_min_position(&self) -> Option<f64> {
-        let audio_duration = self.curr_media_playlist(MediaType::Audio).and_then(|a| {
-            a.beginning()
-        });
-        let video_duration = self.curr_media_playlist(MediaType::Video).and_then(|v| {
-            v.beginning()
-        });
+        let audio_duration = self
+            .curr_media_playlist(MediaType::Audio)
+            .and_then(|a| a.beginning());
+        let video_duration = self
+            .curr_media_playlist(MediaType::Video)
+            .and_then(|v| v.beginning());
         match (audio_duration, video_duration) {
             (None, None) => None,
             (Some(a), Some(v)) => Some(f64::max(a, v)),
             (Some(a), None) => Some(a),
-            (None, Some(v)) => Some(v)
+            (None, Some(v)) => Some(v),
         }
     }
 
@@ -212,22 +211,20 @@ impl ContentTracker {
     /// consequence updated.
     /// Returns an empty vec if this new bandwidth estimate did not have any effect on any selected
     /// MediaPlaylist.
-    pub(crate) fn update_curr_bandwidth(
-        &mut self,
-        bandwidth: f64
-    ) -> VariantUpdateResult {
+    pub(crate) fn update_curr_bandwidth(&mut self, bandwidth: f64) -> VariantUpdateResult {
         self.last_bandwidth = bandwidth;
         if self.is_variant_locked() {
             return VariantUpdateResult::Unchanged;
         }
         let variants = self.playlist.variants();
-        let best_variant_idx = variants.iter().position(|x| {
-            (x.bandwidth as f64) > bandwidth
-        }).or(if variants.is_empty(){
-            None
-        } else {
-            Some(variants.len() - 1)
-        });
+        let best_variant_idx = variants
+            .iter()
+            .position(|x| (x.bandwidth as f64) > bandwidth)
+            .or(if variants.is_empty() {
+                None
+            } else {
+                Some(variants.len() - 1)
+            });
         self.update_variant(best_variant_idx)
     }
 
@@ -238,17 +235,16 @@ impl ContentTracker {
     ///
     /// The returned option is `None` if the `variant_id` given is not found to correspond
     /// to any existing variant and contains the corresponding update when set.
-    pub(crate) fn lock_variant(&mut self,
-        variant_id: String
-    ) -> Option<VariantUpdateResult> {
+    pub(crate) fn lock_variant(&mut self, variant_id: String) -> Option<VariantUpdateResult> {
         let variants = self.playlist.variants();
-        let pos = variants.iter().position(|x| {
-            x.id() == variant_id
-        }).or(if variants.is_empty() {
-            None
-        } else {
-            Some(variants.len() - 1)
-        });
+        let pos = variants
+            .iter()
+            .position(|x| x.id() == variant_id)
+            .or(if variants.is_empty() {
+                None
+            } else {
+                Some(variants.len() - 1)
+            });
 
         if let Some(pos) = pos {
             self.is_variant_locked = true;
@@ -277,26 +273,23 @@ impl ContentTracker {
     /// `MediaType`.
     ///
     /// Returns `None` if there's no active MediaPlaylist for the given MediaType.
-    pub(crate) fn curr_media_playlist_request_info(&self,
-        media_type: MediaType
+    pub(crate) fn curr_media_playlist_request_info(
+        &self,
+        media_type: MediaType,
     ) -> Option<(&Url, &MediaPlaylistPermanentId)> {
         let wanted_idx = match media_type {
             MediaType::Video => &self.curr_video_idx,
             MediaType::Audio => &self.curr_audio_idx,
         };
         match wanted_idx {
-            Some(MediaPlaylistPermanentId::VariantStreamUrl(idx)) => {
-                Some((
-                    self.playlist.get_variant(*idx)?.get_url(),
-                    wanted_idx.as_ref().unwrap()
-                ))
-            },
-            Some(MediaPlaylistPermanentId::MediaTagUrl(idx)) => {
-                Some((
-                    self.playlist.get_media(*idx)?.get_url()?,
-                    wanted_idx.as_ref().unwrap()
-                ))
-            },
+            Some(MediaPlaylistPermanentId::VariantStreamUrl(idx)) => Some((
+                self.playlist.get_variant(*idx)?.get_url(),
+                wanted_idx.as_ref().unwrap(),
+            )),
+            Some(MediaPlaylistPermanentId::MediaTagUrl(idx)) => Some((
+                self.playlist.get_media(*idx)?.get_url()?,
+                wanted_idx.as_ref().unwrap(),
+            )),
             None => None,
         }
     }
@@ -305,9 +298,7 @@ impl ContentTracker {
     ///
     /// Returns `None` either if there's no MediaPlaylist selected for that `MediaType` or if the
     /// MediaPlaylist is not yet loaded.
-    pub(crate) fn curr_media_playlist(&self,
-        media_type: MediaType
-    ) -> Option<&MediaPlaylist> {
+    pub(crate) fn curr_media_playlist(&self, media_type: MediaType) -> Option<&MediaPlaylist> {
         let wanted_idx = match media_type {
             MediaType::Video => &self.curr_video_idx,
             MediaType::Audio => &self.curr_audio_idx,
@@ -315,10 +306,10 @@ impl ContentTracker {
         match wanted_idx {
             Some(MediaPlaylistPermanentId::VariantStreamUrl(idx)) => {
                 Some(self.playlist.get_variant(*idx)?.media_playlist.as_ref()?)
-            },
+            }
             Some(MediaPlaylistPermanentId::MediaTagUrl(idx)) => {
                 Some(self.playlist.get_media(*idx)?.media_playlist.as_ref()?)
-            },
+            }
             None => None,
         }
     }
@@ -331,15 +322,16 @@ impl ContentTracker {
     ///   - The MediaPlaylist for that given `MediaType` is not yet loaded.
     ///   - There's no initialization segment for the MediaPlaylist of that given `MediaType`.
     pub(crate) fn curr_init_segment(&self, media_type: MediaType) -> Option<&Url> {
-        self.curr_media_playlist(media_type).as_ref()?.init_segment().map(|i| { &i.uri })
+        self.curr_media_playlist(media_type)
+            .as_ref()?
+            .init_segment()
+            .map(|i| &i.uri)
     }
 
     /// Returns currently estimated start time in seconds at which to begin playing the content.
     pub(crate) fn get_expected_start_time(&self) -> f64 {
         let media_playlists = self.curr_media_playlists();
-        if media_playlists.is_empty() ||
-            media_playlists.iter().any(|p| { p.1.end_list })
-        {
+        if media_playlists.is_empty() || media_playlists.iter().any(|p| p.1.end_list) {
             0.
         } else {
             let initial_dur: Option<f64> = None;
@@ -364,9 +356,7 @@ impl ContentTracker {
     }
 
     /// Run the variant update logic from its index in the variants array and return the result of doing so
-    fn update_variant(&mut self,
-        index: Option<usize>
-    ) -> VariantUpdateResult {
+    fn update_variant(&mut self, index: Option<usize>) -> VariantUpdateResult {
         if index != self.curr_variant_idx {
             if let Some(idx) = index {
                 let prev_bandwidth = self.curr_variant().map(|v| v.bandwidth);
@@ -416,14 +406,21 @@ impl ContentTracker {
         }
 
         if let Some(group_id) = variant.audio.as_ref() {
-            let best_audio = self.playlist.medias().iter().enumerate().fold(None, |acc, x| {
-                if x.1.typ() == MediaTagType::Audio && x.1.group_id() == group_id &&
-                    x.1.is_autoselect() && (acc.is_none() || x.1.is_default())
-                {
-                    return Some(x.0);
-                }
-                acc
-            });
+            let best_audio = self
+                .playlist
+                .medias()
+                .iter()
+                .enumerate()
+                .fold(None, |acc, x| {
+                    if x.1.typ() == MediaTagType::Audio
+                        && x.1.group_id() == group_id
+                        && x.1.is_autoselect()
+                        && (acc.is_none() || x.1.is_default())
+                    {
+                        return Some(x.0);
+                    }
+                    acc
+                });
             if let Some(idx) = best_audio {
                 self.curr_audio_idx = Some(MediaPlaylistPermanentId::MediaTagUrl(idx));
             } else {
@@ -443,24 +440,25 @@ impl ContentTracker {
         // TODO and group of codec?
         // They however should not have the same group_id
 
-        let mut available_audio_tracks : Vec<AvailableAudioTrack> = vec![];
+        let mut available_audio_tracks: Vec<AvailableAudioTrack> = vec![];
         for (idx, media) in self.playlist.medias().iter().enumerate() {
             if media.typ() == MediaTagType::Audio {
                 // TODO Implementing this method might actually be harder when considering
                 // multiple audio media tags with the same characteristics but used in different
                 // variants.
-                let is_current =  if let Some(MediaPlaylistPermanentId::MediaTagUrl(id)) = self.curr_audio_idx {
-                    id == idx
-                } else {
-                    false
-                };
+                let is_current =
+                    if let Some(MediaPlaylistPermanentId::MediaTagUrl(id)) = self.curr_audio_idx {
+                        id == idx
+                    } else {
+                        false
+                    };
                 available_audio_tracks.push(AvailableAudioTrack {
                     is_current,
                     id: idx,
                     language: media.language(),
                     assoc_language: media.assoc_language(),
                     name: media.name(),
-                    channels: media.channels()
+                    channels: media.channels(),
                 })
             }
         }
@@ -498,22 +496,22 @@ pub struct AvailableAudioTrack<'a> {
 }
 
 impl<'a> AvailableAudioTrack<'a> {
-   pub fn is_current(&self) -> bool {
-       self.is_current
-   }
-   pub fn id(&self) -> usize {
-       self.id
-   }
-   pub fn language(&self) -> Option<&'a str> {
-       self.language
-   }
-   pub fn assoc_language(&self) -> Option<&'a str> {
-       self.assoc_language
-   }
-   pub fn name(&self) -> &'a str {
-       self.name
-   }
-   pub fn channels(&self) -> Option<u32> {
-       self.channels
-   }
+    pub fn is_current(&self) -> bool {
+        self.is_current
+    }
+    pub fn id(&self) -> usize {
+        self.id
+    }
+    pub fn language(&self) -> Option<&'a str> {
+        self.language
+    }
+    pub fn assoc_language(&self) -> Option<&'a str> {
+        self.assoc_language
+    }
+    pub fn name(&self) -> &'a str {
+        self.name
+    }
+    pub fn channels(&self) -> Option<u32> {
+        self.channels
+    }
 }

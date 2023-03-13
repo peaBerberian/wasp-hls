@@ -1,22 +1,13 @@
 use std::io::BufRead;
 
-use crate::{
-    bindings::MediaType,
-    Logger,
-    utils::url::Url,
-};
 use super::{
-    utils::{
-        parse_decimal_integer,
-        parse_comma_separated_list,
-        parse_decimal_floating_point,
-        parse_enumerated_string,
-        parse_resolution,
-        parse_quoted_string,
-        skip_attribute_list_value,
-    },
     media_playlist::{MediaPlaylist, MediaPlaylistParsingError},
+    utils::{
+        parse_comma_separated_list, parse_decimal_floating_point, parse_decimal_integer,
+        parse_enumerated_string, parse_quoted_string, parse_resolution, skip_attribute_list_value,
+    },
 };
+use crate::{bindings::MediaType, utils::url::Url, Logger};
 
 /// Stucture representing the HLS concept of a "variant stream".
 #[derive(Debug)]
@@ -173,7 +164,6 @@ pub struct VariantStream {
     // TODO
     // ALLOWED-CPC
     // SUPPLEMENTAL-CODECS
-
 }
 
 /// Pixel resolution of a video content
@@ -251,19 +241,22 @@ pub enum VariantParsingError {
 
 impl VariantStream {
     pub(crate) fn has_type(&self, media_type: MediaType) -> bool {
-        self.codecs.iter().any(|c| {
-            matches!(c.0, Some(x) if x == media_type)
-        })
+        self.codecs
+            .iter()
+            .any(|c| matches!(c.0, Some(x) if x == media_type))
     }
 
     pub(crate) fn codecs(&self, media_type: MediaType) -> Option<String> {
-        let concerned_codecs = self.codecs.iter().filter(|c| {
-            match c.0 {
+        let concerned_codecs = self
+            .codecs
+            .iter()
+            .filter(|c| match c.0 {
                 Some(MediaType::Audio) => media_type == MediaType::Audio || self.audio.is_none(),
                 Some(MediaType::Video) => media_type == MediaType::Video,
                 _ => false,
-            }
-        }).map(|c| c.1.as_ref()).collect::<Vec<&str>>();
+            })
+            .map(|c| c.1.as_ref())
+            .collect::<Vec<&str>>();
         if concerned_codecs.is_empty() {
             None
         } else {
@@ -288,9 +281,10 @@ impl VariantStream {
     }
 
     /// TODO real update
-    pub fn update_media_playlist(&mut self,
+    pub fn update_media_playlist(
+        &mut self,
         playlist: impl BufRead,
-        url: Url
+        url: Url,
     ) -> Result<&MediaPlaylist, MediaPlaylistParsingError> {
         let new_mp = MediaPlaylist::create(playlist, url)?;
         self.media_playlist = Some(new_mp);
@@ -304,23 +298,23 @@ impl VariantStream {
     pub(super) fn create_from_stream_inf(
         variant_line: &str,
         url: Url,
-        base_uri: &str
+        base_uri: &str,
     ) -> Result<Self, VariantParsingError> {
-        let mut bandwidth : Option<u64> = None;
-        let mut resolution : Option<VideoResolution> = None;
-        let mut average_bandwitdh : Option<u64> = None;
-        let mut codecs : Vec<(Option<MediaType>, String)> = vec![];
-        let mut hdcp_level : HdcpLevel = HdcpLevel::None;
-        let mut video_range : VideoDynamicRange = VideoDynamicRange::Sdr;
-        let mut program_id : Option<u64> = None;
-        let mut score : Option<f64> = None;
-        let mut frame_rate : Option<f64> = None;
-        let mut stable_variant_id : Option<String> = None;
-        let mut audio : Option<String> = None;
-        let mut video  : Option<String> = None;
-        let mut subtitles : Option<String> = None;
-        let mut closed_captions : Option<String> = None;
-        let mut pathway_id : Option<String> = None;
+        let mut bandwidth: Option<u64> = None;
+        let mut resolution: Option<VideoResolution> = None;
+        let mut average_bandwitdh: Option<u64> = None;
+        let mut codecs: Vec<(Option<MediaType>, String)> = vec![];
+        let mut hdcp_level: HdcpLevel = HdcpLevel::None;
+        let mut video_range: VideoDynamicRange = VideoDynamicRange::Sdr;
+        let mut program_id: Option<u64> = None;
+        let mut score: Option<f64> = None;
+        let mut frame_rate: Option<f64> = None;
+        let mut stable_variant_id: Option<String> = None;
+        let mut audio: Option<String> = None;
+        let mut video: Option<String> = None;
+        let mut subtitles: Option<String> = None;
+        let mut closed_captions: Option<String> = None;
+        let mut pathway_id: Option<String> = None;
 
         let mut offset = "#EXT-X-STREAM-INF:".len();
         loop {
@@ -336,53 +330,60 @@ impl VariantStream {
                 Some(idx) => {
                     match &variant_line[offset..offset + idx] {
                         "AVERAGE-BANDWIDTH" => {
-                            let (parsed, end_offset) = parse_decimal_integer(variant_line, offset + idx + 1);
+                            let (parsed, end_offset) =
+                                parse_decimal_integer(variant_line, offset + idx + 1);
                             offset = end_offset + 1;
                             if let Ok(val) = parsed {
                                 average_bandwitdh = Some(val);
                             } else {
                                 Logger::warn("Unparsable AVERAGE-BANDWIDTH value");
                             }
-                        },
+                        }
                         "BANDWIDTH" => {
-                            let (parsed, end_offset) = parse_decimal_integer(variant_line, offset + idx + 1);
+                            let (parsed, end_offset) =
+                                parse_decimal_integer(variant_line, offset + idx + 1);
                             offset = end_offset + 1;
                             if let Ok(val) = parsed {
                                 bandwidth = Some(val);
                             } else {
                                 Logger::warn("Unparsable BANDWIDTH value");
                             }
-                        },
+                        }
                         "CODECS" => {
-                            let (parsed, end_offset) = parse_comma_separated_list(variant_line, offset + idx + 1);
+                            let (parsed, end_offset) =
+                                parse_comma_separated_list(variant_line, offset + idx + 1);
                             offset = end_offset + 1;
                             if let Ok(val) = parsed {
-                                codecs = val.iter().map(|c| {
-                                    // TODO more codecs
-                                    let mut media_type : Option<MediaType> = None;
-                                    if c.starts_with("mp4a") {
-                                        media_type = Some(MediaType::Audio);
-                                    } else if c.starts_with("avc") || c.starts_with("hvc") {
-                                        media_type = Some(MediaType::Video);
-                                    }
-                                    (media_type, (*c).to_owned())
-
-                                }).collect();
+                                codecs = val
+                                    .iter()
+                                    .map(|c| {
+                                        // TODO more codecs
+                                        let mut media_type: Option<MediaType> = None;
+                                        if c.starts_with("mp4a") {
+                                            media_type = Some(MediaType::Audio);
+                                        } else if c.starts_with("avc") || c.starts_with("hvc") {
+                                            media_type = Some(MediaType::Video);
+                                        }
+                                        (media_type, (*c).to_owned())
+                                    })
+                                    .collect();
                             } else {
                                 Logger::warn("Unparsable CODECS value");
                             }
-                        },
+                        }
                         "FRAME-RATE" => {
-                            let (parsed, end_offset) = parse_decimal_floating_point(variant_line, offset + idx + 1);
+                            let (parsed, end_offset) =
+                                parse_decimal_floating_point(variant_line, offset + idx + 1);
                             offset = end_offset + 1;
                             if let Ok(val) = parsed {
                                 frame_rate = Some(val);
                             } else {
                                 Logger::warn("Unparsable FRAME-RATE value");
                             }
-                        },
+                        }
                         "HDCP-LEVEL" => {
-                            let (parsed, end_offset) = parse_enumerated_string(variant_line, offset + idx + 1);
+                            let (parsed, end_offset) =
+                                parse_enumerated_string(variant_line, offset + idx + 1);
                             offset = end_offset + 1;
                             hdcp_level = match parsed {
                                 "TYPE-0" => HdcpLevel::Type0,
@@ -390,75 +391,86 @@ impl VariantStream {
                                 "NONE" => HdcpLevel::None,
                                 _ => HdcpLevel::Unknown,
                             };
-                        },
+                        }
                         "PROGRAM-ID" => {
-                            let (parsed, end_offset) = parse_decimal_integer(variant_line, offset + idx + 1);
+                            let (parsed, end_offset) =
+                                parse_decimal_integer(variant_line, offset + idx + 1);
                             offset = end_offset + 1;
                             if let Ok(val) = parsed {
                                 program_id = Some(val);
                             } else {
                                 Logger::warn("Unparsable PROGRAM-ID value");
                             }
-                        },
+                        }
                         "RESOLUTION" => {
-                            let (parsed, end_offset) = parse_resolution(variant_line, offset + idx + 1);
+                            let (parsed, end_offset) =
+                                parse_resolution(variant_line, offset + idx + 1);
                             offset = end_offset + 1;
                             if let Ok(res) = parsed {
-                                resolution = Some(VideoResolution { height: res.height, width: res.width });
+                                resolution = Some(VideoResolution {
+                                    height: res.height,
+                                    width: res.width,
+                                });
                             } else {
                                 Logger::warn("Unparsable RESOLUTION value");
                             }
-                        },
+                        }
                         "SCORE" => {
-                            let (parsed, end_offset) = parse_decimal_floating_point(variant_line, offset + idx + 1);
+                            let (parsed, end_offset) =
+                                parse_decimal_floating_point(variant_line, offset + idx + 1);
                             offset = end_offset + 1;
                             if let Ok(val) = parsed {
                                 score = Some(val);
                             } else {
                                 Logger::warn("Unparsable SCORE value");
                             }
-                        },
+                        }
                         "STABLE-VARIANT-ID" => {
-                            let (parsed, end_offset) = parse_quoted_string(variant_line, offset + idx + 1);
+                            let (parsed, end_offset) =
+                                parse_quoted_string(variant_line, offset + idx + 1);
                             offset = end_offset + 1;
                             if let Ok(val) = parsed {
                                 stable_variant_id = Some(val.to_owned());
                             } else {
                                 Logger::warn("Unparsable STABLE-VARIANT-ID value");
                             }
-                        },
+                        }
                         "AUDIO" => {
-                            let (parsed, end_offset) = parse_quoted_string(variant_line, offset + idx + 1);
+                            let (parsed, end_offset) =
+                                parse_quoted_string(variant_line, offset + idx + 1);
                             offset = end_offset + 1;
                             if let Ok(val) = parsed {
                                 audio = Some(val.to_owned());
                             } else {
                                 Logger::warn("Unparsable AUDIO value");
                             }
-                        },
+                        }
                         "VIDEO" => {
-                            let (parsed, end_offset) = parse_quoted_string(variant_line, offset + idx + 1);
+                            let (parsed, end_offset) =
+                                parse_quoted_string(variant_line, offset + idx + 1);
                             offset = end_offset + 1;
                             if let Ok(val) = parsed {
                                 video = Some(val.to_owned());
                             } else {
                                 Logger::warn("Unparsable VIDEO value");
                             }
-                        },
+                        }
                         "SUBTITLES" => {
-                            let (parsed, end_offset) = parse_quoted_string(variant_line, offset + idx + 1);
+                            let (parsed, end_offset) =
+                                parse_quoted_string(variant_line, offset + idx + 1);
                             offset = end_offset + 1;
                             if let Ok(val) = parsed {
                                 subtitles = Some(val.to_owned());
                             } else {
                                 Logger::warn("Unparsable SUBTITLES value");
                             }
-                        },
+                        }
                         "CLOSED-CAPTIONS" => {
                             if variant_line[offset + idx + 1..].starts_with("NONE") {
                                 offset = skip_attribute_list_value(variant_line, offset + idx + 1);
                             } else {
-                                let (parsed, end_offset) = parse_quoted_string(variant_line, offset + idx + 1);
+                                let (parsed, end_offset) =
+                                    parse_quoted_string(variant_line, offset + idx + 1);
                                 offset = end_offset + 1;
                                 if let Ok(val) = parsed {
                                     closed_captions = Some(val.to_owned());
@@ -466,9 +478,10 @@ impl VariantStream {
                                     Logger::warn("Unparsable CLOSED-CAPTIONS value");
                                 }
                             }
-                        },
+                        }
                         "VIDEO-RANGE" => {
-                            let (parsed, end_offset) = parse_enumerated_string(variant_line, offset + idx + 1);
+                            let (parsed, end_offset) =
+                                parse_enumerated_string(variant_line, offset + idx + 1);
                             offset = end_offset + 1;
                             video_range = match parsed {
                                 "SDR" => VideoDynamicRange::Sdr,
@@ -476,19 +489,20 @@ impl VariantStream {
                                 "PQ" => VideoDynamicRange::Pq,
                                 _ => VideoDynamicRange::Unknown,
                             };
-                        },
+                        }
                         "PATHWAY-ID" => {
-                            let (parsed, end_offset) = parse_quoted_string(variant_line, offset + idx + 1);
+                            let (parsed, end_offset) =
+                                parse_quoted_string(variant_line, offset + idx + 1);
                             offset = end_offset + 1;
                             if let Ok(val) = parsed {
                                 pathway_id = Some(val.to_owned());
                             } else {
                                 Logger::warn("Unparsable PATHWAY-ID value");
                             }
-                        },
+                        }
                         _ => {
                             offset = skip_attribute_list_value(variant_line, offset + idx + 1) + 1;
-                        },
+                        }
                     }
                 }
             }

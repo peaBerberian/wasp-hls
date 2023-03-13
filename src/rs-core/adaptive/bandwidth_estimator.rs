@@ -1,9 +1,9 @@
 use super::ewma::Ewma;
 
-const FAST_EWMA_HALF_LIFE : u32 = 2;
-const SLOW_EWMA_HALF_LIFE : u32 = 10;
-const MINIMUM_CHUNK_SIZE : u32 = 16_000;
-const MINIMUM_TOTAL_BYTES : u64 = 150_000;
+const FAST_EWMA_HALF_LIFE: u32 = 2;
+const SLOW_EWMA_HALF_LIFE: u32 = 10;
+const MINIMUM_CHUNK_SIZE: u32 = 16_000;
+const MINIMUM_TOTAL_BYTES: u64 = 150_000;
 
 /// Produce bandwidth estimates based on two EWMA (exponentially-weighted moving average), one
 /// evolving slow and the other evolving fast.
@@ -50,7 +50,11 @@ impl BandwithEstimator {
         if self.bytes_sampled < MINIMUM_TOTAL_BYTES {
             None
         } else {
-            Some(self.fast_ewma.get_estimate().min(self.slow_ewma.get_estimate()))
+            Some(
+                self.fast_ewma
+                    .get_estimate()
+                    .min(self.slow_ewma.get_estimate()),
+            )
         }
     }
 
@@ -61,5 +65,3 @@ impl BandwithEstimator {
         self.bytes_sampled = 0;
     }
 }
-
-

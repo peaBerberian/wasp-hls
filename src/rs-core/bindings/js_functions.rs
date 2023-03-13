@@ -1,5 +1,5 @@
-use std::fmt;
 use crate::wasm_bindgen;
+use std::fmt;
 
 /// # js_functions
 ///
@@ -59,11 +59,12 @@ extern "C" {
     //
     // In that last scenario, you will receive a corresponding error when trying to use that
     // `ResourceId` in the JavaScript functions receiving it.
-    pub fn jsFetch(url: &str,
+    pub fn jsFetch(
+        url: &str,
         range_base: Option<usize>,
         range_end: Option<usize>,
-        timeout: Option<f64>
-        ) -> RequestId;
+        timeout: Option<f64>,
+    ) -> RequestId;
 
     // Abort a request started with `jsFetch`` based on its
     // `request_id`.
@@ -103,10 +104,7 @@ extern "C" {
     //
     // This function performs this operation synchronously and may fail, see
     // `AddSourceBufferResult` for more details on the return value.
-    pub fn jsAddSourceBuffer(
-        media_type: MediaType,
-        typ: &str
-    ) -> AddSourceBufferResult;
+    pub fn jsAddSourceBuffer(media_type: MediaType, typ: &str) -> AddSourceBufferResult;
 
     // Append media data to the given SourceBuffer.
     //
@@ -128,7 +126,7 @@ extern "C" {
     pub fn jsAppendBuffer(
         source_buffer_id: SourceBufferId,
         segment_id: ResourceId,
-        parse_time_information: bool
+        parse_time_information: bool,
     ) -> AppendBufferResult;
 
     // Remove media data from the given SourceBuffer.
@@ -151,7 +149,7 @@ extern "C" {
     pub fn jsRemoveBuffer(
         source_buffer_id: SourceBufferId,
         start: f64,
-        end: f64
+        end: f64,
     ) -> RemoveBufferResult;
 
     // Call the `MediaSource.prototype.endOfStream` API, allowing to signal that
@@ -211,10 +209,7 @@ extern "C" {
     // which is the time actually present on the HTMLMediaElement.
     pub fn jsSetMediaOffset(media_offset: f64);
 
-    pub fn jsUpdateContentInfo(
-        minimum_position : Option<f64>,
-        maximum_position : Option<f64>
-    );
+    pub fn jsUpdateContentInfo(minimum_position: Option<f64>, maximum_position: Option<f64>);
 
     pub fn jsAnnounceFetchedContent(variant_info: Vec<u32>);
 
@@ -232,25 +227,21 @@ extern "C" {
         timeInfo: Option<Vec<f64>>,
         mediaType: MediaType,
         reason: RequestErrorReason,
-        status: Option<u32>
+        status: Option<u32>,
     );
 
-    pub fn jsSendOtherError(
-        fatal: bool,
-        code: OtherErrorCode,
-        message: Option<&str>
-    );
+    pub fn jsSendOtherError(fatal: bool, code: OtherErrorCode, message: Option<&str>);
 
     pub fn jsSendSourceBufferCreationError(
         code: SourceBufferCreationErrorCode,
-        message: Option<&str>
+        message: Option<&str>,
     );
 
     pub fn jsSendPlaylistParsingError(
         fatal: bool,
         playlist_type: PlaylistType,
         media_type: Option<MediaType>,
-        message: Option<&str>
+        message: Option<&str>,
     );
 }
 
@@ -324,7 +315,9 @@ impl RemoveMediaSourceResult {
     ///
     /// This function should only be called by the JavaScript-side.
     pub fn error(err: RemoveMediaSourceErrorCode, desc: Option<String>) -> Self {
-        Self { error: Some((err, desc)) }
+        Self {
+            error: Some((err, desc)),
+        }
     }
 }
 
@@ -343,7 +336,7 @@ impl JsResult<(), RemoveMediaSourceErrorCode> for RemoveMediaSourceResult {
 /// Trait allowing to convert "JavaScript Results" as exposed by the JavaScript functions into
 /// `Result` structs more idiomatic to Rust.
 pub(crate) trait JsResult<T, E> {
-    fn result(self)  -> Result<T, (E, Option<String>)>;
+    fn result(self) -> Result<T, (E, Option<String>)>;
 }
 
 /// Errors that can arise when attempting to update the duration of a MediaSource.
@@ -380,7 +373,9 @@ impl MediaSourceDurationUpdateResult {
     ///
     /// This function should only be called by the JavaScript-side.
     pub fn error(err: MediaSourceDurationUpdateErrorCode, desc: Option<String>) -> Self {
-        Self { error: Some((err, desc)) }
+        Self {
+            error: Some((err, desc)),
+        }
     }
 }
 
@@ -443,7 +438,9 @@ impl RemoveBufferResult {
     ///
     /// This function should only be called by the JavaScript-side.
     pub fn error(err: RemoveBufferErrorCode, desc: Option<String>) -> Self {
-        Self { error: Some((err, desc)) }
+        Self {
+            error: Some((err, desc)),
+        }
     }
 }
 
@@ -494,7 +491,9 @@ impl EndOfStreamResult {
     ///
     /// This function should only be called by the JavaScript-side.
     pub fn error(err: EndOfStreamErrorCode, desc: Option<String>) -> Self {
-        Self { error: Some((err, desc)) }
+        Self {
+            error: Some((err, desc)),
+        }
     }
 }
 
@@ -553,8 +552,11 @@ impl AddSourceBufferResult {
     /// `SourceBufferId`.
     ///
     /// This function should only be called by the JavaScript-side.
-    pub fn success(val : SourceBufferId) -> Self {
-        Self { source_buffer_id: val, error: None }
+    pub fn success(val: SourceBufferId) -> Self {
+        Self {
+            source_buffer_id: val,
+            error: None,
+        }
     }
 
     /// Creates an `AddSourceBufferResult` indicating failure, with the corresponding
@@ -562,7 +564,10 @@ impl AddSourceBufferResult {
     ///
     /// This function should only be called by the JavaScript-side.
     pub fn error(err: AddSourceBufferErrorCode, desc: Option<String>) -> Self {
-        Self { source_buffer_id: 0., error: Some((err, desc)) }
+        Self {
+            source_buffer_id: 0.,
+            error: Some((err, desc)),
+        }
     }
 }
 
@@ -602,7 +607,9 @@ impl AttachMediaSourceResult {
     ///
     /// This function should only be called by the JavaScript-side.
     pub fn error(err: AttachMediaSourceErrorCode, desc: Option<String>) -> Self {
-        Self { error: Some((err, desc)) }
+        Self {
+            error: Some((err, desc)),
+        }
     }
 }
 
@@ -639,10 +646,7 @@ impl AppendBufferResult {
     /// `SourceBufferId`.
     ///
     /// This function should only be called by the JavaScript-side.
-    pub fn success(
-        start: Option<f64>,
-        duration: Option<f64>
-    ) -> Self {
+    pub fn success(start: Option<f64>, duration: Option<f64>) -> Self {
         Self {
             success: Some(ParsedSegmentInfo { start, duration }),
             error: None,
@@ -654,20 +658,17 @@ impl AppendBufferResult {
     ///
     /// This function should only be called by the JavaScript-side.
     pub fn error(err: AppendBufferErrorCode, desc: Option<String>) -> Self {
-        Self { success: None, error: Some((err, desc)) }
+        Self {
+            success: None,
+            error: Some((err, desc)),
+        }
     }
 }
 
-impl JsResult<
-    Option<ParsedSegmentInfo>,
-    AppendBufferErrorCode
-> for AppendBufferResult {
+impl JsResult<Option<ParsedSegmentInfo>, AppendBufferErrorCode> for AppendBufferResult {
     /// Basically unwrap and consume the `AppendBufferResult`, converting it into a
     /// Result enum.
-    fn result(self) -> Result<
-        Option<ParsedSegmentInfo>,
-        (AppendBufferErrorCode, Option<String>)
-    > {
+    fn result(self) -> Result<Option<ParsedSegmentInfo>, (AppendBufferErrorCode, Option<String>)> {
         if let Some(err) = self.error {
             Err(err)
         } else {
@@ -700,7 +701,7 @@ pub enum AppendBufferErrorCode {
 pub struct PlaybackObservation {
     /// The reason that triggered the `PlaybackObservation` struct to be
     /// created.
-    reason : PlaybackObservationReason,
+    reason: PlaybackObservationReason,
     /// The value of the `currentTime` attribute of the HTMLMediaElement.
     current_time: f64,
     /// The value of the `playbackRate` attribute of the HTMLMediaElement.
@@ -790,9 +791,13 @@ impl fmt::Display for MediaType {
     /// When wanting to display the value, just format Audio as "audio" and
     /// Video as "video"
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", match self {
-            MediaType::Audio => "audio",
-            MediaType::Video => "video",
-        })
+        write!(
+            f,
+            "{}",
+            match self {
+                MediaType::Audio => "audio",
+                MediaType::Video => "video",
+            }
+        )
     }
 }

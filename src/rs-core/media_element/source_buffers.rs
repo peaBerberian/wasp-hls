@@ -1,13 +1,6 @@
 use crate::bindings::{
-    jsAddSourceBuffer,
-    jsAppendBuffer,
-    jsRemoveBuffer,
-    MediaType,
-    JsMemoryBlob,
-    AppendBufferErrorCode,
-    JsResult,
-    ParsedSegmentInfo,
-    AddSourceBufferErrorCode,
+    jsAddSourceBuffer, jsAppendBuffer, jsRemoveBuffer, AddSourceBufferErrorCode,
+    AppendBufferErrorCode, JsMemoryBlob, JsResult, MediaType, ParsedSegmentInfo,
 };
 use crate::Logger;
 
@@ -46,18 +39,18 @@ impl SourceBuffer {
     /// Create a new `SourceBuffer` for the given `MediaType` and the mime-type indicated by `typ`.
     pub(super) fn new(media_type: MediaType, typ: String) -> Result<Self, AddSourceBufferError> {
         Logger::info(&format!("Creating new {} SourceBuffer", media_type));
-        match jsAddSourceBuffer(media_type, &typ,).result() {
-            Ok(x) => {
-                Ok(Self {
-                    id: x,
-                    typ,
-                    queue: vec![],
-                    was_used: false,
-                    last_segment_pushed: false,
-                    media_type,
-                })
-            },
-            Err(err) => Err(AddSourceBufferError::from_add_source_buffer_error(err, &typ)),
+        match jsAddSourceBuffer(media_type, &typ).result() {
+            Ok(x) => Ok(Self {
+                id: x,
+                typ,
+                queue: vec![],
+                was_used: false,
+                last_segment_pushed: false,
+                media_type,
+            }),
+            Err(err) => Err(AddSourceBufferError::from_add_source_buffer_error(
+                err, &typ,
+            )),
         }
     }
 
@@ -82,7 +75,7 @@ impl SourceBuffer {
     pub(super) fn append_buffer(
         &mut self,
         metadata: PushMetadata,
-        parse_time_info: bool
+        parse_time_info: bool,
     ) -> Result<Option<ParsedSegmentInfo>, PushSegmentError> {
         self.last_segment_pushed = false;
         self.was_used = true;
@@ -90,8 +83,10 @@ impl SourceBuffer {
         self.queue.push(SourceBufferQueueElement::Push(metadata));
         Logger::debug(&format!("Buffer {} ({}): Pushing", self.id, self.typ));
         match jsAppendBuffer(self.id, segment_id, parse_time_info).result() {
-            Err(err) =>
-                Err(PushSegmentError::from_append_buffer_error(self.media_type, err)),
+            Err(err) => Err(PushSegmentError::from_append_buffer_error(
+                self.media_type,
+                err,
+            )),
             Ok(x) => Ok(x),
         }
     }
@@ -99,9 +94,12 @@ impl SourceBuffer {
     /// Remove media data from this `SourceBuffer`, based on a `start` and `end` time in seconds.
     pub(super) fn remove_buffer(&mut self, start: f64, end: f64) {
         self.was_used = true;
-        self.queue.push(SourceBufferQueueElement::Remove { start, end });
-        Logger::debug(&format!("Buffer {} ({}): Removing {} {}",
-            self.id, self.typ, start, end));
+        self.queue
+            .push(SourceBufferQueueElement::Remove { start, end });
+        Logger::debug(&format!(
+            "Buffer {} ({}): Removing {} {}",
+            self.id, self.typ, start, end
+        ));
         jsRemoveBuffer(self.id, start, end);
     }
 
@@ -121,18 +119,18 @@ impl SourceBuffer {
         self.queue.remove(0);
     }
 
-//     pub(super) fn buffered(&self) -> Vec<(f64, f64)> {
-//         let buffered = jsGetSourceBufferBuffered(self.id);
-//         let og_len = buffered.len();
-//         if og_len % 2 != 0 {
-//             panic!("Unexpected buffered value: not even.");
-//         }
-//         let mut ret : Vec<(f64, f64)> = Vec::with_capacity(og_len / 2);
-//         for i in 0..og_len / 2 {
-//             ret.push((buffered[i], buffered[i+1]));
-//         }
-//         ret
-//     }
+    //     pub(super) fn buffered(&self) -> Vec<(f64, f64)> {
+    //         let buffered = jsGetSourceBufferBuffered(self.id);
+    //         let og_len = buffered.len();
+    //         if og_len % 2 != 0 {
+    //             panic!("Unexpected buffered value: not even.");
+    //         }
+    //         let mut ret : Vec<(f64, f64)> = Vec::with_capacity(og_len / 2);
+    //         for i in 0..og_len / 2 {
+    //             ret.push((buffered[i], buffered[i+1]));
+    //         }
+    //         ret
+    //     }
 }
 
 /// Structure describing a segment that should be pushed to the SourceBuffer.
@@ -144,16 +142,16 @@ pub(crate) struct PushMetadata {
     ///
     /// This should always be defined, unless the segment contains no media data (like for
     /// initialization segments).
-    pub(crate) time_info: Option<(f64, f64)>
+    pub(crate) time_info: Option<(f64, f64)>,
 }
 
 impl PushMetadata {
     /// Creates a new `PushMetadata`.
-    pub(crate) fn new(
-        segment_data: JsMemoryBlob,
-        time_info: Option<(f64, f64)>
-    ) -> Self {
-        Self { segment_data, time_info }
+    pub(crate) fn new(segment_data: JsMemoryBlob, time_info: Option<(f64, f64)>) -> Self {
+        Self {
+            segment_data,
+            time_info,
+        }
     }
 }
 
@@ -177,40 +175,49 @@ use thiserror::Error;
 /// time.
 #[derive(Debug)]
 pub(super) enum AddSourceBufferError {
-  NoMediaSourceAttached { message: String },
-  MediaSourceIsClosed,
-  QuotaExceededError { message: String },
-  TypeNotSupportedError { mime_type: String, message: String },
-  EmptyMimeType,
-  UnknownError { message: String },
+    NoMediaSourceAttached { message: String },
+    MediaSourceIsClosed,
+    QuotaExceededError { message: String },
+    TypeNotSupportedError { mime_type: String, message: String },
+    EmptyMimeType,
+    UnknownError { message: String },
 }
 
 impl AddSourceBufferError {
     fn from_add_source_buffer_error(
         err: (AddSourceBufferErrorCode, Option<String>),
-        mime_type: &str
+        mime_type: &str,
     ) -> Self {
         match err.0 {
-            AddSourceBufferErrorCode::NoMediaSourceAttached =>
+            AddSourceBufferErrorCode::NoMediaSourceAttached => {
                 AddSourceBufferError::NoMediaSourceAttached {
-                    message: err.1.unwrap_or_else(|| "MediaSource instance not found.".to_owned())
-                },
-            AddSourceBufferErrorCode::MediaSourceIsClosed =>
-                AddSourceBufferError::MediaSourceIsClosed,
-            AddSourceBufferErrorCode::QuotaExceededError =>
+                    message: err
+                        .1
+                        .unwrap_or_else(|| "MediaSource instance not found.".to_owned()),
+                }
+            }
+            AddSourceBufferErrorCode::MediaSourceIsClosed => {
+                AddSourceBufferError::MediaSourceIsClosed
+            }
+            AddSourceBufferErrorCode::QuotaExceededError => {
                 AddSourceBufferError::QuotaExceededError {
-                    message: err.1.unwrap_or_else(|| "Unknown QuotaExceededError error".to_owned())
-                },
-            AddSourceBufferErrorCode::TypeNotSupportedError =>
+                    message: err
+                        .1
+                        .unwrap_or_else(|| "Unknown QuotaExceededError error".to_owned()),
+                }
+            }
+            AddSourceBufferErrorCode::TypeNotSupportedError => {
                 AddSourceBufferError::TypeNotSupportedError {
                     mime_type: mime_type.to_string(),
-                    message: err.1.unwrap_or_else(|| "Unknown NotSupportedError error".to_owned()),
-                },
+                    message: err
+                        .1
+                        .unwrap_or_else(|| "Unknown NotSupportedError error".to_owned()),
+                }
+            }
             AddSourceBufferErrorCode::EmptyMimeType => AddSourceBufferError::EmptyMimeType,
-            AddSourceBufferErrorCode::UnknownError =>
-                AddSourceBufferError::UnknownError {
-                    message: err.1.unwrap_or_else(|| "Unknown error.".to_owned())
-                },
+            AddSourceBufferErrorCode::UnknownError => AddSourceBufferError::UnknownError {
+                message: err.1.unwrap_or_else(|| "Unknown error.".to_owned()),
+            },
         }
     }
 }
@@ -233,23 +240,20 @@ impl PushSegmentError {
     /// returned by the `jsAppendBuffer` binding.
     fn from_append_buffer_error(
         media_type: MediaType,
-        err: (AppendBufferErrorCode, Option<String>)
+        err: (AppendBufferErrorCode, Option<String>),
     ) -> Self {
         match err.0 {
-            AppendBufferErrorCode::NoSourceBuffer =>
-                PushSegmentError::NoSourceBuffer(media_type),
-            AppendBufferErrorCode::NoResource =>
-                PushSegmentError::NoResource(media_type),
-            AppendBufferErrorCode::TransmuxerError =>
-                PushSegmentError::TransmuxerError(
-                    media_type,
-                    err.1.unwrap_or_else(|| "Unknown transmuxing error.".to_owned())
-                ),
-            AppendBufferErrorCode::UnknownError =>
-                PushSegmentError::UnknownError(
-                    media_type,
-                    err.1.unwrap_or_else(|| "Unknown error.".to_owned())
-                ),
+            AppendBufferErrorCode::NoSourceBuffer => PushSegmentError::NoSourceBuffer(media_type),
+            AppendBufferErrorCode::NoResource => PushSegmentError::NoResource(media_type),
+            AppendBufferErrorCode::TransmuxerError => PushSegmentError::TransmuxerError(
+                media_type,
+                err.1
+                    .unwrap_or_else(|| "Unknown transmuxing error.".to_owned()),
+            ),
+            AppendBufferErrorCode::UnknownError => PushSegmentError::UnknownError(
+                media_type,
+                err.1.unwrap_or_else(|| "Unknown error.".to_owned()),
+            ),
         }
     }
 }

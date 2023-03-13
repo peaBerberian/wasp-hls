@@ -1,6 +1,6 @@
 use crate::{
     bindings::MediaType,
-    parser::{MediaPlaylist, SegmentInfo, MapInfo},
+    parser::{MapInfo, MediaPlaylist, SegmentInfo},
 };
 
 mod segment_queue;
@@ -133,10 +133,7 @@ impl NextSegmentSelector {
         self.last_validated_position = Some(pos);
     }
 
-    pub fn get_next_segment_info<'a>(
-        &mut self,
-        pl: &'a MediaPlaylist
-    ) -> NextSegmentInfo<'a> {
+    pub fn get_next_segment_info<'a>(&mut self, pl: &'a MediaPlaylist) -> NextSegmentInfo<'a> {
         if self.init_status == InitializationSegmentSelectorStatus::Unreturned {
             if let Some(i) = pl.init_segment() {
                 self.init_status = InitializationSegmentSelectorStatus::Returned;
@@ -146,7 +143,10 @@ impl NextSegmentSelector {
             }
         }
         let maximum_position = self.buffer_goal + self.base_pos;
-        match self.segment_queue.get_next(&pl.segment_list, maximum_position) {
+        match self
+            .segment_queue
+            .get_next(&pl.segment_list, maximum_position)
+        {
             None => NextSegmentInfo::None,
             Some(si) => {
                 self.segment_queue.validate_start(si.start);

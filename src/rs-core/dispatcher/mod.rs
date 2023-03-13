@@ -1,10 +1,12 @@
 use crate::{
-    wasm_bindgen,
-    media_element::MediaElementReference,
-    requester::{Requester, PlaylistFileType},
-    content_tracker::ContentTracker,
     adaptive::AdaptiveQualitySelector,
-    segment_selector::NextSegmentSelectors, bindings::TimerId, utils::url::Url,
+    bindings::TimerId,
+    content_tracker::ContentTracker,
+    media_element::MediaElementReference,
+    requester::{PlaylistFileType, Requester},
+    segment_selector::NextSegmentSelectors,
+    utils::url::Url,
+    wasm_bindgen,
 };
 
 mod api;

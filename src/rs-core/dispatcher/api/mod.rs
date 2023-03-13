@@ -1,18 +1,14 @@
 use crate::{
-    wasm_bindgen,
-    bindings::{OtherErrorCode, jsSendOtherError},
-    Logger,
-    media_element::MediaElementReference,
-    utils::url::Url,
-    requester::{Requester, PlaylistFileType},
     adaptive::AdaptiveQualitySelector,
+    bindings::{jsSendOtherError, OtherErrorCode},
+    media_element::MediaElementReference,
+    requester::{PlaylistFileType, Requester},
     segment_selector::NextSegmentSelectors,
+    utils::url::Url,
+    wasm_bindgen, Logger,
 };
 
-use super::{
-    Dispatcher,
-    PlayerReadyState,
-};
+use super::{Dispatcher, PlayerReadyState};
 
 /// Methods exposed to the JavaScript-side.
 ///
@@ -44,27 +40,29 @@ impl Dispatcher {
         self.stop();
         self.ready_state = PlayerReadyState::Loading;
         let content_url = Url::new(content_url);
-        self.requester.fetch_playlist(content_url, PlaylistFileType::Unknown);
+        self.requester
+            .fetch_playlist(content_url, PlaylistFileType::Unknown);
         Logger::info("Attaching MediaSource");
         if let Err(x) = self.media_element_ref.attach_media_source() {
             jsSendOtherError(
                 true,
                 OtherErrorCode::MediaSourceAttachmentError,
-                Some(&x.to_string()));
+                Some(&x.to_string()),
+            );
             self.internal_stop();
         }
     }
 
     pub fn minimum_position(&self) -> Option<f64> {
-        self.content_tracker.as_ref().and_then(|c| {
-            c.curr_min_position()
-        })
+        self.content_tracker
+            .as_ref()
+            .and_then(|c| c.curr_min_position())
     }
 
     pub fn maximum_position(&self) -> Option<f64> {
-        self.content_tracker.as_ref().and_then(|c| {
-            c.curr_max_position()
-        })
+        self.content_tracker
+            .as_ref()
+            .and_then(|c| c.curr_max_position())
     }
 
     pub fn set_wanted_speed(&mut self, speed: f64) {
@@ -103,19 +101,23 @@ impl Dispatcher {
     }
 
     pub fn set_multi_variant_playlist_request_timeout(&mut self, timeout: Option<f64>) {
-        self.requester.update_multi_variant_playlist_request_timeout(timeout);
+        self.requester
+            .update_multi_variant_playlist_request_timeout(timeout);
     }
 
     pub fn set_multi_variant_playlist_backoff_base(&mut self, base: f64) {
-        self.requester.update_multi_variant_playlist_backoff_base(base);
+        self.requester
+            .update_multi_variant_playlist_backoff_base(base);
     }
 
     pub fn set_multi_variant_playlist_backoff_max(&mut self, max: f64) {
-        self.requester.update_multi_variant_playlist_backoff_max(max);
+        self.requester
+            .update_multi_variant_playlist_backoff_max(max);
     }
 
     pub fn set_media_playlist_request_timeout(&mut self, timeout: Option<f64>) {
-        self.requester.update_media_playlist_request_timeout(timeout);
+        self.requester
+            .update_media_playlist_request_timeout(timeout);
     }
 
     pub fn set_media_playlist_backoff_base(&mut self, base: f64) {
@@ -126,16 +128,16 @@ impl Dispatcher {
         self.requester.update_media_playlist_backoff_max(max);
     }
 
-//     pub fn available_audio_tracks(&self) -> Vec<u8> {
-//         match self.content_tracker {
-//             None => vec![],
-//             Some(ref c) => c.todo_get_available_audio_tracks()
-//                 .iter()
-//                 .map(|x| x.serialize_for_js())
-//                 .flatten()
-//                 .collect(),
-//         }
-//     }
+    //     pub fn available_audio_tracks(&self) -> Vec<u8> {
+    //         match self.content_tracker {
+    //             None => vec![],
+    //             Some(ref c) => c.todo_get_available_audio_tracks()
+    //                 .iter()
+    //                 .map(|x| x.serialize_for_js())
+    //                 .flatten()
+    //                 .collect(),
+    //         }
+    //     }
 }
 
 // impl<'a> AvailableAudioTrack<'a> {
