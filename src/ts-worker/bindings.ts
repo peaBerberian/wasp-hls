@@ -3,7 +3,6 @@ import logger from "../ts-common/logger.js";
 import QueuedSourceBuffer from "../ts-common/QueuedSourceBuffer.js";
 import { VariantInfo } from "../ts-common/types.js";
 import {
-  Dispatcher,
   LogLevel,
   MediaType,
   MediaSourceReadyState,
@@ -464,7 +463,7 @@ export function removeMediaSource(): RemoveMediaSourceResult {
           catch (e) {
             const msg =
               formatErrMessage(e, "Unknown error while removing SourceBuffer");
-            Dispatcher.log(LogLevel.Error, "Could not remove SourceBuffer: " + msg);
+            logger.error("Could not remove SourceBuffer: " + msg);
             return RemoveMediaSourceResult.error(
               RemoveMediaSourceErrorCode.UnknownError,
               msg
@@ -858,10 +857,7 @@ export function startObservingPlayback(): void {
     return;
   }
   if (contentInfo.mediaSourceObj === null) {
-    Dispatcher.log(
-      LogLevel.Error,
-      "Cannot start observing playback: No MediaSource Attached"
-    );
+    logger.error("Cannot start observing playback: No MediaSource Attached");
     return;
   }
   postMessageToMain({

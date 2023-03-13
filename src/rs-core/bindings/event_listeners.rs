@@ -23,6 +23,15 @@ impl Dispatcher {
     ///   is actually finished
     ///
     /// * `resource_id` - Id refering to the resource on the JavaScript-side.
+    ///
+    /// * `resource_size` - Size of the fetched resource (uncompressed, in
+    ///   bytes)
+    ///
+    /// * `final_url` - Actual url of the content, which may be different from
+    ///   the original resource if an HTTP redirect occured
+    ///
+    /// * `duration_ms` - Number of millisceconds taken to perform the request
+    ///   from start to finish.
     pub fn on_request_finished(&mut self,
         request_id: RequestId,
         resource_id: ResourceId,
@@ -46,6 +55,13 @@ impl Dispatcher {
     /// * `request_id` - The identifier given by the JavaScript when the request
     ///   was started. This allows the `Dispatcher` to identify which request
     ///   is actually finished
+    ///
+    /// * `has_timeouted` - If `true`, the issue was due to the request timeouting
+    ///   with the current request configuration.
+    ///
+    /// * `has_timeouted` - If set, the issue was due to a non-satisfying HTTP
+    ///   status being received.
+    ///   TODO actually categorize that in Rust?
     pub fn on_request_failed(&mut self,
         request_id: RequestId,
         has_timeouted: bool,
@@ -120,38 +136,64 @@ impl Dispatcher {
     }
 }
 
+/// Identify the event that lead to the `MediaObservation` being sent.
 #[wasm_bindgen]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PlaybackTickReason {
+    /// This is the initial observation emitted, right after it was started.
     Init,
-    Seeking,
-    Seeked,
+    /// This designates MediaObservation sent after an interval without any
+    /// of the other events.
     RegularInterval,
+    /// The HTMLMediaElement's "seeking" event has just been triggered
+    Seeking,
+    /// The HTMLMediaElement's "seeked" event has just been triggered
+    Seeked,
+    /// The HTMLMediaElement's "loadeddata" event has just been triggered
     LoadedData,
+    /// The HTMLMediaElement's "loadedmetadata" event has just been triggered
     LoadedMetadata,
+    /// The HTMLMediaElement's "canplay" event has just been triggered
     CanPlay,
+    /// The HTMLMediaElement's "canplaythrough" event has just been triggered
     CanPlayThrough,
+    /// The HTMLMediaElement's "ended" event has just been triggered
     Ended,
+    /// The HTMLMediaElement's "pause" event has just been triggered
     Pause,
+    /// The HTMLMediaElement's "play" event has just been triggered
     Play,
+    /// The HTMLMediaElement's "ratechange" event has just been triggered
     RateChange,
+    /// The HTMLMediaElement's "stalled" event has just been triggered
     Stalled,
 }
 
+/// Special structure to handle data that is only present in JavaScript's
+/// memory.
+///
+/// The data is identified through a unique `ResourceId` identifier.
+///
+/// The idea behind this struct is to prevent memory leaks by implementing the
+/// Drop trait on it, so the resource is freed when no ownership of it is left.
 pub struct JsMemoryBlob {
+    /// Its unique identifier
     id: ResourceId,
 }
 
-/// Special structure to handle data
 impl JsMemoryBlob {
+    /// Create a `JsMemoryBlob` object from the `ResourceId` given by the
+    /// JavaScript-side
     pub fn from_resource_id(id: ResourceId) -> Self {
         Self { id }
     }
 
+    /// Recuperates the ResourceId behind this `JsMemoryBlob`.
     pub fn get_id(&self) -> ResourceId {
         self.id
     }
 
+    /// Actually obtain the data behind this `JsMemoryBlob`, as a Vec of bytes.
     pub fn obtain(self) -> Vec<u8> {
         jsGetResourceData(self.id).unwrap()
     }

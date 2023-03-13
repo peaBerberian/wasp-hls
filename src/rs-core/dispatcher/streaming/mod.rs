@@ -19,10 +19,18 @@ use crate::{
         PlaylistType,
         jsSendOtherError,
         jsAnnounceFetchedContent,
-        formatters::format_variants_info_for_js, jsAnnounceVariantUpdate,
+        jsAnnounceVariantUpdate,
+        formatters::{
+            format_variants_info_for_js,
+            format_source_buffer_creation_err_for_js
+        },
     },
     Logger,
-    content_tracker::{MediaPlaylistPermanentId, ContentTracker, VariantUpdateResult},
+    content_tracker::{
+        MediaPlaylistPermanentId,
+        ContentTracker,
+        VariantUpdateResult,
+    },
     parser::MultiVariantPlaylist,
     requester::{
         PlaylistFileType,
@@ -115,12 +123,14 @@ impl Dispatcher {
             }
 
             if let Some(Err(e)) = self.init_source_buffer(MediaType::Audio) {
-                handle_source_buffer_creation_error(e);
+                let (code, msg) = format_source_buffer_creation_err_for_js(e);
+                jsSendSourceBufferCreationError(code, Some(&msg));
                 self.internal_stop();
                 return;
             }
             if let Some(Err(e)) = self.init_source_buffer(MediaType::Video) {
-                handle_source_buffer_creation_error(e);
+                let (code, msg) = format_source_buffer_creation_err_for_js(e);
+                jsSendSourceBufferCreationError(code, Some(&msg));
                 self.internal_stop();
                 return;
             }
@@ -497,45 +507,5 @@ fn was_last_segment(
                 },
             }
         },
-    }
-}
-
-fn handle_source_buffer_creation_error(err: SourceBufferCreationError) {
-    match err {
-        SourceBufferCreationError::EmptyMimeType =>
-            jsSendSourceBufferCreationError(
-                crate::bindings::SourceBufferCreationErrorCode::EmptyMimeType,
-                Some(&err.to_string())
-            ),
-        SourceBufferCreationError::NoMediaSourceAttached { .. } =>
-            jsSendSourceBufferCreationError(
-                crate::bindings::SourceBufferCreationErrorCode::NoMediaSourceAttached,
-                Some(&err.to_string())
-            ),
-        SourceBufferCreationError::MediaSourceIsClosed =>
-            jsSendSourceBufferCreationError(
-                crate::bindings::SourceBufferCreationErrorCode::MediaSourceIsClosed,
-                Some(&err.to_string())
-            ),
-        SourceBufferCreationError::QuotaExceededError { .. } =>
-            jsSendSourceBufferCreationError(
-                crate::bindings::SourceBufferCreationErrorCode::QuotaExceededError,
-                Some(&err.to_string())
-            ),
-        SourceBufferCreationError::CantPlayType { .. } =>
-            jsSendSourceBufferCreationError(
-                crate::bindings::SourceBufferCreationErrorCode::CantPlayType,
-                Some(&err.to_string())
-            ),
-        SourceBufferCreationError::AlreadyCreatedWithSameType { .. } =>
-            jsSendSourceBufferCreationError(
-                crate::bindings::SourceBufferCreationErrorCode::AlreadyCreatedWithSameType,
-                Some(&err.to_string())
-            ),
-        SourceBufferCreationError::UnknownError { .. } =>
-            jsSendSourceBufferCreationError(
-                crate::bindings::SourceBufferCreationErrorCode::Unknown,
-                Some(&err.to_string())
-            ),
     }
 }

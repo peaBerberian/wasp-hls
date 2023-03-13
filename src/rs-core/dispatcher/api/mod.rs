@@ -1,6 +1,6 @@
 use crate::{
     wasm_bindgen,
-    bindings::{LogLevel, OtherErrorCode, jsSendOtherError},
+    bindings::{OtherErrorCode, jsSendOtherError},
     Logger,
     media_element::MediaElementReference,
     utils::url::Url,
@@ -14,7 +14,11 @@ use super::{
     PlayerReadyState,
 };
 
-/// Methods exposed to the JavaScript-side
+/// Methods exposed to the JavaScript-side.
+///
+/// Note that these are not the only methods callable by JavaScript. There's
+/// also "event_listeners" which as its name point at, should be called when particular 
+/// events happen. Such "event_listeners" are defined in its own file:
 #[wasm_bindgen]
 impl Dispatcher {
     /// Create a new `Dispatcher` allowing to load a content on the HTMLMediaElement that should be
@@ -78,14 +82,12 @@ impl Dispatcher {
         self.internal_stop();
     }
 
-    /// Produce a log for the given `LogLevel`.
-    pub fn log(level: LogLevel, msg: &str) {
-        match level {
-            LogLevel::Error => Logger::error(msg),
-            LogLevel::Warn => Logger::warn(msg),
-            LogLevel::Info => Logger::info(msg),
-            LogLevel::Debug => Logger::debug(msg),
-        }
+    pub fn lock_variant(&mut self, variant_id: u32) {
+        self.inner_lock_variant(variant_id)
+    }
+
+    pub fn unlock_variant(&mut self) {
+        self.inner_unlock_variant()
     }
 
     pub fn set_segment_request_timeout(&mut self, timeout: Option<f64>) {
@@ -122,14 +124,6 @@ impl Dispatcher {
 
     pub fn set_media_playlist_backoff_max(&mut self, max: f64) {
         self.requester.update_media_playlist_backoff_max(max);
-    }
-
-    pub fn lock_variant(&mut self, variant_id: u32) {
-        self.inner_lock_variant(variant_id)
-    }
-
-    pub fn unlock_variant(&mut self) {
-        self.inner_unlock_variant()
     }
 
 //     pub fn available_audio_tracks(&self) -> Vec<u8> {

@@ -148,10 +148,10 @@ most do not prevent playback):
     - [X] GROUP-ID
     - [X] DEFAULT
     - [X] AUTOSELECT
+    - [ ] STABLE-RENDITION-ID: Not sure if it will be useful in some way.
     - [ ] LANGUAGE: No track selection API yet
     - [ ] ASSOC-LANGUAGE: No track selection API yet
     - [ ] NAME: No track selection API yet
-    - [ ] STABLE-RENDITION-ID: Not sure if it will be useful in some way.
     - [ ] FORCED: As the SUBTITLES TYPE is not handled yet, we don't have to use
       this one
     - [ ] INSTREAM-ID: As the CLOSED-CAPTIONS TYPE is not handled yet, we don't
@@ -165,9 +165,12 @@ most do not prevent playback):
       compatible renditions yet. Should probably also be used for that in the
       future.
     - [X] AUDIO: As no track selection API exist yet, only the most prioritized
-      audio media playlsit is then considered
+      audio media playlist is then considered
     - [X] VIDEO: As no track selection API exist yet, only the most prioritized
       video media playlsit is then considered
+    - [X] RESOLUTION: Used to describe variant in variant selection API
+    - [X] FRAME-RATE: Used to describe variant in variant selection API
+    - [ ] STABLE-VARIANT-ID
     - [ ] AVERAGE-BANDWIDTH: Not used yet. I don't know if it's useful for us
       here yet.
     - [ ] SCORE: Not considered yet, but should be used alongside BANDWIDTH to
@@ -175,36 +178,30 @@ most do not prevent playback):
     - [ ] SUPPLEMENTAL-CODECS: In our web use case, I'm not sure if this is only
       useful for track selection API or if filtering also needs to be done based
       on this.
-    - [ ] RESOLUTION: No track selection API yet
-    - [ ] FRAME-RATE: No track selection API yet
-    - [ ] HDCP-LEVEL: DRM are not handled for now
-    - [ ] ALLOWED-CPC: DRM are not handled for now
-    - [ ] STABLE-VARIANT-ID: Not sure if this will be useful in some way
     - [ ] SUBTITLES: No subtitles support for now
     - [ ] CLOSED-CAPTIONS: We just ignore that one for now
     - [ ] PATHWAY-ID: Content Steering not handled yet
+    - [ ] HDCP-LEVEL: DRM are not handled for now
+    - [ ] ALLOWED-CPC: DRM are not handled for now
+  - [ ] EXT-X-START: Should be relied on for the default starting position.
+    For now we just play at `0` for VoD and at `live-edge - 10` for live
+  - [ ] EXT-X-PLAYLIST-TYPE: Not sure if there's an advantage compared to the
+    presence of an ENDLIST tag, to check...
+  - [ ] EXT-X-GAP
   - [ ] EXT-X-VERSION: Not specifically considered for now, most differences
     handled until now had compatible behaviors from version to version
   - [ ] EXT-X-INDEPENDENT-SEGMENTS: Might needs to be considered once we're
     doing some flushing?
-  - [ ] EXT-X-START: Should be relied on for the default starting position.
-    For now we just play at `0` for VoD and at `live-edge - 10` for live
   - [ ] EXT-X-DEFINE: Seems rare enough, so may be supported if the time is
     taken...
   - [ ] EXT-X-TARGETDURATION: Might be useful for heuristics for playlist
     refresh, or for predicting future segments. To see...
   - [ ] EXT-X-MEDIA-SEQUENCE: Not sure of what this allows. To check...
-  - [ ] EXT-X-DISCONTINUITY-SEQUENCE
-  - [ ] EXT-X-PLAYLIST-TYPE: Not sure if there's an advantage compared to the
-    presence of an ENDLIST tag, to check...
   - [ ] EXT-X-I-FRAMES-ONLY: To handle one day, perhaps (very low priority)
+  - [ ] EXT-X-PART
   - [ ] EXT-X-PART-INF
   - [ ] EXT-X-SERVER-CONTROL
-  - [ ] EXT-X-DISCONTINUITY
-  - [ ] EXT-X-KEY: decryption and related tags are very low priority
-  - [ ] EXT-X-GAP
   - [ ] EXT-X-BITRATE
-  - [ ] EXT-X-PART
   - [ ] EXT-X-DATERANGE: Might be used for an event emitting API?
   - [ ] EXT-X-SKIP
   - [ ] EXT-X-PRELOAD-HINT
@@ -213,6 +210,12 @@ most do not prevent playback):
   - [ ] EXT-X-SESSION-DATA
   - [ ] EXT-X-SESSION-KEY
   - [ ] EXT-X-CONTENT-STEERING
+  - [ ] EXT-X-KEY: decryption and related tags are very low priority
+  - [ ] EXT-X-DISCONTINUITY: I'm under the impression in our scenario that it
+        only is useful to increment discontinuity sequences, which we have no
+        need for...
+  - [ ] EXT-X-DISCONTINUITY-SEQUENCE: I don't think we need this, at least I
+        didn't encounter a case for it now that isn't handled by other tags.
 
 ## Architecture
 
