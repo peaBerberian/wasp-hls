@@ -3,5 +3,6 @@
 /src/wasm
 /build/*
 !/build/index.html
+!/build/style.css
 
 /doc/generated

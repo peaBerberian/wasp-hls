@@ -19,7 +19,7 @@
     "types:main": "tsc --project ./src/ts-main --noEmit",
     "types:worker": "tsc --project ./src/ts-worker --noEmit",
     "types:demo": "tsc --project ./demo --noEmit",
-    "clean": "find ./build ! -name 'index.html' ! -name 'build' ! -name 'demo.js' -exec rm -rf {} +",
+    "clean": "find ./build ! -name 'index.html' ! -name 'build' ! -name 'style.css' ! -name 'demo.js' -exec rm -rf {} +",
     "compile:rs": "cargo build --target=wasm32-unknown-unknown && wasm-bindgen --keep-debug --target web ./target/wasm32-unknown-unknown/debug/wasp_hls.wasm --out-dir src/wasm",
     "compile:rs:release": "cargo build --release --target=wasm32-unknown-unknown && wasm-bindgen --target web ./target/wasm32-unknown-unknown/release/wasp_hls.wasm --out-dir src/wasm",
     "doc": "rm -rf doc/generated && docgen.ico doc doc/generated",
