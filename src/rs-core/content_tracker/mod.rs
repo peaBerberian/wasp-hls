@@ -115,13 +115,9 @@ impl ContentTracker {
 
     /// Returns `true` only if all media playlists currently selected have been loaded.
     pub(crate) fn all_curr_media_playlists_ready(&self) -> bool {
-        (
-            !self.has_media_type(MediaType::Audio) ||
-            self.curr_media_playlist_ready(MediaType::Audio)
-        ) &&
-        (
-            !self.has_media_type(MediaType::Video) ||
-            self.curr_media_playlist_ready(MediaType::Video)
+        [MediaType::Audio, MediaType::Video].into_iter().all(|t|
+            !self.has_media_type(t) ||
+            self.curr_media_playlist_ready(t)
         )
     }
 
@@ -159,12 +155,10 @@ impl ContentTracker {
     /// Returns `None` if there's not enough data to produce that estimate (e.g. no audio or video
     /// media playlist selected or they are not loaded).
     pub(crate) fn curr_duration(&self) -> Option<f64> {
-        let audio_duration = self.curr_media_playlist(MediaType::Audio).and_then(|a| {
-            a.duration()
-        });
-        let video_duration = self.curr_media_playlist(MediaType::Video).and_then(|v| {
-            v.duration()
-        });
+        let audio_duration = self.curr_media_playlist(MediaType::Audio)
+            .and_then(|a| a.duration());
+        let video_duration = self.curr_media_playlist(MediaType::Video)
+            .and_then(|v| v.duration());
         match (audio_duration, video_duration) {
             (None, None) => None,
             (Some(a), Some(v)) => Some(f64::min(a, v)),
@@ -442,6 +436,13 @@ impl ContentTracker {
 
     // TODO Should not be relied on for now, still working out the details
     pub(crate) fn todo_get_available_audio_tracks(&self) -> Vec<AvailableAudioTrack> {
+        // The same audio track may be present in multiple encoding, for example to enable multiple
+        // qualities.
+        // To ensure
+        // Identifying attributes are: LANGUAGE, ASSOC-LANGUAGE, FORCED, CHANNELS and CHARACTERISTICS
+        // TODO and group of codec?
+        // They however should not have the same group_id
+
         let mut available_audio_tracks : Vec<AvailableAudioTrack> = vec![];
         for (idx, media) in self.playlist.medias().iter().enumerate() {
             if media.typ() == MediaTagType::Audio {

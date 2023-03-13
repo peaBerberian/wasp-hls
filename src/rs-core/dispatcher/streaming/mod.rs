@@ -258,7 +258,7 @@ impl Dispatcher {
 
         // TODO to_string should be unneeded here as &str is sufficient
         let codecs = content.curr_variant()?.codecs(media_type)
-            .unwrap_or_else(|| "".to_string());
+            .unwrap_or_default();
         Some(self.media_element_ref.create_source_buffer(media_type, mime_type, &codecs))
     }
 

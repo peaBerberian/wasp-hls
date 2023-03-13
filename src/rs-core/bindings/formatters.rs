@@ -15,8 +15,8 @@ pub(crate) unsafe fn format_variants_info_for_js(
         ret.push(id.len() as u32);
         ret.push(id.as_ptr() as u32);
         let resolution = v.resolution().unwrap_or(&NULL_RESOLUTION);
-        ret.push(resolution.height() as u32);
-        ret.push(resolution.width() as u32);
+        ret.push(resolution.height());
+        ret.push(resolution.width());
         ret.push(v.frame_rate().unwrap_or(0.) as u32);
         ret.push(v.bandwidth as u32);
     });

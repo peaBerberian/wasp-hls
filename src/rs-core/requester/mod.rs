@@ -470,8 +470,9 @@ impl Requester {
                 self.media_playlist_request_timeout,
             _ => None,
         };
-        let request_id = jsFetch(url.get_ref(), None, None, timeout);
-        Logger::info(&format!("Req: Fetching playlist u:{}, id:{}", url.get_ref(), request_id));
+        let url_ref = url.get_ref();
+        let request_id = jsFetch(url_ref, None, None, timeout);
+        Logger::info(&format!("Req: Fetching playlist u:{url_ref}, id:{request_id}"));
         self.pending_playlist_requests.push(PlaylistRequestInfo {
             request_id,
             url,
@@ -487,11 +488,12 @@ impl Requester {
     /// Once it succeeds, the `on_request_finished` function will be called.
     pub(crate) fn request_init_segment(&mut self, media_type: MediaType, url: Url, byte_range: Option<&ByteRange>) {
         let (range_start, range_end) = format_range_for_js(byte_range);
+        let url_ref = url.get_ref();
         let request_id = jsFetch(
-            url.get_ref(),
+            url_ref,
             range_start, range_end,
             self.segment_request_timeout);
-        Logger::info(&format!("Req: Fetching init segment u:{}, id:{}", url.get_ref(), request_id));
+        Logger::info(&format!("Req: Fetching init segment u:{url_ref}, id:{request_id}"));
         self.pending_segment_requests.push(SegmentRequestInfo {
             request_id,
             media_type,
@@ -533,8 +535,8 @@ impl Requester {
             let request_id = jsFetch(seg.url.get_ref(),
                 range_start, range_end,
                 self.segment_request_timeout);
-            Logger::debug(&format!("Req: Performing request right away. u:{} id:{}",
-                    seg.url.get_ref(), request_id));
+            Logger::debug(&format!("Req: Performing request right away. u:{} id:{request_id}",
+                    seg.url.get_ref()));
             self.pending_segment_requests.push(SegmentRequestInfo {
                 request_id,
                 media_type,
@@ -595,11 +597,11 @@ impl Requester {
             {
                 self.retry_playlist_segment_request(pos, reason)
             } else {
-                Logger::info(&format!("Req: Request to retry not found, id:{}", request_id));
+                Logger::info(&format!("Req: Request to retry not found, id:{request_id}"));
                 RetryResult::NotFound
             }
         } else {
-            Logger::info(&format!("Req: Cannot retry request id:{}", request_id));
+            Logger::info(&format!("Req: Cannot retry request id:{request_id}"));
             match  self.end_pending_request(request_id) {
                 None => RetryResult::NotFound,
                 Some(req) => RetryResult::Failed((req, RequestErrorReason::Error))
@@ -742,7 +744,8 @@ impl Requester {
     fn retry_pending_segment_request(&mut self, pos: usize, reason: RequestErrorReason) -> RetryResult {
        let req = &mut self.pending_segment_requests[pos];
        if req.attempts_failed >= 3 {
-           Logger::info(&format!("Req: Too much attempts for segment request id:{} a:{}", req.request_id, req.attempts_failed));
+           Logger::info(&format!("Req: Too much attempts for segment request id:{} a:{}",
+                   req.request_id, req.attempts_failed));
            let seg = self.pending_segment_requests.remove(pos);
            RetryResult::Failed((FinishedRequestType::Segment(seg), reason))
        } else {
@@ -761,7 +764,8 @@ impl Requester {
     fn retry_playlist_segment_request(&mut self, pos: usize, reason: RequestErrorReason) -> RetryResult {
        let req = &mut self.pending_playlist_requests[pos];
        if req.attempts_failed >= 3 {
-           Logger::info(&format!("Req: Too much attempts for playlist request id:{} a:{}", req.request_id, req.attempts_failed));
+           Logger::info(&format!("Req: Too much attempts for playlist request id:{} a:{}",
+                   req.request_id, req.attempts_failed));
            let pl = self.pending_playlist_requests.remove(pos);
            RetryResult::Failed((FinishedRequestType::Playlist(pl), reason))
        } else {
@@ -785,8 +789,13 @@ impl Requester {
        }
     }
 
-    fn retry_pending_playlist_request(&mut self, request_id: RequestId, reason: RequestErrorReason) -> RetryResult {
-       let pos = self.pending_playlist_requests.iter_mut().position(|x| x.request_id == request_id);
+    fn retry_pending_playlist_request(&mut self,
+        request_id: RequestId,
+        reason: RequestErrorReason
+    ) -> RetryResult {
+       let pos = self.pending_playlist_requests
+           .iter_mut()
+           .position(|x| x.request_id == request_id);
        if let Some(pos) = pos {
            if self.pending_playlist_requests[pos].attempts_failed >= 3 {
                let seg = self.pending_playlist_requests.remove(pos);
@@ -839,12 +848,9 @@ impl Requester {
                     })
                 .for_each(|seg| {
                     let (range_start, range_end) = format_range_for_js(seg.byte_range.as_ref());
-                    let request_id = jsFetch(
-                        seg.url.get_ref(),
-                        range_start, range_end,
-                        self.segment_request_timeout);
-                    Logger::debug(&format!("Req: Performing request of queued segment u:{} id:{}",
-                            seg.url().get_ref(), request_id));
+                    let url_ref = seg.url.get_ref();
+                    let request_id = jsFetch(url_ref, range_start, range_end, self.segment_request_timeout);
+                    Logger::debug(&format!("Req: Performing request of queued segment u:{url_ref} id:{request_id}"));
                     self.pending_segment_requests.push(SegmentRequestInfo {
                         request_id,
                         media_type: seg.media_type,
@@ -859,11 +865,9 @@ impl Requester {
         } else {
             while let Some(seg) = self.segment_waiting_queue.pop() {
                 let (range_start, range_end) = format_range_for_js(seg.byte_range.as_ref());
-                let request_id = jsFetch(seg.url.get_ref(),
-                    range_start, range_end,
-                    self.segment_request_timeout);
-                Logger::debug(&format!("Req: Performing request of queued segment u:{} id:{}",
-                        seg.url().get_ref(), request_id));
+                let url_ref = seg.url.get_ref();
+                let request_id = jsFetch(url_ref, range_start, range_end, self.segment_request_timeout);
+                Logger::debug(&format!("Req: Performing request of queued segment u:{url_ref} id:{request_id}"));
                 self.pending_segment_requests.push(SegmentRequestInfo {
                     request_id,
                     media_type: seg.media_type,
@@ -920,10 +924,10 @@ impl Requester {
 fn log_segment_abort(seg: &impl RequesterSegmentInfo) {
     Logger::lazy_info(&|| {
         let media_type = seg.media_type();
-        match (seg.start_time(), seg.duration()) {
-            (Some(start), Some(duration)) =>
-                format!("Req: Aborting {} segment: t: {}, d: {}", media_type, start, duration),
-            _ => format!("Req: Aborting {} init segment", media_type),
+        if let (Some(start), Some(duration)) = (seg.start_time(), seg.duration()) {
+            format!("Req: Aborting {media_type} segment: t: {start}, d: {duration}")
+        } else {
+            format!("Req: Aborting {media_type} init segment")
         }
     });
 }
