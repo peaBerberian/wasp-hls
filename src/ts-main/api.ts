@@ -51,24 +51,12 @@ const generateContentId = idGenerator();
 /** List events triggered by a `WaspHlsPlayer` and corresponding payloads. */
 interface WaspHlsPlayerEvents {
   /**
-   * Sent when a new content is being loaded.
+   * Sent when WaspHlsPlayerEvents transition from one PlayerState to another,
+   * with the new state as a payload.
    *
-   * The `getPlayerState` method should now return `Loading`.
+   * The `getPlayerState` method should now return that new state.
    */
-  loading: null;
-  /**
-   * Sent when that last loaded content can start to play.
-   *
-   * The `getPlayerState` method should now return `Loaded`.
-   */
-  loaded: null;
-  /**
-   * Sent when a content is succesfully stopped an no content is
-   * currently left playing.
-   *
-   * The `getPlayerState` method should now return `Stopped`.
-   */
-  stopped: null;
+  playerStateChange: PlayerState;
   /**
    * Playback is now paused with a loaded content.
    *
@@ -358,7 +346,7 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
       loadingAborter,
       error: null,
     };
-    this.trigger("loading", null);
+    this.trigger("playerStateChange", PlayerState.Loaded);
     postMessageToWorker(this.__worker__, {
       type: "load",
       value: { contentId, url },
@@ -764,6 +752,7 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
           if (error !== null) {
             logger.error("API: sending fatal error", error);
             this.trigger("error", error);
+            this.trigger("playerStateChange", PlayerState.Error);
           }
           break;
         }
@@ -780,7 +769,7 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
         case "content-stopped":
           if (onContentStoppedMessage(data, this.__contentMetadata__)) {
             this.__contentMetadata__ = null;
-            this.trigger("stopped", null);
+            this.trigger("playerStateChange", PlayerState.Stopped);
           }
           break;
         case "rebuffering-started":
@@ -833,7 +822,7 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
         if (this.__contentMetadata__ !== null) {
           this.__contentMetadata__.loadingAborter = undefined;
         }
-        this.trigger("loaded", null);
+        this.trigger("playerStateChange", PlayerState.Loaded);
       },
       (reason) => {
         if (this.__contentMetadata__ !== null) {

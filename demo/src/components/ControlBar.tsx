@@ -96,10 +96,7 @@ export default React.memo(function ControlBar(
 
     player.addEventListener("variantUpdate", onVariantUpdate);
     player.addEventListener("variantsListUpdate", onVariantsListUpdate);
-    player.addEventListener("loaded", onLoaded);
-    player.addEventListener("loading", onLoading);
-    player.addEventListener("stopped", onStopped);
-    player.addEventListener("error", onError);
+    player.addEventListener("playerStateChange", onPlayerStateChange);
     player.addEventListener("paused", onPaused);
     player.addEventListener("playing", onPlaying);
     player.videoElement.addEventListener("volumechange", onVideoVolumeChange);
@@ -113,10 +110,7 @@ export default React.memo(function ControlBar(
       resetTimeInfo();
       player.removeEventListener("variantUpdate", onVariantUpdate);
       player.removeEventListener("variantsListUpdate", onVariantsListUpdate);
-      player.removeEventListener("loaded", onLoaded);
-      player.removeEventListener("loading", onLoading);
-      player.removeEventListener("stopped", onStopped);
-      player.removeEventListener("error", onError);
+      player.removeEventListener("playerStateChange", onPlayerStateChange);
       player.removeEventListener("paused", onPaused);
       player.removeEventListener("playing", onPlaying);
       player.videoElement.removeEventListener("volumechange", onVideoVolumeChange);
@@ -136,48 +130,52 @@ export default React.memo(function ControlBar(
       setVariantsList(vl);
     }
 
-    function onLoading() {
-      setVariant(undefined);
-      setVariantsList([]);
-      setIsPaused(true);
-      setAreControlsDisabled(false);
-      setIsPlayPauseDisabled(true);
-      resetTimeInfo();
-      setIsPlayPauseDisabled(true);
-      clearPositionUpdateInterval();
-    }
-
-    function onLoaded() {
-      displayControlBar(false);
-      resetTimeInfo();
-      setAreControlsDisabled(false);
-      setIsPlayPauseDisabled(false);
-      clearPositionUpdateInterval();
-      positionRefreshIntervalId = setInterval(() => {
-        const pos = player.getPosition();
-        setPosition(pos);
-        const minPos = player.getMinimumPosition();
-        setMinimumPosition(minPos ?? 0);
-        const maxPos = player.getMaximumPosition();
-        setMaximumPosition(maxPos ?? Infinity);
-
-        let newBufferGap = 0;
-        const buffered = player.videoElement.buffered;
-        if (buffered.length > 0) {
-          for (let i = 0; i < buffered.length; i++) {
-            if (pos >= buffered.start(i) && pos < buffered.end(i)) {
-              newBufferGap = buffered.end(i) - pos;
-            }
-          }
-        }
-        setBufferGap(newBufferGap);
-        if (!player.isPaused()) {
-          if (minPos !== undefined && minPos > pos + 2) {
-            console.warn("Behind minimum position, seeking...");
-            player.seek(minPos + 2);
-          }
-        }
-      }, TIME_CHECK_INTERVAL);
+    function onPlayerStateChange(playerState: PlayerState): void {
+      switch(playerState) {
+        case PlayerState.Loading:
+          setVariant(undefined);
+          setVariantsList([]);
+          setIsPaused(true);
+          setAreControlsDisabled(false);
+          setIsPlayPauseDisabled(true);
+          resetTimeInfo();
+          setIsPlayPauseDisabled(true);
+          clearPositionUpdateInterval();
+          break;
+        case PlayerState.Loaded:
+          displayControlBar(false);
+          resetTimeInfo();
+          setAreControlsDisabled(false);
+          setIsPlayPauseDisabled(false);
+          clearPositionUpdateInterval();
+          positionRefreshIntervalId = setInterval(
+            onPositionUpdateInterval,
+            TIME_CHECK_INTERVAL
+          );
+          break;
+        case PlayerState.Stopped:
+          setVariant(undefined);
+          setVariantsList([]);
+          displayControlBar(true);
+          resetTimeInfo();
+          setAreControlsDisabled(true);
+          setShouldDisplaySettings(false);
+          setIsPlayPauseDisabled(true);
+          setIsPaused(true);
+          clearPositionUpdateInterval();
+          break;
+        case PlayerState.Error:
+          setVariant(undefined);
+          setVariantsList([]);
+          resetTimeInfo();
+          displayControlBar(true);
+          setAreControlsDisabled(false);
+          setShouldDisplaySettings(false);
+          setIsPlayPauseDisabled(true);
+          setIsPaused(true);
+          clearPositionUpdateInterval();
+          break;
+      }
     }
 
     function resetTimeInfo() {
@@ -187,28 +185,29 @@ export default React.memo(function ControlBar(
       setBufferGap(0);
     }
 
-    function onError() {
-      setVariant(undefined);
-      setVariantsList([]);
-      resetTimeInfo();
-      displayControlBar(true);
-      setAreControlsDisabled(false);
-      setShouldDisplaySettings(false);
-      setIsPlayPauseDisabled(true);
-      setIsPaused(true);
-      clearPositionUpdateInterval();
-    }
-
-    function onStopped() {
-      setVariant(undefined);
-      setVariantsList([]);
-      displayControlBar(true);
-      resetTimeInfo();
-      setAreControlsDisabled(true);
-      setShouldDisplaySettings(false);
-      setIsPlayPauseDisabled(true);
-      setIsPaused(true);
-      clearPositionUpdateInterval();
+    function onPositionUpdateInterval() {
+      const pos = player.getPosition();
+      setPosition(pos);
+      const minPos = player.getMinimumPosition();
+      setMinimumPosition(minPos ?? 0);
+      const maxPos = player.getMaximumPosition();
+      setMaximumPosition(maxPos ?? Infinity);
+      let newBufferGap = 0;
+      const buffered = player.videoElement.buffered;
+      if (buffered.length > 0) {
+        for (let i = 0; i < buffered.length; i++) {
+          if (pos >= buffered.start(i) && pos < buffered.end(i)) {
+            newBufferGap = buffered.end(i) - pos;
+          }
+        }
+      }
+      setBufferGap(newBufferGap);
+      if (!player.isPaused()) {
+        if (minPos !== undefined && minPos > pos + 2) {
+          console.warn("Behind minimum position, seeking...");
+          player.seek(minPos + 2);
+        }
+      }
     }
 
     function onPaused() {

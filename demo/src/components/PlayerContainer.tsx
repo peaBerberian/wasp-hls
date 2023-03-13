@@ -66,10 +66,12 @@ export default React.memo(function PlayerContainer(
     ) {
       startBufferGapInterval();
     }
-    player.addEventListener("loading", startBufferGapInterval);
-    player.addEventListener("loaded", startBufferGapInterval);
-    player.addEventListener("stopped", stopBufferGapInterval);
-    player.addEventListener("error", stopBufferGapInterval);
+    player.addEventListener("playerStateChange", onPlayerStateChange);
+
+    return () => {
+      stopBufferGapInterval();
+      player.removeEventListener("playerStateChange", onPlayerStateChange);
+    };
 
     function startBufferGapInterval() {
       if (bufferGapIntervalId !== undefined) {
@@ -105,14 +107,16 @@ export default React.memo(function PlayerContainer(
         setBufferGaps([]);
       }
     }
-
-    return () => {
-      stopBufferGapInterval();
-      player.removeEventListener("loading", startBufferGapInterval);
-      player.removeEventListener("loaded", startBufferGapInterval);
-      player.removeEventListener("stopped", stopBufferGapInterval);
-      player.removeEventListener("error", stopBufferGapInterval);
-    };
+    function onPlayerStateChange(playerState: PlayerState): void {
+      if (
+        playerState === PlayerState.Stopped ||
+        playerState === PlayerState.Error
+      ) {
+        stopBufferGapInterval();
+      } else {
+        startBufferGapInterval();
+      }
+    }
   }, [player, shouldShowBufferGaps]);
 
   const onBufferSizeCheckBoxChange = React.useCallback(

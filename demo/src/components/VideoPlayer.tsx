@@ -62,47 +62,41 @@ export default React.memo(function VideoPlayer(
     let spinnerTimeout: number | null = null;
     const enableClickableVideo = () => setIsVideoClickable(true);
     const disableClickableVideo = () => setIsVideoClickable(false);
-    player.addEventListener("loaded", onLoaded);
-    player.addEventListener("error", onError);
-    player.addEventListener("stopped", onStopped);
-    player.addEventListener("loading", onLoading);
-    player.addEventListener("stopped", onStopped);
+    player.addEventListener("playerStateChange", onPlayerStateChange);
     player.addEventListener("rebufferingStarted", onRebuffering);
     player.addEventListener("rebufferingEnded", disableSpinner);
     return () => {
-      player.removeEventListener("loaded", onLoaded);
-      player.removeEventListener("error", onError);
-      player.removeEventListener("stopped", onStopped);
-      player.removeEventListener("loading", onLoading);
+      player.removeEventListener("playerStateChange", onPlayerStateChange);
       player.removeEventListener("rebufferingStarted", onRebuffering);
       player.removeEventListener("rebufferingEnded", disableSpinner);
     };
 
-    function onLoaded() {
-      disableSpinner();
-      enableClickableVideo();
-      setError(null);
-    }
-
-    function onStopped() {
-      disableSpinner();
-      disableClickableVideo();
-      setError(null);
-    }
-
-    function onLoading() {
-      enableSpinnerAfterTimeout(30);
-      setError(null);
+    function onPlayerStateChange(playerState: PlayerState): void {
+      switch (playerState) {
+        case PlayerState.Stopped:
+          disableSpinner();
+          disableClickableVideo();
+          setError(null);
+          break;
+        case PlayerState.Loading:
+          enableSpinnerAfterTimeout(30);
+          setError(null);
+          break;
+        case PlayerState.Loaded:
+          disableSpinner();
+          enableClickableVideo();
+          setError(null);
+          break;
+        case PlayerState.Error:
+          disableSpinner();
+          disableClickableVideo();
+          setError(player.getError());
+          break;
+      }
     }
 
     function onRebuffering() {
       enableSpinnerAfterTimeout(500);
-    }
-
-    function onError(err: Error) {
-      disableSpinner();
-      disableClickableVideo();
-      setError(err);
     }
 
     function enableSpinnerAfterTimeout(timeout: number) {
