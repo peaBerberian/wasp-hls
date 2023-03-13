@@ -17,7 +17,7 @@ use super::{
 /// Methods exposed to the JavaScript-side.
 ///
 /// Note that these are not the only methods callable by JavaScript. There's
-/// also "event_listeners" which as its name point at, should be called when particular 
+/// also "event_listeners" which as its name point at, should be called when particular
 /// events happen. Such "event_listeners" are defined in its own file:
 #[wasm_bindgen]
 impl Dispatcher {
@@ -209,3 +209,9 @@ impl Dispatcher {
 //         track_info
 //     }
 // }
+
+impl Default for Dispatcher {
+    fn default() -> Self {
+        Self::new()
+    }
+}

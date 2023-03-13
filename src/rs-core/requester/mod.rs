@@ -496,7 +496,7 @@ impl Requester {
             request_id,
             media_type,
             url,
-            byte_range: byte_range.map(|b| b.clone()),
+            byte_range: byte_range.cloned(),
             time_info: None,
             attempts_failed: 0,
             is_waiting_for_retry: false,
@@ -589,16 +589,14 @@ impl Requester {
                 .position(|x| x.request_id == request_id)
             {
                 self.retry_pending_segment_request(pos, reason)
-            } else {
-                if let Some(pos) = self.pending_playlist_requests
-                    .iter()
+            } else if let Some(pos) = self.pending_playlist_requests
+                .iter()
                     .position(|x| x.request_id == request_id)
-                {
-                    self.retry_playlist_segment_request(pos, reason)
-                } else {
-                    Logger::info(&format!("Req: Request to retry not found, id:{}", request_id));
-                    RetryResult::NotFound
-                }
+            {
+                self.retry_playlist_segment_request(pos, reason)
+            } else {
+                Logger::info(&format!("Req: Request to retry not found, id:{}", request_id));
+                RetryResult::NotFound
             }
         } else {
             Logger::info(&format!("Req: Cannot retry request id:{}", request_id));
@@ -806,12 +804,10 @@ impl Requester {
     }
 
     fn check_segment_queue(&mut self) {
-        if self.segment_request_locked {
+        if self.segment_request_locked || self.segment_waiting_queue.is_empty() {
             return ;
         }
-        if self.segment_waiting_queue.is_empty() {
-            return ;
-        } else if let Some(base_pos) = self.base_position {
+        if let Some(base_pos) = self.base_position {
             let min_pending_priority = self.min_pending_priority();
             let new_min_priority = self.segment_waiting_queue
                 .iter()

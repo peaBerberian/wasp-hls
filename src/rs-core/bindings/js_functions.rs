@@ -747,7 +747,7 @@ pub enum TimerReason {
 
 /// Levels with which a log can be emitted.
 #[wasm_bindgen]
-#[derive(Clone, Copy, Debug, PartialEq, PartialOrd)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd)]
 pub enum LogLevel {
     /// Log level reserved for very important errors and highly unexpected events.
     Error = 0,
@@ -780,7 +780,7 @@ pub type TimerId = f64;
 pub type SourceBufferId = f64;
 
 #[wasm_bindgen]
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MediaType {
     Audio = 0,
     Video = 1,

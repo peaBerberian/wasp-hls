@@ -217,7 +217,7 @@ pub fn parse_iso_8601_date(value : &str, base_offset: usize) -> Option<f64> {
     let (month, mut base) = read_integer_until(value, base, b'-');
     let month = month?;
     base += 1;
-    if month < 1 || month > 12 {
+    if !(1..=12).contains(&month) {
         return None;
     }
 
@@ -346,10 +346,10 @@ pub fn parse_byte_range(
         Err(_) => { return None; },
     };
 
-    return Some(ByteRange {
+    Some(ByteRange {
         first_byte: range_base,
         last_byte: range_base + range_size - 1,
-    });
+    })
 }
 
 fn read_integer_until(

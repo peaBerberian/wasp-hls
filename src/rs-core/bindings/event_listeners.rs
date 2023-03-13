@@ -220,6 +220,7 @@ pub struct MediaObservation {
 
 #[wasm_bindgen]
 impl MediaObservation {
+    #[allow(clippy::too_many_arguments)]
     #[wasm_bindgen(constructor)]
     pub fn new(
         reason: PlaybackTickReason,

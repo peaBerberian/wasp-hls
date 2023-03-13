@@ -106,6 +106,7 @@ pub enum MediaTagParsingError {
     MissingType,
     MissingGroupId,
     MissingName,
+    Unknown,
 }
 
 impl MediaTag {
@@ -142,7 +143,7 @@ impl MediaTag {
             if offset >= media_line.len() {
                 break;
             }
-            match media_line[offset..].find("=") {
+            match media_line[offset..].find('=') {
                 None => {
                     Logger::warn("Attribute Name not followed by equal sign");
                     break;
@@ -252,11 +253,12 @@ impl MediaTag {
             return Err(MediaTagParsingError::MissingName);
         };
 
-        let id = stable_rendition_id.or(url.as_ref().map(|u| u.clone().take()));
-        url = url.and_then(|u| if u.is_absolute() {
-            Some(u)
+        let id = stable_rendition_id.or_else(||
+            url.as_ref().map(|u| u.clone().take()));
+        url = url.map(|u| if u.is_absolute() {
+            u
         } else {
-            Some(Url::from_relative(playlist_base_url, u))
+            Url::from_relative(playlist_base_url, u)
         });
         Ok(MediaTag {
             id,

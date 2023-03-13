@@ -1,4 +1,4 @@
-use std::io::BufRead;
+use std::{io::BufRead, cmp::Ordering};
 use crate::{
     bindings::MediaType,
     parser::{
@@ -115,18 +115,14 @@ impl ContentTracker {
 
     /// Returns `true` only if all media playlists currently selected have been loaded.
     pub(crate) fn all_curr_media_playlists_ready(&self) -> bool {
-        if self.has_media_type(MediaType::Audio) &&
-            !self.curr_media_playlist_ready(MediaType::Audio)
-        {
-            false
-        } else if self.has_media_type(MediaType::Video) &&
-            !self.curr_media_playlist_ready(MediaType::Video)
-        {
-            false
-        } else {
-            true
-        }
-
+        (
+            !self.has_media_type(MediaType::Audio) ||
+            self.curr_media_playlist_ready(MediaType::Audio)
+        ) &&
+        (
+            !self.has_media_type(MediaType::Video) ||
+            self.curr_media_playlist_ready(MediaType::Video)
+        )
     }
 
     /// Returns true if a MediaPlaylist for the given `MediaType` has been selected, regardless if
@@ -233,12 +229,10 @@ impl ContentTracker {
         let variants = self.playlist.variants();
         let best_variant_idx = variants.iter().position(|x| {
             (x.bandwidth as f64) > bandwidth
-        }).or_else(|| {
-            if variants.len() == 0 {
-                None
-            } else {
-                Some(variants.len() - 1)
-            }
+        }).or(if variants.is_empty(){
+            None
+        } else {
+            Some(variants.len() - 1)
         });
         self.update_variant(best_variant_idx)
     }
@@ -256,12 +250,10 @@ impl ContentTracker {
         let variants = self.playlist.variants();
         let pos = variants.iter().position(|x| {
             x.id() == variant_id
-        }).or_else(|| {
-            if variants.len() == 0 {
-                None
-            } else {
-                Some(variants.len() - 1)
-            }
+        }).or(if variants.is_empty() {
+            None
+        } else {
+            Some(variants.len() - 1)
         });
 
         if let Some(pos) = pos {
@@ -397,12 +389,10 @@ impl ContentTracker {
                     updates.push(MediaType::Video);
                 }
                 match (prev_bandwidth, new_bandwidth) {
-                    (Some(p), Some(n)) => if p > n {
-                        VariantUpdateResult::Worsened(updates)
-                    } else if p == n {
-                        VariantUpdateResult::EqualOrUnknown(updates)
-                    } else {
-                        VariantUpdateResult::Improved(updates)
+                    (Some(p), Some(n)) => match p.cmp(&n) {
+                        Ordering::Greater => VariantUpdateResult::Worsened(updates),
+                        Ordering::Equal => VariantUpdateResult::EqualOrUnknown(updates),
+                        Ordering::Less => VariantUpdateResult::Improved(updates),
                     },
                     _ => VariantUpdateResult::EqualOrUnknown(updates),
                 }

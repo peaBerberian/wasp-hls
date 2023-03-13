@@ -136,7 +136,7 @@ impl MediaElementReference {
                     .as_ref()
                     .map(|o| o.current_time())
                     .unwrap_or(0.);
-                self.from_media_position(last_media_pos)
+                self.media_pos_to_playlist_pos(last_media_pos)
                     .unwrap_or(last_media_pos)
             },
         }
@@ -153,7 +153,7 @@ impl MediaElementReference {
     pub(crate) fn seek(&mut self, position: f64) -> bool {
         match &self.last_observation {
             Some(obs) if obs.ready_state() >= 1 => {
-                match self.to_media_position(position) {
+                match self.playlist_pos_to_media_pos(position) {
                     Some(media_pos) => {
                         self.awaiting_seek = None;
                         jsSeek(media_pos);
@@ -210,7 +210,7 @@ impl MediaElementReference {
             },
             _ => {},
         }
-        let sb_codec = format!("{};codecs=\"{}\"", mime_type, codec).to_owned();
+        let sb_codec = format!("{};codecs=\"{}\"", mime_type, codec);
         match media_type {
             MediaType::Audio => {
                 if self.audio_buffer.is_some() {
@@ -251,7 +251,7 @@ impl MediaElementReference {
                     metadata.time_info.is_some();
                 let start = metadata.time_info.map(|t| t.0);
                 let parsed = sb.append_buffer(metadata, do_time_parsing)?;
-                let media_start = parsed.map_or(None, |p| p.start);
+                let media_start = parsed.and_then(|p| p.start);
                 if let (Some(segment_start), Some(media_start)) = (start, media_start) {
                     let media_offset = media_start - segment_start;
                     Logger::info(&format!("Setting media offset: {}", media_start - segment_start));
@@ -447,7 +447,7 @@ impl MediaElementReference {
     fn check_awaiting_seek(&mut self) -> bool {
         if self.awaiting_seek.is_some() && self.last_observation.as_ref().unwrap().ready_state() >= 1 {
             let awaiting_seek = self.awaiting_seek.unwrap();
-            if let Some(media_pos) = self.to_media_position(awaiting_seek) {
+            if let Some(media_pos) = self.playlist_pos_to_media_pos(awaiting_seek) {
                 Logger::info(&format!("Perform awaited seek to {} ({})", awaiting_seek, media_pos));
                 jsSeek(media_pos);
                 self.awaiting_seek = None;
@@ -463,7 +463,7 @@ impl MediaElementReference {
     ///
     /// None if the `MediaElementReference` has not enough information yet to
     /// make that conversion.
-    fn from_media_position(&self, pos: f64) -> Option<f64> {
+    fn media_pos_to_playlist_pos(&self, pos: f64) -> Option<f64> {
         Some(pos - self.media_offset?)
     }
 
@@ -473,7 +473,7 @@ impl MediaElementReference {
     ///
     /// None if the `MediaElementReference` has not enough information yet to
     /// make that conversion.
-    fn to_media_position(&self, pos: f64) -> Option<f64> {
+    fn playlist_pos_to_media_pos(&self, pos: f64) -> Option<f64> {
         Some(pos + self.media_offset?)
     }
 }
@@ -535,7 +535,7 @@ impl From<(AttachMediaSourceErrorCode, Option<String>)> for AttachMediaSourceErr
                 AttachMediaSourceError::NoContentLoaded,
             AttachMediaSourceErrorCode::UnknownError =>
                 AttachMediaSourceError::UnknownError {
-                    message: x.1.unwrap_or("Unknown Error.".to_string())
+                    message: x.1.unwrap_or_else(|| "Unknown Error.".to_string())
                 }
         }
     }

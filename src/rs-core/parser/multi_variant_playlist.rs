@@ -44,13 +44,15 @@ pub enum MultiVariantPlaylistParsingError {
     MediaTagMissingGroupId,
 
     UnableToReadLine,
+
+    Unknown,
 }
 
 impl error::Error for MultiVariantPlaylistParsingError { }
 
 impl fmt::Display for MultiVariantPlaylistParsingError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match &*self {
+        match self {
            MultiVariantPlaylistParsingError::MissingUriLineAfterVariant =>
                write!(f, "A variant is missing its URI"),
            MultiVariantPlaylistParsingError::UnableToReadVariantUri =>
@@ -67,6 +69,8 @@ impl fmt::Display for MultiVariantPlaylistParsingError {
                write!(f, "A media tag is missing a GROUP-ID attribute"),
            MultiVariantPlaylistParsingError::UnableToReadLine =>
                write!(f, "A line of the MultiVariantPlaylist was impossible to parse"),
+           _ =>
+               write!(f, "An unknown error was encountered while parsing the MultiVariantPlaylist"),
         }
     }
 }
@@ -93,6 +97,7 @@ impl From<MediaTagParsingError> for MultiVariantPlaylistParsingError {
                 MultiVariantPlaylistParsingError::MediaTagMissingGroupId,
             MediaTagParsingError::MissingName =>
                 MultiVariantPlaylistParsingError::MediaTagMissingName,
+            _ => MultiVariantPlaylistParsingError::Unknown
         }
     }
 }
@@ -105,7 +110,7 @@ pub enum MediaPlaylistUpdateError {
 
 impl fmt::Display for MediaPlaylistUpdateError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match &*self {
+        match self {
            MediaPlaylistUpdateError::NotFound =>
                write!(f, "The media playlist to update was not found in the MultiVariant Playlist."),
            MediaPlaylistUpdateError::ParsingError(og_error) =>
@@ -140,8 +145,8 @@ impl MultiVariantPlaylist {
             };
             if str_line.is_empty() {
                 continue;
-            } else if str_line.starts_with("#EXT") {
-                let colon_idx = match &str_line[4..].find(':') {
+            } else if let Some(stripped) = str_line.strip_prefix("#EXT") {
+                let colon_idx = match &stripped.find(':') {
                     None => continue,
                     Some(idx) => idx + 4,
                 };
@@ -154,7 +159,7 @@ impl MultiVariantPlaylist {
                         };
 
                         let variant = VariantStream::create_from_stream_inf(
-                            &str_line, variant_url, &playlist_base_url)?;
+                            &str_line, variant_url, playlist_base_url)?;
                         ret.variants.push(variant);
                     },
                     "-X-MEDIA" => {

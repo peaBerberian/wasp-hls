@@ -1,3 +1,5 @@
+use std::cmp::Ordering;
+
 use crate::{
     bindings::{
         JsMemoryBlob,
@@ -85,7 +87,7 @@ impl Dispatcher {
             },
             RetryResult::Failed((FinishedRequestType::Playlist(_), _reason)) => {
                 jsSendOtherError(true, crate::bindings::OtherErrorCode::Unknown,
-                    Some(&"Failed to fetch Playlist"));
+                    Some("Failed to fetch Playlist"));
                 self.internal_stop();
             },
             _ => {},
@@ -225,11 +227,12 @@ impl Dispatcher {
                         self.playlist_refresh_timers.push(
                             (timer_id, url, PlaylistFileType::MediaPlaylist { id: playlist_id }));
                     }
-                    if self.ready_state == PlayerReadyState::Loading {
-                        self.check_ready_to_load_segments();
-                    } else if self.ready_state > PlayerReadyState::Loading {
-                        self.check_segments_to_request();
-                    }
+
+                    match self.ready_state.cmp(&PlayerReadyState::Loading) {
+                        Ordering::Greater => self.check_segments_to_request(),
+                        Ordering::Equal => self.check_ready_to_load_segments(),
+                        _ => {}
+                    };
 
                     if let Some(content_tracker) = self.content_tracker.as_ref() {
                         let min_pos = content_tracker.curr_min_position();
@@ -240,7 +243,7 @@ impl Dispatcher {
             }
         } else {
             jsSendOtherError(true, crate::bindings::OtherErrorCode::Unknown,
-                Some(&"Media playlist loaded but no MultiVariantPlaylist"));
+                Some("Media playlist loaded but no MultiVariantPlaylist"));
             self.internal_stop();
         }
     }
@@ -254,7 +257,8 @@ impl Dispatcher {
         let mime_type = media_playlist.mime_type(media_type).unwrap_or("");
 
         // TODO to_string should be unneeded here as &str is sufficient
-        let codecs = content.curr_variant()?.codecs(media_type).unwrap_or("".to_string());
+        let codecs = content.curr_variant()?.codecs(media_type)
+            .unwrap_or_else(|| "".to_string());
         Some(self.media_element_ref.create_source_buffer(media_type, mime_type, &codecs))
     }
 
@@ -381,7 +385,6 @@ impl Dispatcher {
                 jsSendOtherError(true, crate::bindings::OtherErrorCode::Unknown,
                     Some(&format!("Can't push {} segment: {:?}", media_type, x)));
                 self.internal_stop();
-                return;
             }
             Ok(()) => if let Some(ti) = time_info {
                 self.segment_selectors.get_mut(media_type).validate_media(ti.0);
@@ -493,7 +496,6 @@ impl Dispatcher {
         });
         if let Some(idx) = found {
             let (_, url, playlist_type) = self.playlist_refresh_timers.remove(idx);
-            let url = url.clone();
             self.requester.fetch_playlist(url, playlist_type);
         }
     }

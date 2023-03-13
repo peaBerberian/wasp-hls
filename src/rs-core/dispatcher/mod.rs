@@ -55,7 +55,7 @@ pub struct Dispatcher {
 
 /// Identify the JavaScript `readyState` of a created `MediaSource` instance.
 #[wasm_bindgen]
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum MediaSourceReadyState {
     /// Corresponds to the "closed" JavaScript MediaSource's `readyState`
     Closed = 0,

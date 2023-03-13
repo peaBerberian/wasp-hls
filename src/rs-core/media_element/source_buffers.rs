@@ -193,23 +193,23 @@ impl AddSourceBufferError {
         match err.0 {
             AddSourceBufferErrorCode::NoMediaSourceAttached =>
                 AddSourceBufferError::NoMediaSourceAttached {
-                    message: err.1.unwrap_or("MediaSource instance not found.".to_owned())
+                    message: err.1.unwrap_or_else(|| "MediaSource instance not found.".to_owned())
                 },
             AddSourceBufferErrorCode::MediaSourceIsClosed =>
                 AddSourceBufferError::MediaSourceIsClosed,
             AddSourceBufferErrorCode::QuotaExceededError =>
                 AddSourceBufferError::QuotaExceededError {
-                    message: err.1.unwrap_or("Unknown QuotaExceededError error".to_owned())
+                    message: err.1.unwrap_or_else(|| "Unknown QuotaExceededError error".to_owned())
                 },
             AddSourceBufferErrorCode::TypeNotSupportedError =>
                 AddSourceBufferError::TypeNotSupportedError {
                     mime_type: mime_type.to_string(),
-                    message: err.1.unwrap_or("Unknown NotSupportedError error".to_owned()),
+                    message: err.1.unwrap_or_else(|| "Unknown NotSupportedError error".to_owned()),
                 },
             AddSourceBufferErrorCode::EmptyMimeType => AddSourceBufferError::EmptyMimeType,
             AddSourceBufferErrorCode::UnknownError =>
                 AddSourceBufferError::UnknownError {
-                    message: err.1.unwrap_or("Unknown error.".to_owned())
+                    message: err.1.unwrap_or_else(|| "Unknown error.".to_owned())
                 },
         }
     }
@@ -243,12 +243,12 @@ impl PushSegmentError {
             AppendBufferErrorCode::TransmuxerError =>
                 PushSegmentError::TransmuxerError(
                     media_type,
-                    err.1.unwrap_or("Unknown transmuxing error.".to_owned())
+                    err.1.unwrap_or_else(|| "Unknown transmuxing error.".to_owned())
                 ),
             AppendBufferErrorCode::UnknownError =>
                 PushSegmentError::UnknownError(
                     media_type,
-                    err.1.unwrap_or("Unknown error.".to_owned())
+                    err.1.unwrap_or_else(|| "Unknown error.".to_owned())
                 ),
         }
     }

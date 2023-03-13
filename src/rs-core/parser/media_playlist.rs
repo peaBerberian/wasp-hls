@@ -85,7 +85,7 @@ pub enum MediaPlaylistParsingError {
 
 impl fmt::Display for MediaPlaylistParsingError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match &*self {
+        match self {
            MediaPlaylistParsingError::UnparsableExtInf =>
                write!(f, "One of the #EXTINF value could not be parsed"),
            MediaPlaylistParsingError::UriMissingInMap =>
@@ -118,20 +118,19 @@ impl MediaPlaylist {
 
         let playlist_base_url = url.pathname();
 
-        let mut lines = playlist.lines();
-
         let mut curr_start_time = 0.;
         let mut segment_list: Vec<SegmentInfo> = vec![];
         let mut next_segment_duration: Option<f64> = None;
         let mut current_byte: Option<usize> = None;
         let mut next_segment_byte_range: Option<ByteRange> = None;
 
-        while let Some(line) = lines.next() {
+        let lines = playlist.lines();
+        for line in lines {
             let str_line = line.unwrap();
             if str_line.is_empty() {
                 continue;
-            } else if str_line.starts_with("#EXT") {
-                let colon_idx = match str_line[4..].find(":") {
+            } else if let Some(stripped) = str_line.strip_prefix("#EXT") {
+                let colon_idx = match stripped.find(':') {
                     None => str_line.len(),
                     Some(idx) => idx + 4,
                 };
@@ -189,7 +188,7 @@ impl MediaPlaylist {
                             if base_offset >= str_line.len() {
                                 break;
                             }
-                            match str_line[base_offset..].find("=") {
+                            match str_line[base_offset..].find('=') {
                                 None => {
                                     Logger::warn("Attribute Name not followed by equal sign");
                                     break;
@@ -241,7 +240,7 @@ impl MediaPlaylist {
                     "M3U" => {},
                     x => Logger::debug(&format!("Unrecognized tag: \"{}\"", x)),
                 }
-            } else if str_line.starts_with("#") {
+            } else if str_line.starts_with('#') {
                 continue;
             } else {
                 // URI
@@ -259,7 +258,7 @@ impl MediaPlaylist {
                         url: seg_url,
                     };
                     segment_list.push(seg);
-                    curr_start_time = curr_start_time + duration;
+                    curr_start_time += duration;
                     next_segment_duration = None;
                     next_segment_byte_range = None;
                 } else {
