@@ -218,7 +218,7 @@ extern "C" {
 
     pub fn jsAnnounceFetchedContent(variant_info: Vec<u32>);
 
-    pub fn jsAnnounceVariantUpdate(variant_id: Option<u32>);
+    pub fn jsAnnounceVariantUpdate(variant_id: Option<&str>);
 
     pub fn jsStartRebuffering();
     pub fn jsStopRebuffering();

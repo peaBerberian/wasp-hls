@@ -102,7 +102,7 @@ export interface ContentMetadata {
 
   variants : VariantInfo[];
 
-  lockedVariant: number | null;
+  lockedVariant: string | null;
 
   loadingAborter: AbortController | undefined;
 

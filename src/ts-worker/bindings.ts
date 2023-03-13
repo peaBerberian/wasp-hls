@@ -49,6 +49,10 @@ import {
 import { formatErrMessage } from "./utils.js";
 
 const generateMediaSourceId = idGenerator();
+const cachedTextDecoder = new TextDecoder("utf-8", {
+  ignoreBOM: true,
+  fatal: true,
+});
 
 export function sendSegmentRequestError(
   fatal: boolean,
@@ -959,15 +963,20 @@ export function announceFetchedContent(
   variantInfo: Uint32Array
 ): void {
   const contentInfo = playerInstance.getContentInfo();
-  if (contentInfo === null) {
+  const memory = playerInstance.getCurrentWasmMemory();
+  if (contentInfo === null || memory === null) {
     return ;
   }
   const variantInfoObj : VariantInfo[] = [];
   let i = 0;
   i++; // Skip number of variants
   while (i < variantInfo.length) {
-    const id = variantInfo[i];
+    const idLen = variantInfo[i];
     i++;
+
+    const idU8 = new Uint8Array(memory.buffer, variantInfo[i], idLen);
+    i++;
+    const id = cachedTextDecoder.decode(idU8);
 
     const height = variantInfo[i];
     i++;
@@ -999,7 +1008,7 @@ export function announceFetchedContent(
 }
 
 export function announceVariantUpdate(
-  variantId: number | undefined
+  variantId: string | undefined
 ): void {
   const contentInfo = playerInstance.getContentInfo();
   if (contentInfo === null) {

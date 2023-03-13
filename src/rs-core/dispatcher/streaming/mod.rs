@@ -167,7 +167,18 @@ impl Dispatcher {
                     self.internal_stop();
                     return;
                 }
-                let variants_info = format_variants_info_for_js(content_tracker.variants());
+                // SAFETY: The following line is unsafe because it may actually define raw pointers
+                // to point to Rust's heap memory and put it in the returned value.
+                //
+                // However, we're calling the JS binding function it is communicated to directly
+                // after and thus before the corresponding underlying data had a chance to be
+                // dropped.
+                //
+                // Because one of the rules of those bindings is to copy all pointed data
+                // synchronously on call, we should not encounter any issue.
+                let variants_info = unsafe {
+                    format_variants_info_for_js(content_tracker.variants())
+                };
                 jsAnnounceFetchedContent(variants_info);
 
                 use PlaylistFileType::*;
@@ -399,7 +410,7 @@ impl Dispatcher {
     }
 
     pub(super) fn inner_lock_variant(&mut self,
-        variant_id: u32
+        variant_id: String
     ) {
         if let Some(ctnt) = self.content_tracker.as_mut() {
             match ctnt.lock_variant(variant_id) {

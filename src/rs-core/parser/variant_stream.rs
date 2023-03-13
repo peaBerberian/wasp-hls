@@ -21,7 +21,14 @@ use super::{
 /// Stucture representing the HLS concept of a "variant stream".
 #[derive(Debug)]
 pub struct VariantStream {
-    id: u32,
+    /// Stable identifier for the URI within the parent Multivariant Playlist.
+    ///
+    /// This identifier allows the URI of the Variant Stream to
+    /// change between two distinct downloads of the Multivariant
+    /// Playlist. IDs are matched using a byte-for-byte comparison.
+    /// All `VariantStream` in a Multivariant Playlist with the same
+    /// `url` value SHOULD use the same `id`.
+    id: String,
 
     /// Url of the "Media Playlist" corresponding to the main rendition of this
     /// variant stream.
@@ -128,18 +135,6 @@ pub struct VariantStream {
     /// included if any video in a Variant Stream exceeds 30 frames per
     /// second.
     frame_rate: Option<f64>,
-
-    /// The value is a stable identifier for the URI within the parent
-    /// Multivariant Playlist.
-    /// All characters in the quoted-string MUST be from the following
-    /// set: [a..z], [A..Z], [0..9], '+', '/', '=', '.', '-', and '_'.
-    ///
-    /// The stable_variant_id allows the URI of the Variant Stream to
-    /// change between two distinct downloads of the Multivariant
-    /// Playlist. IDs are matched using a byte-for-byte comparison.
-    /// All `VariantStream` in a Multivariant Playlist with the same
-    /// `url` value SHOULD use the same stable_variant_id.
-    stable_variant_id: Option<String>,
 
     /// The value match the value of the `group_id` attribute of a `Media`
     /// elsewhere in the Multivariant Playlist whose `type` attribute is
@@ -284,8 +279,8 @@ impl VariantStream {
         self.frame_rate
     }
 
-    pub(crate) fn id(&self) -> u32 {
-        self.id
+    pub(crate) fn id(&self) -> &str {
+        &self.id
     }
 
     pub(crate) fn url(&self) -> &Url {
@@ -309,7 +304,7 @@ impl VariantStream {
     pub(super) fn create_from_stream_inf(
         variant_line: &str,
         url: Url,
-        id: u32
+        base_uri: &str
     ) -> Result<Self, VariantParsingError> {
         let mut bandwidth : Option<u64> = None;
         let mut resolution : Option<VideoResolution> = None;
@@ -499,6 +494,13 @@ impl VariantStream {
             }
         }
 
+        let id = stable_variant_id.unwrap_or_else(|| url.clone().take());
+        let url = if url.is_absolute() {
+            url
+        } else {
+            Url::from_relative(base_uri, url)
+        };
+
         if let Some(bandwidth) = bandwidth {
             Ok(VariantStream {
                 id,
@@ -514,7 +516,6 @@ impl VariantStream {
                 program_id,
                 resolution,
                 score,
-                stable_variant_id,
                 subtitles,
                 url,
                 video,

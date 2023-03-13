@@ -148,7 +148,7 @@ most do not prevent playback):
     - [X] GROUP-ID
     - [X] DEFAULT
     - [X] AUTOSELECT
-    - [ ] STABLE-RENDITION-ID: Not sure if it will be useful in some way.
+    - [X] STABLE-RENDITION-ID: Help to identify a Media Playlist with its URI
     - [ ] LANGUAGE: No track selection API yet
     - [ ] ASSOC-LANGUAGE: No track selection API yet
     - [ ] NAME: No track selection API yet
@@ -170,7 +170,8 @@ most do not prevent playback):
       video media playlsit is then considered
     - [X] RESOLUTION: Used to describe variant in variant selection API
     - [X] FRAME-RATE: Used to describe variant in variant selection API
-    - [ ] STABLE-VARIANT-ID
+    - [X] STABLE-VARIANT-ID: Used for variant-identification, else, its URI is
+      used.
     - [ ] AVERAGE-BANDWIDTH: Not used yet. I don't know if it's useful for us
       here yet.
     - [ ] SCORE: Not considered yet, but should be used alongside BANDWIDTH to

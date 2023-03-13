@@ -13,6 +13,16 @@ use super::{
 /// Structure describing a "Media tag" in the HLS Multivariant Playlist.
 #[derive(Debug)]
 pub struct MediaTag {
+    /// Stable identifier for the URI within the parent Multivariant Playlist.
+    ///
+    /// This identifier allows the URI of the Variant Stream to
+    /// change between two distinct downloads of the Multivariant
+    /// Playlist. IDs are matched using a byte-for-byte comparison.
+    ///
+    /// All `MediaTag` in a `MultiVariantPlaylist` with the same `url`
+    /// value SHOULD use the same stable_rendition_id.
+    id: Option<String>,
+
     /// Media Playlist associated to this media tag.
     /// `None` if it does not exists or if not yet loaded.
     pub media_playlist: Option<MediaPlaylist>,
@@ -44,18 +54,6 @@ pub struct MediaTag {
     /// If the `language` attribute is present, then this description SHOULD be
     /// in that language.
     name: String,
-
-    /// Stable identifier for the URI within the Multivariant Playlist.
-    /// All characters in the string MUST be from the following set:
-    /// [a..z], [A..Z], [0..9], '+', '/', '=', '.', '-', and '_'.
-    ///
-    /// The stable_rendition_id allows the URI of a Rendition to change
-    /// between two distinct downloads of the Multivariant Playlist. IDs
-    /// are matched using a byte-for-byte comparison.
-    ///
-    /// All `MediaTag` in a `MultiVariantPlaylist` with the same `url`
-    /// value SHOULD use the same stable_rendition_id.
-    stable_rendition_id: Option<String>,
 
     /// If `true`, then the client SHOULD play this Rendition of the content in
     /// the absence of information from the user indicating a different choice.
@@ -169,12 +167,7 @@ impl MediaTag {
                             let (parsed, end_offset) = parse_quoted_string(media_line, offset + idx + 1);
                             offset = end_offset + 1;
                             if let Ok(parsed) = parsed {
-                                let base_uri = Url::new(parsed.to_owned());
-                                url = if base_uri.is_absolute() {
-                                    Some(base_uri)
-                                } else {
-                                    Some(Url::from_relative(playlist_base_url, base_uri))
-                                };
+                                url = Some(Url::new(parsed.to_owned()));
                             } else {
                                 Logger::warn("Unparsable URI value");
                             }
@@ -259,7 +252,14 @@ impl MediaTag {
             return Err(MediaTagParsingError::MissingName);
         };
 
+        let id = stable_rendition_id.or(url.as_ref().map(|u| u.clone().take()));
+        url = url.and_then(|u| if u.is_absolute() {
+            Some(u)
+        } else {
+            Some(Url::from_relative(playlist_base_url, u))
+        });
         Ok(MediaTag {
+            id,
             media_playlist: None,
             typ,
             url,
@@ -267,7 +267,6 @@ impl MediaTag {
             language,
             assoc_language,
             name,
-            stable_rendition_id,
             default,
             autoselect,
             forced,

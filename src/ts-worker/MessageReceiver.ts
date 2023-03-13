@@ -272,8 +272,8 @@ function initialize(
   hasWorkerMse: boolean,
   config: WaspHlsPlayerConfig
 ) {
-  initializeWasm(fetch(wasmUrl)).then(() => {
-    playerInstance.start(hasWorkerMse, config);
+  initializeWasm(fetch(wasmUrl)).then((wasm) => {
+    playerInstance.start(hasWorkerMse, config, wasm);
     postMessageToMain({ type: "initialized", value: null });
   }).catch(err => {
     handleInitializationError(err, InitializationErrorCode.WasmRequestError);

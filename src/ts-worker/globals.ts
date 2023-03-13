@@ -1,10 +1,10 @@
 import { numberIdGenerator } from "../ts-common/idGenerator";
-import logger from "../ts-common/logger";
 import QueuedSourceBuffer from "../ts-common/QueuedSourceBuffer";
 import { WaspHlsPlayerConfig } from "../ts-common/types";
-import { Dispatcher } from "../wasm/wasp_hls";
+import { Dispatcher, InitOutput } from "../wasm/wasp_hls";
 
 export interface WorkerInfo {
+  wasm: InitOutput;
   dispatcher: Dispatcher;
   content: ContentInfo | null;
 }
@@ -17,11 +17,16 @@ class PlayerInstance {
     this.hasWorkerMse = undefined;
   }
 
-  public start(hasWorkerMse: boolean, config: WaspHlsPlayerConfig) {
+  public start(
+    hasWorkerMse: boolean,
+    config: WaspHlsPlayerConfig,
+    wasm: InitOutput
+  ) {
     this.hasWorkerMse = hasWorkerMse;
     const dispatcher = new Dispatcher();
     updateDispatcherConfig(dispatcher, config);
     this._instanceInfo = {
+      wasm,
       dispatcher,
       content: null,
     };
@@ -37,8 +42,7 @@ class PlayerInstance {
     content: ContentInfo
   ) {
     if (this._instanceInfo === null) {
-      // TODO
-      logger.error();
+      // TODO log error
       return ;
     }
     jsMemoryResources.freeEverything();
@@ -47,15 +51,15 @@ class PlayerInstance {
   }
 
   public getDispatcher(): Dispatcher | null {
-    return this._instanceInfo === null ?
-      null :
-      this._instanceInfo.dispatcher;
+    return this._instanceInfo?.dispatcher ?? null;
+  }
+
+  public getCurrentWasmMemory(): WebAssembly.Memory | null {
+    return this._instanceInfo?.wasm.memory ?? null;
   }
 
   public getContentInfo(): ContentInfo | null {
-    return this._instanceInfo === null ?
-      null :
-      this._instanceInfo.content;
+    return this._instanceInfo?.content ?? null;
   }
 }
 

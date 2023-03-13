@@ -251,7 +251,7 @@ impl ContentTracker {
     /// The returned option is `None` if the `variant_id` given is not found to correspond
     /// to any existing variant and contains the corresponding update when set.
     pub(crate) fn lock_variant(&mut self,
-        variant_id: u32
+        variant_id: String
     ) -> Option<VariantUpdateResult> {
         let variants = self.playlist.variants();
         let pos = variants.iter().position(|x| {

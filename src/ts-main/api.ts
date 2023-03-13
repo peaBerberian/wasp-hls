@@ -592,7 +592,7 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
     return this.__contentMetadata__?.variants ?? [];
   }
 
-  public lockVariant(variantId: number) {
+  public lockVariant(variantId: string) {
     if (this.__worker__ === null) {
       throw new Error("The Player is not initialized or disposed.");
     }
@@ -626,7 +626,7 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
     });
   }
 
-  public getLockedVariant(): number | null {
+  public getLockedVariant(): string | null {
     return this.__contentMetadata__?.lockedVariant ?? null;
   }
 

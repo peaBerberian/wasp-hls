@@ -5,14 +5,16 @@ use crate::{
 
 static NULL_RESOLUTION: VideoResolution = VideoResolution::new(0, 0);
 
-pub(crate) fn format_variants_info_for_js(
+pub(crate) unsafe fn format_variants_info_for_js(
     variants: &[VariantStream]
 ) -> Vec<u32> {
     let mut ret: Vec<u32> = vec![];
     ret.push(variants.len() as u32);
     variants.iter().for_each(|v| {
+        let id = v.id();
+        ret.push(id.len() as u32);
+        ret.push(id.as_ptr() as u32);
         let resolution = v.resolution().unwrap_or(&NULL_RESOLUTION);
-        ret.push(v.id());
         ret.push(resolution.height() as u32);
         ret.push(resolution.width() as u32);
         ret.push(v.frame_rate().unwrap_or(0.) as u32);

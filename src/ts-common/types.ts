@@ -303,7 +303,7 @@ export interface MultiVariantPlaylistParsedWorkerMessage {
 }
 
 export interface VariantInfo {
-  id: number;
+  id: string;
   width: number;
   height: number;
   frameRate: number;
@@ -683,7 +683,7 @@ export interface VariantUpdateWorkerMessage {
      * present on the various events concerning that content.
      */
     contentId: string;
-    variantId: number | undefined;
+    variantId: string | undefined;
   };
 }
 
@@ -964,7 +964,7 @@ export interface LockVariantMainMessage {
      * `LoadContentMainMessage`.
      */
     contentId: string;
-    variantId: number | null;
+    variantId: string | null;
   };
 }
 

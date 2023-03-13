@@ -82,7 +82,7 @@ impl Dispatcher {
         self.internal_stop();
     }
 
-    pub fn lock_variant(&mut self, variant_id: u32) {
+    pub fn lock_variant(&mut self, variant_id: String) {
         self.inner_lock_variant(variant_id)
     }
 
