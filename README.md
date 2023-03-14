@@ -145,6 +145,7 @@ most do not prevent playback):
   - [X] EXT-X-BYTERANGE: Used for range requests
   - [X] EXT-X-PLAYLIST-TYPE: Used To know if a Playlist may be refreshed
   - [X] EXT-X-TARGETDURATION: Useful for heuristics for playlist refresh
+  - [X] EXT-X-START: Relied on for the default starting position.
   - EXT-X-MAP:
     - [X] URI: Used to fetch the initialization segment if one is present
     - [X] BYTERANGE: To perform a range request for the initialization segment
@@ -191,8 +192,6 @@ most do not prevent playback):
     - [ ] PATHWAY-ID: Content Steering not handled yet
     - [ ] HDCP-LEVEL: DRM are not handled for now
     - [ ] ALLOWED-CPC: DRM are not handled for now
-  - [ ] EXT-X-START: Should be relied on for the default starting position.
-    For now we just play at `0` for VoD and at `live-edge - 10` for live
   - [ ] EXT-X-GAP
   - [ ] EXT-X-VERSION: Not specifically considered for now, most differences
     handled until now had compatible behaviors from version to version

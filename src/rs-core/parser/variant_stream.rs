@@ -2,6 +2,7 @@ use std::io::BufRead;
 
 use super::{
     media_playlist::{MediaPlaylist, MediaPlaylistParsingError},
+    multi_variant_playlist::MediaPlaylistContext,
     utils::{
         parse_comma_separated_list, parse_decimal_floating_point, parse_decimal_integer,
         parse_enumerated_string, parse_quoted_string, parse_resolution, skip_attribute_list_value,
@@ -161,6 +162,8 @@ pub struct VariantStream {
     /// default Pathway, so every Variant Stream can be associated with a named
     /// Pathway.
     pathway_id: Option<String>,
+
+    context: Option<MediaPlaylistContext>,
     // TODO
     // ALLOWED-CPC
     // SUPPLEMENTAL-CODECS
@@ -281,12 +284,13 @@ impl VariantStream {
     }
 
     /// TODO real update
-    pub fn update_media_playlist(
+    pub(crate) fn update_media_playlist(
         &mut self,
         playlist: impl BufRead,
         url: Url,
+        context: Option<&MediaPlaylistContext>,
     ) -> Result<&MediaPlaylist, MediaPlaylistParsingError> {
-        let new_mp = MediaPlaylist::create(playlist, url)?;
+        let new_mp = MediaPlaylist::create(playlist, url, context)?;
         self.media_playlist = Some(new_mp);
         Ok(self.media_playlist.as_ref().unwrap())
     }
@@ -516,7 +520,7 @@ impl VariantStream {
         };
 
         if let Some(bandwidth) = bandwidth {
-            Ok(VariantStream {
+            Ok(Self {
                 id,
                 audio,
                 average_bandwitdh,
@@ -534,9 +538,14 @@ impl VariantStream {
                 url,
                 video,
                 video_range,
+                context: None,
             })
         } else {
             Err(VariantParsingError::MissingBandwidth)
         }
+    }
+
+    pub(super) fn communicate_context(&mut self, context: MediaPlaylistContext) {
+        self.context = Some(context);
     }
 }

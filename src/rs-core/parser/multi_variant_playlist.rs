@@ -8,6 +8,7 @@ use std::{error, fmt, io};
 pub struct MultiVariantPlaylist {
     variants: Vec<VariantStream>,
     media: Vec<MediaTag>,
+    context: Option<MediaPlaylistContext>,
 }
 
 impl MultiVariantPlaylist {
@@ -22,9 +23,18 @@ impl MultiVariantPlaylist {
 /// Values parsed from a MultiVariantPlaylist that may have an influence on
 /// parsed MediaPlaylists.
 #[derive(Debug, Default)]
-struct MediaPlaylistContext {
+pub(crate) struct MediaPlaylistContext {
     independent_segments: Option<bool>,
     start: Option<StartAttribute>,
+}
+
+impl MediaPlaylistContext {
+    pub(crate) fn start(&self) -> Option<&StartAttribute> {
+        self.start.as_ref()
+    }
+    pub(crate) fn independent_segments(&self) -> Option<bool> {
+        self.independent_segments
+    }
 }
 
 // TODO information on the line at which the error was encountered?
@@ -151,6 +161,7 @@ impl MultiVariantPlaylist {
         let mut ret = MultiVariantPlaylist {
             media: vec![],
             variants: vec![],
+            context: None,
         };
         let mut lines = playlist.lines();
         while let Some(line) = lines.next() {
@@ -201,9 +212,6 @@ impl MultiVariantPlaylist {
             }
         }
         ret.variants.sort_by_key(|x| x.bandwidth);
-
-        // TODO here communicate potential context to each variant
-
         Ok(ret)
     }
 
@@ -226,7 +234,9 @@ impl MultiVariantPlaylist {
         url: Url,
     ) -> Result<&MediaPlaylist, MediaPlaylistUpdateError> {
         match self.variants.get_mut(variant_idx) {
-            Some(v) => Ok(v.update_media_playlist(media_playlist_data, url)?),
+            Some(v) => {
+                Ok(v.update_media_playlist(media_playlist_data, url, self.context.as_ref())?)
+            }
             None => Err(MediaPlaylistUpdateError::NotFound),
         }
     }
@@ -242,7 +252,7 @@ impl MultiVariantPlaylist {
         url: Url,
     ) -> Result<&MediaPlaylist, MediaPlaylistUpdateError> {
         match self.media.get_mut(media_tag_idx) {
-            Some(m) => Ok(m.update(media_playlist_data, url)?),
+            Some(m) => Ok(m.update(media_playlist_data, url, self.context.as_ref())?),
             None => Err(MediaPlaylistUpdateError::NotFound),
         }
     }

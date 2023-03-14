@@ -53,21 +53,9 @@ impl Dispatcher {
         }
     }
 
-    pub fn flush_audio_buffer(&mut self) {
-        if let Err(e) = self
-            .media_element_ref
-            .remove_data(MediaType::Audio, 0., f64::INFINITY)
-        {
-            Logger::error(&format!("Error when flushing audio buffer: {}", e));
-        }
-    }
-
-    pub fn flush_video_buffer(&mut self) {
-        if let Err(e) = self
-            .media_element_ref
-            .remove_data(MediaType::Video, 0., f64::INFINITY)
-        {
-            Logger::error(&format!("Error when flushing audio buffer: {}", e));
+    pub fn flush_buffer(&mut self, mt: MediaType) {
+        if let Err(e) = self.media_element_ref.remove_data(mt, 0., f64::INFINITY) {
+            Logger::error(&format!("Error when flushing {mt} buffer: {}", e));
         }
     }
 

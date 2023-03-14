@@ -331,9 +331,9 @@ impl PlaylistStore {
     /// Returns currently estimated start time in seconds at which to begin playing the content.
     pub(crate) fn get_expected_start_time(&self) -> f64 {
         let media_playlists = self.curr_media_playlists();
-        if media_playlists.is_empty() || media_playlists.iter().any(|p| p.1.is_live()) {
+        if media_playlists.is_empty() {
             0.
-        } else {
+        } else if media_playlists.iter().all(|p| p.1.is_live()) {
             let initial_dur: Option<f64> = None;
             let min_duration = media_playlists.iter().fold(initial_dur, |acc, p| {
                 let duration = p.1.ending();
@@ -352,6 +352,11 @@ impl PlaylistStore {
             } else {
                 0.
             }
+        } else {
+            media_playlists
+                .iter()
+                .find_map(|p| p.1.wanted_start())
+                .unwrap_or(0.)
         }
     }
 

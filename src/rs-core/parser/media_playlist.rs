@@ -1,9 +1,12 @@
 use crate::{bindings::MediaType, utils::url::Url, Logger};
 use std::{error, fmt, io::BufRead};
 
-use super::utils::{
-    parse_byte_range, parse_decimal_floating_point, parse_decimal_integer, parse_enumerated_string,
-    parse_iso_8601_date, parse_quoted_string,
+use super::{
+    multi_variant_playlist::MediaPlaylistContext,
+    utils::{
+        parse_byte_range, parse_decimal_floating_point, parse_decimal_integer,
+        parse_enumerated_string, parse_iso_8601_date, parse_quoted_string,
+    },
 };
 
 pub use super::utils::ByteRange;
@@ -105,7 +108,11 @@ impl fmt::Display for MediaPlaylistParsingError {
 impl error::Error for MediaPlaylistParsingError {}
 
 impl MediaPlaylist {
-    pub fn create(playlist: impl BufRead, url: Url) -> Result<Self, MediaPlaylistParsingError> {
+    pub(crate) fn create(
+        playlist: impl BufRead,
+        url: Url,
+        context: Option<&MediaPlaylistContext>,
+    ) -> Result<Self, MediaPlaylistParsingError> {
         let mut version: Option<u32> = None;
         let mut independent_segments = false;
         let mut target_duration: Option<u32> = None;
@@ -114,8 +121,7 @@ impl MediaPlaylist {
         let mut playlist_type = PlaylistType::None;
         let mut i_frames_only = false;
         let mut map: Option<MapInfo> = None;
-
-        let start = None;
+        let mut start = None;
 
         let playlist_base_url = url.pathname();
 
@@ -280,6 +286,14 @@ impl MediaPlaylist {
             Some(target_duration) => target_duration,
             None => return Err(MediaPlaylistParsingError::MissingTargetDuration),
         };
+        if start.is_none() {
+            start = context.and_then(|x| x.start().cloned())
+        }
+        if !independent_segments {
+            independent_segments = context
+                .and_then(|x| x.independent_segments())
+                .unwrap_or(false);
+        }
         Ok(MediaPlaylist {
             version,
             independent_segments,
@@ -296,6 +310,30 @@ impl MediaPlaylist {
             // server_control,
             // part_inf,
         })
+    }
+
+    pub(crate) fn wanted_start(&self) -> Option<f64> {
+        self.start
+            .as_ref()
+            .and_then(|start| {
+                let actual_offset = if start.time_offset < 0. {
+                    self.segment_list
+                        .last()
+                        .map(|s| s.start + s.duration + start.time_offset)
+                } else {
+                    self.segment_list
+                        .first()
+                        .map(|s| s.start + start.time_offset)
+                };
+                actual_offset.map(|a| (a, start.precise))
+            })
+            .and_then(|(actual_time, is_precise)| {
+                if is_precise {
+                    Some(actual_time)
+                } else {
+                    self.segment_from_pos(actual_time).map(|s| s.start)
+                }
+            })
     }
 
     pub(crate) fn url(&self) -> &Url {
@@ -374,5 +412,11 @@ impl MediaPlaylist {
 
     fn extension(&self) -> Option<&str> {
         self.segment_list.get(0).map(|s| s.url.extension())
+    }
+
+    fn segment_from_pos(&self, pos: f64) -> Option<&SegmentInfo> {
+        self.segment_list
+            .iter()
+            .find(|s| s.duration > pos && s.start <= pos)
     }
 }

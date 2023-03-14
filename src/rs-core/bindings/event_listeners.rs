@@ -10,20 +10,15 @@ use super::{
     ResourceId, TimerId, TimerReason,
 };
 
-/// Methods triggered on JavaScript events by the JavaScript code
-///
-/// Those functions are voluntarly written a certain way to put in evidence that
-/// those should just be bindings converting to the right types without directly
-/// interacting with the `Dispatcher`'s state (e.g. methods are called with
-/// an explicit `Dispatcher` reference).
+/// Methods triggered on JavaScript events by the JavaScript code.
 #[wasm_bindgen]
 impl Dispatcher {
-    /// Called by the JavaScript code each time an HTTP(S) request started with
+    /// The JS code should call this method each time an HTTP(S) request started with
     /// `jsFetch` finished with success.
     ///
     /// # Arguments
     ///
-    /// * `request_id` - The identifier given by the JavaScript when the request
+    /// * `request_id` - The identifier given by `jsFetch` when the request
     ///   was started. This allows the `Dispatcher` to identify which request
     ///   is actually finished
     ///
@@ -56,12 +51,12 @@ impl Dispatcher {
         );
     }
 
-    /// Called by the JavaScript code each time an HTTP(S) request started with
+    /// The JS code should call this method each time an HTTP(S) request started with
     /// `jsFetch` finished with an error.
     ///
     /// # Arguments
     ///
-    /// * `request_id` - The identifier given by the JavaScript when the request
+    /// * `request_id` - The identifier given by `jsFetch` when the request
     ///   was started. This allows the `Dispatcher` to identify which request
     ///   is actually finished
     ///
@@ -80,7 +75,7 @@ impl Dispatcher {
         Dispatcher::on_request_failed_inner(self, request_id, has_timeouted, status);
     }
 
-    /// Called by the JavaScript code when the MediaSource's readyState changed.
+    /// The JS code should call this method when the MediaSource's readyState changed.
     ///
     /// # Arguments
     ///
@@ -89,31 +84,31 @@ impl Dispatcher {
         Dispatcher::internal_on_media_source_state_change(self, state);
     }
 
-    /// Called by the JavaScript code when a SourceBuffer emits an `updateend`
+    /// The JS code should call this method when a SourceBuffer emits an `updateend`
     /// event.
     ///
     /// # Arguments
     ///
-    /// * `source_buffer_id` - The identifier given by the JavaScript when the
+    /// * `source_buffer_id` - The identifier generated when the
     ///   SourceBuffer was created. This allows the `Dispatcher` to identify
     ///   which SourceBuffer actually emitted this event.
     pub fn on_source_buffer_update(&mut self, source_buffer_id: SourceBufferId) {
         Dispatcher::internal_on_source_buffer_update(self, source_buffer_id);
     }
 
-    /// Called by the JavaScript code when a SourceBuffer emits an `error`
+    /// The JS code should call this method when a SourceBuffer emits an `error`
     /// event.
     ///
     /// # Arguments
     ///
-    /// * `source_buffer_id` - The identifier given by the JavaScript when the
+    /// * `source_buffer_id` - The identifier given generated when the
     ///   SourceBuffer was created. This allows the `Dispatcher` to identify
     ///   which SourceBuffer actually emitted this event.
     pub fn on_source_buffer_error(&mut self, source_buffer_id: SourceBufferId) {
         Dispatcher::internal_on_source_buffer_error(self, source_buffer_id);
     }
 
-    /// Called by the JavaScript code once regular playback "tick" are enabled
+    /// The JS code should call this method once regular playback "tick" are enabled
     /// after the `jsStartObservingPlayback` function has been called.
     ///
     /// This function will be continuously called at each important media events
@@ -123,12 +118,12 @@ impl Dispatcher {
         Dispatcher::on_observation(self, observation);
     }
 
-    /// Called by the JavaScript code each time a timer started with the `jsTimer`
+    /// The JS code should call this method each time a timer started with the `jsTimer`
     /// function finished.
     ///
     /// # Arguments
     ///
-    /// * `id` - The `TimerId` given by the JavaScript when the timer was
+    /// * `id` - The `TimerId` given by `jsTimer` when the timer was
     ///   started. This allows the `Dispatcher` to identify which timer
     ///   actually finished.
     ///
