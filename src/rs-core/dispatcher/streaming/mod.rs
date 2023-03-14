@@ -161,6 +161,7 @@ impl Dispatcher {
                 // synchronously on call, we should not encounter any issue.
                 let variants_info =
                     unsafe { format_variants_info_for_js(playlist_store.variants()) };
+                // let available_audio_tracks = playlist_store.available_audio_tracks();
                 jsAnnounceFetchedContent(variants_info);
 
                 use PlaylistFileType::*;

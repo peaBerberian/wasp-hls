@@ -291,6 +291,10 @@ impl MediaTag {
         Ok(self.media_playlist.as_ref().unwrap())
     }
 
+    pub(crate) fn id(&self) -> Option<&str> {
+        self.id.as_deref()
+    }
+
     pub(crate) fn url(&self) -> Option<&Url> {
         self.url.as_ref()
     }

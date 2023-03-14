@@ -1,11 +1,16 @@
 use crate::{
     bindings::MediaType,
     parser::{
-        MediaPlaylist, MediaPlaylistUpdateError, MediaTagType, MultiVariantPlaylist, VariantStream,
+        MediaPlaylist, MediaPlaylistUpdateError, MediaTagType, MultiVariantPlaylist,
+        VariantStream,
     },
     utils::url::Url,
 };
 use std::{cmp::Ordering, io::BufRead};
+
+use self::audio_track::AudioTrackList;
+
+mod audio_track;
 
 /// Stores information about the current loaded playlist:
 ///   - The playlist itself.
@@ -360,6 +365,10 @@ impl PlaylistStore {
         }
     }
 
+    pub(crate) fn available_audio_tracks(&self) -> AudioTrackList {
+        AudioTrackList::new(self.playlist.medias(), self.curr_audio_idx.as_ref())
+    }
+
     /// Run the variant update logic from its index in the variants array and return the result of doing so
     fn update_variant(&mut self, index: Option<usize>) -> VariantUpdateResult {
         if index != self.curr_variant_idx {
@@ -435,40 +444,6 @@ impl PlaylistStore {
             self.curr_audio_idx = None;
         }
     }
-
-    // TODO Should not be relied on for now, still working out the details
-    pub(crate) fn todo_get_available_audio_tracks(&self) -> Vec<AvailableAudioTrack> {
-        // The same audio track may be present in multiple encoding, for example to enable multiple
-        // qualities.
-        // To ensure
-        // Identifying attributes are: LANGUAGE, ASSOC-LANGUAGE, FORCED, CHANNELS and CHARACTERISTICS
-        // TODO and group of codec?
-        // They however should not have the same group_id
-
-        let mut available_audio_tracks: Vec<AvailableAudioTrack> = vec![];
-        for (idx, media) in self.playlist.medias().iter().enumerate() {
-            if media.typ() == MediaTagType::Audio {
-                // TODO Implementing this method might actually be harder when considering
-                // multiple audio media tags with the same characteristics but used in different
-                // variants.
-                let is_current =
-                    if let Some(MediaPlaylistPermanentId::MediaTagUrl(id)) = self.curr_audio_idx {
-                        id == idx
-                    } else {
-                        false
-                    };
-                available_audio_tracks.push(AvailableAudioTrack {
-                    is_current,
-                    id: idx,
-                    language: media.language(),
-                    assoc_language: media.assoc_language(),
-                    name: media.name(),
-                    channels: media.channels(),
-                })
-            }
-        }
-        available_audio_tracks
-    }
 }
 
 /// Identifier allowing to identify a given MediaPlaylist based on its index in the array of
@@ -489,34 +464,4 @@ pub enum MediaPlaylistLoadedState {
     None,
     Loaded,
     NotLoaded,
-}
-
-pub struct AvailableAudioTrack<'a> {
-    is_current: bool,
-    id: usize,
-    language: Option<&'a str>,
-    assoc_language: Option<&'a str>,
-    name: &'a str,
-    channels: Option<u32>,
-}
-
-impl<'a> AvailableAudioTrack<'a> {
-    pub fn is_current(&self) -> bool {
-        self.is_current
-    }
-    pub fn id(&self) -> usize {
-        self.id
-    }
-    pub fn language(&self) -> Option<&'a str> {
-        self.language
-    }
-    pub fn assoc_language(&self) -> Option<&'a str> {
-        self.assoc_language
-    }
-    pub fn name(&self) -> &'a str {
-        self.name
-    }
-    pub fn channels(&self) -> Option<u32> {
-        self.channels
-    }
 }
