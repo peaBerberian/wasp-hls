@@ -1,6 +1,6 @@
 use crate::{
     adaptive::AdaptiveQualitySelector,
-    bindings::{jsSendOtherError, OtherErrorCode},
+    bindings::{jsSendOtherError, MediaType, OtherErrorCode},
     media_element::MediaElementReference,
     requester::{PlaylistFileType, Requester},
     segment_selector::NextSegmentSelectors,
@@ -50,6 +50,24 @@ impl Dispatcher {
                 Some(&x.to_string()),
             );
             self.internal_stop();
+        }
+    }
+
+    pub fn flush_audio_buffer(&mut self) {
+        if let Err(e) = self
+            .media_element_ref
+            .remove_data(MediaType::Audio, 0., f64::INFINITY)
+        {
+            Logger::error(&format!("Error when flushing audio buffer: {}", e));
+        }
+    }
+
+    pub fn flush_video_buffer(&mut self) {
+        if let Err(e) = self
+            .media_element_ref
+            .remove_data(MediaType::Video, 0., f64::INFINITY)
+        {
+            Logger::error(&format!("Error when flushing audio buffer: {}", e));
         }
     }
 
