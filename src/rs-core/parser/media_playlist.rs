@@ -11,21 +11,23 @@ pub use super::utils::ByteRange;
 /// Structure representing the concept of the `Media Playlist` in HLS.
 #[derive(Clone, Debug)]
 pub struct MediaPlaylist {
-    pub version: Option<u32>,
-    pub independent_segments: bool,
-    pub start: StartAttribute,
-    pub target_duration: u32,
-    pub media_sequence: u32,
-    pub discontinuity_sequence: u32,
-    pub end_list: bool,
-    pub playlist_type: PlaylistType,
-    pub i_frames_only: bool,
-    pub map: Option<MapInfo>,
-    pub segment_list: Vec<SegmentInfo>,
-    pub url: Url,
+    version: Option<u32>,
+    independent_segments: bool,
+    start: Option<StartAttribute>,
+    target_duration: u32,
+    media_sequence: u32,
+    end_list: bool,
+    playlist_type: PlaylistType,
+    i_frames_only: bool,
+    map: Option<MapInfo>,
+    segment_list: Vec<SegmentInfo>,
+    url: Url,
     // TODO
     // pub server_control: ServerControl,
     // pub part_inf: Option<f64>,
+
+    // ignored
+    // pub discontinuity_sequence: Option<u32>;
 }
 
 #[derive(Clone, Debug)]
@@ -42,7 +44,7 @@ pub struct SegmentInfo {
     pub url: Url,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PlaylistType {
     Event,
     VoD,
@@ -51,7 +53,7 @@ pub enum PlaylistType {
 
 #[derive(Clone, Debug)]
 pub struct StartAttribute {
-    time_offset: Option<f64>,
+    time_offset: f64,
     precise: bool,
 }
 
@@ -108,16 +110,12 @@ impl MediaPlaylist {
         let mut independent_segments = false;
         let mut target_duration: Option<u32> = None;
         let mut media_sequence = 0;
-        let mut discontinuity_sequence = 0;
         let mut end_list = false;
         let mut playlist_type = PlaylistType::None;
         let mut i_frames_only = false;
         let mut map: Option<MapInfo> = None;
 
-        let start = StartAttribute {
-            time_offset: None,
-            precise: false,
-        };
+        let start = None;
 
         let playlist_base_url = url.pathname();
 
@@ -140,13 +138,13 @@ impl MediaPlaylist {
 
                 match &str_line[4..colon_idx] {
                     "-X-VERSION" => match parse_decimal_integer(&str_line, colon_idx + 1).0 {
-                        Ok(v) => version = Some(v as u32),
-                        Err(_) => Logger::warn("Unparsable VERSION value"),
+                        Ok(v) if v <= (u32::MAX as u64) => version = Some(v as u32),
+                        _ => Logger::warn("Unparsable VERSION value"),
                     },
                     "-X-TARGETDURATION" => {
                         match parse_decimal_integer(&str_line, colon_idx + 1).0 {
-                            Ok(t) => target_duration = Some(t as u32),
-                            Err(_) => Logger::warn("Unparsable TARGETDURATION value"),
+                            Ok(t) if t <= (u32::MAX as u64) => target_duration = Some(t as u32),
+                            _ => Logger::warn("Unparsable TARGETDURATION value"),
                         }
                     }
                     "-X-ENDLIST" => end_list = true,
@@ -171,14 +169,8 @@ impl MediaPlaylist {
                     }
                     "-X-MEDIA-SEQUENCE" => {
                         match parse_decimal_integer(&str_line, colon_idx + 1).0 {
-                            Ok(s) => media_sequence = s as u32,
-                            Err(_) => Logger::warn("Unparsable MEDIA-SEQUENCE value"),
-                        }
-                    }
-                    "-X-DISCONTINUITY-SEQUENCE" => {
-                        match parse_decimal_integer(&str_line, colon_idx + 1).0 {
-                            Ok(s) => discontinuity_sequence = s as u32,
-                            Err(_) => Logger::warn("Unparsable DISCONTINUITY-SEQUENCE value"),
+                            Ok(s) if s <= (u32::MAX as u64) => media_sequence = s as u32,
+                            _ => Logger::warn("Unparsable MEDIA-SEQUENCE value"),
                         }
                     }
                     "-X-PLAYLIST-TYPE" => match parse_enumerated_string(&str_line, colon_idx + 1).0
@@ -294,7 +286,6 @@ impl MediaPlaylist {
             start,
             target_duration,
             media_sequence,
-            discontinuity_sequence,
             end_list,
             playlist_type,
             i_frames_only,
@@ -307,20 +298,44 @@ impl MediaPlaylist {
         })
     }
 
-    pub(crate) fn extension(&self) -> Option<&str> {
-        self.segment_list.get(0).map(|s| s.url.extension())
+    pub(crate) fn url(&self) -> &Url {
+        &self.url
     }
 
-    pub(crate) fn target_duration(&self) -> u32 {
-        self.target_duration
+    pub(crate) fn refresh_interval(&self) -> Option<f64> {
+        if self.may_be_refreshed() {
+            Some(f64::from(self.target_duration) * 1000.)
+        } else {
+            None
+        }
+    }
+
+    pub(crate) fn init_segment(&self) -> Option<&MapInfo> {
+        self.map.as_ref()
+    }
+
+    pub(crate) fn segment_list(&self) -> &[SegmentInfo] {
+        &self.segment_list
     }
 
     pub(crate) fn beginning(&self) -> Option<f64> {
         self.segment_list.first().map(|s| s.start)
     }
 
-    pub(crate) fn duration(&self) -> Option<f64> {
+    pub(crate) fn ending(&self) -> Option<f64> {
         self.segment_list.last().map(|s| s.start + s.duration)
+    }
+
+    pub(crate) fn may_be_refreshed(&self) -> bool {
+        !self.end_list && self.playlist_type != PlaylistType::VoD
+    }
+
+    pub(crate) fn is_live(&self) -> bool {
+        !self.end_list && self.playlist_type == PlaylistType::None
+    }
+
+    pub(crate) fn is_ended(&self) -> bool {
+        self.end_list
     }
 
     /// TODO kind of weird to give the MediaType here
@@ -357,29 +372,7 @@ impl MediaPlaylist {
         }
     }
 
-    pub fn init_segment(&self) -> Option<&MapInfo> {
-        self.map.as_ref()
-    }
-
-    pub fn last_segment_start(&self) -> Option<f64> {
-        match self.end_list {
-            false => None,
-            true => self.segment_list.last().map(|x| x.start),
-        }
-    }
-
-    pub fn last_segment_end(&self) -> Option<f64> {
-        match self.end_list {
-            false => None,
-            true => self.segment_list.last().map(|x| x.start + x.duration),
-        }
-    }
-
-    pub fn first_segment_start(&self) -> Option<f64> {
-        self.segment_list.first().map(|x| x.start)
-    }
-
-    pub fn first_segment_end(&self) -> Option<f64> {
-        self.segment_list.first().map(|x| x.start + x.duration)
+    fn extension(&self) -> Option<&str> {
+        self.segment_list.get(0).map(|s| s.url.extension())
     }
 }

@@ -180,11 +180,11 @@ impl VideoResolution {
         Self { height, width }
     }
 
-    pub fn height(&self) -> u32 {
+    pub fn height(self) -> u32 {
         self.height
     }
 
-    pub fn width(&self) -> u32 {
+    pub fn width(self) -> u32 {
         self.width
     }
 }

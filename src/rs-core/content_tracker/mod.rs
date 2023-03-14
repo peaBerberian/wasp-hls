@@ -154,10 +154,10 @@ impl ContentTracker {
     pub(crate) fn curr_duration(&self) -> Option<f64> {
         let audio_duration = self
             .curr_media_playlist(MediaType::Audio)
-            .and_then(|a| a.duration());
+            .and_then(|a| a.ending());
         let video_duration = self
             .curr_media_playlist(MediaType::Video)
-            .and_then(|v| v.duration());
+            .and_then(|v| v.ending());
         match (audio_duration, video_duration) {
             (None, None) => None,
             (Some(a), Some(v)) => Some(f64::min(a, v)),
@@ -287,7 +287,7 @@ impl ContentTracker {
                 wanted_idx.as_ref().unwrap(),
             )),
             Some(MediaPlaylistPermanentId::MediaTagUrl(idx)) => Some((
-                self.playlist.get_media(*idx)?.get_url()?,
+                self.playlist.get_media(*idx)?.url()?,
                 wanted_idx.as_ref().unwrap(),
             )),
             None => None,
@@ -331,12 +331,12 @@ impl ContentTracker {
     /// Returns currently estimated start time in seconds at which to begin playing the content.
     pub(crate) fn get_expected_start_time(&self) -> f64 {
         let media_playlists = self.curr_media_playlists();
-        if media_playlists.is_empty() || media_playlists.iter().any(|p| p.1.end_list) {
+        if media_playlists.is_empty() || media_playlists.iter().any(|p| p.1.is_live()) {
             0.
         } else {
             let initial_dur: Option<f64> = None;
             let min_duration = media_playlists.iter().fold(initial_dur, |acc, p| {
-                let duration = p.1.duration();
+                let duration = p.1.ending();
                 if let Some(acc_dur) = acc {
                     if let Some(p_dur) = duration {
                         Some(acc_dur.min(p_dur))

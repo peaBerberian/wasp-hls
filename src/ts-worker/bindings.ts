@@ -48,8 +48,6 @@ import {
 } from "./transmux.js";
 import { formatErrMessage } from "./utils.js";
 
-const activeTimeouts: [TimerId, number] = [];
-
 const generateMediaSourceId = idGenerator();
 const cachedTextDecoder = new TextDecoder("utf-8", {
   ignoreBOM: true,

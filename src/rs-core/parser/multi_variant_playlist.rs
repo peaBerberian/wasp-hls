@@ -1,4 +1,4 @@
-use super::media_playlist::{MediaPlaylist, MediaPlaylistParsingError};
+use super::media_playlist::{MediaPlaylist, MediaPlaylistParsingError, StartAttribute};
 use super::media_tag::{MediaTag, MediaTagParsingError};
 use super::variant_stream::{VariantParsingError, VariantStream};
 use crate::utils::url::Url;
@@ -8,7 +8,6 @@ use std::{error, fmt, io};
 pub struct MultiVariantPlaylist {
     variants: Vec<VariantStream>,
     media: Vec<MediaTag>,
-    media_playlist_context: MediaPlaylistContext,
 }
 
 impl MultiVariantPlaylist {
@@ -22,11 +21,10 @@ impl MultiVariantPlaylist {
 
 /// Values parsed from a MultiVariantPlaylist that may have an influence on
 /// parsed MediaPlaylists.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 struct MediaPlaylistContext {
-    // version: Option<u32>,
-    // independent_segments: Option<bool>,
-    // start: Option<StartAttribute>,
+    independent_segments: Option<bool>,
+    start: Option<StartAttribute>,
 }
 
 // TODO information on the line at which the error was encountered?
@@ -153,7 +151,6 @@ impl MultiVariantPlaylist {
         let mut ret = MultiVariantPlaylist {
             media: vec![],
             variants: vec![],
-            media_playlist_context: MediaPlaylistContext {},
         };
         let mut lines = playlist.lines();
         while let Some(line) = lines.next() {
@@ -204,6 +201,9 @@ impl MultiVariantPlaylist {
             }
         }
         ret.variants.sort_by_key(|x| x.bandwidth);
+
+        // TODO here communicate potential context to each variant
+
         Ok(ret)
     }
 

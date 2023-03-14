@@ -13,7 +13,7 @@ impl Ewma {
     /// Creates a new Ewma with the given "half life", in seconds.
     pub fn new(half_life: u32) -> Self {
         Self {
-            alpha: f64::exp(0.5f64.ln() / half_life as f64),
+            alpha: f64::exp(0.5f64.ln() / f64::from(half_life)),
             last_estimate: 0.,
             total_weight: 0.,
         }

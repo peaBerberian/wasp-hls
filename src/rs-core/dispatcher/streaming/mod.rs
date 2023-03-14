@@ -208,20 +208,15 @@ impl Dispatcher {
                     self.internal_stop();
                 }
                 Ok(p) => {
-                    if !p.end_list {
-                        let target_duration = p.target_duration;
-                        let timer_id = jsTimer(
-                            target_duration as f64 * 1000.,
-                            TimerReason::MediaPlaylistRefresh,
-                        );
-                        let url = p.url.clone();
+                    if let Some(refresh_interval) = p.refresh_interval() {
+                        let timer_id = jsTimer(refresh_interval, TimerReason::MediaPlaylistRefresh);
+                        let url = p.url().clone();
                         self.playlist_refresh_timers.push((
                             timer_id,
                             url,
                             PlaylistFileType::MediaPlaylist { id: playlist_id },
                         ));
                     }
-
                     match self.ready_state.cmp(&PlayerReadyState::Loading) {
                         Ordering::Greater => self.check_segments_to_request(),
                         Ordering::Equal => self.check_ready_to_load_segments(),
@@ -528,11 +523,15 @@ fn was_last_segment(
     media_type: MediaType,
     seg_start: f64,
 ) -> bool {
-    match content_tracker {
-        None => false,
-        Some(ctnt) => match ctnt.curr_media_playlist(media_type) {
-            None => false,
-            Some(pl) => pl.last_segment_start() == Some(seg_start),
-        },
-    }
+    content_tracker
+        .and_then(|c| c.curr_media_playlist(media_type))
+        .map(|pl| {
+            pl.is_ended()
+                && pl
+                    .segment_list()
+                    .last()
+                    .map(|x| x.start == seg_start)
+                    .unwrap_or(false)
+        })
+        .unwrap_or(false)
 }

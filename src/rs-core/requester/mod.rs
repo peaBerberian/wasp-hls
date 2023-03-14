@@ -946,7 +946,7 @@ fn log_segment_abort(seg: &impl RequesterSegmentInfo) {
 }
 
 fn get_waiting_delay(retry_attempt: u32, base: f64, max: f64) -> f64 {
-    let delay = f64::min(base * u64::pow(2, retry_attempt - 1) as f64, max);
+    let delay = f64::min(base * f64::from(u32::pow(2, retry_attempt - 1)), max);
     let fuzzing_factor = (jsGetRandom() * 2. - 1.) * 0.3; // Max 1.3 Min 0.7
     delay * (fuzzing_factor + 1.)
 }

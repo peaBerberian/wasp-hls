@@ -75,7 +75,9 @@ Adaptive BitRate:
   - [x] Allow application to list and select its own variant (quality) and know
     the current one
   - [ ] Also choose variant based on buffer-based estimates.
-    _Priority: low_
+    _Priority: average_
+  - [ ] Logic to detect sudden large fall in bandwidth
+    _Priority: average_
 
 Request Scheduling:
   - [x] Lazy Media Playlist downloading
@@ -91,22 +93,25 @@ Request Scheduling:
 Buffers:
   - [x] End of stream support (as in: actually end when playback reached the end!)
   - [x] Multiple simultaneous type of buffers support (for now only audio and video)
-  - [ ] Inventory storing which quality is where in the buffers, both for API reasons
-    and for several optimizations (though quality identification seems more difficult
-    to implement in HLS than in DASH due to the fact that HLS only link variants to
-    bitrate, not the actual audio and video streams - but it should be doable).
-    _Priority: very low_
   - [ ] Proper handling of `QuotaExceededError` after pushing segments (when low
     on memory).
     This is generally not needed as the browser should already handle some kind of
     garbage collection but some platforms still may have issues when memory is
     constrained.
     _Priority: low_
+  - [ ] Inventory storing which quality is where in the buffers, both for API reasons
+    and for several optimizations (though quality identification seems more difficult
+    to implement in HLS than in DASH due to the fact that HLS only link variants to
+    bitrate, not the actual audio and video streams - but it should be doable).
+    _Priority: very low_
 
 Tracks:
-  - [ ] Provide API to set an audio, video and/or text track.
+  - [ ] Provide API to set an audio track
+    _Priority: high_
+  - [ ] Provide API to set a video track
     _Priority: low_
-  - [ ] support of at least one text track format (didn't check which yet).
+  - [ ] Allow text track selection and support at least one text track format
+    (TTML IMSC1 or webVTT)
     _Priority: low_
 
 Decryption:
@@ -115,13 +120,13 @@ Decryption:
 
 Miscellaneous:
   - [x] Error API
-  - [ ] WebAssembly-based mpeg-ts transcoder.
-    _Priority: very low_
+  - [ ] Discontinuity handling.
+    _Priority: average_
   - [ ] Delta playlist handling.
     _Priority: low_
   - [ ] Content Steering handling.
     _Priority: low_
-  - [ ] Discontinuity handling.
+  - [ ] WebAssembly-based mpeg-ts transcoder.
     _Priority: low_
 
 Playlist tags specifically considered (unchecked ones are mainly just ignored,
@@ -138,6 +143,8 @@ most do not prevent playback):
     The units/scale indicated by this tag will be preferred over the real media
     time in the player APIs.
   - [X] EXT-X-BYTERANGE: Used for range requests
+  - [X] EXT-X-PLAYLIST-TYPE: Used To know if a Playlist may be refreshed
+  - [X] EXT-X-TARGETDURATION: Useful for heuristics for playlist refresh
   - EXT-X-MAP:
     - [X] URI: Used to fetch the initialization segment if one is present
     - [X] BYTERANGE: To perform a range request for the initialization segment
@@ -186,8 +193,6 @@ most do not prevent playback):
     - [ ] ALLOWED-CPC: DRM are not handled for now
   - [ ] EXT-X-START: Should be relied on for the default starting position.
     For now we just play at `0` for VoD and at `live-edge - 10` for live
-  - [ ] EXT-X-PLAYLIST-TYPE: Not sure if there's an advantage compared to the
-    presence of an ENDLIST tag, to check...
   - [ ] EXT-X-GAP
   - [ ] EXT-X-VERSION: Not specifically considered for now, most differences
     handled until now had compatible behaviors from version to version
@@ -195,13 +200,11 @@ most do not prevent playback):
     doing some flushing?
   - [ ] EXT-X-DEFINE: Seems rare enough, so may be supported if the time is
     taken...
-  - [ ] EXT-X-TARGETDURATION: Might be useful for heuristics for playlist
-    refresh, or for predicting future segments. To see...
   - [ ] EXT-X-MEDIA-SEQUENCE: Not sure of what this allows. To check...
   - [ ] EXT-X-I-FRAMES-ONLY: To handle one day, perhaps (very low priority)
-  - [ ] EXT-X-PART
-  - [ ] EXT-X-PART-INF
-  - [ ] EXT-X-SERVER-CONTROL
+  - [ ] EXT-X-PART: low-latency related
+  - [ ] EXT-X-PART-INF: low-latency related
+  - [ ] EXT-X-SERVER-CONTROL: low-latency related?
   - [ ] EXT-X-BITRATE
   - [ ] EXT-X-DATERANGE: Might be used for an event emitting API?
   - [ ] EXT-X-SKIP

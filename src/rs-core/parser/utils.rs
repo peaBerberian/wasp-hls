@@ -369,19 +369,18 @@ fn read_next_float(value: &[u8], base_offset: usize) -> Option<f64> {
         i += 1;
     }
     if i == value.len() || (value[i] != b'.' && value[i] != b',') {
-        // UNSAFE: We already checked that this string represents a valid integer
+        // SAFETY: We already checked that this string represents a valid integer
         let val_str = unsafe { std::str::from_utf8_unchecked(&value[base_offset..i]) };
-        let val_u64 = val_str.parse::<u64>().ok()?;
-        return Some(val_u64 as f64);
-    }
-
-    i += 1;
-    while i < value.len() && value[i] >= b'0' && value[i] <= b'9' {
+        val_str.parse::<f64>().ok()
+    } else {
         i += 1;
+        while i < value.len() && value[i] >= b'0' && value[i] <= b'9' {
+            i += 1;
+        }
+        // SAFETY: We already checked that this string represents a valid float
+        let val_str = unsafe { std::str::from_utf8_unchecked(&value[base_offset..i]) };
+        val_str.parse::<f64>().ok()
     }
-    // UNSAFE: We already checked that this string represents a valid float
-    let val_str = unsafe { std::str::from_utf8_unchecked(&value[base_offset..i]) };
-    val_str.parse::<f64>().ok()
 }
 
 #[cfg(test)]

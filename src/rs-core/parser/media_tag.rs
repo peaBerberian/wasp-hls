@@ -105,17 +105,6 @@ pub enum MediaTagParsingError {
 }
 
 impl MediaTag {
-    /// TODO real update
-    pub fn update(
-        &mut self,
-        playlist: impl BufRead,
-        url: Url,
-    ) -> Result<&MediaPlaylist, MediaPlaylistParsingError> {
-        let new_mp = MediaPlaylist::create(playlist, url)?;
-        self.media_playlist = Some(new_mp);
-        Ok(self.media_playlist.as_ref().unwrap())
-    }
-
     pub(super) fn create(
         media_line: &str,
         multi_variant_playlist_url: &Url,
@@ -289,41 +278,52 @@ impl MediaTag {
         })
     }
 
-    pub fn get_url(&self) -> Option<&Url> {
+    /// TODO real update
+    pub(crate) fn update(
+        &mut self,
+        playlist: impl BufRead,
+        url: Url,
+    ) -> Result<&MediaPlaylist, MediaPlaylistParsingError> {
+        let new_mp = MediaPlaylist::create(playlist, url)?;
+        self.media_playlist = Some(new_mp);
+        Ok(self.media_playlist.as_ref().unwrap())
+    }
+
+    pub(crate) fn url(&self) -> Option<&Url> {
         self.url.as_ref()
     }
 
-    pub fn typ(&self) -> MediaTagType {
+    pub(crate) fn typ(&self) -> MediaTagType {
         self.typ
     }
 
-    pub fn group_id(&self) -> &str {
+    pub(crate) fn group_id(&self) -> &str {
         &self.group_id
     }
 
-    pub fn is_autoselect(&self) -> bool {
+    pub(crate) fn is_autoselect(&self) -> bool {
         self.autoselect
     }
 
-    pub fn is_default(&self) -> bool {
+    pub(crate) fn is_default(&self) -> bool {
         self.default
     }
 
-    pub fn language(&self) -> Option<&str> {
+    pub(crate) fn language(&self) -> Option<&str> {
         let l = self.language.as_ref()?;
         Some(l.as_str())
     }
 
-    pub fn assoc_language(&self) -> Option<&str> {
+    pub(crate) fn assoc_language(&self) -> Option<&str> {
         let l = self.assoc_language.as_ref()?;
         Some(l.as_str())
     }
 
-    pub fn name(&self) -> &str {
+    pub(crate) fn name(&self) -> &str {
         self.name.as_str()
     }
 
-    pub fn channels(&self) -> Option<u32> {
+    pub(crate) fn channels(&self) -> Option<u32> {
         self.channels
     }
 }
