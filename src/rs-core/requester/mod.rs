@@ -3,8 +3,8 @@ use crate::{
         formatters::format_range_for_js, jsAbortRequest, jsFetch, jsGetRandom, jsTimer, MediaType,
         RequestErrorReason, RequestId, TimerId, TimerReason,
     },
-    content_tracker::MediaPlaylistPermanentId,
     parser::{ByteRange, SegmentInfo},
+    playlist_store::MediaPlaylistPermanentId,
     utils::url::Url,
     Logger,
 };

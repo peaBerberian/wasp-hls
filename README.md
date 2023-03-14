@@ -260,9 +260,9 @@ The architecture of the project is as follow:
 | Requester |    |   | NextSegmentSelector | | | |  AdaptiveQualitySelector  |    | o
 +-----------+    |   +---------------------+ | | +---------------------------+    | d
                  V                           | V                                  | u
-    +----------------+                       | +-----------------------+          | l
-    | ContentTracker |-----------------------+-| MediaElementReference |          | e
-    +----------------+                         +---------------------- +          | s
+     +---------------+                       | +-----------------------+          | l
+     | PlaylistStore |-----------------------+-| MediaElementReference |          | e
+     +---------------+                         +---------------------- +          | s
                                                                                   |
                        (and other modules...)                                     |
                                                                                   |
@@ -351,10 +351,10 @@ top to bottom:
     The AdaptiveQualitySelector is defined in the `src/rs-core/adaptive/`
     directory.
 
-  - **ContentTracker**: Parses and stores the metadata of the current content as
+  - **PlaylistStore**: Parses and stores the metadata of the current content as
     well as keep tracks of the current variant and media playlists selected.
 
-    The ContentTracker is defined in the `src/rs-core/content_tracker/`
+    The PlaylistStore is defined in the `src/rs-core/playlist_store/`
     directory.
 
   - **MediaElementReference**: Interface to interact with the media element in

@@ -24,7 +24,7 @@ impl Dispatcher {
         Dispatcher {
             ready_state: PlayerReadyState::Stopped,
             adaptive_selector: AdaptiveQualitySelector::new(),
-            content_tracker: None,
+            playlist_store: None,
             requester: Requester::new(),
             media_element_ref: MediaElementReference::new(),
             last_position: 0.,
@@ -54,13 +54,13 @@ impl Dispatcher {
     }
 
     pub fn minimum_position(&self) -> Option<f64> {
-        self.content_tracker
+        self.playlist_store
             .as_ref()
             .and_then(|c| c.curr_min_position())
     }
 
     pub fn maximum_position(&self) -> Option<f64> {
-        self.content_tracker
+        self.playlist_store
             .as_ref()
             .and_then(|c| c.curr_max_position())
     }
@@ -129,7 +129,7 @@ impl Dispatcher {
     }
 
     //     pub fn available_audio_tracks(&self) -> Vec<u8> {
-    //         match self.content_tracker {
+    //         match self.playlist_store {
     //             None => vec![],
     //             Some(ref c) => c.todo_get_available_audio_tracks()
     //                 .iter()

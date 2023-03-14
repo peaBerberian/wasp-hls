@@ -11,7 +11,7 @@ use std::{cmp::Ordering, io::BufRead};
 ///   - The playlist itself.
 ///   - The current variant selected.
 ///   - The different audio and video media playlist selected.
-pub struct ContentTracker {
+pub struct PlaylistStore {
     /// A struct representing the `MultiVariant Playlist`, a.k.a. `Master Playlist` of
     /// the currently loaded HLS content.
     playlist: MultiVariantPlaylist,
@@ -40,7 +40,7 @@ pub struct ContentTracker {
     last_bandwidth: f64,
 }
 
-/// Response returned by `ContentTracker` method which may update the current
+/// Response returned by `PlaylistStore` method which may update the current
 /// variant and as a consequence, linked media playlists.
 pub enum VariantUpdateResult {
     /// No MediaPlaylist was updated
@@ -69,8 +69,8 @@ pub enum VariantUpdateResult {
     EqualOrUnknown(Vec<MediaType>),
 }
 
-impl ContentTracker {
-    /// Create a new `ContentTracker` based on the given parsed MultiVariantPlaylist.
+impl PlaylistStore {
+    /// Create a new `PlaylistStore` based on the given parsed `MultiVariantPlaylist`.
     pub(crate) fn new(playlist: MultiVariantPlaylist) -> Self {
         Self {
             playlist,

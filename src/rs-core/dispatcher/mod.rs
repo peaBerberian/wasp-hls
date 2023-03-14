@@ -1,8 +1,8 @@
 use crate::{
     adaptive::AdaptiveQualitySelector,
     bindings::TimerId,
-    content_tracker::ContentTracker,
     media_element::MediaElementReference,
+    playlist_store::PlaylistStore,
     requester::{PlaylistFileType, Requester},
     segment_selector::NextSegmentSelectors,
     utils::url::Url,
@@ -32,7 +32,7 @@ pub struct Dispatcher {
     /// (More technically of variants and media streams).
     ///
     /// `None` if no "MultiVariant Playlist" has been loaded yet.
-    content_tracker: Option<ContentTracker>,
+    playlist_store: Option<PlaylistStore>,
 
     /// Abstraction allowing to perform playlist and segment requests, while
     /// easily monitoring requests that are pending.
@@ -51,7 +51,7 @@ pub struct Dispatcher {
 
     segment_selectors: NextSegmentSelectors,
 
-    // TODO move to content_tracker?
+    // TODO move to playlist_store?
     playlist_refresh_timers: Vec<(TimerId, Url, PlaylistFileType)>,
 }
 
