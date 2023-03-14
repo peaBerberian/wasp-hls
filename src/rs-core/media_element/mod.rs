@@ -1,14 +1,14 @@
 use crate::bindings::{
     jsAttachMediaSource, jsEndOfStream, jsRemoveMediaSource, jsSeek, jsSetMediaOffset,
     jsSetPlaybackRate, jsStartRebuffering, jsStopRebuffering, AttachMediaSourceErrorCode, JsResult,
-    MediaObservation, MediaType,
+    MediaObservation, MediaType, SourceBufferId,
 };
 use crate::dispatcher::MediaSourceReadyState;
 use crate::Logger;
 
 mod source_buffers;
 
-use source_buffers::{PushSegmentError, RemoveDataError, SourceBufferId};
+use source_buffers::{PushSegmentError, RemoveDataError};
 
 pub(crate) use source_buffers::PushMetadata;
 

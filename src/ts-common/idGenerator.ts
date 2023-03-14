@@ -18,11 +18,13 @@ export default function idGenerator() : () => string {
   };
 }
 
+const MAX_U32_VAL = 4294967295;
+
 export function numberIdGenerator() : () => number {
   let currId = -1;
   return function generateNewNumberId() : number {
     currId++;
-    if (currId >= Number.MAX_SAFE_INTEGER) {
+    if (currId >= MAX_U32_VAL) {
       logger.warn("Exceeding `numberIdGenerator` limit. Collisions may occur");
       currId = 0;
     }

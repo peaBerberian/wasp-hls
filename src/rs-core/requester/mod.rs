@@ -485,26 +485,7 @@ impl Requester {
         url: Url,
         byte_range: Option<&ByteRange>,
     ) {
-        let (range_start, range_end) = format_range_for_js(byte_range);
-        let url_ref = url.get_ref();
-        let request_id = jsFetch(
-            url_ref,
-            range_start,
-            range_end,
-            self.segment_request_timeout,
-        );
-        Logger::info(&format!(
-            "Req: Fetching init segment u:{url_ref}, id:{request_id}"
-        ));
-        self.pending_segment_requests.push(SegmentRequestInfo {
-            request_id,
-            media_type,
-            url,
-            byte_range: byte_range.cloned(),
-            time_info: None,
-            attempts_failed: 0,
-            is_waiting_for_retry: false,
-        });
+        self.request_segment_now(&url, byte_range, media_type, None);
     }
 
     /// Fetch a segment in the right format through the given `url`.
@@ -523,34 +504,15 @@ impl Requester {
             media_type, seg.start, seg.duration
         ));
         let time_info = Some((seg.start, seg.start + seg.duration));
-        if !self.can_start_new_media_segment_request(seg.start) {
+        if self.can_start_request(seg.start) {
+            self.request_segment_now(&seg.url, seg.byte_range.as_ref(), media_type, time_info)
+        } else {
             Logger::debug("Req: pushing segment request to queue");
             self.segment_waiting_queue.push(WaitingSegmentInfo {
                 media_type,
                 url: seg.url.clone(),
                 byte_range: seg.byte_range.clone(),
                 time_info,
-            });
-        } else {
-            let (range_start, range_end) = format_range_for_js(seg.byte_range.as_ref());
-            let request_id = jsFetch(
-                seg.url.get_ref(),
-                range_start,
-                range_end,
-                self.segment_request_timeout,
-            );
-            Logger::debug(&format!(
-                "Req: Performing request right away. u:{} id:{request_id}",
-                seg.url.get_ref()
-            ));
-            self.pending_segment_requests.push(SegmentRequestInfo {
-                request_id,
-                media_type,
-                url: seg.url.clone(),
-                byte_range: seg.byte_range.clone(),
-                time_info,
-                attempts_failed: 0,
-                is_waiting_for_retry: false,
             });
         }
     }
@@ -811,7 +773,7 @@ impl Requester {
                     self.media_playlist_backoff_base,
                     self.media_playlist_backoff_max,
                 ),
-                _ => (DEFAULT_BACKOFF_BASE, DEFAULT_BACKOFF_MAX),
+                PlaylistFileType::Unknown => (DEFAULT_BACKOFF_BASE, DEFAULT_BACKOFF_MAX),
             };
             let retry_delay = get_waiting_delay(req.attempts_failed, base, max);
             Logger::info(&format!(
@@ -855,79 +817,37 @@ impl Requester {
             return;
         }
         if let Some(base_pos) = self.base_position {
-            let min_pending_priority = self.min_pending_priority();
-            let new_min_priority = self.segment_waiting_queue.iter().enumerate().fold(
-                min_pending_priority,
-                |acc, (_, w)| {
-                    let w_prio = get_segment_priority(w.start_time(), base_pos);
-                    match acc {
-                        None => Some(w_prio),
-                        Some(priority) => Some(w_prio.min(priority)),
-                    }
-                },
-            );
-
-            if let Some(new_min_priority) = new_min_priority {
+            if let Some(new_min_prio) = self.min_priority_for_base(base_pos) {
                 // TODO drain_filter when it's stabilized
-                let indexes: Vec<usize> = self
+                let indexes_of_segment_to_request: Vec<usize> = self
                     .segment_waiting_queue
                     .iter()
                     .enumerate()
-                    .filter(|(_, w)| {
-                        get_segment_priority(w.start_time(), base_pos) <= new_min_priority
-                    })
+                    .filter(|(_, w)| get_segment_priority(w.start_time(), base_pos) <= new_min_prio)
                     .map(|w| w.0)
                     .collect();
 
-                indexes
-                    .iter()
-                    .enumerate()
-                    .map(|(idx_idx, idx)| self.segment_waiting_queue.remove(idx - idx_idx))
-                    .for_each(|seg| {
-                        let (range_start, range_end) = format_range_for_js(seg.byte_range.as_ref());
-                        let url_ref = seg.url.get_ref();
-                        let request_id = jsFetch(
-                            url_ref,
-                            range_start,
-                            range_end,
-                            self.segment_request_timeout,
+                indexes_of_segment_to_request.iter().enumerate().for_each(
+                    |(enum_idx, original_idx)| {
+                        // We sadly have to subtract `enum_idx` to account for already removed items
+                        let seg = self.segment_waiting_queue.remove(original_idx - enum_idx);
+                        self.request_segment_now(
+                            &seg.url,
+                            seg.byte_range.as_ref(),
+                            seg.media_type,
+                            seg.time_info,
                         );
-                        Logger::debug(&format!(
-                            "Req: Performing request of queued segment u:{url_ref} id:{request_id}"
-                        ));
-                        self.pending_segment_requests.push(SegmentRequestInfo {
-                            request_id,
-                            media_type: seg.media_type,
-                            url: seg.url,
-                            byte_range: seg.byte_range,
-                            time_info: seg.time_info,
-                            attempts_failed: 0,
-                            is_waiting_for_retry: false,
-                        });
-                    });
+                    },
+                );
             }
         } else {
             while let Some(seg) = self.segment_waiting_queue.pop() {
-                let (range_start, range_end) = format_range_for_js(seg.byte_range.as_ref());
-                let url_ref = seg.url.get_ref();
-                let request_id = jsFetch(
-                    url_ref,
-                    range_start,
-                    range_end,
-                    self.segment_request_timeout,
+                self.request_segment_now(
+                    &seg.url,
+                    seg.byte_range.as_ref(),
+                    seg.media_type,
+                    seg.time_info,
                 );
-                Logger::debug(&format!(
-                    "Req: Performing request of queued segment u:{url_ref} id:{request_id}"
-                ));
-                self.pending_segment_requests.push(SegmentRequestInfo {
-                    request_id,
-                    media_type: seg.media_type,
-                    url: seg.url,
-                    byte_range: seg.byte_range,
-                    time_info: seg.time_info,
-                    attempts_failed: 0,
-                    is_waiting_for_retry: false,
-                });
             }
         }
     }
@@ -957,19 +877,60 @@ impl Requester {
         }
     }
 
-    fn can_start_new_media_segment_request(&self, start_time: f64) -> bool {
+    fn can_start_request(&self, start_time: f64) -> bool {
         if self.segment_request_locked {
             return false;
         }
         let min_pending_priority = self.min_pending_priority();
         if let (Some(pos), Some(min_pending_priority)) = (self.base_position, min_pending_priority)
         {
-            let curr_seg_priority = PriorityLevel::from_time_distance(start_time - pos);
-            if curr_seg_priority > min_pending_priority {
-                return false;
-            }
+            PriorityLevel::from_time_distance(start_time - pos) <= min_pending_priority
+        } else {
+            true
         }
-        true
+    }
+
+    fn request_segment_now(
+        &mut self,
+        url: &Url,
+        byte_range: Option<&ByteRange>,
+        media_type: MediaType,
+        time_info: Option<(f64, f64)>,
+    ) {
+        let (range_start, range_end) = format_range_for_js(byte_range);
+        let url_ref = url.get_ref();
+        let request_id = jsFetch(
+            url_ref,
+            range_start,
+            range_end,
+            self.segment_request_timeout,
+        );
+        Logger::debug(&format!(
+            "Req: Performing segment request. u:{url_ref} id:{request_id}"
+        ));
+        self.pending_segment_requests.push(SegmentRequestInfo {
+            request_id,
+            media_type,
+            url: url.clone(),
+            byte_range: byte_range.cloned(),
+            time_info,
+            attempts_failed: 0,
+            is_waiting_for_retry: false,
+        });
+    }
+
+    fn min_priority_for_base(&self, base_pos: f64) -> Option<PriorityLevel> {
+        let min_pending_priority = self.min_pending_priority();
+        self.segment_waiting_queue
+            .iter()
+            .enumerate()
+            .fold(min_pending_priority, |acc, (_, w)| {
+                let w_prio = get_segment_priority(w.start_time(), base_pos);
+                match acc {
+                    None => Some(w_prio),
+                    Some(priority) => Some(w_prio.min(priority)),
+                }
+            })
     }
 }
 

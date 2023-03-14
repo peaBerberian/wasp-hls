@@ -1,11 +1,8 @@
 use crate::bindings::{
     jsAddSourceBuffer, jsAppendBuffer, jsRemoveBuffer, AddSourceBufferErrorCode,
-    AppendBufferErrorCode, JsMemoryBlob, JsResult, MediaType, ParsedSegmentInfo,
+    AppendBufferErrorCode, JsMemoryBlob, JsResult, MediaType, ParsedSegmentInfo, SourceBufferId,
 };
 use crate::Logger;
-
-/// Identify a unique JavaScript `SourceBuffer`
-pub(crate) type SourceBufferId = f64;
 
 /// Abstraction over the Media Source Extension's `SourceBuffer` concept.
 ///

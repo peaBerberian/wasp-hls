@@ -565,7 +565,7 @@ impl AddSourceBufferResult {
     /// This function should only be called by the JavaScript-side.
     pub fn error(err: AddSourceBufferErrorCode, desc: Option<String>) -> Self {
         Self {
-            source_buffer_id: 0.,
+            source_buffer_id: 0,
             error: Some((err, desc)),
         }
     }
@@ -769,16 +769,16 @@ pub enum LogLevel {
 ///
 /// Special care of those id should be taken to avoid memory leaks: you should always call
 /// `jsFreeResource` as soon as the resource is not needed anymore.
-pub type ResourceId = f64;
+pub type ResourceId = u32;
 
 /// Identify a pending request.
-pub type RequestId = f64;
+pub type RequestId = u32;
 
 /// Identify a pending timer.
 pub type TimerId = f64;
 
 /// Identify a SourceBuffer.
-pub type SourceBufferId = f64;
+pub type SourceBufferId = u32;
 
 #[wasm_bindgen]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
