@@ -427,7 +427,7 @@ impl Dispatcher {
 
     pub(super) fn inner_lock_variant(&mut self, variant_id: String) {
         if let Some(pl) = self.playlist_store.as_mut() {
-            match pl.lock_variant(variant_id) {
+            match pl.lock_variant(&variant_id) {
                 None => Logger::warn("Locked variant not found"),
                 Some(update) => self.handle_variant_update(update, true),
             }

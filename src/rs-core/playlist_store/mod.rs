@@ -14,10 +14,8 @@ pub struct PlaylistStore {
     /// the currently loaded HLS content.
     playlist: MultiVariantPlaylist,
 
-    /// Index of the currently chosen variant, in terms of its index in the
-    /// MultiVariantPlaylist's `variants` slice.
-    /// Has to be watched closely to avoid out-of-bounds and de-synchronizations.
-    curr_variant_idx: Option<usize>,
+    /// `id` of the currently chosen variant.
+    curr_variant_id: Option<String>,
 
     /// Chosen playlist for video.
     ///
@@ -72,7 +70,7 @@ impl PlaylistStore {
     pub(crate) fn new(playlist: MultiVariantPlaylist) -> Self {
         Self {
             playlist,
-            curr_variant_idx: None,
+            curr_variant_id: None,
             curr_audio_id: None,
             curr_video_id: None,
             is_variant_locked: false,
@@ -211,7 +209,7 @@ impl PlaylistStore {
     /// Returns a reference to the `VariantStream` currently selected. You can influence the
     /// variant currently selected by e.g. calling the `update_curr_bandwidth` method.
     pub(crate) fn curr_variant(&self) -> Option<&VariantStream> {
-        self.playlist.variants().get(self.curr_variant_idx?)
+        self.playlist.variant(self.curr_variant_id.as_ref()?)
     }
 
     /// Optionally update currently-selected variant by communicating the last bandwidth estimate.
@@ -244,7 +242,7 @@ impl PlaylistStore {
     ///
     /// The returned option is `None` if the `variant_id` given is not found to correspond
     /// to any existing variant and contains the corresponding update when set.
-    pub(crate) fn lock_variant(&mut self, variant_id: String) -> Option<VariantUpdateResult> {
+    pub(crate) fn lock_variant(&mut self, variant_id: &str) -> Option<VariantUpdateResult> {
         let variants = self.playlist.variants();
         let pos = variants
             .iter()
@@ -398,13 +396,14 @@ impl PlaylistStore {
 
     /// Run the variant update logic from its index in the variants array and return the result of doing so
     fn update_variant(&mut self, index: Option<usize>) -> VariantUpdateResult {
-        if index != self.curr_variant_idx {
-            if let Some(idx) = index {
+        let new_id = index.map(|i| self.playlist.variants().get(i).unwrap().id());
+        if new_id != self.curr_variant_id.as_deref() {
+            if let Some(id) = new_id {
                 let prev_bandwidth = self.curr_variant().map(|v| v.bandwidth());
-                let new_bandwidth = self.variants().get(idx).map(|v| v.bandwidth());
+                let new_bandwidth = self.playlist.variant(&id).map(|v| v.bandwidth());
                 let prev_audio_id = self.curr_audio_id.clone();
                 let prev_video_id = self.curr_video_id.clone();
-                self.set_curr_variant(idx);
+                self.set_curr_variant(id.to_owned());
 
                 let mut updates = vec![];
                 if self.curr_audio_id != prev_audio_id {
@@ -422,7 +421,7 @@ impl PlaylistStore {
                     _ => VariantUpdateResult::EqualOrUnknown(updates),
                 }
             } else {
-                self.curr_variant_idx = None;
+                self.curr_variant_id = None;
                 self.curr_video_id = None;
                 self.curr_audio_id = None;
                 VariantUpdateResult::EqualOrUnknown(vec![MediaType::Audio, MediaType::Video])
@@ -433,14 +432,10 @@ impl PlaylistStore {
     }
 
     /// Internally update the current variant chosen as well as its corresponding other media.
-    fn set_curr_variant(&mut self, variant_idx: usize) {
-        let variants = self.playlist.variants();
-        if variant_idx >= variants.len() {
-            panic!("Variant index provided is out of bounds.");
-        }
-        self.curr_variant_idx = Some(variant_idx);
+    fn set_curr_variant(&mut self, variant_id: String) {
+        let variant = self.playlist.variant(&variant_id).unwrap();
+        self.curr_variant_id = Some(variant_id);
 
-        let variant = self.playlist.variant_from_idx(variant_idx).unwrap();
         if variant.has_type(MediaType::Video) {
             self.curr_video_id = Some(MediaPlaylistPermanentId::Variant(variant.id().to_owned()));
         } else {
