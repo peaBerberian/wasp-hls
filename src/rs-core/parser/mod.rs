@@ -1,3 +1,4 @@
+mod audio_track_list;
 mod media_playlist;
 mod media_tag;
 mod multi_variant_playlist;

@@ -96,7 +96,7 @@ impl Dispatcher {
         } else {
             return;
         };
-        if playlist_store.all_curr_media_playlists_ready() {
+        if playlist_store.are_playlists_ready() {
             self.ready_state = PlayerReadyState::AwaitingSegments;
             let start_time = playlist_store.get_expected_start_time();
             if start_time > 0. {
@@ -211,10 +211,8 @@ impl Dispatcher {
                 Ok(p) => {
                     if let Some(refresh_interval) = p.refresh_interval() {
                         let timer_id = jsTimer(refresh_interval, TimerReason::MediaPlaylistRefresh);
-                        let url = p.url().clone();
                         self.playlist_refresh_timers.push((
                             timer_id,
-                            url,
                             PlaylistFileType::MediaPlaylist { id: playlist_id },
                         ));
                     }
@@ -509,8 +507,24 @@ impl Dispatcher {
     pub fn on_playlist_refresh_timer_ended(&mut self, id: TimerId) {
         let found = self.playlist_refresh_timers.iter().position(|x| x.0 == id);
         if let Some(idx) = found {
-            let (_, url, playlist_type) = self.playlist_refresh_timers.remove(idx);
-            self.requester.fetch_playlist(url, playlist_type);
+            let (_, playlist_type) = self.playlist_refresh_timers.remove(idx);
+            if let Some(playlist_store) = &self.playlist_store {
+                match playlist_type {
+                    PlaylistFileType::MultiVariantPlaylist => self
+                        .requester
+                        .fetch_playlist(playlist_store.url().clone(), playlist_type),
+                    PlaylistFileType::MediaPlaylist { ref id } => {
+                        if let Some(u) = playlist_store.media_playlist_url(id) {
+                            self.requester.fetch_playlist(u.clone(), playlist_type)
+                        } else {
+                            Logger::error("Cannot refresh Media Playlist: id not found");
+                        }
+                    }
+                    PlaylistFileType::Unknown => {
+                        Logger::error("Cannot refresh Media Playlist: type unknown")
+                    }
+                }
+            }
         }
     }
 

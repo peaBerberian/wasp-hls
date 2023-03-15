@@ -22,7 +22,7 @@ pub struct MediaTag {
 
     /// Media Playlist associated to this media tag.
     /// `None` if it does not exists or if not yet loaded.
-    pub media_playlist: Option<MediaPlaylist>,
+    media_playlist: Option<MediaPlaylist>,
 
     /// Identify the underlying type of media
     typ: MediaTagType,
@@ -277,6 +277,10 @@ impl MediaTag {
             forced,
             channels,
         })
+    }
+
+    pub(super) fn media_playlist(&self) -> Option<&MediaPlaylist> {
+        self.media_playlist.as_ref()
     }
 
     /// TODO real update

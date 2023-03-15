@@ -336,10 +336,6 @@ impl MediaPlaylist {
             })
     }
 
-    pub(crate) fn url(&self) -> &Url {
-        &self.url
-    }
-
     pub(crate) fn refresh_interval(&self) -> Option<f64> {
         if self.may_be_refreshed() {
             Some(f64::from(self.target_duration) * 1000.)
@@ -408,6 +404,10 @@ impl MediaPlaylist {
                 _ => None,
             },
         }
+    }
+
+    pub(super) fn url(&self) -> &Url {
+        &self.url
     }
 
     fn extension(&self) -> Option<&str> {

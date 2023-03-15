@@ -28,7 +28,7 @@ pub struct VariantStream {
 
     /// Media Playlist associated to the main rendition of this variant stream.
     /// `None` if not yet loaded.
-    pub media_playlist: Option<MediaPlaylist>,
+    media_playlist: Option<MediaPlaylist>,
 
     /// The value represents the peak segment bit rate of the Variant Stream.
     ///
@@ -42,7 +42,7 @@ pub struct VariantStream {
     /// Media Segments in the presentation have been encoded, this
     /// value SHOULD be the bandwidth value of a representative period of
     /// similar content, encoded using the same settings.
-    pub bandwidth: u64,
+    bandwidth: u64,
 
     /// The value represents the average segment bit rate of the Variant Stream.
     /// If all the Media Segments in a Variant Stream have already been
@@ -133,7 +133,7 @@ pub struct VariantStream {
     /// `Audio`.
     /// It indicates the set of audio Renditions that SHOULD be used when
     /// playing the presentation.
-    pub audio: Option<String>,
+    audio: Option<String>,
 
     /// The value match the value of the `group_id` attribute of a `MediaTag`
     /// elsewhere in the Multivariant Playlist whose `typ` attribute is
@@ -283,8 +283,16 @@ impl VariantStream {
         &self.url
     }
 
+    pub(crate) fn bandwidth(&self) -> u64 {
+        self.bandwidth
+    }
+
+    pub(super) fn media_playlist(&self) -> Option<&MediaPlaylist> {
+        self.media_playlist.as_ref()
+    }
+
     /// TODO real update
-    pub(crate) fn update_media_playlist(
+    pub(super) fn update_media_playlist(
         &mut self,
         playlist: impl BufRead,
         url: Url,
@@ -295,8 +303,12 @@ impl VariantStream {
         Ok(self.media_playlist.as_ref().unwrap())
     }
 
-    pub fn get_url(&self) -> &Url {
+    pub(super) fn get_url(&self) -> &Url {
         &self.url
+    }
+
+    pub(super) fn audio_group(&self) -> Option<&str> {
+        self.audio.as_deref()
     }
 
     pub(super) fn create_from_stream_inf(

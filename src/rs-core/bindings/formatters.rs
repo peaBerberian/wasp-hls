@@ -16,7 +16,7 @@ pub(crate) unsafe fn format_variants_info_for_js(variants: &[VariantStream]) -> 
         ret.push(resolution.height());
         ret.push(resolution.width());
         ret.push(v.frame_rate().unwrap_or(0.) as u32);
-        ret.push(v.bandwidth as u32);
+        ret.push(v.bandwidth() as u32);
     });
     ret
 }

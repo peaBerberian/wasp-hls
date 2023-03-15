@@ -5,7 +5,6 @@ use crate::{
     playlist_store::PlaylistStore,
     requester::{PlaylistFileType, Requester},
     segment_selector::NextSegmentSelectors,
-    utils::url::Url,
     wasm_bindgen,
 };
 
@@ -52,7 +51,7 @@ pub struct Dispatcher {
     segment_selectors: NextSegmentSelectors,
 
     // TODO move to playlist_store?
-    playlist_refresh_timers: Vec<(TimerId, Url, PlaylistFileType)>,
+    playlist_refresh_timers: Vec<(TimerId, PlaylistFileType)>,
 }
 
 /// Identify the JavaScript `readyState` of a created `MediaSource` instance.
