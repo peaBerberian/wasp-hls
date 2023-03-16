@@ -21,6 +21,16 @@ body {
   padding: 10px 10px;
 }
 
+.header-right {
+  margin-right: 30px;
+}
+
+.header-right svg {
+  height: 40px;
+  fill: white;
+  padding-top: 3px;
+}
+
 .title {
   height: 60px;
 }
