@@ -172,7 +172,7 @@ impl MultiVariantPlaylist {
                     .find(|t| t.id() == track_id)
                     .and_then(|t| t.medias().iter().find(|m| m.group_id() == group_id))
                     .map(|m| {
-                        if let Some(_) = m.url() {
+                        if m.url().is_some() {
                             MediaPlaylistPermanentId::new(
                                 MediaPlaylistUrlLocation::AudioTrack,
                                 m.id().to_owned(),
@@ -192,7 +192,7 @@ impl MultiVariantPlaylist {
                         && m.is_autoselect()
                         && (acc.is_none() || m.is_default())
                     {
-                        if let Some(_) = m.url() {
+                        if m.url().is_some() {
                             Some(MediaPlaylistPermanentId::new(
                                 MediaPlaylistUrlLocation::AudioTrack,
                                 m.id().to_owned(),

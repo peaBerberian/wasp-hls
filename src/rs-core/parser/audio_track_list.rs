@@ -40,7 +40,7 @@ impl AudioTrackList {
 
     pub(super) fn track_for_media(&self, id: &str) -> Option<&AudioTrack> {
         self.iter()
-            .find(|t| t.media_tags.iter().find(|m| m.id() == id).is_some())
+            .find(|t| t.media_tags.iter().any(|m| m.id() == id))
     }
 
     pub(super) fn get_media(&self, id: &str) -> Option<&MediaTag> {
@@ -73,7 +73,7 @@ impl Deref for AudioTrackList {
 
 impl DerefMut for AudioTrackList {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        return &mut self.tracks;
+        &mut self.tracks
     }
 }
 
@@ -93,7 +93,7 @@ impl AudioTrack {
         self.media_tags.first().and_then(|t| t.assoc_language())
     }
     pub fn name(&self) -> &str {
-        &self.media_tags.first().unwrap().name()
+        self.media_tags.first().unwrap().name()
     }
     pub fn channels(&self) -> Option<u32> {
         self.media_tags.first().and_then(|t| t.channels())

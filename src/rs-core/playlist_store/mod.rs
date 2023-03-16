@@ -403,7 +403,7 @@ impl PlaylistStore {
         if new_id != self.curr_variant_id.as_deref() {
             if let Some(id) = new_id {
                 let prev_bandwidth = self.curr_variant().map(|v| v.bandwidth());
-                let new_bandwidth = self.playlist.variant(&id).map(|v| v.bandwidth());
+                let new_bandwidth = self.playlist.variant(id).map(|v| v.bandwidth());
                 let prev_audio_id = self.curr_audio_id.clone();
                 let prev_video_id = self.curr_video_id.clone();
                 self.set_curr_variant(id.to_owned());

@@ -145,7 +145,7 @@ impl NextSegmentSelector {
         let maximum_position = self.buffer_goal + self.base_pos;
         match self
             .segment_queue
-            .get_next(&pl.segment_list(), maximum_position)
+            .get_next(pl.segment_list(), maximum_position)
         {
             None => NextSegmentInfo::None,
             Some(si) => {
