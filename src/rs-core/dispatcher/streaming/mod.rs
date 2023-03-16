@@ -467,7 +467,12 @@ impl Dispatcher {
         }
     }
 
-    fn on_media_playlist_changed(&mut self, changed_media_types: &[MediaType], abort_prev: bool, flush: bool) {
+    fn on_media_playlist_changed(
+        &mut self,
+        changed_media_types: &[MediaType],
+        abort_prev: bool,
+        flush: bool,
+    ) {
         if let Some(pl) = self.playlist_store.as_mut() {
             changed_media_types.iter().for_each(|mt| {
                 let mt = *mt;

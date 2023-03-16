@@ -53,7 +53,7 @@ const fs = require("fs");
 const { access, stat } = require("fs/promises");
 
 /** Magic number a WebAssembly file should start with. */
-const WASM_MAGIC_NUMBER = 0x0061736D;
+const WASM_MAGIC_NUMBER = 0x0061736d;
 
 /**
  * Id for the "Custom" sections of a WebAssembly files.
@@ -66,7 +66,6 @@ const CUSTOM_SECTION_ID = 0;
 run();
 
 async function run() {
-
   let fileName, tmpName;
 
   try {
@@ -81,7 +80,7 @@ async function run() {
    * We need it much later, in the result, but as this is async better doing it
    * ASAP.
    */
-  const initialFileSizeProm = stat(fileName).then(s => s.size);
+  const initialFileSizeProm = stat(fileName).then((s) => s.size);
 
   try {
     tmpName = await getTmpName(fileName);
@@ -108,8 +107,10 @@ async function run() {
   }
   console.log("Stripping has been done, checking...");
 
-  const nbBytesRemoved = result.removedSections
-    .reduce((acc, r) => acc + r.length, 0);
+  const nbBytesRemoved = result.removedSections.reduce(
+    (acc, r) => acc + r.length,
+    0
+  );
 
   let initialFileSize;
   try {
@@ -120,7 +121,7 @@ async function run() {
 
   let newFileSize;
   try {
-    newFileSize = await stat(tmpName).then(s => s.size);
+    newFileSize = await stat(tmpName).then((s) => s.size);
   } catch (err) {
     onFatalError(err, tmpName);
   }
@@ -128,8 +129,10 @@ async function run() {
   // TODO better validation?
   if (initialFileSize - nbBytesRemoved !== newFileSize) {
     const expected = initialFileSize - nbBytesRemoved;
-    const err = new Error(`Expected a file of ${expected} bytes, ` +
-                          `actually got ${newFileSize} bytes.`);
+    const err = new Error(
+      `Expected a file of ${expected} bytes, ` +
+        `actually got ${newFileSize} bytes.`
+    );
     onFatalError(err, tmpName);
   }
   console.log("Check succeed! Moving temporary file back to original file...");
@@ -140,12 +143,16 @@ async function run() {
   }
 
   if (nbBytesRemoved === 0) {
-    console.log("Nothing was removed, your wasm file was already devoid of the " +
-                "sections stripped by this tool.");
+    console.log(
+      "Nothing was removed, your wasm file was already devoid of the " +
+        "sections stripped by this tool."
+    );
   } else {
-    console.log(`Success!\nRemoved ${nbBytesRemoved} bytes by stripping ` +
-                `out ${result.removedSections.length} sections.\n` +
-                `Size went from ${initialFileSize}B to ${newFileSize}B.`);
+    console.log(
+      `Success!\nRemoved ${nbBytesRemoved} bytes by stripping ` +
+        `out ${result.removedSections.length} sections.\n` +
+        `Size went from ${initialFileSize}B to ${newFileSize}B.`
+    );
   }
   process.exit(0);
 }
@@ -170,7 +177,6 @@ function waitForWriteStreamFinish(writeStream) {
     writeStream.on("error", rej);
     writeStream.end();
   });
-
 }
 
 /**
@@ -187,7 +193,7 @@ function readAndStripWasm(readStream, writeStream) {
       keptSections: [],
       removedSections: [],
     };
-    let prevBuffered = null
+    let prevBuffered = null;
     let checkedMagicAndVersion = false;
     let currOffset = 0;
     let nextSectionOffset = 8;
@@ -206,10 +212,11 @@ function readAndStripWasm(readStream, writeStream) {
       res(result);
     });
 
-    readStream.on("data", chunk => {
-      const buff = prevBuffered === null ?
-        chunk.buffer :
-        concatArrayBuffers(prevBuffered, chunk.buffer);
+    readStream.on("data", (chunk) => {
+      const buff =
+        prevBuffered === null
+          ? chunk.buffer
+          : concatArrayBuffers(prevBuffered, chunk.buffer);
       onNext(buff);
     });
 
@@ -231,19 +238,23 @@ function readAndStripWasm(readStream, writeStream) {
       while (currOffset < maxOffsetInChunk) {
         if (nextSectionOffset === currOffset) {
           const relativeOffset = currOffset - chunkBaseOffset;
-          if (buff.byteLength - relativeOffset < 6 /* id + max LEB128 u32 size */) {
+          if (
+            buff.byteLength - relativeOffset <
+            6 /* id + max LEB128 u32 size */
+          ) {
             prevBuffered = buff.slice(relativeOffset);
             return;
           }
           const dataView = new DataView(buff);
           const sectionType = dataView.getUint8(relativeOffset);
-          const [size, sizeOfSize] = readULeb128(dataView,
-                                                 relativeOffset + 1);
+          const [size, sizeOfSize] = readULeb128(dataView, relativeOffset + 1);
 
-          const sectionInfo = { sectionType,
-                                offset: currOffset,
-                                contentSize: size,
-                                length: size + 1 + sizeOfSize };
+          const sectionInfo = {
+            sectionType,
+            offset: currOffset,
+            contentSize: size,
+            length: size + 1 + sizeOfSize,
+          };
           currOffset += 1 + sizeOfSize; // Section id + size
 
           if (sectionType === CUSTOM_SECTION_ID) {
@@ -251,16 +262,25 @@ function readAndStripWasm(readStream, writeStream) {
             result.removedSections.push(sectionInfo);
           } else {
             skipCurrentSection = false;
-            writeStream.write(Buffer.from(buff.slice(relativeOffset,
-                                                     currOffset - chunkBaseOffset)));
+            writeStream.write(
+              Buffer.from(
+                buff.slice(relativeOffset, currOffset - chunkBaseOffset)
+              )
+            );
             result.keptSections.push(sectionInfo);
           }
           nextSectionOffset = size + currOffset;
         }
         const newOffset = Math.min(maxOffsetInChunk, nextSectionOffset);
         if (!skipCurrentSection) {
-          writeStream.write(Buffer.from(buff.slice(currOffset - chunkBaseOffset,
-                                                   newOffset - chunkBaseOffset)));
+          writeStream.write(
+            Buffer.from(
+              buff.slice(
+                currOffset - chunkBaseOffset,
+                newOffset - chunkBaseOffset
+              )
+            )
+          );
         }
         currOffset = newOffset;
       }
@@ -277,13 +297,17 @@ function checkMagicNumberAndVersion(buff) {
     throw new Error("Error: Not a valid WebAssembly file: no magic number");
   }
   if (dataView.getUint32(4, true) !== 1) {
-    throw new Error("Error: Unsupported WebAssembly version: ",
-                    dataView.getUint32(4, true));
+    throw new Error(
+      "Error: Unsupported WebAssembly version: ",
+      dataView.getUint32(4, true)
+    );
   }
 }
 
 function concatArrayBuffers(...buffers) {
-  const ret = new Uint8Array(buffers.reduce((acc, buff) => acc + buff.byteLength, 0));
+  const ret = new Uint8Array(
+    buffers.reduce((acc, buff) => acc + buff.byteLength, 0)
+  );
   let currOffset = 0;
   for (let i = 0; i < buffers.length; i++) {
     const buffer = buffers[i];
@@ -313,9 +337,9 @@ function readULeb128(dv, offset) {
 
     // do some shenanigans to extract the interesting value.
     // (all but the highest bit, which just tells us when this is the end).
-    const val = byte & 0x7F;
+    const val = byte & 0x7f;
 
-    res |= (val << currShift);
+    res |= val << currShift;
     nbSize++;
 
     // higher bit set to 0 == end of number
@@ -344,14 +368,15 @@ async function getTmpName(fileName) {
   let i = 1;
   while (true) {
     if (i > 1000) {
-      throw new Error("Error: Too many temporary files, check if there's " +
-                      "something wrong with this script.");
+      throw new Error(
+        "Error: Too many temporary files, check if there's " +
+          "something wrong with this script."
+      );
     }
 
     let tmpFileName;
     try {
-      tmpFileName = fileName + ".tmp" + (i === 1 ? "" :
-                                                   `_${i}`);
+      tmpFileName = fileName + ".tmp" + (i === 1 ? "" : `_${i}`);
       await access(tmpFileName);
       i++;
     } catch (e) {
@@ -364,7 +389,7 @@ function extractFileNameFromArgs() {
   const processArgs = process.argv.slice(2);
 
   if (processArgs.length === 0) {
-   throw new Error("Error: Missing filename argument");
+    throw new Error("Error: Missing filename argument");
   }
 
   return processArgs[0];
