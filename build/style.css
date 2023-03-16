@@ -1,12 +1,14 @@
-body {
+#main {
   text-align: center;
 }
+
 .title {
   color: #807c53;
   margin: 30px auto;
   font-weight: normal;
   border-bottom: 1px solid #807c53;
   width: 400px;
+  min-width: 542px;
 }
 
 .inputs-container {
@@ -34,6 +36,7 @@ body {
 
 .player-container {
   width: 80%;
+  min-width: 542px;
   margin: auto;
 }
 
