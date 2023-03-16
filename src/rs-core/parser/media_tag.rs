@@ -15,10 +15,7 @@ pub struct MediaTag {
     /// This identifier allows the URI of the Variant Stream to
     /// change between two distinct downloads of the Multivariant
     /// Playlist. IDs are matched using a byte-for-byte comparison.
-    ///
-    /// All `MediaTag` in a `MultiVariantPlaylist` with the same `url`
-    /// value SHOULD use the same stable_rendition_id.
-    id: Option<String>,
+    id: String,
 
     /// Media Playlist associated to this media tag.
     /// `None` if it does not exists or if not yet loaded.
@@ -255,7 +252,9 @@ impl MediaTag {
             return Err(MediaTagParsingError::MissingName);
         };
 
-        let id = stable_rendition_id.or_else(|| url.as_ref().map(|u| u.clone().take()));
+        let id = stable_rendition_id.
+            or_else(|| url.as_ref().map(|u| u.clone().take()))
+            .unwrap_or_else(|| format!("{group_id}{multi_variant_playlist_url}"));
         url = url.map(|u| {
             if u.is_absolute() {
                 u
@@ -295,8 +294,8 @@ impl MediaTag {
         Ok(self.media_playlist.as_ref().unwrap())
     }
 
-    pub(crate) fn id(&self) -> Option<&str> {
-        self.id.as_deref()
+    pub(crate) fn id(&self) -> &str {
+        self.id.as_str()
     }
 
     pub(crate) fn url(&self) -> Option<&Url> {

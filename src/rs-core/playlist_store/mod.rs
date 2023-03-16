@@ -1,9 +1,11 @@
 use crate::{
     bindings::MediaType,
-    parser::{MediaPlaylist, MediaPlaylistUpdateError, MultiVariantPlaylist, VariantStream},
+    parser::{MediaPlaylist, MediaPlaylistUpdateError, MultiVariantPlaylist, VariantStream, AudioTrack},
     utils::url::Url,
 };
 use std::{cmp::Ordering, io::BufRead};
+
+pub use crate::parser::MediaPlaylistPermanentId;
 
 /// Stores information about the current loaded playlist:
 ///   - The playlist itself.
@@ -28,6 +30,8 @@ pub struct PlaylistStore {
     ///
     /// Set to `None` if no audio playlist is chosen.
     curr_audio_id: Option<MediaPlaylistPermanentId>,
+
+    curr_audio_track: Option<String>,
 
     /// If `true` a variant is being manually locked and as such, cannot change.
     is_variant_locked: bool,
@@ -73,6 +77,7 @@ impl PlaylistStore {
             curr_variant_id: None,
             curr_audio_id: None,
             curr_video_id: None,
+            curr_audio_track: None,
             is_variant_locked: false,
             last_bandwidth: 0.,
         }
@@ -132,20 +137,7 @@ impl PlaylistStore {
         media_playlist_data: impl BufRead,
         url: Url,
     ) -> Result<&MediaPlaylist, MediaPlaylistUpdateError> {
-        match id {
-            MediaPlaylistPermanentId::Variant(id) => {
-                self.playlist
-                    .update_variant_media_playlist(id, media_playlist_data, url)
-            }
-            MediaPlaylistPermanentId::AudioTrack(id) => {
-                self.playlist
-                    .update_audio_media_playlist(id, media_playlist_data, url)
-            }
-            MediaPlaylistPermanentId::OtherMedia(id) => {
-                self.playlist
-                    .update_other_media_playlist(id, media_playlist_data, url)
-            }
-        }
+        self.playlist.update_media_playlist(id, media_playlist_data, url)
     }
 
     /// Returns vec describing all available variant streams in the current MultiVariantPlaylist.
@@ -288,38 +280,20 @@ impl PlaylistStore {
     /// Both are probably an error as a `MediaPlaylistPermanentId` should always identify a
     /// `MediaPlaylist` .
     pub(crate) fn media_playlist_url(&self, wanted_id: &MediaPlaylistPermanentId) -> Option<&Url> {
-        match wanted_id {
-            MediaPlaylistPermanentId::Variant(id) => Some(self.playlist.variant(id)?.url()),
-            MediaPlaylistPermanentId::AudioTrack(id) => self.playlist.audio_url(id),
-            MediaPlaylistPermanentId::OtherMedia(id) => self.playlist.other_media_url(id),
-        }
+        self.playlist.media_playlist_url(wanted_id)
     }
 
-    /// Returns both the `Url` and the corresponding `MediaPlaylistPermanentId` of the
-    /// MediaPlaylist linked to the media of the given `MediaType`.
+    /// Returns the `MediaPlaylistPermanentId` of the MediaPlaylist linked to the media
+    /// of the given `MediaType`.
     ///
-    /// Returns `None` if there's no active MediaPlaylist for the given MediaType.
-    pub(crate) fn curr_media_playlist_request_info(
+    /// Returns `None` if there's no choosen MediaPlaylist for the given MediaType.
+    pub(crate) fn curr_media_playlist_id(
         &self,
         media_type: MediaType,
-    ) -> Option<(&Url, &MediaPlaylistPermanentId)> {
-        let wanted_id = match media_type {
-            MediaType::Video => &self.curr_video_id,
-            MediaType::Audio => &self.curr_audio_id,
-        };
-        match wanted_id {
-            Some(MediaPlaylistPermanentId::Variant(id)) => Some((
-                self.playlist.variant(id)?.url(),
-                wanted_id.as_ref().unwrap(),
-            )),
-            Some(MediaPlaylistPermanentId::AudioTrack(id)) => {
-                Some((self.playlist.audio_url(id)?, wanted_id.as_ref().unwrap()))
-            }
-            Some(MediaPlaylistPermanentId::OtherMedia(id)) => Some((
-                self.playlist.other_media_url(id)?,
-                wanted_id.as_ref().unwrap(),
-            )),
-            None => None,
+    ) -> Option<&MediaPlaylistPermanentId> {
+        match media_type {
+            MediaType::Video => self.curr_video_id.as_ref(),
+            MediaType::Audio => self.curr_audio_id.as_ref(),
         }
     }
 
@@ -328,21 +302,13 @@ impl PlaylistStore {
     /// Returns `None` either if there's no MediaPlaylist selected for that `MediaType` or if the
     /// MediaPlaylist is not yet loaded.
     pub(crate) fn curr_media_playlist(&self, media_type: MediaType) -> Option<&MediaPlaylist> {
-        let wanted_id = match media_type {
+        if let Some(wanted_id) = match media_type {
             MediaType::Video => &self.curr_video_id,
             MediaType::Audio => &self.curr_audio_id,
-        };
-        match wanted_id {
-            Some(MediaPlaylistPermanentId::Variant(id)) => {
-                Some(self.playlist.variant_default_playlist(id)?)
-            }
-            Some(MediaPlaylistPermanentId::AudioTrack(id)) => {
-                Some(self.playlist.audio_playlist(id)?)
-            }
-            Some(MediaPlaylistPermanentId::OtherMedia(id)) => {
-                Some(self.playlist.other_media_playlist(id)?)
-            }
-            None => None,
+        } {
+            self.playlist.media_playlist(wanted_id)
+        } else {
+            None
         }
     }
 
@@ -363,7 +329,7 @@ impl PlaylistStore {
     /// Returns currently estimated start time in seconds at which to begin playing the content.
     ///
     /// This value may change depending on the chosen MediaPlaylist that are also loaded.
-    pub(crate) fn get_expected_start_time(&self) -> f64 {
+    pub(crate) fn expected_start_time(&self) -> f64 {
         let media_playlists = self.curr_media_playlists();
         if media_playlists.is_empty() {
             0.
@@ -391,6 +357,34 @@ impl PlaylistStore {
                 .iter()
                 .find_map(|p| p.1.wanted_start())
                 .unwrap_or(0.)
+        }
+    }
+
+    pub(crate) fn audio_track_id(&self) -> Option<&str> {
+        self.curr_audio_track.as_deref()
+    }
+
+    /// Returns the list of available audio tracks on the current content
+    pub(crate) fn audio_tracks(&self) -> &[AudioTrack] {
+        self.playlist.audio_tracks()
+    }
+
+    pub(crate) fn set_audio_track(&mut self, track_id: Option<String>) -> bool {
+        self.curr_audio_track = track_id;
+
+        if let Some(variant) = self.curr_variant() {
+            let new_audio_id = self
+                .playlist
+                // TODO handle case where current variant not compatible with track
+                .audio_media_playlist_id_for(variant, self.curr_audio_track.as_deref());
+            if new_audio_id != self.curr_audio_id {
+                self.curr_audio_id = new_audio_id;
+                true
+            } else {
+                false
+            }
+        } else {
+            false
         }
     }
 
@@ -436,31 +430,13 @@ impl PlaylistStore {
         let variant = self.playlist.variant(&variant_id).unwrap();
         self.curr_variant_id = Some(variant_id);
 
-        if variant.has_type(MediaType::Video) {
-            self.curr_video_id = Some(MediaPlaylistPermanentId::Variant(variant.id().to_owned()));
-        } else {
-            self.curr_video_id = None;
-        }
+        self.curr_video_id = self.playlist.video_media_playlist_id_for(variant);
 
+        // TODO handle case where current variant not compatible with track
         self.curr_audio_id = self
             .playlist
-            .audio_media_id_for(variant, None)
-            .map(|id| MediaPlaylistPermanentId::AudioTrack(id.to_owned()))
+            .audio_media_playlist_id_for(variant, self.curr_audio_track.as_deref());
     }
-}
-
-/// Identifier allowing to identify a given MediaPlaylist
-#[derive(Clone, PartialEq, Eq, Debug)]
-pub enum MediaPlaylistPermanentId {
-    /// This Media Playlist is defined by a variant in the `MultiVariantPlaylist` object.
-    /// The payload is its `id`.
-    Variant(String),
-    /// This Media Playlist is audio-specific track in the `MultiVariantPlaylist` object.
-    /// The payload is its `id`.
-    AudioTrack(String),
-    /// This Media Playlist is defined as another media in the `MultiVariantPlaylist` object.
-    /// The payload is its `id`.
-    OtherMedia(String),
 }
 
 /// Current state a given Media Playlist, defined either by a veriant stream or a media tag in the

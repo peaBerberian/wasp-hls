@@ -98,7 +98,7 @@ impl Dispatcher {
         };
         if playlist_store.are_playlists_ready() {
             self.ready_state = PlayerReadyState::AwaitingSegments;
-            let start_time = playlist_store.get_expected_start_time();
+            let start_time = playlist_store.expected_start_time();
             if start_time > 0. {
                 self.media_element_ref.seek(start_time);
             }
@@ -167,20 +167,15 @@ impl Dispatcher {
                 use PlaylistFileType::*;
                 // TODO lowest/latest bandwidth first?
                 playlist_store.update_curr_bandwidth(2_000_000.);
-                if let Some((url, id)) =
-                    playlist_store.curr_media_playlist_request_info(MediaType::Video)
-                {
-                    let id = id.clone();
-                    let url = url.clone();
-                    self.requester.fetch_playlist(url, MediaPlaylist { id });
-                }
-                if let Some((url, id)) =
-                    playlist_store.curr_media_playlist_request_info(MediaType::Audio)
-                {
-                    let id = id.clone();
-                    let url = url.clone();
-                    self.requester.fetch_playlist(url, MediaPlaylist { id });
-                }
+                [MediaType::Video, MediaType::Audio].into_iter().for_each(|mt| {
+                    if let Some(id) = playlist_store.curr_media_playlist_id(mt) {
+                        if let Some(url) = playlist_store.media_playlist_url(id) {
+                            let id = id.clone();
+                            let url = url.clone();
+                            self.requester.fetch_playlist(url, MediaPlaylist { id });
+                        }
+                    }
+                });
                 jsAnnounceVariantUpdate(playlist_store.curr_variant().map(|v| v.id()));
             }
         }
@@ -464,12 +459,14 @@ impl Dispatcher {
                 selector.rollback();
                 selector.reset_init_segment();
                 if pl.curr_media_playlist(mt).is_none() {
-                    if let Some((url, id)) = pl.curr_media_playlist_request_info(mt) {
-                        use PlaylistFileType::*;
-                        Logger::debug("Media changed, requesting its media playlist");
-                        let id = id.clone();
-                        let url = url.clone();
-                        self.requester.fetch_playlist(url, MediaPlaylist { id });
+                    if let Some(id) = pl.curr_media_playlist_id(mt) {
+                        if let Some(url) = pl.media_playlist_url(id) {
+                            use PlaylistFileType::*;
+                            Logger::debug("Media changed, requesting its media playlist");
+                            let id = id.clone();
+                            let url = url.clone();
+                            self.requester.fetch_playlist(url, MediaPlaylist { id });
+                        }
                     }
                 }
             });

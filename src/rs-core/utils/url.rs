@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 /// Abstraction allowing to help with the handling of URLs
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Url {
@@ -95,5 +97,11 @@ impl Url {
             Some(idx) => &filename[idx + 1..],
             None => "",
         }
+    }
+}
+
+impl Display for Url {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.get_ref())
     }
 }

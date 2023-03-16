@@ -2,7 +2,7 @@ use super::audio_track_list::AudioTrackList;
 use super::media_playlist::{MediaPlaylist, MediaPlaylistParsingError, StartAttribute};
 use super::media_tag::{MediaTag, MediaTagParsingError};
 use super::variant_stream::{VariantParsingError, VariantStream};
-use super::MediaTagType;
+use super::{MediaTagType, AudioTrack};
 use crate::utils::url::Url;
 use std::{error, fmt, io};
 
@@ -127,9 +127,30 @@ impl MultiVariantPlaylist {
 
     /// Returns the `MediaPlaylist` object of the default Media Playlist linked to the variant
     /// whose `id` is given in argument
+    ///
+    /// Returns `None` either if the variant does not exist or if it does but its `MediaPlaylist`
+    /// hasn't been fetched yet.
     pub(crate) fn variant_default_playlist(&self, variant_id: &str) -> Option<&MediaPlaylist> {
         self.variant(variant_id)
             .and_then(|v| v.media_playlist())
+    }
+
+    /// Returns the `id` of the video media that should be chosen when loading the variant given
+    /// in argument.
+    ///
+    /// Returns `None` if there's no specific video media that can be loaded because none
+    /// are compatible with the given characteristics.
+    pub(crate) fn video_media_playlist_id_for(
+        &self,
+        curr_variant: &VariantStream
+    ) -> Option<MediaPlaylistPermanentId> {
+        if curr_variant.has_type(crate::bindings::MediaType::Video) {
+            Some(MediaPlaylistPermanentId {
+                inner: MediaPlaylistPermanentIdEnum::Variant(curr_variant.id().to_owned())
+            })
+        } else {
+            None
+        }
     }
 
     /// Returns the `id` of the audio media that should be chosen when loading the variant given
@@ -140,26 +161,43 @@ impl MultiVariantPlaylist {
     ///
     /// Returns `None` if there's no specific audio media that can be loaded because none
     /// are compatible with the given characteristics.
-    pub(crate) fn audio_media_id_for(
+    pub(crate) fn audio_media_playlist_id_for(
         &self,
         curr_variant: &VariantStream,
         curr_audio_track: Option<&str>,
-    ) -> Option<&str> {
-        // TODO improve this giga mess
+    ) -> Option<MediaPlaylistPermanentId> {
         if let Some(group_id) = curr_variant.audio_group() {
             if let Some(track_id) = curr_audio_track {
                 self.audio_tracks
                     .iter()
                     .find(|t| t.id() == track_id)
                     .and_then(|t| t.medias().iter().find(|m| m.group_id() == group_id))
-                    .and_then(|m| m.id())
+                    .map(|m| {
+                        if let Some(_) = m.url() {
+                            MediaPlaylistPermanentId {
+                                inner: MediaPlaylistPermanentIdEnum::AudioTrack(m.id().to_owned())
+                            }
+                        } else {
+                            MediaPlaylistPermanentId {
+                                inner: MediaPlaylistPermanentIdEnum::Variant(curr_variant.id().to_owned())
+                            }
+                        }
+                    })
             } else {
                 self.audio_tracks.iter_media().fold(None, |acc, m| {
                     if m.group_id() == group_id
                         && m.is_autoselect()
                         && (acc.is_none() || m.is_default())
                     {
-                        m.id()
+                        if let Some(_) = m.url() {
+                            Some(MediaPlaylistPermanentId {
+                                inner: MediaPlaylistPermanentIdEnum::AudioTrack(m.id().to_owned())
+                            })
+                        } else {
+                            Some(MediaPlaylistPermanentId {
+                                inner: MediaPlaylistPermanentIdEnum::Variant(curr_variant.id().to_owned())
+                            })
+                        }
                     } else {
                         acc
                     }
@@ -176,7 +214,7 @@ impl MultiVariantPlaylist {
     /// Returns `null` either if no audio media is found with that `id` or if there is but no
     /// particular `Url` is linked to it (e.g. because its corresponding data is directly in
     /// segments of the variant's MediaPlaylist).
-    pub(crate) fn audio_url(&self, media_id: &str) -> Option<&Url> {
+    fn audio_url(&self, media_id: &str) -> Option<&Url> {
         self.audio_tracks.get_media(media_id).and_then(|x| {
             if let Some(playlist) = x.media_playlist() {
                 Some(playlist.url())
@@ -190,16 +228,16 @@ impl MultiVariantPlaylist {
     ///
     /// Returns `None` either if the given `id` isn't linked to any media, if it has no
     /// linked `MediaPlaylist` or if its Media Playlist hasn't been fetched yet.
-    pub(crate) fn audio_playlist(&self, media_id: &str) -> Option<&MediaPlaylist> {
+    fn audio_playlist(&self, media_id: &str) -> Option<&MediaPlaylist> {
         self.audio_tracks
             .get_media(media_id)
             .and_then(|x| x.media_playlist())
     }
 
-    pub(crate) fn other_media_playlist(&self, media_id: &str) -> Option<&MediaPlaylist> {
+    fn other_media_playlist(&self, media_id: &str) -> Option<&MediaPlaylist> {
         self.other_media
             .iter()
-            .find(|x| x.id() == Some(media_id))
+            .find(|x| x.id() == media_id)
             .and_then(|x| x.media_playlist())
     }
 
@@ -207,10 +245,10 @@ impl MultiVariantPlaylist {
         self.variants.get(idx)
     }
 
-    pub(crate) fn other_media_url(&self, media_id: &str) -> Option<&Url> {
+    fn other_media_url(&self, media_id: &str) -> Option<&Url> {
         self.other_media
             .iter()
-            .find(|x| x.id() == Some(media_id))
+            .find(|x| x.id() == media_id)
             .and_then(|x| {
                 if let Some(playlist) = x.media_playlist() {
                     Some(playlist.url())
@@ -220,7 +258,50 @@ impl MultiVariantPlaylist {
             })
     }
 
-    pub(crate) fn update_variant_media_playlist(
+    /// Returns the `Url` of the MediaPlaylist whose `MediaPlaylistPermanentId` is given in
+    /// argument.
+    ///
+    /// Returns `None` when any of the following is true:
+    ///   - The given `MediaPlaylistPermanentId` does not correspond to any known media of
+    ///     the content.
+    ///   - The given `MediaPlaylistPermanentId` is linked to some media which isn't linked to
+    ///     a MediaPlaylist. In that condition, it is the MediaPlaylist linked to its Variant
+    ///     stream that should be done.
+    /// Both are probably an error as a `MediaPlaylistPermanentId` should always identify a
+    /// `MediaPlaylist` .
+    pub(crate) fn media_playlist_url(&self, wanted_id: &MediaPlaylistPermanentId) -> Option<&Url> {
+        match &wanted_id.inner {
+            MediaPlaylistPermanentIdEnum::Variant(id) => Some(self.variant(&id)?.url()),
+            MediaPlaylistPermanentIdEnum::AudioTrack(id) => self.audio_url(&id),
+            MediaPlaylistPermanentIdEnum::OtherMedia(id) => self.other_media_url(&id),
+        }
+    }
+
+    pub(crate) fn media_playlist(&self, wanted_id: &MediaPlaylistPermanentId) -> Option<&MediaPlaylist> {
+        match &wanted_id.inner {
+            MediaPlaylistPermanentIdEnum::Variant(id) => Some(self.variant(&id)?.media_playlist()?),
+            MediaPlaylistPermanentIdEnum::AudioTrack(id) => self.audio_playlist(&id),
+            MediaPlaylistPermanentIdEnum::OtherMedia(id) => self.other_media_playlist(&id),
+        }
+    }
+
+    pub(crate) fn update_media_playlist(
+        &mut self,
+        id: &MediaPlaylistPermanentId,
+        data: impl io::BufRead,
+        url: Url
+    ) -> Result<&MediaPlaylist, MediaPlaylistUpdateError> {
+        match &id.inner {
+            MediaPlaylistPermanentIdEnum::Variant(id) =>
+                self.update_variant_media_playlist(&id, data, url),
+            MediaPlaylistPermanentIdEnum::AudioTrack(id) =>
+                self.update_audio_media_playlist(&id, data, url),
+            MediaPlaylistPermanentIdEnum::OtherMedia(id) =>
+                self.update_other_media_playlist(&id, data, url),
+        }
+    }
+
+    fn update_variant_media_playlist(
         &mut self,
         variant_id: &str,
         media_playlist_data: impl io::BufRead,
@@ -234,7 +315,7 @@ impl MultiVariantPlaylist {
         }
     }
 
-    pub(crate) fn update_audio_media_playlist(
+    fn update_audio_media_playlist(
         &mut self,
         id: &str,
         media_playlist_data: impl io::BufRead,
@@ -246,7 +327,7 @@ impl MultiVariantPlaylist {
         }
     }
 
-    pub(crate) fn update_other_media_playlist(
+    fn update_other_media_playlist(
         &mut self,
         media_tag_id: &str,
         media_playlist_data: impl io::BufRead,
@@ -255,11 +336,19 @@ impl MultiVariantPlaylist {
         match self
             .other_media
             .iter_mut()
-            .find(|v| v.id() == Some(media_tag_id))
+            .find(|v| v.id() == media_tag_id)
         {
             Some(m) => Ok(m.update(media_playlist_data, url, self.context.as_ref())?),
             None => Err(MediaPlaylistUpdateError::NotFound),
         }
+    }
+
+    pub(crate) fn audio_tracks(&self) -> &[AudioTrack] {
+        self.audio_tracks.as_slice()
+    }
+
+    pub(crate) fn audio_track_for_media_id(&self, id: &str) -> Option<&AudioTrack> {
+        self.audio_tracks.track_for_media(id)
     }
 }
 
@@ -393,4 +482,23 @@ impl From<MediaPlaylistParsingError> for MediaPlaylistUpdateError {
     fn from(err: MediaPlaylistParsingError) -> MediaPlaylistUpdateError {
         MediaPlaylistUpdateError::ParsingError(err)
     }
+}
+
+/// Identifier allowing to identify a given MediaPlaylist
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct MediaPlaylistPermanentId {
+    inner: MediaPlaylistPermanentIdEnum,
+}
+
+#[derive(Clone, PartialEq, Eq, Debug)]
+enum MediaPlaylistPermanentIdEnum {
+    /// This Media Playlist is defined by a variant in the `MultiVariantPlaylist` object.
+    /// The payload is its `id`.
+    Variant(String),
+    /// This Media Playlist is audio-specific track in the `MultiVariantPlaylist` object.
+    /// The payload is its `id`.
+    AudioTrack(String),
+    /// This Media Playlist is defined as another media in the `MultiVariantPlaylist` object.
+    /// The payload is its `id`.
+    OtherMedia(String),
 }

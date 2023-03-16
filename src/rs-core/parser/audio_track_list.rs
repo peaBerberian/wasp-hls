@@ -9,29 +9,28 @@ impl AudioTrackList {
     pub(super) fn new(mut audio_media: Vec<MediaTag>) -> Self {
         let mut available_audio_tracks: Vec<AudioTrack> = vec![];
         while let Some(media) = audio_media.pop() {
-            if let Some(id) = media.id() {
-                let name = media.name();
-                let language = media.language();
-                let assoc_language = media.assoc_language();
-                let channels = media.channels();
+            let id = media.id();
+            let name = media.name();
+            let language = media.language();
+            let assoc_language = media.assoc_language();
+            let channels = media.channels();
 
-                // Check if the track already exist in another encoding quality
-                // TODO also check characteristics
-                let pos_compat = available_audio_tracks.iter().position(|t| {
-                    t.name() != name
-                        || t.language() != language
-                        || t.assoc_language() != assoc_language
-                        || t.channels() != channels
+            // Check if the track already exist in another encoding quality
+            // TODO also check characteristics
+            let pos_compat = available_audio_tracks.iter().position(|t| {
+                t.name() != name
+                    || t.language() != language
+                    || t.assoc_language() != assoc_language
+                    || t.channels() != channels
+            });
+
+            if let Some(pos) = pos_compat {
+                available_audio_tracks[pos].media_tags.push(media);
+            } else {
+                available_audio_tracks.push(AudioTrack {
+                    id: id.to_owned(),
+                    media_tags: vec![media],
                 });
-
-                if let Some(pos) = pos_compat {
-                    available_audio_tracks[pos].media_tags.push(media);
-                } else {
-                    available_audio_tracks.push(AudioTrack {
-                        id: id.to_owned(),
-                        media_tags: vec![media],
-                    });
-                }
             }
         }
         Self {
@@ -39,14 +38,19 @@ impl AudioTrackList {
         }
     }
 
+    pub(super) fn track_for_media(&self, id: &str) -> Option<&AudioTrack> {
+        self.iter()
+            .find(|t| t.media_tags.iter().find(|m| m.id() == id).is_some())
+    }
+
     pub(super) fn get_media(&self, id: &str) -> Option<&MediaTag> {
         self.iter()
-            .find_map(|t| t.media_tags.iter().find(|m| m.id() == Some(id)))
+            .find_map(|t| t.media_tags.iter().find(|m| m.id() == id))
     }
 
     pub(super) fn get_mut_media(&mut self, id: &str) -> Option<&mut MediaTag> {
         self.iter_mut()
-            .find_map(|t| t.media_tags.iter_mut().find(|m| m.id() == Some(id)))
+            .find_map(|t| t.media_tags.iter_mut().find(|m| m.id() == id))
     }
 
     pub(super) fn iter_media(&self) -> impl Iterator<Item = &MediaTag> {
