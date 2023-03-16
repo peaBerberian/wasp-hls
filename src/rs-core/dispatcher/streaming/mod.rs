@@ -167,15 +167,17 @@ impl Dispatcher {
                 use PlaylistFileType::*;
                 // TODO lowest/latest bandwidth first?
                 playlist_store.update_curr_bandwidth(2_000_000.);
-                [MediaType::Video, MediaType::Audio].into_iter().for_each(|mt| {
-                    if let Some(id) = playlist_store.curr_media_playlist_id(mt) {
-                        if let Some(url) = playlist_store.media_playlist_url(id) {
-                            let id = id.clone();
-                            let url = url.clone();
-                            self.requester.fetch_playlist(url, MediaPlaylist { id });
+                [MediaType::Video, MediaType::Audio]
+                    .into_iter()
+                    .for_each(|mt| {
+                        if let Some(id) = playlist_store.curr_media_playlist_id(mt) {
+                            if let Some(url) = playlist_store.media_playlist_url(id) {
+                                let id = id.clone();
+                                let url = url.clone();
+                                self.requester.fetch_playlist(url, MediaPlaylist { id });
+                            }
                         }
-                    }
-                });
+                    });
                 jsAnnounceVariantUpdate(playlist_store.curr_variant().map(|v| v.id()));
             }
         }

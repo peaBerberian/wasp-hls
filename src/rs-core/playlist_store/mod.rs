@@ -1,6 +1,8 @@
 use crate::{
     bindings::MediaType,
-    parser::{MediaPlaylist, MediaPlaylistUpdateError, MultiVariantPlaylist, VariantStream, AudioTrack},
+    parser::{
+        AudioTrack, MediaPlaylist, MediaPlaylistUpdateError, MultiVariantPlaylist, VariantStream,
+    },
     utils::url::Url,
 };
 use std::{cmp::Ordering, io::BufRead};
@@ -137,7 +139,8 @@ impl PlaylistStore {
         media_playlist_data: impl BufRead,
         url: Url,
     ) -> Result<&MediaPlaylist, MediaPlaylistUpdateError> {
-        self.playlist.update_media_playlist(id, media_playlist_data, url)
+        self.playlist
+            .update_media_playlist(id, media_playlist_data, url)
     }
 
     /// Returns vec describing all available variant streams in the current MultiVariantPlaylist.

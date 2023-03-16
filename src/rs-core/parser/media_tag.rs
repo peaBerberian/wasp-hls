@@ -252,8 +252,8 @@ impl MediaTag {
             return Err(MediaTagParsingError::MissingName);
         };
 
-        let id = stable_rendition_id.
-            or_else(|| url.as_ref().map(|u| u.clone().take()))
+        let id = stable_rendition_id
+            .or_else(|| url.as_ref().map(|u| u.clone().take()))
             .unwrap_or_else(|| format!("{group_id}{multi_variant_playlist_url}"));
         url = url.map(|u| {
             if u.is_absolute() {
