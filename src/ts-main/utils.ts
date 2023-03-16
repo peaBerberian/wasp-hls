@@ -1,3 +1,4 @@
+import { MainMessageType } from "../ts-common/types";
 import postMessageToWorker from "./postMessageToWorker";
 import { ContentMetadata } from "./types";
 
@@ -22,7 +23,7 @@ export function requestStopForContent(
 
   if (worker !== null) {
     postMessageToWorker(worker, {
-      type: "stop",
+      type: MainMessageType.StopContent,
       value: { contentId: metadata.contentId },
     });
   }

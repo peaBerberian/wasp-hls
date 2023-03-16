@@ -25,7 +25,10 @@ import {
   WarningWorkerMessage,
   MultiVariantPlaylistParsedWorkerMessage,
   VariantUpdateWorkerMessage,
+  TrackUpdateWorkerMessage,
+  MainMessageType,
 } from "../ts-common/types";
+import { MediaType } from "../wasm/wasp_hls";
 import {
   WaspOtherError,
   WaspPlaylistParsingError,
@@ -170,7 +173,7 @@ export function onCreateMediaSourceMessage(
         "Unknown error when creating the MediaSource"
       );
       postMessageToWorker(worker, {
-        type: "create-media-source-error",
+        type: MainMessageType.CreateMediaSourceError,
         value: { mediaSourceId, message, name },
       });
     }
@@ -208,7 +211,7 @@ export function onUpdateMediaSourceDurationMessage(
     );
     const { mediaSourceId } = msg.value;
     postMessageToWorker(worker, {
-      type: "update-media-source-duration-error",
+      type: MainMessageType.UpdateMediaSourceDurationError,
       value: { mediaSourceId, message, name },
     });
   }
@@ -264,7 +267,7 @@ export function onCreateSourceBufferMessage(
   }
   if (contentMetadata.mediaSource === null) {
     postMessageToWorker(worker, {
-      type: "create-source-buffer-error",
+      type: MainMessageType.CreateSourceBufferError,
       value: {
         mediaSourceId: msg.value.mediaSourceId,
         sourceBufferId: msg.value.sourceBufferId,
@@ -289,7 +292,7 @@ export function onCreateSourceBufferMessage(
       "Unknown error when adding the SourceBuffer to the MediaSource"
     );
     postMessageToWorker(worker, {
-      type: "create-source-buffer-error",
+      type: MainMessageType.CreateSourceBufferError,
       value: {
         mediaSourceId: msg.value.mediaSourceId,
         sourceBufferId: msg.value.sourceBufferId,
@@ -329,7 +332,7 @@ export function onAppendBufferMessage(
       sbObject.queuedSourceBuffer.push(msg.value.data)
         .then(() => {
           postMessageToWorker(worker, {
-            type: "source-buffer-updated",
+            type: MainMessageType.SourceBufferOperationSuccess,
             value: { mediaSourceId, sourceBufferId },
           });
         })
@@ -343,7 +346,7 @@ export function onAppendBufferMessage(
         "Unknown error when appending data to the SourceBuffer"
       );
       postMessageToWorker(worker, {
-        type: "source-buffer-error",
+        type: MainMessageType.SourceBufferOperationError,
         value: { sourceBufferId, message, name },
       });
     }
@@ -378,7 +381,7 @@ export function onRemoveBufferMessage(
       sbObject.queuedSourceBuffer.removeBuffer(msg.value.start, msg.value.end)
         .then(() => {
           postMessageToWorker(worker, {
-            type: "source-buffer-updated",
+            type: MainMessageType.SourceBufferOperationSuccess,
             value: { mediaSourceId, sourceBufferId },
           });
         })
@@ -392,7 +395,7 @@ export function onRemoveBufferMessage(
         "Unknown error when removing data to the SourceBuffer"
       );
       postMessageToWorker(worker, {
-        type: "source-buffer-error",
+        type: MainMessageType.SourceBufferOperationError,
         value: { sourceBufferId, message, name },
       });
     }
@@ -429,7 +432,10 @@ export function onStartPlaybackObservationMessage(
   contentMetadata.stopPlaybackObservations = observePlayback(
     mediaElement,
     msg.value.mediaSourceId,
-    (value) => postMessageToWorker(worker, { type: "observation", value })
+    (value) => postMessageToWorker(worker, {
+      type: MainMessageType.MediaObservation,
+      value,
+    })
   );
 }
 
@@ -478,7 +484,7 @@ export function onEndOfStreamMessage(
     const { mediaSourceId } = msg.value;
     if (contentMetadata.mediaSource === null) {
       postMessageToWorker(worker, {
-        type: "end-of-stream-error",
+        type: MainMessageType.EndOfStreamError,
         value: {
           mediaSourceId,
           code: EndOfStreamErrorCode.NoMediaSource,
@@ -502,7 +508,7 @@ export function onEndOfStreamMessage(
         "Unknown error when calling MediaSource.endOfStream()"
       );
       postMessageToWorker(worker, {
-        type: "end-of-stream-error",
+        type: MainMessageType.EndOfStreamError,
         value: {
           mediaSourceId,
           code: EndOfStreamErrorCode.EndOfStreamError,
@@ -734,6 +740,35 @@ export function onMultiVariantPlaylistParsedMessage(
 }
 
 /**
+ * Handles `TrackUpdateWorkerMessage` messages.
+ * @param {Object} msg - The worker's message received.
+ * @param {Object|null} contentMetadata - Metadata of the content currently
+ * playing. `null` if no content is currently playing.
+ * This object may be mutated.
+ * @returns {boolean} - `true` if the message concerned the current content.
+ */
+export function onTrackUpdateMessage(
+  msg: TrackUpdateWorkerMessage,
+  contentMetadata: ContentMetadata | null
+): boolean {
+  if (contentMetadata?.contentId !== msg.value.contentId) {
+    logger.info("API: Ignoring warning due to wrong `contentId`");
+    return false;
+  }
+  if (msg.value.mediaType !== MediaType.Audio) {
+    logger.warn("API: track update for a type not handled for now");
+    return false;
+  }
+  contentMetadata.currentAudioTrack = msg.value.audioTrack ?
+    {
+      id: msg.value.audioTrack.current,
+      isSelected: msg.value.audioTrack.isSelected,
+    } :
+    undefined;
+  return true;
+}
+
+/**
  * Handles `VariantUpdateWorkerMessage` messages.
  * @param {Object} msg - The worker's message received.
  * @param {Object|null} contentMetadata - Metadata of the content currently
@@ -800,19 +835,19 @@ function bindMediaSource(
 
   function onMediaSourceEnded() {
     postMessageToWorker(worker, {
-      type: "media-source-state-changed",
+      type: MainMessageType.MediaSourceStateChanged,
       value: { mediaSourceId, state: MediaSourceReadyState.Ended },
     });
   }
   function onMediaSourceOpen() {
     postMessageToWorker(worker, {
-      type: "media-source-state-changed",
+      type: MainMessageType.MediaSourceStateChanged,
       value: { mediaSourceId, state: MediaSourceReadyState.Open },
     });
   }
   function onMediaSourceClose() {
     postMessageToWorker(worker, {
-      type: "media-source-state-changed",
+      type: MainMessageType.MediaSourceStateChanged,
       value: { mediaSourceId, state: MediaSourceReadyState.Closed },
     });
   }

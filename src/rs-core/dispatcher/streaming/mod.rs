@@ -3,12 +3,15 @@ use std::cmp::Ordering;
 use super::{Dispatcher, MediaSourceReadyState, PlayerReadyState};
 use crate::{
     bindings::{
-        formatters::{format_source_buffer_creation_err_for_js, format_variants_info_for_js, format_audio_tracks_for_js},
+        formatters::{
+            format_audio_tracks_for_js, format_source_buffer_creation_err_for_js,
+            format_variants_info_for_js,
+        },
         jsAnnounceFetchedContent, jsAnnounceVariantUpdate, jsSendOtherError,
         jsSendPlaylistParsingError, jsSendSegmentRequestError, jsSendSourceBufferCreationError,
         jsSetMediaSourceDuration, jsStartObservingPlayback, jsStopObservingPlayback, jsTimer,
         jsUpdateContentInfo, JsMemoryBlob, MediaObservation, MediaType, PlaybackTickReason,
-        PlaylistType, RequestId, SourceBufferId, TimerId, TimerReason,
+        PlaylistType, RequestId, SourceBufferId, TimerId, TimerReason, jsAnnounceTrackUpdate,
     },
     media_element::{PushMetadata, SourceBufferCreationError},
     parser::MultiVariantPlaylist,
@@ -150,20 +153,6 @@ impl Dispatcher {
                     self.internal_stop();
                     return;
                 }
-                // SAFETY: The following line is unsafe because it may actually define raw pointers
-                // to point to Rust's heap memory and put it in the returned value.
-                //
-                // However, we're calling the JS binding function it is communicated to directly
-                // after and thus before the corresponding underlying data had a chance to be
-                // dropped.
-                //
-                // Because one of the rules of those bindings is to copy all pointed data
-                // synchronously on call, we should not encounter any issue.
-                let variants_info =
-                    unsafe { format_variants_info_for_js(playlist_store.variants()) };
-                let audio_tracks_info =
-                    unsafe { format_audio_tracks_for_js(playlist_store.audio_tracks()) };
-                jsAnnounceFetchedContent(variants_info, audio_tracks_info);
 
                 use PlaylistFileType::*;
                 // TODO lowest/latest bandwidth first?
@@ -179,7 +168,37 @@ impl Dispatcher {
                             }
                         }
                     });
+
+                // SAFETY: The following lines are unsafe because they may actually define raw pointers
+                // to point to Rust's heap memory and put it in the returned values.
+                //
+                // However, we're calling the JS binding function it is communicated to directly
+                // after and thus before the corresponding underlying data had a chance to be
+                // dropped.
+                //
+                // Because one of the rules of those bindings is to copy all pointed data
+                // synchronously on call, we should not encounter any issue.
+                let variants_info =
+                    unsafe { format_variants_info_for_js(playlist_store.variants()) };
+                let audio_tracks_info =
+                    unsafe { format_audio_tracks_for_js(playlist_store.audio_tracks()) };
+                let selected_audio_track = playlist_store.selected_audio_track_id();
+                let is_selected = selected_audio_track.is_some();
+                let curr_audio_track = if let Some(selected) = selected_audio_track {
+                    Some(selected)
+                } else {
+                    playlist_store.curr_audio_track_id()
+                };
+                jsAnnounceFetchedContent(
+                    variants_info,
+                    audio_tracks_info
+                );
                 jsAnnounceVariantUpdate(playlist_store.curr_variant().map(|v| v.id()));
+                jsAnnounceTrackUpdate(
+                    MediaType::Audio,
+                    curr_audio_track,
+                    is_selected,
+                );
             }
         }
     }

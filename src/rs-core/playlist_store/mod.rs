@@ -363,7 +363,13 @@ impl PlaylistStore {
         }
     }
 
-    pub(crate) fn audio_track_id(&self) -> Option<&str> {
+    pub(crate) fn curr_audio_track_id(&self) -> Option<&str> {
+        self.playlist
+            .audio_track_for_media_id(self.curr_audio_id.as_ref()?)
+            .map(|p| p.id())
+    }
+
+    pub(crate) fn selected_audio_track_id(&self) -> Option<&str> {
         self.curr_audio_track.as_deref()
     }
 

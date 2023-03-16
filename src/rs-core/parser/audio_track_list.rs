@@ -53,8 +53,13 @@ impl AudioTrackList {
             .find_map(|t| t.media_tags.iter_mut().find(|m| m.id() == id))
     }
 
-    pub(super) fn iter_media(&self) -> impl Iterator<Item = &MediaTag> {
-        self.iter().flat_map(|t| &t.media_tags)
+    pub(super) fn iter_media(&self) -> impl Iterator<Item = (&AudioTrack, &MediaTag)> {
+        self.iter().flat_map(|t| {
+            t.media_tags
+                .iter()
+                .map(|m| (t, m))
+                .collect::<Vec<(&AudioTrack, &MediaTag)>>()
+        })
     }
 }
 

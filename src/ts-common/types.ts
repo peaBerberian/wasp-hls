@@ -31,7 +31,35 @@ export type MainMessage =
   UpdateWantedSpeedMainMessage |
   UpdateLoggerLevelMainMessage |
   LockVariantMainMessage |
-  UpdateConfigMainMessage;
+  UpdateConfigMainMessage |
+  SetAudioTrackMainMessage;
+
+/**
+ * Discriminants (value of the `type` property) for messages sent by the main
+ * thread.
+ *
+ * Centralized here for easier type hinting, search, refactoring and format
+ * updates.
+ */
+export const enum MainMessageType {
+  Initialization = "init",
+  LoadContent = "load",
+  StopContent = "stop",
+  DisposePlayer = "dispose",
+  MediaSourceStateChanged = "ms-state",
+  CreateMediaSourceError = "create-ms",
+  CreateSourceBufferError = "create-sb",
+  UpdateMediaSourceDurationError = "update-ms-dur-err",
+  MediaObservation = "obs",
+  SourceBufferOperationSuccess = "sb-s",
+  SourceBufferOperationError = "sb-err",
+  EndOfStreamError = "eos-err",
+  UpdateWantedSpeed = "upd-speed",
+  UpdateLoggerLevel = "upd-log",
+  UpdateConfig = "upd-conf",
+  LockVariant = "lock-var",
+  SetAudioTrack = "set-audio",
+}
 
 /** Message sent from the worker to the main thread. */
 export type WorkerMessage =
@@ -47,6 +75,7 @@ export type WorkerMessage =
   ContentTimeBoundsUpdateWorkerMessage |
   MediaOffsetUpdateWorkerMessage |
   VariantUpdateWorkerMessage |
+  TrackUpdateWorkerMessage |
 
   // HTMLMediaElement/MSE actions
 
@@ -73,6 +102,39 @@ export type WorkerMessage =
   ErrorWorkerMessage |
   WarningWorkerMessage |
   ContentStoppedWorkerMessage;
+
+/**
+ * Discriminants (value of the `type` property) for messages sent by the worker.
+ *
+ * Centralized here for easier type hinting, search, refactoring and format
+ * updates.
+ */
+export const enum WorkerMessageType {
+  Initialized = "init",
+  InitializationError = "init-err",
+  Error = "err",
+  Warning = "warn",
+  ContentTimeBoundsUpdate = "time-upd",
+  MultiVariantPlaylistParsed = "m-playlist",
+  TrackUpdate = "track-upd",
+  ContentStopped = "ctnt-stop",
+  Seek = "seek",
+  UpdatePlaybackRate = "upd-pbr",
+  AttachMediaSource = "attach-ms",
+  CreateMediaSource = "create-ms",
+  UpdateMediaSourceDuration = "upd-ms-dur",
+  ClearMediaSource = "clear-ms",
+  CreateSourceBuffer = "creat-sb",
+  AppendBuffer = "push-sb",
+  RemoveBuffer = "rem-sb",
+  StartPlaybackObservation = "start-obs",
+  StopPlaybackObservation = "stop-obs",
+  EndOfStream = "eos",
+  RebufferingStarted = "rebuf-start",
+  RebufferingEnded = "rebuf-end",
+  MediaOffsetUpdate = "media-off-upd",
+  VariantUpdate = "variant-upd",
+}
 
 /**
  * Error codes generated for `InitializationErrorWorkerMessage` messages.
@@ -107,7 +169,7 @@ export const enum InitializationErrorCode {
  * to begin loading content.
  */
 export interface InitializedWorkerMessage {
-  type: "initialized";
+  type: WorkerMessageType.Initialized;
   value: null;
 }
 
@@ -116,7 +178,7 @@ export interface InitializedWorkerMessage {
  * consequently not be able to operate anymore.
  */
 export interface InitializationErrorWorkerMessage {
-  type: "initialization-error";
+  type: WorkerMessageType.InitializationError;
   value: {
     /**
      * Code describing the error encountered.
@@ -136,7 +198,7 @@ export interface InitializationErrorWorkerMessage {
  * end of the current content.
  */
 export interface ErrorWorkerMessage {
-  type: "error";
+  type: WorkerMessageType.Error;
   value: {
     /**
      * The identifier for the content on which an error was received.
@@ -168,7 +230,7 @@ export interface ErrorWorkerMessage {
  * If a content was playing, we're still able to continue playback.
  */
 export interface WarningWorkerMessage {
-  type: "warning";
+  type: WorkerMessageType.Warning;
   value: {
     /**
      * The identifier for the content on which an error was received.
@@ -268,7 +330,7 @@ export interface OtherErrorWorkerInfo {
  * Message sent when the Worker has new information on the content being played.
  */
 export interface ContentTimeBoundsUpdateWorkerMessage {
-  type: "content-time-update";
+  type: WorkerMessageType.ContentTimeBoundsUpdate;
   value: {
     /**
      * The identifier for the content on which an error was received.
@@ -290,7 +352,7 @@ export interface ContentTimeBoundsUpdateWorkerMessage {
 }
 
 export interface MultiVariantPlaylistParsedWorkerMessage {
-  type: "multivariant-parsed";
+  type: WorkerMessageType.MultiVariantPlaylistParsed;
   value: {
     /**
      * The identifier for the content on which an error was received.
@@ -300,6 +362,23 @@ export interface MultiVariantPlaylistParsedWorkerMessage {
     contentId: string;
     variants: VariantInfo[];
     audioTracks: AudioTrackInfo[];
+  };
+}
+
+export interface TrackUpdateWorkerMessage {
+  type: WorkerMessageType.TrackUpdate;
+  value: {
+    /**
+     * The identifier for the content on which an error was received.
+     * This is the same `contentId` value that on the related
+     * `LoadContentMainMessage`.
+     */
+    contentId: string;
+    mediaType: MediaType;
+    audioTrack?: {
+      current: string;
+      isSelected: boolean;
+    } | undefined;
   };
 }
 
@@ -323,7 +402,7 @@ export interface AudioTrackInfo {
  * Message sent when the Worker has succesfully stopped a content.
  */
 export interface ContentStoppedWorkerMessage {
-  type: "content-stopped";
+  type: WorkerMessageType.ContentStopped;
   value: {
     /** The identifier for the content which was stopped. */
     contentId: string;
@@ -332,7 +411,7 @@ export interface ContentStoppedWorkerMessage {
 
 /** Message sent when the Worker want to seek in the content */
 export interface SeekWorkerMessage {
-  type: "seek";
+  type: WorkerMessageType.Seek;
   value: {
     /**
      * Identify the MediaSource currently used by the worker.
@@ -350,7 +429,7 @@ export interface SeekWorkerMessage {
 
 /** Message sent when the Worker wants to change the media element's playback rate. */
 export interface UpdatePlaybackRateWorkerMessage {
-  type: "update-playback-rate";
+  type: WorkerMessageType.UpdatePlaybackRate;
   value: {
     /**
      * Identify the MediaSource currently used by the worker.
@@ -375,7 +454,7 @@ export interface UpdatePlaybackRateWorkerMessage {
  * a MediaSource instance is accessible from a Worker.
  */
 export interface AttachMediaSourceWorkerMessage {
-  type: "attach-media-source";
+  type: WorkerMessageType.AttachMediaSource;
   value: {
     /**
      * The identifier for the content on which an error was received.
@@ -411,7 +490,7 @@ export interface AttachMediaSourceWorkerMessage {
  * a MediaSource instance is accessible from a Worker.
  */
 export interface CreateMediaSourceWorkerMessage {
-  type: "create-media-source";
+  type: WorkerMessageType.CreateMediaSource;
   value: {
     /**
      * The identifier for the content on which an error was received.
@@ -433,7 +512,7 @@ export interface CreateMediaSourceWorkerMessage {
  * MediaSource associated to the `mediaSourceId` given.
  */
 export interface SetMediaSourceDurationWorkerMessage {
-  type: "update-media-source-duration";
+  type: WorkerMessageType.UpdateMediaSourceDuration;
   value: {
     /**
      * Identify the MediaSource currently used by the worker.
@@ -452,7 +531,7 @@ export interface SetMediaSourceDurationWorkerMessage {
  * resources disposed.
  */
 export interface ClearMediaSourceWorkerMessage {
-  type: "clear-media-source";
+  type: WorkerMessageType.ClearMediaSource;
   value: {
     /**
      * Identify the MediaSource currently used by the worker.
@@ -469,7 +548,7 @@ export interface ClearMediaSourceWorkerMessage {
  * `mediaSourceId`.
  */
 export interface CreateSourceBufferWorkerMessage {
-  type: "create-source-buffer";
+  type: WorkerMessageType.CreateSourceBuffer;
   value: {
     /**
      * Identify the MediaSource currently used by the worker.
@@ -501,7 +580,7 @@ export interface CreateSourceBufferWorkerMessage {
  * in the main thread.
  */
 export interface AppendBufferWorkerMessage {
-  type: "append-buffer";
+  type: WorkerMessageType.AppendBuffer;
   value: {
     /**
      * Identify the MediaSource currently used by the worker.
@@ -530,7 +609,7 @@ export interface AppendBufferWorkerMessage {
  * in the main thread.
  */
 export interface RemoveBufferWorkerMessage {
-  type: "remove-buffer";
+  type: WorkerMessageType.RemoveBuffer;
   value: {
     /**
      * Identify the MediaSource currently used by the worker.
@@ -556,7 +635,7 @@ export interface RemoveBufferWorkerMessage {
  * observations", which are key attributes associated to the HTMLVideoElement.
  */
 export interface StartPlaybackObservationWorkerMessage {
-  type: "start-playback-observation";
+  type: WorkerMessageType.StartPlaybackObservation;
   value: {
     /**
      * Playback observations are linked to an unique MediaSource.
@@ -579,7 +658,7 @@ export interface StartPlaybackObservationWorkerMessage {
  * `StartPlaybackObservationWorkerMessage`
  */
 export interface StopPlaybackObservationWorkerMessage {
-  type: "stop-playback-observation";
+  type: WorkerMessageType.StopPlaybackObservation;
   value: {
     /**
      * Playback observations are linked to an unique MediaSource.
@@ -601,7 +680,7 @@ export interface StopPlaybackObservationWorkerMessage {
  * `MediaSource`, thus ending the stream.
  */
 export interface EndOfStreamWorkerMessage {
-  type: "end-of-stream";
+  type: WorkerMessageType.EndOfStream;
   value: {
     /**
      * This `mediaSourceId` should be the same `mediaSourceId` than the one on
@@ -621,7 +700,7 @@ export interface EndOfStreamWorkerMessage {
  * buffer.
  */
 export interface RebufferingStartedWorkerMessage {
-  type: "rebuffering-started";
+  type: WorkerMessageType.RebufferingStarted;
   value: {
     /**
      * This `mediaSourceId` should be the same `mediaSourceId` than the one on
@@ -647,7 +726,7 @@ export interface RebufferingStartedWorkerMessage {
  * through a `RebufferingStartedWorkerMessage`.
  */
 export interface RebufferingEndedWorkerMessage {
-  type: "rebuffering-ended";
+  type: WorkerMessageType.RebufferingEnded;
   value: {
     /**
      * This `mediaSourceId` should be the same `mediaSourceId` than the one on
@@ -669,7 +748,7 @@ export interface RebufferingEndedWorkerMessage {
  * HTMLMediaElement.
  */
 export interface MediaOffsetUpdateWorkerMessage {
-  type: "media-offset-update";
+  type: WorkerMessageType.MediaOffsetUpdate;
   value: {
     /**
      * A unique identifier for the content being loaded, that will have to be
@@ -685,7 +764,7 @@ export interface MediaOffsetUpdateWorkerMessage {
 }
 
 export interface VariantUpdateWorkerMessage {
-  type: "variant-update";
+  type: WorkerMessageType.VariantUpdate;
   value: {
     /**
      * A unique identifier for the content being loaded, that will have to be
@@ -702,7 +781,7 @@ export interface VariantUpdateWorkerMessage {
  * `InitializedWorkerMessage`.
  */
 export interface InitializationMainMessage {
-  type: "init";
+  type: MainMessageType.Initialization;
   value: {
     /**
      * If `true` the current browser has the MSE-in-worker feature.
@@ -725,7 +804,7 @@ export interface InitializationMainMessage {
  * Sent by the main thread to the worker when a new content should be loaded.
  */
 export interface LoadContentMainMessage {
-  type: "load";
+  type: MainMessageType.LoadContent;
   value: {
     /**
      * A unique identifier for the content being loaded, that will have to be
@@ -742,7 +821,7 @@ export interface LoadContentMainMessage {
  * a `LoadContentMainMessage`) should be stopped and all its resources disposed.
  */
 export interface StopContentMainMessage {
-  type: "stop";
+  type: MainMessageType.StopContent;
   value: {
     /**
      * The identifier for the content that should be stopped.
@@ -759,7 +838,7 @@ export interface StopContentMainMessage {
  * sent.
  */
 export interface DisposePlayerMainMessage {
-  type: "dispose";
+  type: MainMessageType.DisposePlayer;
   value: null;
 }
 
@@ -770,7 +849,7 @@ export interface DisposePlayerMainMessage {
  * This message is only sent if the MediaSource is created on the main thread.
  */
 export interface MediaSourceStateChangedMainMessage {
-  type: "media-source-state-changed";
+  type: MainMessageType.MediaSourceStateChanged;
   value: {
     /** Identify the MediaSource in question. */
     mediaSourceId: string;
@@ -784,7 +863,7 @@ export interface MediaSourceStateChangedMainMessage {
  * to a previously-received `CreateMediaSourceWorkerMessage`, failed.
  */
 export interface CreateMediaSourceErrorMainMessage {
-  type: "create-media-source-error";
+  type: MainMessageType.CreateMediaSourceError;
   value: {
     /** Identify the MediaSource in question. */
     mediaSourceId: string;
@@ -816,7 +895,7 @@ export enum SourceBufferCreationErrorCode {
  * to a previously-received `CreateSourceBufferWorkerMessage`, failed.
  */
 export interface CreateSourceBufferErrorMainMessage {
-  type: "create-source-buffer-error";
+  type: MainMessageType.CreateSourceBufferError;
   value: {
     mediaSourceId: string;
     /** Identify the SourceBuffer in question. */
@@ -836,7 +915,7 @@ export interface CreateSourceBufferErrorMainMessage {
  * failed.
  */
 export interface SetMediaSourceDurationErrorMainMessage {
-  type: "update-media-source-duration-error";
+  type: MainMessageType.UpdateMediaSourceDurationError;
   value: {
     /** Identify the MediaSource in question. */
     mediaSourceId: string;
@@ -848,7 +927,7 @@ export interface SetMediaSourceDurationErrorMainMessage {
 }
 
 export interface MediaObservationMainMessage {
-  type: "observation";
+  type: MainMessageType.MediaObservation;
   value: MediaObservation;
 }
 
@@ -873,7 +952,7 @@ export interface MediaObservation {
  * `RemoveBufferWorkerMessage`).
  */
 export interface SourceBufferOperationSuccessMainMessage {
-  type: "source-buffer-updated";
+  type: MainMessageType.SourceBufferOperationSuccess;
   value: {
     /**
      * Identify the MediaSource which contains the SourceBuffer concerned by
@@ -896,7 +975,7 @@ export interface SourceBufferOperationSuccessMainMessage {
  * `RemoveBufferWorkerMessage`.
  */
 export interface SourceBufferOperationErrorMainMessage {
-  type: "source-buffer-error";
+  type: MainMessageType.SourceBufferOperationError;
   value: {
     /** Identify the SourceBuffer in question. */
     sourceBufferId: number;
@@ -927,7 +1006,7 @@ export enum EndOfStreamErrorCode {
  * to a previously-received `CreateSourceBufferWorkerMessage`, failed.
  */
 export interface EndOfStreamErrorMainMessage {
-  type: "end-of-stream-error";
+  type: MainMessageType.EndOfStreamError;
   value: {
     /** Identify the MediaSource in question. */
     mediaSourceId: string;
@@ -945,7 +1024,7 @@ export interface EndOfStreamErrorMainMessage {
  * playback rate.
  */
 export interface UpdateWantedSpeedMainMessage {
-  type: "update-wanted-speed";
+  type: MainMessageType.UpdateWantedSpeed;
   value: {
     /** Identify the MediaSource in question. */
     mediaSourceId: string;
@@ -955,17 +1034,17 @@ export interface UpdateWantedSpeedMainMessage {
 }
 
 export interface UpdateLoggerLevelMainMessage {
-  type: "update-logger-level";
+  type: MainMessageType.UpdateLoggerLevel;
   value: LoggerLevel;
 }
 
 export interface UpdateConfigMainMessage {
-  type: "update-config";
+  type: MainMessageType.UpdateConfig;
   value: Partial<WaspHlsPlayerConfig>;
 }
 
 export interface LockVariantMainMessage {
-  type: "lock-variant";
+  type: MainMessageType.LockVariant;
   value: {
     /**
      * The identifier for the content that should be stopped.
@@ -974,6 +1053,19 @@ export interface LockVariantMainMessage {
      */
     contentId: string;
     variantId: string | null;
+  };
+}
+
+export interface SetAudioTrackMainMessage {
+  type: MainMessageType.SetAudioTrack;
+  value: {
+    /**
+     * The identifier for the content that should be stopped.
+     * This is the same `contentId` value that on the related
+     * `LoadContentMainMessage`.
+     */
+    contentId: string;
+    trackId: string | null;
   };
 }
 

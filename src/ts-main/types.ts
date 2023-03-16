@@ -104,6 +104,11 @@ export interface ContentMetadata {
 
   audioTracks: AudioTrackInfo[];
 
+  currentAudioTrack: {
+    id: string;
+    isSelected: boolean;
+  } | undefined;
+
   lockedVariant: string | null;
 
   loadingAborter: AbortController | undefined;

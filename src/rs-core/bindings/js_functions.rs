@@ -218,6 +218,12 @@ extern "C" {
 
     pub fn jsAnnounceVariantUpdate(variant_id: Option<&str>);
 
+    pub fn jsAnnounceTrackUpdate(
+        media_type: MediaType,
+        current_audio_track: Option<&str>,
+        is_audio_track_selected: bool
+    );
+
     pub fn jsStartRebuffering();
     pub fn jsStopRebuffering();
 

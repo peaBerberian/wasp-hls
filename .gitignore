@@ -4,5 +4,6 @@
 /build/*
 !/build/index.html
 !/build/style.css
+!/build/logo-white.png
 
 /doc/generated

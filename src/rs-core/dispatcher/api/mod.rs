@@ -94,6 +94,12 @@ impl Dispatcher {
         self.inner_unlock_variant()
     }
 
+    pub fn set_audio_track(&mut self, track_id: Option<String>) {
+        if let Some(ref mut pl) = self.playlist_store {
+            pl.set_audio_track(track_id);
+        }
+    }
+
     pub fn set_segment_request_timeout(&mut self, timeout: Option<f64>) {
         self.requester.update_segment_request_timeout(timeout);
     }

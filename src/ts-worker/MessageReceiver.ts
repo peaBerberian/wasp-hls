@@ -3,6 +3,8 @@ import {
   MainMessage,
   InitializationErrorCode,
   WaspHlsPlayerConfig,
+  MainMessageType,
+  WorkerMessageType,
 } from "../ts-common/types";
 import initializeWasm, {
   MediaObservation,
@@ -25,14 +27,14 @@ export default function MessageReceiver() {
       return;
     }
     const { data } = evt;
-    if (typeof data !== "object" || data === null || typeof data.type !== "string") {
+    if (typeof data !== "object" || data === null || typeof data.type === "undefined") {
       logger.error("unexpected main message");
       return;
     }
 
     switch (data.type) {
 
-      case "init":
+      case MainMessageType.Initialization:
         if (wasInitializedCalled) {
           return handleInitializationError(
             "Worker initialization already done",
@@ -45,11 +47,11 @@ export default function MessageReceiver() {
         initialize(wasmUrl, hasWorkerMse, data.value.initialConfig);
         break;
 
-      case "dispose":
+      case MainMessageType.DisposePlayer:
         dispose();
         break;
 
-      case "load": {
+      case MainMessageType.LoadContent: {
         const dispatcher = playerInstance.getDispatcher();
         if (dispatcher === null) {
           return postUnitializedWorkerError(data.value.contentId);
@@ -65,7 +67,7 @@ export default function MessageReceiver() {
         break;
       }
 
-      case "stop": {
+      case MainMessageType.StopContent: {
         const dispatcher = playerInstance.getDispatcher();
         if (dispatcher === null) {
           return postUnitializedWorkerError(data.value.contentId);
@@ -83,7 +85,7 @@ export default function MessageReceiver() {
           logger.error("Error: when stopping the content:", err);
         }
         postMessageToMain({
-          type: "content-stopped",
+          type: WorkerMessageType.ContentStopped,
           value: {
             contentId: data.value.contentId,
           },
@@ -91,7 +93,7 @@ export default function MessageReceiver() {
         break;
       }
 
-      case "media-source-state-changed": {
+      case MainMessageType.MediaSourceStateChanged: {
         const dispatcher = playerInstance.getDispatcher();
         const contentInfo = playerInstance.getContentInfo();
         if (
@@ -104,7 +106,7 @@ export default function MessageReceiver() {
         break;
       }
 
-      case "source-buffer-updated": {
+      case MainMessageType.SourceBufferOperationSuccess: {
         const dispatcher = playerInstance.getDispatcher();
         const contentInfo = playerInstance.getContentInfo();
         if (
@@ -118,7 +120,7 @@ export default function MessageReceiver() {
       }
 
 
-      case "observation": {
+      case MainMessageType.MediaObservation: {
         const dispatcher = playerInstance.getDispatcher();
         const contentInfo = playerInstance.getContentInfo();
         if (
@@ -141,7 +143,7 @@ export default function MessageReceiver() {
         break;
       }
 
-      case "create-media-source-error": {
+      case MainMessageType.CreateMediaSourceError: {
         const dispatcher = playerInstance.getDispatcher();
         const contentInfo = playerInstance.getContentInfo();
         if (
@@ -156,7 +158,7 @@ export default function MessageReceiver() {
         break;
       }
 
-      case "update-media-source-duration-error": {
+      case MainMessageType.UpdateMediaSourceDurationError: {
         const dispatcher = playerInstance.getDispatcher();
         const contentInfo = playerInstance.getContentInfo();
         if (
@@ -171,7 +173,7 @@ export default function MessageReceiver() {
         break;
       }
 
-      case "create-source-buffer-error": {
+      case MainMessageType.CreateSourceBufferError: {
         const dispatcher = playerInstance.getDispatcher();
         const contentInfo = playerInstance.getContentInfo();
         if (
@@ -187,7 +189,7 @@ export default function MessageReceiver() {
         break;
       }
 
-      case "update-wanted-speed": {
+      case MainMessageType.UpdateWantedSpeed: {
         const dispatcher = playerInstance.getDispatcher();
         const contentInfo = playerInstance.getContentInfo();
         if (
@@ -201,11 +203,11 @@ export default function MessageReceiver() {
         break;
       }
 
-      case "update-logger-level":
+      case MainMessageType.UpdateLoggerLevel:
         logger.setLevel(data.value);
         break;
 
-      case "update-config": {
+      case MainMessageType.UpdateConfig: {
         const dispatcher = playerInstance.getDispatcher();
         if (dispatcher === null) {
           return;
@@ -214,7 +216,23 @@ export default function MessageReceiver() {
         break;
       }
 
-      case "lock-variant": {
+      case MainMessageType.SetAudioTrack: {
+        const dispatcher = playerInstance.getDispatcher();
+        if (dispatcher === null) {
+          return postUnitializedWorkerError(data.value.contentId);
+        }
+        const contentInfo = playerInstance.getContentInfo();
+        if (
+          contentInfo === null ||
+          contentInfo.contentId !== data.value.contentId
+        ) {
+          return ;
+        }
+        dispatcher.set_audio_track(data.value.trackId ?? undefined);
+        break;
+      }
+
+      case MainMessageType.LockVariant: {
         const dispatcher = playerInstance.getDispatcher();
         if (dispatcher === null) {
           return postUnitializedWorkerError(data.value.contentId);
@@ -245,7 +263,7 @@ function handleInitializationError(err: unknown, code: InitializationErrorCode) 
     message = err.message;
   }
   postMessageToMain({
-    type: "initialization-error",
+    type: WorkerMessageType.InitializationError,
     value: {
       code,
       message,
@@ -255,7 +273,7 @@ function handleInitializationError(err: unknown, code: InitializationErrorCode) 
 
 function postUnitializedWorkerError(contentId: string): void {
   postMessageToMain({
-    type: "error",
+    type: WorkerMessageType.Error,
     value: {
       contentId,
       message: "Error: Worker not initialized.",
@@ -274,7 +292,7 @@ function initialize(
 ) {
   initializeWasm(fetch(wasmUrl)).then((wasm) => {
     playerInstance.start(hasWorkerMse, config, wasm);
-    postMessageToMain({ type: "initialized", value: null });
+    postMessageToMain({ type: WorkerMessageType.Initialized, value: null });
   }).catch(err => {
     handleInitializationError(err, InitializationErrorCode.WasmRequestError);
   });

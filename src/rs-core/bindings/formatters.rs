@@ -1,6 +1,6 @@
 use crate::{
     media_element::SourceBufferCreationError,
-    parser::{ByteRange, VariantStream, VideoResolution, AudioTrack},
+    parser::{AudioTrack, ByteRange, VariantStream, VideoResolution},
 };
 
 static NULL_RESOLUTION: VideoResolution = VideoResolution::new(0, 0);

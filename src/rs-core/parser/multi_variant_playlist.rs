@@ -187,7 +187,7 @@ impl MultiVariantPlaylist {
                         }
                     })
             } else {
-                self.audio_tracks.iter_media().fold(None, |acc, m| {
+                self.audio_tracks.iter_media().fold(None, |acc, (_, m)| {
                     if m.group_id() == group_id
                         && m.is_autoselect()
                         && (acc.is_none() || m.is_default())
@@ -358,8 +358,22 @@ impl MultiVariantPlaylist {
         self.audio_tracks.as_slice()
     }
 
-    pub(crate) fn audio_track_for_media_id(&self, id: &str) -> Option<&AudioTrack> {
-        self.audio_tracks.track_for_media(id)
+    pub(crate) fn audio_track_for_media_id(
+        &self,
+        id: &MediaPlaylistPermanentId,
+    ) -> Option<&AudioTrack> {
+        match id.location() {
+            MediaPlaylistUrlLocation::AudioTrack => self.audio_tracks.track_for_media(id.id()),
+            MediaPlaylistUrlLocation::Variant => {
+                let variant = self.variant(id.id())?;
+                let group = variant.audio_group()?;
+                self.audio_tracks
+                    .iter_media()
+                    .find(|(_, a)| a.url().is_none() && a.group_id() == group)
+                    .map(|t| t.0)
+            }
+            _ => None,
+        }
     }
 }
 

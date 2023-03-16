@@ -6,10 +6,13 @@ import logger, {
 import noop from "../ts-common/noop";
 import {
   AudioTrackInfo,
+  MainMessageType,
   VariantInfo,
   WaspHlsPlayerConfig,
   WorkerMessage,
+  WorkerMessageType,
 } from "../ts-common/types";
+import { MediaType } from "../wasm/wasp_hls";
 import {
   WaspInitializationError,
 } from "./errors";
@@ -44,6 +47,7 @@ import {
   onWarningMessage,
   onMultiVariantPlaylistParsedMessage,
   onVariantUpdateMessage,
+  onTrackUpdateMessage,
 } from "./worker-message-handlers";
 
 // Allows to ensure a never-seen-before identifier is used for each content.
@@ -110,11 +114,11 @@ interface WaspHlsPlayerEvents {
 
   variantUpdate: VariantInfo | undefined;
 
+  audioTrackUpdate: AudioTrackInfo | undefined;
+
   audioTrackListUpdate: AudioTrackInfo[];
 
   variantsListUpdate: VariantInfo[];
-
-  VariantUpdateWorkerMessage: VariantInfo;
 }
 
 /** Various statuses that may be set for a WaspHlsPlayer's initialization. */
@@ -300,7 +304,7 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
     }
     this.__config__ = { ...this.__config__, ...overwrite };
     postMessageToWorker(this.__worker__, {
-      type: "update-config",
+      type: MainMessageType.UpdateConfig,
       value: this.__config__,
     });
   }
@@ -339,6 +343,7 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
       sourceBuffers: [],
       variants: [],
       audioTracks: [],
+      currentAudioTrack: undefined,
       currVariant: undefined,
       lockedVariant: null,
       stopPlaybackObservations: null,
@@ -350,9 +355,9 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
       loadingAborter,
       error: null,
     };
-    this.trigger("playerStateChange", PlayerState.Loaded);
+    this.trigger("playerStateChange", PlayerState.Loading);
     postMessageToWorker(this.__worker__, {
-      type: "load",
+      type: MainMessageType.LoadContent,
       value: { contentId, url },
     });
   }
@@ -552,7 +557,7 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
 
     this.__contentMetadata__.wantedSpeed = speed;
     postMessageToWorker(this.__worker__, {
-      type: "update-wanted-speed",
+      type: MainMessageType.UpdateWantedSpeed,
       value: {
         mediaSourceId: this.__contentMetadata__.mediaSourceId,
         wantedSpeed: speed,
@@ -588,6 +593,30 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
     return this.__contentMetadata__?.audioTracks ?? [];
   }
 
+  public getAudioTrack(): AudioTrackInfo | undefined {
+    const id = this.__contentMetadata__?.currentAudioTrack?.id;
+    if (id === undefined) {
+      return undefined;
+    }
+    return this.getAudioTrackList()?.find((a) => a.id === id);
+  }
+
+  public setAudioTrack(trackId: string | null): void {
+    if (this.__worker__ === null) {
+      throw new Error("The Player is not initialized or disposed.");
+    }
+    if (this.__contentMetadata__ === null) {
+      throw new Error("No content loaded");
+    }
+    postMessageToWorker(this.__worker__, {
+      type: MainMessageType.SetAudioTrack,
+      value: {
+        contentId: this.__contentMetadata__.contentId,
+        trackId,
+      },
+    });
+  }
+
   public lockVariant(variantId: string) {
     if (this.__worker__ === null) {
       throw new Error("The Player is not initialized or disposed.");
@@ -597,7 +626,7 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
     }
     this.__contentMetadata__.lockedVariant = variantId;
     postMessageToWorker(this.__worker__, {
-      type: "lock-variant",
+      type: MainMessageType.LockVariant,
       value: {
         contentId: this.__contentMetadata__.contentId,
         variantId,
@@ -614,7 +643,7 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
     }
     this.__contentMetadata__.lockedVariant = null;
     postMessageToWorker(this.__worker__, {
-      type: "lock-variant",
+      type: MainMessageType.LockVariant,
       value: {
         contentId: this.__contentMetadata__.contentId,
         variantId: null,
@@ -635,7 +664,10 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
       requestStopForContent(this.__contentMetadata__, this.__worker__);
     }
     // TODO needed? What about GC once it is set to `null`?
-    postMessageToWorker(this.__worker__, { type: "dispose", value: null });
+    postMessageToWorker(this.__worker__, {
+      type: MainMessageType.DisposePlayer,
+      value: null,
+    });
     this.__worker__ = null;
     if (this.__logLevelChangeListener__ !== null) {
       logger.removeEventListener("onLogLevelChange", this.__logLevelChangeListener__);
@@ -653,7 +685,7 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
     const worker = new Worker(workerUrl);
     this.__worker__ = worker;
     postMessageToWorker(worker, {
-      type: "init",
+      type: MainMessageType.Initialization,
       value: {
         hasWorkerMse: typeof MediaSource === "function" &&
           /* eslint-disable-next-line */
@@ -672,18 +704,18 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
 
     worker.onmessage = (evt: MessageEvent<WorkerMessage>) => {
       const { data } = evt;
-      if (typeof data !== "object" || data === null || typeof data.type !== "string") {
+      if (typeof data !== "object" || data === null || typeof data.type === "undefined") {
         logger.error("unexpected Worker message");
         return;
       }
 
       switch (data.type) {
-        case "initialized":
+        case WorkerMessageType.Initialized:
           this.initializationStatus = InitializationStatus.Initialized;
           mayStillReject = false;
           resolveProm();
           break;
-        case "initialization-error":
+        case WorkerMessageType.InitializationError:
           if (mayStillReject) {
             const error = new WaspInitializationError(
               data.value.code,
@@ -694,17 +726,17 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
             rejectProm(error);
           }
           break;
-        case "seek":
+        case WorkerMessageType.Seek:
           onSeekMessage(data, this.__contentMetadata__, this.videoElement);
           break;
-        case "update-playback-rate":
+        case WorkerMessageType.UpdatePlaybackRate:
           onUpdatePlaybackRateMessage(data, this.__contentMetadata__, this.videoElement);
           break;
-        case "attach-media-source":
+        case WorkerMessageType.AttachMediaSource:
           onAttachMediaSourceMessage(data, this.__contentMetadata__, this.videoElement);
           this.__startListeningToLoadedEvent__();
           break;
-        case "create-media-source":
+        case WorkerMessageType.CreateMediaSource:
           onCreateMediaSourceMessage(
             data,
             this.__contentMetadata__,
@@ -713,22 +745,22 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
           );
           this.__startListeningToLoadedEvent__();
           break;
-        case "update-media-source-duration":
+        case WorkerMessageType.UpdateMediaSourceDuration:
           onUpdateMediaSourceDurationMessage(data, this.__contentMetadata__, worker);
           break;
-        case "clear-media-source":
+        case WorkerMessageType.ClearMediaSource:
           onClearMediaSourceMessage(data, this.__contentMetadata__, this.videoElement);
           break;
-        case "create-source-buffer":
+        case WorkerMessageType.CreateSourceBuffer:
           onCreateSourceBufferMessage(data, this.__contentMetadata__, worker);
           break;
-        case "append-buffer":
+        case WorkerMessageType.AppendBuffer:
           onAppendBufferMessage(data, this.__contentMetadata__, worker);
           break;
-        case "remove-buffer":
+        case WorkerMessageType.RemoveBuffer:
           onRemoveBufferMessage(data, this.__contentMetadata__, worker);
           break;
-        case "start-playback-observation":
+        case WorkerMessageType.StartPlaybackObservation:
           onStartPlaybackObservationMessage(
             data,
             this.__contentMetadata__,
@@ -736,27 +768,34 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
             worker
           );
           break;
-        case "stop-playback-observation":
+        case WorkerMessageType.StopPlaybackObservation:
           onStopPlaybackObservationMessage(data, this.__contentMetadata__);
           break;
-        case "end-of-stream":
+        case WorkerMessageType.EndOfStream:
           onEndOfStreamMessage(data, this.__contentMetadata__, worker);
           break;
-        case "media-offset-update":
+        case WorkerMessageType.MediaOffsetUpdate:
           onMediaOffsetUpdateMessage(data, this.__contentMetadata__);
           break;
-        case "multivariant-parsed":
+        case WorkerMessageType.MultiVariantPlaylistParsed:
           if (onMultiVariantPlaylistParsedMessage(data, this.__contentMetadata__)) {
             this.trigger("variantsListUpdate", this.getVariantsList());
             this.trigger("audioTrackListUpdate", this.getAudioTrackList());
           }
           break;
-        case "variant-update":
+        case WorkerMessageType.TrackUpdate:
+          if (onTrackUpdateMessage(data, this.__contentMetadata__)) {
+            if (data.value.mediaType === MediaType.Audio) {
+              this.trigger("audioTrackUpdate", this.getAudioTrack());
+            }
+          }
+          break;
+        case WorkerMessageType.VariantUpdate:
           if (onVariantUpdateMessage(data, this.__contentMetadata__)) {
             this.trigger("variantUpdate", this.getCurrentVariant());
           }
           break;
-        case "error": {
+        case WorkerMessageType.Error: {
           const error = onErrorMessage(data, this.__contentMetadata__);
           if (error !== null) {
             logger.error("API: sending fatal error", error);
@@ -765,23 +804,23 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
           }
           break;
         }
-        case "warning": {
+        case WorkerMessageType.Warning: {
           const error = onWarningMessage(data, this.__contentMetadata__);
           if (error !== null) {
             this.trigger("warning", error);
           }
           break;
         }
-        case "content-time-update":
+        case WorkerMessageType.ContentTimeBoundsUpdate:
           onContentTimeBoundsUpdateMessage(data, this.__contentMetadata__);
           break;
-        case "content-stopped":
+        case WorkerMessageType.ContentStopped:
           if (onContentStoppedMessage(data, this.__contentMetadata__)) {
             this.__contentMetadata__ = null;
             this.trigger("playerStateChange", PlayerState.Stopped);
           }
           break;
-        case "rebuffering-started":
+        case WorkerMessageType.RebufferingStarted:
           if (onRebufferingStartedMessage(
             data,
             this.__contentMetadata__,
@@ -790,7 +829,7 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
             this.trigger("rebufferingStarted", null);
           }
           break;
-        case "rebuffering-ended":
+        case WorkerMessageType.RebufferingEnded:
           if (onRebufferingEndedMessage(
             data,
             this.__contentMetadata__,
@@ -799,6 +838,9 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
             this.trigger("rebufferingEnded", null);
           }
           break;
+
+        default:
+          assertNever(data);
       }
 
     };
@@ -813,7 +855,7 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
     };
     function onLogLevelChange(level: LoggerLevel): void {
       postMessageToWorker(worker, {
-        type: "update-logger-level",
+        type: MainMessageType.UpdateLoggerLevel,
         value: level,
       });
     }
@@ -841,4 +883,8 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
       }
     );
   }
+}
+
+function assertNever(_arg: never): void {
+  throw new Error("This function should never be called");
 }

@@ -1,7 +1,7 @@
 import idGenerator from "../ts-common/idGenerator.js";
 import logger from "../ts-common/logger.js";
 import QueuedSourceBuffer from "../ts-common/QueuedSourceBuffer.js";
-import { AudioTrackInfo, VariantInfo } from "../ts-common/types.js";
+import { AudioTrackInfo, VariantInfo, WorkerMessageType } from "../ts-common/types.js";
 import {
   LogLevel,
   MediaType,
@@ -48,6 +48,14 @@ import {
 } from "./transmux.js";
 import { formatErrMessage } from "./utils.js";
 
+// Some environments (such as Safari Desktop) weirdly do not support
+// `performance.now` inside a WebWorker
+const timerFn = typeof performance !== "object" ||
+  performance === null ||
+  typeof performance.now !== "function" ?
+   Date.now.bind(Date) :
+  performance.now.bind(performance);
+
 const generateMediaSourceId = idGenerator();
 const cachedTextDecoder = new TextDecoder("utf-8", {
   ignoreBOM: true,
@@ -69,7 +77,9 @@ export function sendSegmentRequestError(
     return;
   }
   postMessageToMain({
-    type: fatal ? "error" as const : "warning" as const,
+    type: fatal ?
+      WorkerMessageType.Error as const :
+      WorkerMessageType.Warning as const,
     value: {
       contentId,
       errorInfo: {
@@ -99,7 +109,9 @@ export function sendOtherError(
     return;
   }
   postMessageToMain({
-    type: fatal ? "error" as const : "warning" as const,
+    type: fatal ?
+      WorkerMessageType.Error as const :
+      WorkerMessageType.Warning as const,
     value: {
       contentId,
       message,
@@ -125,7 +137,9 @@ export function sendPlaylistParsingError(
     return;
   }
   postMessageToMain({
-    type: fatal ? "error" as const : "warning" as const,
+    type: fatal ?
+      WorkerMessageType.Error as const :
+      WorkerMessageType.Warning as const,
     value: {
       contentId,
       message,
@@ -155,7 +169,7 @@ export function getResourceData(
  * @param {string} logStr
  */
 export function log(logLevel: LogLevel, logStr: string) {
-  const now = performance.now().toFixed(2);
+  const now = timerFn().toFixed(2);
   switch (logLevel) {
     case LogLevel.Error:
       logger.error(now, logStr);
@@ -212,7 +226,7 @@ export function doFetch(
   let timeouted = false;
   const abortController = new AbortController();
   const currentRequestId = requestsStore.create({ abortController });
-  const timestampBef = performance.now();
+  const timestampBef = timerFn();
 
   let timeoutTimeoutId : number | undefined;
   if (timeout !== undefined) {
@@ -237,7 +251,7 @@ export function doFetch(
       }
 
       const arrRes = await res.arrayBuffer();
-      const elapsedMs = performance.now() - timestampBef;
+      const elapsedMs = timerFn() - timestampBef;
       requestsStore.delete(currentRequestId);
       if (dispatcher !== null) {
         const segmentArray = new Uint8Array(arrRes);
@@ -295,7 +309,7 @@ export function abortRequest(id: RequestId) : boolean {
 //     return ;
 //   }
 //   postMessageToMain({
-//     type: "content-warning",
+//     type: WorkerMessageType.Warning,
 //     value: {
 //       contentId: contentInfo.contentId,
 //       code: warningCode,
@@ -313,7 +327,7 @@ export function seek(position: number): void {
     return ;
   }
   postMessageToMain({
-    type: "seek",
+    type: WorkerMessageType.Seek,
     value: {
       mediaSourceId: contentInfo.mediaSourceObj.mediaSourceId,
       position,
@@ -331,7 +345,7 @@ export function setPlaybackRate(position: number): void {
     return ;
   }
   postMessageToMain({
-    type: "update-playback-rate",
+    type: WorkerMessageType.UpdatePlaybackRate,
     value: {
       mediaSourceId: contentInfo.mediaSourceObj.mediaSourceId,
       playbackRate: position,
@@ -360,7 +374,7 @@ export function attachMediaSource(): AttachMediaSourceResult {
         mediaSourceId,
       };
       postMessageToMain({
-        type: "create-media-source",
+        type: WorkerMessageType.CreateMediaSource,
         value: {
           contentId: contentInfo.contentId,
           mediaSourceId,
@@ -394,7 +408,7 @@ export function attachMediaSource(): AttachMediaSourceResult {
         nextSourceBufferId: 0,
       };
       postMessageToMain({
-        type: "attach-media-source",
+        type: WorkerMessageType.AttachMediaSource,
         value: {
           contentId: contentInfo.contentId,
           /* eslint-disable-next-line */
@@ -479,7 +493,7 @@ export function removeMediaSource(): RemoveMediaSourceResult {
   }
 
   postMessageToMain({
-    type: "clear-media-source",
+    type: WorkerMessageType.ClearMediaSource,
     value: { mediaSourceId: contentInfo.mediaSourceObj.mediaSourceId },
   });
   return RemoveMediaSourceResult.success();
@@ -515,7 +529,7 @@ export function setMediaSourceDuration(
     }
   } else {
     postMessageToMain({
-      type: "update-media-source-duration",
+      type: WorkerMessageType.UpdateMediaSourceDuration,
       value: {
         mediaSourceId: contentInfo.mediaSourceObj.mediaSourceId,
         duration,
@@ -575,7 +589,7 @@ export function addSourceBuffer(
       });
       contentInfo.mediaSourceObj.nextSourceBufferId++;
       postMessageToMain({
-        type: "create-source-buffer",
+        type: WorkerMessageType.CreateSourceBuffer,
         value: {
           mediaSourceId: contentInfo.mediaSourceObj.mediaSourceId,
           sourceBufferId,
@@ -744,7 +758,7 @@ export function appendBuffer(
     } else {
       const buffer = segment.buffer;
       postMessageToMain({
-        type: "append-buffer",
+        type: WorkerMessageType.AppendBuffer,
         value: {
           mediaSourceId: mediaSourceObj.mediaSourceId,
           sourceBufferId,
@@ -804,7 +818,7 @@ export function removeBuffer(
         });
     } else {
       postMessageToMain({
-        type: "remove-buffer",
+        type: WorkerMessageType.RemoveBuffer,
         value: {
           mediaSourceId: mediaSourceObj.mediaSourceId,
           sourceBufferId,
@@ -839,7 +853,7 @@ export function endOfStream(): EndOfStreamResult {
       mediaSourceObj.mediaSource.endOfStream();
     } else {
       postMessageToMain({
-        type: "end-of-stream",
+        type: WorkerMessageType.EndOfStream,
         value: { mediaSourceId: mediaSourceObj.mediaSourceId },
       });
     }
@@ -865,7 +879,7 @@ export function startObservingPlayback(): void {
     return;
   }
   postMessageToMain({
-    type: "start-playback-observation",
+    type: WorkerMessageType.StartPlaybackObservation,
     value: { mediaSourceId: contentInfo.mediaSourceObj.mediaSourceId },
   });
 }
@@ -881,7 +895,7 @@ export function stopObservingPlayback() {
     return;
   }
   postMessageToMain({
-    type: "stop-playback-observation",
+    type: WorkerMessageType.StopPlaybackObservation,
     value: { mediaSourceId: contentInfo.mediaSourceObj.mediaSourceId },
   });
 }
@@ -895,7 +909,7 @@ export function setMediaOffset(mediaOffset: number) {
     return;
   }
   postMessageToMain({
-    type: "media-offset-update",
+    type: WorkerMessageType.MediaOffsetUpdate,
     value: {
       contentId: contentInfo.contentId,
       offset: mediaOffset,
@@ -950,7 +964,7 @@ export function updateContentInfo(
     return ;
   }
   postMessageToMain({
-    type: "content-time-update",
+    type: WorkerMessageType.ContentTimeBoundsUpdate,
     value: {
       contentId: contentInfo.contentId,
       minimumPosition,
@@ -1047,11 +1061,36 @@ export function announceFetchedContent(
     }
   }
   postMessageToMain({
-    type: "multivariant-parsed",
+    type: WorkerMessageType.MultiVariantPlaylistParsed,
     value: {
       contentId: contentInfo.contentId,
       variants: variantInfoObj,
       audioTracks: audioTracksObj,
+    },
+  });
+}
+
+export function announceTrackUpdate(
+  mediaType: MediaType,
+  currentAudioTrack: string,
+  isAudioTrackSelected: boolean
+): void {
+  const contentInfo = playerInstance.getContentInfo();
+  const memory = playerInstance.getCurrentWasmMemory();
+  if (contentInfo === null || memory === null) {
+    return ;
+  }
+  postMessageToMain({
+    type: WorkerMessageType.TrackUpdate,
+    value: {
+      mediaType,
+      contentId: contentInfo.contentId,
+      audioTrack: currentAudioTrack ?
+        {
+          current: currentAudioTrack,
+          isSelected: isAudioTrackSelected,
+        } :
+        undefined,
     },
   });
 }
@@ -1064,7 +1103,7 @@ export function announceVariantUpdate(
     return ;
   }
   postMessageToMain({
-    type: "variant-update",
+    type: WorkerMessageType.VariantUpdate,
     value: {
       contentId: contentInfo.contentId,
       variantId,
@@ -1079,7 +1118,7 @@ export function startRebuffering() : void {
     return ;
   }
   postMessageToMain({
-    type: "rebuffering-started",
+    type: WorkerMessageType.RebufferingStarted,
     value: {
       mediaSourceId: contentInfo.mediaSourceObj.mediaSourceId,
       updatePlaybackRate: true,
@@ -1094,7 +1133,7 @@ export function stopRebuffering() : void {
     return ;
   }
   postMessageToMain({
-    type: "rebuffering-ended",
+    type: WorkerMessageType.RebufferingEnded,
     value: {
       mediaSourceId: contentInfo.mediaSourceObj.mediaSourceId,
     },
