@@ -6,7 +6,9 @@ import VariantSetting from "./VariantSetting";
 
 function SettingsWindow({ player }: { player: WaspHlsPlayer }): JSX.Element {
   const [speed, setSpeed] = React.useState(player.getSpeed());
-  const [isAutoVariant, setIsAutoVariant] = React.useState(false);
+  const [isAutoVariant, setIsAutoVariant] = React.useState(
+    player.getLockedVariant() === null
+  );
   const [variant, setVariant] = React.useState<VariantInfo | undefined>(
     player.getCurrentVariant()
   );
