@@ -4,8 +4,8 @@ import {
   logger,
   LoggerLevels,
 } from "../../src";
+import Header from "./components/Header";
 import PlayerContainersWrapper from "./components/PlayerContainersWrapper";
-import Title from "./components/Title";
 
 logger.setLevel(LoggerLevels.Debug);
 
@@ -25,7 +25,7 @@ window.onload = function() : void {
   const root = ReactDOM.createRoot(rootElt);
   root.render(
     <React.StrictMode>
-      <Title />
+      <Header />
       <PlayerContainersWrapper />
     </React.StrictMode>);
 };
