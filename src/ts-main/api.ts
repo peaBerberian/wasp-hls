@@ -77,7 +77,6 @@ interface WaspHlsPlayerEvents {
    * The `getPlayerState` method should now return `Error`.
    */
   error: Error;
-  // TODO
   warning: Error;
   /**
    * Sent when we're starting to rebuffer to build back buffer.

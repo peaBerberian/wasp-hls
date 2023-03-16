@@ -1,3 +1,4 @@
+import logger from "../ts-common/logger";
 import { MainMessageType } from "../ts-common/types";
 import postMessageToWorker from "./postMessageToWorker";
 import { ContentMetadata } from "./types";
@@ -83,7 +84,10 @@ export function clearElementSrc(element: HTMLMediaElement): void {
           try {
             element.removeChild(childNodes[j]);
           } catch (err) {
-            // TODO
+            logger.warn(
+              "Unable to remove track element from media element",
+              err
+            );
           }
         }
       }

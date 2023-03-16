@@ -628,7 +628,6 @@ export function onErrorMessage(
   msg: ErrorWorkerMessage,
   contentMetadata: ContentMetadata | null
 ): Error | null {
-  // TODO
   if (contentMetadata?.contentId !== msg.value.contentId) {
     logger.info("API: Ignoring error due to wrong `contentId`");
     return null;
@@ -642,40 +641,38 @@ export function onErrorMessage(
   // Make sure resources are freed
   contentMetadata.disposeMediaSource?.();
   contentMetadata.stopPlaybackObservations?.();
-  let error: Error;
+
+  const error = formatError(msg);
+  contentMetadata.error = error;
+  return error;
+}
+
+function formatError(msg: ErrorWorkerMessage | WarningWorkerMessage): Error {
   switch (msg.value.errorInfo.type) {
     case "segment-request":
-      error = new WaspSegmentRequestError(
+      return new WaspSegmentRequestError(
         msg.value.errorInfo.value,
         msg.value.message
       );
-      break;
     case "other-error":
-      error = new WaspOtherError(
+      return new WaspOtherError(
         msg.value.errorInfo.value.code,
         msg.value.message
       );
-      break;
     case "source-buffer-creation-error":
-      error = new WaspSourceBufferCreationError(
+      return new WaspSourceBufferCreationError(
         msg.value.errorInfo.value.code,
         msg.value.message
       );
-      break;
     case "playlist-parse":
-      error = new WaspPlaylistParsingError(
+      return new WaspPlaylistParsingError(
         msg.value.errorInfo.value.type,
         msg.value.errorInfo.value.mediaType,
         msg.value.message
       );
-      break;
     default:
-      error = new Error(msg.value.message ?? "An error arised");
-      break;
+      return new Error(msg.value.message ?? "An error arised");
   }
-
-  contentMetadata.error = error;
-  return error;
 }
 
 /**
@@ -692,18 +689,12 @@ export function onWarningMessage(
   msg: WarningWorkerMessage,
   contentMetadata: ContentMetadata | null
 ): Error | null {
-  // TODO
   if (contentMetadata?.contentId !== msg.value.contentId) {
     logger.info("API: Ignoring warning due to wrong `contentId`");
     return null;
   }
-  // logger.warn("Warning received", data.value.code);
-  // this.trigger("warning", {
-  //   code: data.value.code,
-  //   // TODO
-  //   message: undefined,
-  // });
-  return null;
+  const error = formatError(msg);
+  return error;
 }
 
 /**
@@ -878,8 +869,8 @@ function bindMediaSource(
               sourceBuffer.abort();
             }
             mediaSource.removeSourceBuffer(sourceBuffer);
-          } catch (_e) {
-            // TODO
+          } catch (e) {
+            logger.warn("Could not remove SourceBuffer", e);
           }
         }
       }
