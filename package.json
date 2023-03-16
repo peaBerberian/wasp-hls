@@ -13,7 +13,7 @@
     "build:worker:release": "esbuild src/ts-worker/index.ts --bundle --outfile=build/worker.js --minify",
     "build:release": "npm run clean && npm run build:wasm:release && npm run build:worker:release && npm run build:main:release",
     "build:wasm": "npm run compile:rs && npm run move:wasm",
-    "build:wasm:release": "npm run compile:rs:release && npm run move:wasm",
+    "build:wasm:release": "npm run compile:rs:release && npm run move:wasm && node scripts/wasm-strip.js build/wasp_hls_bg.wasm",
     "clippy": "cargo clippy",
     "check": "npm run types && npm run lint",
     "fmt": "npm run fmtr && npm run fmtt",
