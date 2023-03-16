@@ -1,3 +1,3 @@
 import WaspHlsPlayer from "./api";
-export { PlayerState, VariantInfo } from "./types";
+export { PlayerState, AudioTrackInfo, VariantInfo } from "./types";
 export default WaspHlsPlayer;

@@ -38,6 +38,7 @@ import {
   onMultiVariantPlaylistParsedMessage,
   onVariantUpdateMessage,
   onTrackUpdateMessage,
+  onFlushMessage,
 } from "./worker-message-handlers";
 
 // Allows to ensure a never-seen-before identifier is used for each content.
@@ -107,7 +108,7 @@ interface WaspHlsPlayerEvents {
 
   audioTrackListUpdate: AudioTrackInfo[];
 
-  variantsListUpdate: VariantInfo[];
+  variantListUpdate: VariantInfo[];
 }
 
 /** Various statuses that may be set for a WaspHlsPlayer's initialization. */
@@ -575,7 +576,7 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
     return this.__contentMetadata__?.currVariant ?? undefined;
   }
 
-  public getVariantsList(): VariantInfo[] {
+  public getVariantList(): VariantInfo[] {
     return this.__contentMetadata__?.variants ?? [];
   }
 
@@ -730,7 +731,11 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
         case WorkerMessageType.Seek:
           onSeekMessage(data, this.__contentMetadata__, this.videoElement);
           break;
+        case WorkerMessageType.Flush:
+          onFlushMessage(data, this.__contentMetadata__, this.videoElement);
+          break;
         case WorkerMessageType.UpdatePlaybackRate:
+          console.warn("UPDATE PBR", data.value.playbackRate);
           onUpdatePlaybackRateMessage(
             data,
             this.__contentMetadata__,
@@ -798,7 +803,7 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
           if (
             onMultiVariantPlaylistParsedMessage(data, this.__contentMetadata__)
           ) {
-            this.trigger("variantsListUpdate", this.getVariantsList());
+            this.trigger("variantListUpdate", this.getVariantList());
             this.trigger("audioTrackListUpdate", this.getAudioTrackList());
           }
           break;

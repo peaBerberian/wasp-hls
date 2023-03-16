@@ -7,48 +7,48 @@ import { VariantInfo } from "../../../src/ts-main";
  */
 function VariantSetting({
   variant,
-  variantsList,
+  variantList,
   isAuto,
   updateVariant,
 }: {
   variant: VariantInfo | undefined;
-  variantsList: VariantInfo[];
+  variantList: VariantInfo[];
   isAuto: boolean;
   updateVariant: (v: VariantInfo | undefined) => void;
 }): JSX.Element | null {
-  if (variantsList.length < 1) {
+  if (variantList.length < 1) {
     return null;
   }
   const onSelectChange = React.useCallback(
     (evt: React.SyntheticEvent<HTMLSelectElement>) => {
-      if (variantsList.length < 2) {
+      if (variantList.length < 2) {
         return;
       }
       const index = +(evt.target as HTMLSelectElement).value;
       if (index === 0) {
         updateVariant(undefined);
       } else if (index > 0) {
-        const selected = variantsList[index - 1];
+        const selected = variantList[index - 1];
         updateVariant(selected);
       }
     },
-    [variantsList]
+    [variantList]
   );
 
   const selectedIndex =
-    variantsList.length < 2 || isAuto
+    variantList.length < 2 || isAuto
       ? 0
-      : variantsList.findIndex((v) => v.id === variant?.id) + 1;
+      : variantList.findIndex((v) => v.id === variant?.id) + 1;
 
   const optionsEl = React.useMemo(() => {
-    const variantChoices = variantsList.map((v, index) => {
+    const variantChoices = variantList.map((v, index) => {
       return (
         <option key={index + 1} value={index + 1}>
           {getVariantLine(v)}
         </option>
       );
     });
-    if (variantsList.length < 2) {
+    if (variantList.length < 2) {
       return variantChoices;
     }
     const autoString =
@@ -61,13 +61,13 @@ function VariantSetting({
       </option>,
       variantChoices,
     ];
-  }, [isAuto, variant, variantsList]);
+  }, [isAuto, variant, variantList]);
 
   return (
     <div className="video-setting variant-setting">
       <span className="setting-name">{"Quality"}</span>
       <select
-        disabled={variantsList.length < 2}
+        disabled={variantList.length < 2}
         aria-label="Update the current playback variant"
         className="setting-value"
         onChange={onSelectChange}

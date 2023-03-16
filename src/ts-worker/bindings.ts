@@ -337,6 +337,20 @@ export function seek(position: number): void {
   });
 }
 
+export function flush(): void {
+  const contentInfo = playerInstance.getContentInfo();
+  if (contentInfo === null || contentInfo.mediaSourceObj === null) {
+    logger.error("Attempting to flush when no MediaSource is created");
+    return;
+  }
+  postMessageToMain({
+    type: WorkerMessageType.Flush,
+    value: {
+      mediaSourceId: contentInfo.mediaSourceObj.mediaSourceId,
+    },
+  });
+}
+
 /**
  * @param {number} position
  */

@@ -316,7 +316,8 @@ impl Dispatcher {
         // wanted segments is scheduled - for better priorization
         let was_already_locked = self.requester.lock_segment_requests();
         self.requester.update_base_position(Some(wanted_pos));
-        self.segment_selectors.update_base_position(wanted_pos);
+        self.segment_selectors
+            .update_base_position(wanted_pos - 0.5);
         self.check_segments_to_request();
         if !was_already_locked {
             self.requester.unlock_segment_requests();
@@ -325,7 +326,7 @@ impl Dispatcher {
 
     pub fn on_seek(&mut self) {
         let wanted_pos = self.media_element_ref.wanted_position();
-        self.segment_selectors.reset_position(wanted_pos);
+        self.segment_selectors.reset_position(wanted_pos - 0.5);
 
         // TODO better logic than aborting everything on seek?
         self.requester.abort_all_segments();
@@ -460,14 +461,21 @@ impl Dispatcher {
                 return;
             }
         };
+        self.on_media_playlist_changed(&changed_media_types, has_improved || force_urgent);
+        if let Some(pl) = self.playlist_store.as_mut() {
+            jsAnnounceVariantUpdate(pl.curr_variant().map(|v| v.id()));
+        }
+    }
+
+    fn on_media_playlist_changed(&mut self, changed_media_types: &[MediaType], abort_prev: bool) {
         if let Some(pl) = self.playlist_store.as_mut() {
             changed_media_types.iter().for_each(|mt| {
                 let mt = *mt;
                 Logger::info(&format!("{} MediaPlaylist changed", mt));
-                if has_improved || force_urgent {
+                if abort_prev {
                     self.requester.abort_segments_with_type(mt);
                     self.segment_selectors
-                        .reset_position_for_type(mt, self.last_position);
+                        .reset_position_for_type(mt, self.last_position - 0.5);
                 }
                 self.requester.abort_segments_with_type(mt);
                 let selector = self.segment_selectors.get_mut(mt);
@@ -485,7 +493,6 @@ impl Dispatcher {
                     }
                 }
             });
-            jsAnnounceVariantUpdate(pl.curr_variant().map(|v| v.id()));
             self.check_segments_to_request();
         }
     }
@@ -542,6 +549,20 @@ impl Dispatcher {
 
     pub fn on_retry_request(&mut self, id: TimerId) {
         self.requester.on_timer_finished(id);
+    }
+
+    pub fn inner_set_audio_track(&mut self, track_id: Option<String>) {
+        if let Some(ref mut pl) = self.playlist_store {
+            if pl.set_audio_track(track_id) {
+                if let Err(e) = self.media_element_ref.flush(MediaType::Audio) {
+                    Logger::warn(&format!(
+                        "Could not remove data from the previous audio track: {}",
+                        e
+                    ));
+                }
+                self.on_media_playlist_changed(&[MediaType::Audio], true);
+            }
+        }
     }
 }
 

@@ -27,6 +27,7 @@ import {
   VariantUpdateWorkerMessage,
   TrackUpdateWorkerMessage,
   MainMessageType,
+  FlushWorkerMessage,
 } from "../ts-common/types";
 import { MediaType } from "../wasm/wasp_hls";
 import {
@@ -106,6 +107,32 @@ export function onSeekMessage(
   } catch (err) {
     const error = err instanceof Error ? err : "Unknown Error";
     logger.error("Unexpected error while seeking:", error);
+  }
+}
+
+/**
+ * Handles `FlushWorkerMessage` messages.
+ * @param {Object} msg - The worker's message received.
+ * @param {Object|null} contentMetadata - Metadata of the content currently
+ * playing. `null` if no content is currently playing.
+ * This object may be mutated.
+ * @param {HTMLMediaElement} mediaElement - HTMLMediaElement on which the
+ * content plays.
+ */
+export function onFlushMessage(
+  msg: FlushWorkerMessage,
+  contentMetadata: ContentMetadata | null,
+  mediaElement: HTMLMediaElement
+): void {
+  if (contentMetadata?.mediaSourceId !== msg.value.mediaSourceId) {
+    logger.info("API: Ignoring flush due to wrong `mediaSourceId`");
+    return;
+  }
+  try {
+    mediaElement.currentTime = mediaElement.currentTime - 0.001;
+  } catch (err) {
+    const error = err instanceof Error ? err : "Unknown Error";
+    logger.error("Unexpected error while flushing:", error);
   }
 }
 

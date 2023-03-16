@@ -1,6 +1,7 @@
 import * as React from "react";
 import WaspHlsPlayer, { PlayerState } from "../../../src";
-import { VariantInfo } from "../../../src/ts-main";
+import { AudioTrackInfo, VariantInfo } from "../../../src/ts-main";
+import AudioTrackSetting from "./AudioTrackSetting";
 import SpeedSetting from "./SpeedSetting";
 import VariantSetting from "./VariantSetting";
 
@@ -12,8 +13,14 @@ function SettingsWindow({ player }: { player: WaspHlsPlayer }): JSX.Element {
   const [variant, setVariant] = React.useState<VariantInfo | undefined>(
     player.getCurrentVariant()
   );
-  const [variantsList, setVariantsList] = React.useState<VariantInfo[]>(
-    player.getVariantsList()
+  const [variantList, setVariantList] = React.useState<VariantInfo[]>(
+    player.getVariantList()
+  );
+  const [audioTrack, setAudioTrack] = React.useState<
+    AudioTrackInfo | undefined
+  >(player.getAudioTrack());
+  const [audioTrackList, setAudioTrackList] = React.useState<AudioTrackInfo[]>(
+    player.getAudioTrackList()
   );
 
   React.useEffect(() => {
@@ -24,16 +31,18 @@ function SettingsWindow({ player }: { player: WaspHlsPlayer }): JSX.Element {
 
   React.useEffect(() => {
     player.addEventListener("variantUpdate", onVariantUpdate);
-    player.addEventListener("variantsListUpdate", onVariantsListUpdate);
+    player.addEventListener("variantListUpdate", onVariantListUpdate);
+    player.addEventListener("audioTrackUpdate", onAudioTrackUpdate);
+    player.addEventListener("audioTrackListUpdate", onAudioTrackListUpdate);
     player.addEventListener("playerStateChange", onPlayerStateChange);
 
-    setVariantsList(player.getVariantsList());
+    setVariantList(player.getVariantList());
     setVariant(player.getCurrentVariant());
     setIsAutoVariant(player.getLockedVariant() === null);
     setSpeed(player.getSpeed());
     return () => {
       player.removeEventListener("variantUpdate", onVariantUpdate);
-      player.removeEventListener("variantsListUpdate", onVariantsListUpdate);
+      player.removeEventListener("variantListUpdate", onVariantListUpdate);
       player.removeEventListener("playerStateChange", onPlayerStateChange);
     };
 
@@ -41,8 +50,16 @@ function SettingsWindow({ player }: { player: WaspHlsPlayer }): JSX.Element {
       setVariant(v);
     }
 
-    function onVariantsListUpdate(vl: VariantInfo[]) {
-      setVariantsList(vl);
+    function onVariantListUpdate(vl: VariantInfo[]) {
+      setVariantList(vl);
+    }
+
+    function onAudioTrackUpdate(v: AudioTrackInfo | undefined) {
+      setAudioTrack(v);
+    }
+
+    function onAudioTrackListUpdate(vl: AudioTrackInfo[]) {
+      setAudioTrackList(vl);
     }
 
     function onPlayerStateChange(playerState: PlayerState): void {
@@ -51,7 +68,9 @@ function SettingsWindow({ player }: { player: WaspHlsPlayer }): JSX.Element {
         case PlayerState.Stopped:
         case PlayerState.Error:
           setVariant(undefined);
-          setVariantsList([]);
+          setVariantList([]);
+          setAudioTrack(undefined);
+          setAudioTrackList([]);
           break;
       }
     }
@@ -70,11 +89,25 @@ function SettingsWindow({ player }: { player: WaspHlsPlayer }): JSX.Element {
     [player]
   );
 
+  const updateAudioTrack = React.useCallback(
+    (t: AudioTrackInfo) => {
+      player.setAudioTrack(t.id);
+      setAudioTrack(t);
+    },
+    [player]
+  );
+
   return (
     <div className="settings visible">
+      <AudioTrackSetting
+        audioTrack={audioTrack}
+        audioTrackList={audioTrackList}
+        isAuto={isAutoVariant}
+        updateAudioTrack={updateAudioTrack}
+      />
       <VariantSetting
         variant={variant}
-        variantsList={variantsList}
+        variantList={variantList}
         isAuto={isAutoVariant}
         updateVariant={updateVariant}
       />

@@ -118,7 +118,6 @@ export default React.memo(function ControlBar({
     };
 
     function onPlayerStateChange(playerState: PlayerState): void {
-      console.error("NEW PLAYER State", playerState);
       switch (playerState) {
         case PlayerState.Loading:
           setIsPaused(true);

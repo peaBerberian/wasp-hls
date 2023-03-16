@@ -166,15 +166,15 @@ most do not prevent playback):
   - [x] DEFAULT
   - [x] AUTOSELECT
   - [x] STABLE-RENDITION-ID: Help to identify a Media Playlist with its URI
-  - [ ] LANGUAGE: No track selection API yet
-  - [ ] ASSOC-LANGUAGE: No track selection API yet
-  - [ ] NAME: No track selection API yet
+  - [x] LANGUAGE: In audio track selection API
+  - [x] ASSOC-LANGUAGE: In audio track selection API
+  - [x] NAME: In audio track selection API
+  - [x] CHANNELS: In audio track selection API
+  - [ ] CHARACTERISTICS: Soon....
   - [ ] FORCED: As the SUBTITLES TYPE is not handled yet, we don't have to use
         this one
   - [ ] INSTREAM-ID: As the CLOSED-CAPTIONS TYPE is not handled yet, we don't
         have to use this one
-  - [ ] CHARACTERISTICS: No track selection API yet
-  - [ ] CHANNELS: No track selection API yet
 - EXT-X-STREAM-INF:
   - [x] BANDWIDTH: Used to select the right variant in function of the
         bandwidth

@@ -130,4 +130,4 @@ export const enum PlayerState {
   Error = "Error",
 }
 
-export { VariantInfo };
+export { AudioTrackInfo, VariantInfo };

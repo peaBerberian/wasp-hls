@@ -276,6 +276,16 @@ impl MediaElementReference {
         }
     }
 
+    pub(crate) fn flush(&mut self, media_type: MediaType) -> Result<(), RemoveDataError> {
+        match self.get_buffer_mut(media_type) {
+            None => Err(RemoveDataError::NoSourceBuffer(media_type)),
+            Some(sb) => {
+                sb.flush_buffer();
+                Ok(())
+            }
+        }
+    }
+
     /// Method to call once a `MediaObservation` has been received.
     pub(crate) fn on_observation(&mut self, observation: MediaObservation) {
         self.last_observation = Some(observation);

@@ -192,7 +192,6 @@ extern "C" {
     // playback's playhead.
     pub fn jsSeek(position: f64);
 
-    // XXX TODO
     pub fn jsFlush();
 
     //    // Get the content of what has been buffered by the SourceBuffer, in terms of contiguous

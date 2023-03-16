@@ -44,11 +44,13 @@ impl NextSegmentSelectors {
     }
 
     pub fn reset_position(&mut self, pos: f64) {
+        let pos = f64::max(0., pos);
         self.audio.reset_position(pos);
         self.video.reset_position(pos);
     }
 
     pub fn reset_position_for_type(&mut self, mt: MediaType, pos: f64) {
+        let pos = f64::max(0., pos);
         match mt {
             MediaType::Audio => self.audio.reset_position(pos),
             MediaType::Video => self.video.reset_position(pos),

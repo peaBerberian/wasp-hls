@@ -74,6 +74,7 @@ export type WorkerMessage =
 
   // HTMLMediaElement/MSE actions
   | SeekWorkerMessage
+  | FlushWorkerMessage
   | UpdatePlaybackRateWorkerMessage
   | AttachMediaSourceWorkerMessage
   | CreateMediaSourceWorkerMessage
@@ -111,6 +112,7 @@ export const enum WorkerMessageType {
   TrackUpdate = "track-upd",
   ContentStopped = "ctnt-stop",
   Seek = "seek",
+  Flush = "flush",
   UpdatePlaybackRate = "upd-pbr",
   AttachMediaSource = "attach-ms",
   CreateMediaSource = "create-ms",
@@ -420,6 +422,19 @@ export interface SeekWorkerMessage {
      * to put on the HTMLMediaElement's `currentTime` property.
      */
     position: number;
+  };
+}
+
+/** Message sent when the Worker want to flush the media element */
+export interface FlushWorkerMessage {
+  type: WorkerMessageType.Flush;
+  value: {
+    /**
+     * Identify the MediaSource currently used by the worker.
+     * The main thread should only seek if the same MediaSource is still being
+     * used.
+     */
+    mediaSourceId: string;
   };
 }
 

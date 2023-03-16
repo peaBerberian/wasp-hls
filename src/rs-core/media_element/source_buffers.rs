@@ -1,5 +1,5 @@
 use crate::bindings::{
-    jsAddSourceBuffer, jsAppendBuffer, jsRemoveBuffer, AddSourceBufferErrorCode,
+    jsAddSourceBuffer, jsAppendBuffer, jsFlush, jsRemoveBuffer, AddSourceBufferErrorCode,
     AppendBufferErrorCode, JsMemoryBlob, JsResult, MediaType, ParsedSegmentInfo, SourceBufferId,
 };
 use crate::Logger;
@@ -30,6 +30,8 @@ pub(super) struct SourceBuffer {
 
     /// The MediaType associated to this `SourceBuffer`.
     media_type: MediaType,
+
+    is_flushed: bool,
 }
 
 impl SourceBuffer {
@@ -42,6 +44,7 @@ impl SourceBuffer {
                 typ,
                 queue: vec![],
                 was_used: false,
+                is_flushed: false,
                 last_segment_pushed: false,
                 media_type,
             }),
@@ -100,6 +103,21 @@ impl SourceBuffer {
         jsRemoveBuffer(self.id, start, end);
     }
 
+    /// Empty media data from this `SourceBuffer`.
+    ///
+    /// There's special considerations too take care of here as we'll remove data corresponding to
+    /// the current position. As such a seek will have to be performed once the remove is done
+    pub(super) fn flush_buffer(&mut self) {
+        self.was_used = true;
+        let start = 0.;
+        let end = f64::INFINITY;
+        self.is_flushed = true;
+        self.queue
+            .push(SourceBufferQueueElement::Remove { start, end });
+        Logger::debug(&format!("Buffer {} ({}): flushing", self.id, self.typ));
+        jsRemoveBuffer(self.id, start, end);
+    }
+
     /// Indicate to this `SourceBuffer` that the last chronological segment has been pushed.
     pub(super) fn announce_last_segment_pushed(&mut self) {
         self.last_segment_pushed = true;
@@ -112,8 +130,15 @@ impl SourceBuffer {
 
     /// To call once a `SourceBuffer` operation, either created through `append_buffer` or
     /// `remove_buffer`, has been finished by the underlying MSE SourceBuffer.
-    pub(super) fn on_operation_end(&mut self) {
-        self.queue.remove(0);
+    pub(super) fn on_operation_end(&mut self) -> SourceBufferQueueElement {
+        let queue_elt = self.queue.remove(0);
+        if let SourceBufferQueueElement::Push { .. } = &queue_elt {
+            if self.is_flushed {
+                self.is_flushed = false;
+                jsFlush();
+            }
+        };
+        queue_elt
     }
 
     //     pub(super) fn buffered(&self) -> Vec<(f64, f64)> {
