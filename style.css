@@ -1,0 +1,373 @@
+body {
+  margin: 0;
+  padding: 0;
+}
+
+#main {
+  text-align: center;
+}
+
+.nav-header {
+  position: relative;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 15px 0 15px;
+  background-color: #006ca3;
+  color: #ffffff;
+  z-index: 10;
+  min-width: 542px;
+  margin-bottom: 30px;
+  padding: 10px 10px;
+}
+
+.title {
+  height: 60px;
+}
+
+.inputs-container {
+  margin-bottom: 7px;
+}
+
+.remove-player {
+  float: right;
+  margin: -5px -5px 0px 0px;
+}
+
+.white-button {
+  cursor: pointer;
+  background-color: #008bd3;
+  font-weight: bold;
+  border-radius: 3px;
+  color: #fff;
+  padding: 5px 7px;
+  border: none;
+  font-size: 0.79em;
+}
+
+.create-new-player {
+  margin-bottom: 10px;
+}
+
+.white-button:hover {
+  background-color: #fff900;
+  padding: 3px 5px;
+  border: 2px solid #008bd3;
+  color: black;
+}
+
+.player-container {
+  width: 80%;
+  min-width: 542px;
+  margin: 15px auto;
+}
+
+.player-parent {
+  margin-bottom: 30px;
+  border: 1px dotted black;
+  padding: 10px;
+  min-width: 520px;
+}
+
+.video-container {
+  width: 80%;
+  min-width: 500px;
+  position: relative;
+  max-width: 1280px;
+  max-height: 720px;
+  margin: 0px auto 7px auto;
+}
+
+.video-element-wrapper {
+  height: 100%;
+  width: 100%;
+  display: flex;
+  position: absolute;
+  background-color: #000;
+  justify-content: center;
+}
+
+.video-small {
+  max-width: 100%;
+  max-height: 100%;
+}
+
+.clickable {
+  cursor: pointer;
+}
+
+.input-url {
+  margin: 5px;
+  width: 90%;
+  max-width: 600px;
+}
+
+@keyframes inline-spinner-kf {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+.inline-spinner,
+.inline-spinner:before {
+  display: inline-block;
+  width: 55px;
+  height: 55px;
+  transform-origin: 50%;
+  border: 2px solid transparent;
+  border-color: #006ca3 #006ca3 transparent transparent;
+  border-radius: 50%;
+  content: "";
+  animation: linear inline-spinner-kf 900ms infinite;
+  position: relative;
+  vertical-align: inherit;
+  line-height: inherit;
+}
+
+.inline-spinner {
+  top: 3px;
+  margin: 0 3px;
+}
+
+.inline-spinner:before {
+  border-color: #006ca3 #006ca3 transparent transparent;
+  position: absolute;
+  left: -2px;
+  top: -2px;
+  border-style: solid;
+}
+
+.control-bar.visible {
+  visibility: visible;
+  opacity: 1;
+  transition: opacity 0.1s linear;
+}
+
+.control-bar.hidden {
+  visibility: hidden;
+  opacity: 0;
+  transition: visibility 0s 0.5s, opacity 0.5s linear;
+}
+
+.video-controls {
+  display: flex;
+  width: 100%;
+  margin-bottom: 0px;
+  position: absolute;
+  bottom: 0px;
+  height: 44px;
+  background-color: #0007;
+}
+
+.video-controls-left {
+  margin-left: 6px;
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+  flex-grow: 1;
+}
+
+.video-controls-right {
+  margin-right: 10px;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  flex-grow: 1;
+}
+
+.video-controls-button {
+  width: 1.8rem;
+  height: 1.8rem;
+  background: none;
+  border: none;
+  cursor: pointer;
+  margin: 0px 6px;
+  padding: 0px;
+}
+
+.video-controls-button:disabled {
+  cursor: default;
+}
+
+.video-controls-button svg {
+  fill: #dedede;
+  height: 25px;
+  width: 25px;
+}
+
+.video-controls-button:hover svg {
+  fill: #fff;
+}
+
+.video-controls-button:disabled svg {
+  fill: #777;
+}
+
+.volume-container {
+  position: relative;
+  display: flex;
+  padding: 1px 5px;
+  align-items: center;
+}
+
+.volume-bar-wrapper {
+  height: 6px;
+  position: relative;
+  background-color: #555;
+  cursor: pointer;
+  width: 60px;
+  border-radius: 10px;
+}
+
+.volume-bar-current {
+  height: 100%;
+  background-color: #dedede;
+  border-radius: 10px;
+}
+
+.volume-container:hover .volume-bar-current {
+  background-color: #fff;
+}
+
+.progress-bar-wrapper {
+  height: 5px;
+  cursor: pointer;
+  display: flex;
+  background-color: #5d5c5caa;
+  margin: auto;
+  transition: all 0.2s ease;
+  z-index: 9999;
+  width: 100%;
+  margin-bottom: 7px;
+  position: absolute;
+  bottom: 40px;
+}
+
+.progress-bar-wrapper:hover {
+  transform: scaleY(2.5);
+}
+
+.progress-bar-current {
+  position: absolute;
+  left: 0;
+  height: 100%;
+  background-color: #eee;
+  z-index: 3;
+  transition-duration: 0.1s;
+}
+
+.progress-bar-wrapper:hover .progress-bar-current {
+  background-color: #fff;
+}
+
+.progress-bar-buffered {
+  position: absolute;
+  height: 100%;
+  background-color: #747474;
+  z-index: 2;
+  transition-duration: 0.3s;
+}
+
+.progress-current-position {
+  color: #fff;
+  display: inline-block;
+  position: relative;
+  margin: auto;
+  width: 41px;
+  text-align: center;
+}
+
+.progress-duration {
+  color: #fff;
+  display: inline-block;
+  position: relative;
+  margin: auto;
+  width: 41px;
+  text-align: center;
+}
+
+.position-info {
+  color: #ddd;
+  font-size: 14px;
+  font-family: Arial,Helvetica,sans-serif;
+  margin: 0px 5px;
+}
+
+.spinner-wrapper {
+  transform-origin: center;
+  animation: spinner_anim 1.3s infinite linear;
+  height: 100%;
+  position: absolute;
+  fill: #e2ff00;
+  width: 50px;
+  margin-left: -25px;
+}
+.spinner {
+  transform-origin: center;
+  animation: spinner_anim 1.3s infinite linear;
+}
+@keyframes spinner_anim{
+  100%{
+    transform:rotate(360deg)
+  }
+}
+
+.video-element-error {
+  color: #fff;
+  z-index: 500;
+  position: absolute;
+  width: 100%;
+  padding-top: 20px;
+}
+.video-element-error-name {
+  color: #bad200;
+}
+.video-element-error-message {
+  margin-top: 5px;
+}
+
+.canvas-buffer-size-container {
+  margin: 8px;
+}
+.canvas-buffer-size {
+  padding: 10px;
+  border: 1px dashed black;
+}
+
+.settings.visible {
+  position: absolute;
+  color: white;
+  font-size: 0.95em;
+  background-color: #1c1c1cad;
+  bottom: 65px;
+  right: 10px;
+  padding: 0px 10px;
+  font-family: "Open Sans", sans-serif;
+}
+.settings.hidden {
+  transition: visibility 0s 0.5s, opacity 0.5s linear;
+}
+.video-setting {
+  margin: 14px 0 14px 0;
+  display: flex;
+  justify-content: space-between;
+  min-width: 230px;
+}
+.setting-name {
+  margin-right: 10px;
+}
+.setting-value {
+  background-color: transparent;
+  border: none;
+  color: #fff;
+  font-weight: bold;
+  text-align: left;
+  cursor: pointer;
+}
+.setting-value option {
+  background-color: #000;
+  color: #fff;
+}
