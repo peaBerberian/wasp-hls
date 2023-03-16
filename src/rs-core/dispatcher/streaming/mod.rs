@@ -452,7 +452,7 @@ impl Dispatcher {
         }
     }
 
-    fn handle_variant_update(&mut self, result: VariantUpdateResult, force_urgent: bool) {
+    fn handle_variant_update(&mut self, result: VariantUpdateResult, flush: bool) {
         let (changed_media_types, has_improved) = match result {
             VariantUpdateResult::Improved(mt) => (mt, true),
             VariantUpdateResult::EqualOrUnknown(mt) => (mt, false),
@@ -461,13 +461,13 @@ impl Dispatcher {
                 return;
             }
         };
-        self.on_media_playlist_changed(&changed_media_types, has_improved || force_urgent);
+        self.on_media_playlist_changed(&changed_media_types, has_improved, flush);
         if let Some(pl) = self.playlist_store.as_mut() {
             jsAnnounceVariantUpdate(pl.curr_variant().map(|v| v.id()));
         }
     }
 
-    fn on_media_playlist_changed(&mut self, changed_media_types: &[MediaType], abort_prev: bool) {
+    fn on_media_playlist_changed(&mut self, changed_media_types: &[MediaType], abort_prev: bool, flush: bool) {
         if let Some(pl) = self.playlist_store.as_mut() {
             changed_media_types.iter().for_each(|mt| {
                 let mt = *mt;
@@ -476,6 +476,14 @@ impl Dispatcher {
                     self.requester.abort_segments_with_type(mt);
                     self.segment_selectors
                         .reset_position_for_type(mt, self.last_position - 0.5);
+                }
+                if flush {
+                    if let Err(e) = self.media_element_ref.flush(mt) {
+                        Logger::warn(&format!(
+                            "Could not remove data from the previous {mt} buffer: {}",
+                            e
+                        ));
+                    }
                 }
                 self.requester.abort_segments_with_type(mt);
                 let selector = self.segment_selectors.get_mut(mt);
@@ -554,13 +562,7 @@ impl Dispatcher {
     pub fn inner_set_audio_track(&mut self, track_id: Option<String>) {
         if let Some(ref mut pl) = self.playlist_store {
             if pl.set_audio_track(track_id) {
-                if let Err(e) = self.media_element_ref.flush(MediaType::Audio) {
-                    Logger::warn(&format!(
-                        "Could not remove data from the previous audio track: {}",
-                        e
-                    ));
-                }
-                self.on_media_playlist_changed(&[MediaType::Audio], true);
+                self.on_media_playlist_changed(&[MediaType::Audio], true, true);
             }
         }
     }
