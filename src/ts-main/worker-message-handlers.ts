@@ -104,7 +104,8 @@ export function onSeekMessage(
   try {
     mediaElement.currentTime = msg.value.position;
   } catch (err) {
-    logger.error("Unexpected error while seeking:", err);
+    const error = err instanceof Error ? err : "Unknown Error";
+    logger.error("Unexpected error while seeking:", error);
   }
 }
 
@@ -131,7 +132,8 @@ export function onUpdatePlaybackRateMessage(
   try {
     mediaElement.playbackRate = msg.value.playbackRate;
   } catch (err) {
-    logger.error("Unexpected error while changing the playback rate:", err);
+    const error = err instanceof Error ? err : "Unknown Error";
+    logger.error("Unexpected error while changing the playback rate:", error);
   }
 }
 
@@ -249,7 +251,8 @@ export function onClearMediaSourceMessage(
     contentMetadata.disposeMediaSource?.();
     clearElementSrc(mediaElement);
   } catch (err) {
-    logger.warn("API: Error when clearing current MediaSource:", err);
+    const error = err instanceof Error ? err : "Unknown Error";
+    logger.warn("API: Error when clearing current MediaSource:", error);
   }
 }
 
@@ -870,7 +873,8 @@ function bindMediaSource(
             }
             mediaSource.removeSourceBuffer(sourceBuffer);
           } catch (e) {
-            logger.warn("Could not remove SourceBuffer", e);
+            const error = e instanceof Error ? e : "Unknown Error";
+            logger.warn("Could not remove SourceBuffer", error);
           }
         }
       }

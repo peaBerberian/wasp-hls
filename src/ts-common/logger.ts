@@ -10,8 +10,7 @@ export const enum LoggerLevel {
 }
 
 type ConsoleFunction = (
-  // TODO remove unknown here
-  ...args: Array<boolean | string | number | Error | null | unknown | undefined>
+  ...args: Array<boolean | string | number | Error | null | undefined>
 ) => void;
 
 const DEFAULT_LOG_LEVEL = LoggerLevel.None;
@@ -22,8 +21,6 @@ interface LoggerEvents {
 
 /**
  * Logger implementation.
- *
- * TODO how to synchronize with worker?
  * @class Logger
  */
 export class Logger extends EventEmitter<LoggerEvents> {

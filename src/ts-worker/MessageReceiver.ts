@@ -79,7 +79,8 @@ export default function MessageReceiver() {
         try {
           dispatcher.stop();
         } catch (err) {
-          logger.error("Error: when stopping the content:", err);
+          const error = err instanceof Error ? err : "Unknown Error";
+          logger.error("Error: when stopping the content:", error);
         }
         postMessageToMain({
           type: WorkerMessageType.ContentStopped,
@@ -154,7 +155,7 @@ export default function MessageReceiver() {
         }
         dispatcher.stop();
 
-        // TODO re-dispatch ContentError
+        // TODO re-dispatch Error
         break;
       }
 
@@ -168,7 +169,6 @@ export default function MessageReceiver() {
         ) {
           return;
         }
-        // TODO this should proably not be sent
         logger.error("Error: when setting the MediaSource's duration");
         break;
       }
@@ -185,7 +185,7 @@ export default function MessageReceiver() {
         }
         dispatcher.stop();
 
-        // TODO re-dispatch ContentError
+        // TODO re-dispatch Error
         break;
       }
 

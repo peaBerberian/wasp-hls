@@ -84,9 +84,11 @@ export function clearElementSrc(element: HTMLMediaElement): void {
           try {
             element.removeChild(childNodes[j]);
           } catch (err) {
+            const error =
+              err instanceof Error ? err.toString() : "Unknown Error";
             logger.warn(
               "Unable to remove track element from media element",
-              err
+              error
             );
           }
         }

@@ -751,7 +751,8 @@ export function appendBuffer(
               .getDispatcher()
               ?.on_source_buffer_update(sourceBufferId);
           } catch (err) {
-            logger.error("Error when calling `on_source_buffer_update`", err);
+            const error = err instanceof Error ? err : "Unknown Error";
+            logger.error("Error when calling `on_source_buffer_update`", error);
           }
         })
         .catch(() => {
@@ -760,7 +761,8 @@ export function appendBuffer(
               .getDispatcher()
               ?.on_source_buffer_error(sourceBufferId);
           } catch (err) {
-            logger.error("Error when calling `on_source_buffer_error`", err);
+            const error = err instanceof Error ? err : "Unknown Error";
+            logger.error("Error when calling `on_source_buffer_error`", error);
           }
         });
     } else {
@@ -821,7 +823,8 @@ export function removeBuffer(
               .getDispatcher()
               ?.on_source_buffer_update(sourceBufferId);
           } catch (err) {
-            logger.error("Error when calling `on_source_buffer_update`", err);
+            const error = err instanceof Error ? err : "Unknown Error";
+            logger.error("Error when calling `on_source_buffer_update`", error);
           }
         })
         .catch(() => {
@@ -830,7 +833,8 @@ export function removeBuffer(
               .getDispatcher()
               ?.on_source_buffer_error(sourceBufferId);
           } catch (err) {
-            logger.error("Error when calling `on_source_buffer_error`", err);
+            const error = err instanceof Error ? err : "Unknown Error";
+            logger.error("Error when calling `on_source_buffer_error`", error);
           }
         });
     } else {

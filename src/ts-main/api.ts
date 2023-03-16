@@ -869,7 +869,8 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
 
     // TODO check on which case this is triggered
     worker.onerror = (ev: ErrorEvent) => {
-      logger.error("API: Worker Error encountered", ev.error);
+      const error = ev.error instanceof Error ? ev.error : "Unknown Error";
+      logger.error("API: Worker Error encountered", error);
       if (mayStillReject) {
         rejectProm(ev.error);
       }
@@ -901,7 +902,8 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
         if (this.__contentMetadata__ !== null) {
           this.__contentMetadata__.loadingAborter = undefined;
         }
-        logger.info("Could not load content:", reason);
+        const err = reason instanceof Error ? reason : "Unknown reason";
+        logger.info("Could not load content:", err);
       }
     );
   }
