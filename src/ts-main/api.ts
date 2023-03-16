@@ -5,6 +5,7 @@ import logger, {
 } from "../ts-common/logger";
 import noop from "../ts-common/noop";
 import {
+  AudioTrackInfo,
   VariantInfo,
   WaspHlsPlayerConfig,
   WorkerMessage,
@@ -108,6 +109,8 @@ interface WaspHlsPlayerEvents {
   rebufferingEnded: null;
 
   variantUpdate: VariantInfo | undefined;
+
+  audioTrackListUpdate: AudioTrackInfo[];
 
   variantsListUpdate: VariantInfo[];
 
@@ -335,6 +338,7 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
       disposeMediaSource: null,
       sourceBuffers: [],
       variants: [],
+      audioTracks: [],
       currVariant: undefined,
       lockedVariant: null,
       stopPlaybackObservations: null,
@@ -580,6 +584,10 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
     return this.__contentMetadata__?.variants ?? [];
   }
 
+  public getAudioTrackList(): AudioTrackInfo[] {
+    return this.__contentMetadata__?.audioTracks ?? [];
+  }
+
   public lockVariant(variantId: string) {
     if (this.__worker__ === null) {
       throw new Error("The Player is not initialized or disposed.");
@@ -740,6 +748,7 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
         case "multivariant-parsed":
           if (onMultiVariantPlaylistParsedMessage(data, this.__contentMetadata__)) {
             this.trigger("variantsListUpdate", this.getVariantsList());
+            this.trigger("audioTrackListUpdate", this.getAudioTrackList());
           }
           break;
         case "variant-update":

@@ -1,7 +1,7 @@
 import idGenerator from "../ts-common/idGenerator.js";
 import logger from "../ts-common/logger.js";
 import QueuedSourceBuffer from "../ts-common/QueuedSourceBuffer.js";
-import { VariantInfo } from "../ts-common/types.js";
+import { AudioTrackInfo, VariantInfo } from "../ts-common/types.js";
 import {
   LogLevel,
   MediaType,
@@ -960,7 +960,8 @@ export function updateContentInfo(
 }
 
 export function announceFetchedContent(
-  variantInfo: Uint32Array
+  variantInfo: Uint32Array,
+  audioTracksInfo: Uint32Array
 ): void {
   const contentInfo = playerInstance.getContentInfo();
   const memory = playerInstance.getCurrentWasmMemory();
@@ -968,41 +969,89 @@ export function announceFetchedContent(
     return ;
   }
   const variantInfoObj : VariantInfo[] = [];
-  let i = 0;
-  i++; // Skip number of variants
-  while (i < variantInfo.length) {
-    const idLen = variantInfo[i];
-    i++;
+  {
+    let i = 0;
+    i++; // Skip number of variants
+    while (i < variantInfo.length) {
+      const idLen = variantInfo[i];
+      i++;
 
-    const idU8 = new Uint8Array(memory.buffer, variantInfo[i], idLen);
-    i++;
-    const id = cachedTextDecoder.decode(idU8);
+      const idU8 = new Uint8Array(memory.buffer, variantInfo[i], idLen);
+      i++;
+      const id = cachedTextDecoder.decode(idU8);
 
-    const height = variantInfo[i];
-    i++;
+      const height = variantInfo[i];
+      i++;
 
-    const width = variantInfo[i];
-    i++;
+      const width = variantInfo[i];
+      i++;
 
-    const frameRate = variantInfo[i];
-    i++;
+      const frameRate = variantInfo[i];
+      i++;
 
-    const bandwidth = variantInfo[i];
-    i++;
+      const bandwidth = variantInfo[i];
+      i++;
 
-    variantInfoObj.push({
-      id,
-      height,
-      width,
-      frameRate,
-      bandwidth,
-    });
+      variantInfoObj.push({
+        id,
+        height,
+        width,
+        frameRate,
+        bandwidth,
+      });
+    }
+  }
+  const audioTracksObj : AudioTrackInfo[] = [];
+  {
+    let i = 0;
+    i++; // Skip number of audio tracks
+    while (i < audioTracksInfo.length) {
+      const idLen = audioTracksInfo[i];
+      i++;
+      const idU8 = new Uint8Array(memory.buffer, audioTracksInfo[i], idLen);
+      i++;
+      const id = cachedTextDecoder.decode(idU8);
+
+      const languageLen = audioTracksInfo[i];
+      i++;
+      const languageU8 = new Uint8Array(memory.buffer, audioTracksInfo[i], languageLen);
+      i++;
+      const language = cachedTextDecoder.decode(languageU8);
+
+      const assocLanguageLen = audioTracksInfo[i];
+      i++;
+      const assocLanguageU8 = new Uint8Array(
+        memory.buffer,
+        audioTracksInfo[i],
+        assocLanguageLen
+      );
+      i++;
+      const assocLanguage = cachedTextDecoder.decode(assocLanguageU8);
+
+      const nameLen = audioTracksInfo[i];
+      i++;
+      const nameU8 = new Uint8Array(memory.buffer, audioTracksInfo[i], nameLen);
+      i++;
+      const name = cachedTextDecoder.decode(nameU8);
+
+      const channels = audioTracksInfo[i];
+      i++;
+
+      audioTracksObj.push({
+        id,
+        language: language === "" ? undefined : language,
+        assocLanguage: assocLanguage === "" ? undefined : assocLanguage,
+        name,
+        channels,
+      });
+    }
   }
   postMessageToMain({
     type: "multivariant-parsed",
     value: {
       contentId: contentInfo.contentId,
       variants: variantInfoObj,
+      audioTracks: audioTracksObj,
     },
   });
 }

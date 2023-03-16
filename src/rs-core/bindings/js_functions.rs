@@ -214,7 +214,7 @@ extern "C" {
 
     pub fn jsUpdateContentInfo(minimum_position: Option<f64>, maximum_position: Option<f64>);
 
-    pub fn jsAnnounceFetchedContent(variant_info: Vec<u32>);
+    pub fn jsAnnounceFetchedContent(variant_info: Vec<u32>, audio_tracks_info: Vec<u32>);
 
     pub fn jsAnnounceVariantUpdate(variant_id: Option<&str>);
 

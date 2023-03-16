@@ -178,6 +178,8 @@ impl MultiVariantPlaylist {
                                 m.id().to_owned(),
                             )
                         } else {
+                            // AudioTrack without URL have in fact their MediaPlaylist's URL in the
+                            // variant
                             MediaPlaylistPermanentId::new(
                                 MediaPlaylistUrlLocation::Variant,
                                 curr_variant.id().to_owned(),
@@ -196,6 +198,8 @@ impl MultiVariantPlaylist {
                                 m.id().to_owned(),
                             ))
                         } else {
+                            // AudioTrack without URL have in fact their MediaPlaylist's URL in the
+                            // variant
                             Some(MediaPlaylistPermanentId::new(
                                 MediaPlaylistUrlLocation::Variant,
                                 curr_variant.id().to_owned(),

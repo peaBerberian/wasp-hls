@@ -3,7 +3,7 @@ use std::cmp::Ordering;
 use super::{Dispatcher, MediaSourceReadyState, PlayerReadyState};
 use crate::{
     bindings::{
-        formatters::{format_source_buffer_creation_err_for_js, format_variants_info_for_js},
+        formatters::{format_source_buffer_creation_err_for_js, format_variants_info_for_js, format_audio_tracks_for_js},
         jsAnnounceFetchedContent, jsAnnounceVariantUpdate, jsSendOtherError,
         jsSendPlaylistParsingError, jsSendSegmentRequestError, jsSendSourceBufferCreationError,
         jsSetMediaSourceDuration, jsStartObservingPlayback, jsStopObservingPlayback, jsTimer,
@@ -161,8 +161,9 @@ impl Dispatcher {
                 // synchronously on call, we should not encounter any issue.
                 let variants_info =
                     unsafe { format_variants_info_for_js(playlist_store.variants()) };
-                // let available_audio_tracks = playlist_store.available_audio_tracks();
-                jsAnnounceFetchedContent(variants_info);
+                let audio_tracks_info =
+                    unsafe { format_audio_tracks_for_js(playlist_store.audio_tracks()) };
+                jsAnnounceFetchedContent(variants_info, audio_tracks_info);
 
                 use PlaylistFileType::*;
                 // TODO lowest/latest bandwidth first?

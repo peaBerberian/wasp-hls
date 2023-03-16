@@ -299,6 +299,7 @@ export interface MultiVariantPlaylistParsedWorkerMessage {
      */
     contentId: string;
     variants: VariantInfo[];
+    audioTracks: AudioTrackInfo[];
   };
 }
 
@@ -308,6 +309,14 @@ export interface VariantInfo {
   height: number;
   frameRate: number;
   bandwidth: number;
+}
+
+export interface AudioTrackInfo {
+  id: string;
+  language?: string | undefined;
+  assocLanguage?: string | undefined;
+  name: string;
+  channels?: number | undefined;
 }
 
 /**

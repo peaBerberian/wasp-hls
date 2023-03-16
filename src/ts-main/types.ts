@@ -1,5 +1,5 @@
 import QueuedSourceBuffer from "../ts-common/QueuedSourceBuffer";
-import { VariantInfo } from "../ts-common/types";
+import { AudioTrackInfo, VariantInfo } from "../ts-common/types";
 
 /**
  * Structure storing metadata associated to a content being played by a
@@ -94,13 +94,15 @@ export interface ContentMetadata {
    */
   wantedSpeed: number;
 
-  minimumPosition : number | undefined;
+  minimumPosition: number | undefined;
 
-  maximumPosition : number | undefined;
+  maximumPosition: number | undefined;
 
-  currVariant : VariantInfo | undefined;
+  currVariant: VariantInfo | undefined;
 
-  variants : VariantInfo[];
+  variants: VariantInfo[];
+
+  audioTracks: AudioTrackInfo[];
 
   lockedVariant: string | null;
 

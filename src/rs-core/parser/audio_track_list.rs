@@ -18,10 +18,10 @@ impl AudioTrackList {
             // Check if the track already exist in another encoding quality
             // TODO also check characteristics
             let pos_compat = available_audio_tracks.iter().position(|t| {
-                t.name() != name
-                    || t.language() != language
-                    || t.assoc_language() != assoc_language
-                    || t.channels() != channels
+                t.name() == name
+                    && t.language() == language
+                    && t.assoc_language() == assoc_language
+                    && t.channels() == channels
             });
 
             if let Some(pos) = pos_compat {

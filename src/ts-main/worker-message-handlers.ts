@@ -729,6 +729,7 @@ export function onMultiVariantPlaylistParsedMessage(
     return false;
   }
   contentMetadata.variants = msg.value.variants;
+  contentMetadata.audioTracks = msg.value.audioTracks;
   return true;
 }
 
