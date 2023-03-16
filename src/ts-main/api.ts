@@ -120,7 +120,7 @@ const enum InitializationStatus {
   /** The WaspHlsPlayer has been initialized with success. */
   Initialized = "Initialized",
   /** The WaspHlsPlayer's initialization has failed. */
-  Errored = "errorred",
+  Errored = "errored",
   /** The WaspHlsPlayer's instance has been disposed. */
   Disposed = "disposed",
 }
@@ -209,7 +209,7 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
    */
   constructor(
     videoElement: HTMLVideoElement,
-    config?: Partial<WaspHlsPlayerConfig>
+    config?: Partial<WaspHlsPlayerConfig> | undefined
   ) {
     super();
     this.videoElement = videoElement;

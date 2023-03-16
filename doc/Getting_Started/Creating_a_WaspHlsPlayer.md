@@ -1,6 +1,6 @@
 # Creating a new WaspHlsPlayer
 
-## Instanciation
+## Instantiation
 
 Each WaspHlsPlayer allows to play HLS content on a single video element.
 
@@ -11,8 +11,8 @@ const player = new WaspHlsPlayer(videoElement);
 ```
 
 The `WaspHlsPlayer` optionally can take a second argument, which allows to
-overwrite its initial configuration. More information on this is available
-[in the API documentation (TODO)](TODO).
+overwrite its initial configuration. More information on this object is
+available [in the API documentation (TODO)](TODO).
 
 Before being ready to load contents on that new instance, we now have to
 "initialize" it, which is an operation described in the next chapter.
@@ -35,8 +35,8 @@ choosing), and can be communicated to the `WaspHlsPlayer` through its
 ```js
 player
   .initialize({
-    workerUrl: "./worker.js",
-    wasmUrl: "./wasp_hls_bg.wasm",
+    workerUrl: "https://www.example.com/worker.js",
+    wasmUrl: "https://www.example.com/wasp_hls_bg.wasm",
   })
   .then(
     () => {
@@ -78,7 +78,7 @@ switch (player.initializationStatus) {
     console.log("The WaspHlsPlayer has been initialized with success.");
     break;
 
-  case "errorred":
+  case "errored":
     console.log("The WaspHlsPlayer's initialization has failed.");
     break;
 

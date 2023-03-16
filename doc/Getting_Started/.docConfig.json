@@ -1,6 +1,10 @@
 {
   "pages": [
     {
+      "path": "./Welcome.md",
+      "displayName": "Welcome"
+    },
+    {
       "path": "./Creating_a_WaspHlsPlayer.md",
       "displayName": "Creating a WaspHlsPlayer"
     }

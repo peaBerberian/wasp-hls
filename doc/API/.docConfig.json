@@ -1,0 +1,13 @@
+{
+  "pages": [
+    {
+      "path": "./Overview.md",
+      "displayName": "API Overview"
+    },
+    {
+      "path": "./Instantiation.md",
+      "displayName": "WaspHlsPlayer Instantiation"
+    }
+  ]
+}
+

@@ -10,6 +10,11 @@
       "displayName": "Getting Started"
     },
     {
+      "type": "local-doc",
+      "path": "./API",
+      "displayName": "API"
+    },
+    {
       "type": "link",
       "link": "https://peaberberian.github.io/wasp-hls/index.html",
       "displayName": "Demo"
