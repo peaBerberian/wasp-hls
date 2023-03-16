@@ -12,10 +12,10 @@ import muxjs from "mux.js";
 import logger from "../ts-common/logger.js";
 import { MediaType } from "../wasm/wasp_hls.js";
 
-let transmuxer : any;
+let transmuxer: any;
 
 const MPEG_TS_REGEXP = /^[a-z]+\/mp2t;/i;
-export function isMpegTsType(typ: string) : boolean {
+export function isMpegTsType(typ: string): boolean {
   return MPEG_TS_REGEXP.test(typ);
 }
 
@@ -30,14 +30,11 @@ export function shouldTransmux(typ: string) {
   return !MediaSource.isTypeSupported(typ);
 }
 
-export function canTransmux(typ: string) : boolean {
+export function canTransmux(typ: string): boolean {
   return isMpegTsType(typ);
 }
 
-export function getTransmuxedType(
-  typ: string,
-  mediaType: MediaType
-) : string {
+export function getTransmuxedType(typ: string, mediaType: MediaType): string {
   if (!canTransmux(typ)) {
     return typ;
   }
@@ -84,14 +81,12 @@ export function resetTransmuxer() {
   transmuxer = undefined;
 }
 
-export function transmux(
-  inputSegment: Uint8Array
-) : Uint8Array | null {
+export function transmux(inputSegment: Uint8Array): Uint8Array | null {
   if (transmuxer === undefined) {
     transmuxer = new muxjs.mp4.Transmuxer();
   }
 
-  const subSegments : Uint8Array[] = [];
+  const subSegments: Uint8Array[] = [];
 
   // NOTE: Despite the syntax, mux.js' transmuxing is completely synchronous.
   transmuxer.on("data", onTransmuxedData);
@@ -119,7 +114,8 @@ export function transmux(
 
   function onTransmuxedData(segment: any) {
     const transmuxedSegment = new Uint8Array(
-      segment.initSegment.byteLength + segment.data.byteLength);
+      segment.initSegment.byteLength + segment.data.byteLength
+    );
     transmuxedSegment.set(segment.initSegment, 0);
     transmuxedSegment.set(segment.data, segment.initSegment.byteLength);
     subSegments.push(transmuxedSegment);

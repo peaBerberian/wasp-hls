@@ -11,7 +11,7 @@ export class WaspInitializationError extends Error {
   public readonly name: "InitializationError";
   public readonly code: InitializationErrorCode;
   public readonly wasmHttpStatus: number | undefined;
-  public readonly message : string;
+  public readonly message: string;
 
   /**
    * @param {string} message
@@ -19,7 +19,7 @@ export class WaspInitializationError extends Error {
   constructor(
     code: InitializationErrorCode,
     wasmHttpStatus: number | undefined,
-    message : string
+    message: string
   ) {
     super();
     // @see https://stackoverflow.com/questions/41102060/typescript-extending-error-class
@@ -34,17 +34,17 @@ export class WaspInitializationError extends Error {
 
 export class WaspSegmentRequestError extends Error {
   public readonly name: "WaspSegmentRequestError";
-  public readonly message : string;
-  public readonly url : string | undefined;
-  public readonly isInit : boolean | undefined;
-  public readonly reason : number;
+  public readonly message: string;
+  public readonly url: string | undefined;
+  public readonly isInit: boolean | undefined;
+  public readonly reason: number;
 
   /**
    * @param {string} message
    */
   constructor(
     args: WaspSegmentRequestErrorArgument,
-    message? : string | undefined
+    message?: string | undefined
   ) {
     super();
     // @see https://stackoverflow.com/questions/41102060/typescript-extending-error-class
@@ -60,9 +60,10 @@ export class WaspSegmentRequestError extends Error {
       const msgStart = mediaTypeAsArticle(mediaType) + " segment";
       switch (args.reason) {
         case RequestErrorReason.Status:
-          formattedMsg = args.status === undefined ?
-            `${msgStart}'s HTTP(S) request(s) responded with an invalid status` :
-            `${msgStart}'s HTTP(S) request(s) responded with a ${args.status} status`;
+          formattedMsg =
+            args.status === undefined
+              ? `${msgStart}'s HTTP(S) request(s) responded with an invalid status`
+              : `${msgStart}'s HTTP(S) request(s) responded with a ${args.status} status`;
           break;
 
         case RequestErrorReason.Timeout:
@@ -78,23 +79,21 @@ export class WaspSegmentRequestError extends Error {
           break;
       }
     }
-    this.message = formattedMsg ??
+    this.message =
+      formattedMsg ??
       "An error arised while trying to perform a segment request";
   }
 }
 
 export class WaspOtherError extends Error {
   public readonly name: "WaspOtherError";
-  public readonly message : string;
-  public readonly code : number;
+  public readonly message: string;
+  public readonly code: number;
 
   /**
    * @param {string} message
    */
-  constructor(
-    code: OtherErrorCode,
-    message? : string | undefined
-  ) {
+  constructor(code: OtherErrorCode, message?: string | undefined) {
     super();
     // @see https://stackoverflow.com/questions/41102060/typescript-extending-error-class
     Object.setPrototypeOf(this, WaspOtherError.prototype);
@@ -107,15 +106,15 @@ export class WaspOtherError extends Error {
 
 export class WaspSourceBufferCreationError extends Error {
   public readonly name: "WaspSourceBufferCreationError";
-  public readonly message : string;
-  public readonly code : number;
+  public readonly message: string;
+  public readonly code: number;
 
   /**
    * @param {string} message
    */
   constructor(
     code: SourceBufferCreationErrorCode,
-    message? : string | undefined
+    message?: string | undefined
   ) {
     super();
     // @see https://stackoverflow.com/questions/41102060/typescript-extending-error-class
@@ -129,9 +128,9 @@ export class WaspSourceBufferCreationError extends Error {
 
 export class WaspPlaylistParsingError extends Error {
   public readonly name: "WaspPlaylistParsingError";
-  public readonly message : string;
-  public readonly mediaType : MediaType | undefined;
-  public readonly playlistType : PlaylistType | undefined;
+  public readonly message: string;
+  public readonly mediaType: MediaType | undefined;
+  public readonly playlistType: PlaylistType | undefined;
 
   /**
    * @param {string} message
@@ -139,7 +138,7 @@ export class WaspPlaylistParsingError extends Error {
   constructor(
     playlistType: PlaylistType,
     mediaType: MediaType | undefined,
-    message? : string | undefined
+    message?: string | undefined
   ) {
     super();
     // @see https://stackoverflow.com/questions/41102060/typescript-extending-error-class
@@ -152,9 +151,7 @@ export class WaspPlaylistParsingError extends Error {
   }
 }
 
-function mediaTypeAsArticle(
-  mediaType: MediaType
-): string {
+function mediaTypeAsArticle(mediaType: MediaType): string {
   switch (mediaType) {
     case MediaType.Audio:
       return "An audio";

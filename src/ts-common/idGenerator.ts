@@ -5,10 +5,10 @@ import logger from "./logger";
  * time you call it.
  * @returns {Function}
  */
-export default function idGenerator() : () => string {
+export default function idGenerator(): () => string {
   let prefix = "";
   let currId = -1;
-  return function generateNewId() : string {
+  return function generateNewId(): string {
     currId++;
     if (currId >= Number.MAX_SAFE_INTEGER) {
       prefix += "0";
@@ -20,9 +20,9 @@ export default function idGenerator() : () => string {
 
 const MAX_U32_VAL = 4294967295;
 
-export function numberIdGenerator() : () => number {
+export function numberIdGenerator(): () => number {
   let currId = -1;
-  return function generateNewNumberId() : number {
+  return function generateNewNumberId(): number {
     currId++;
     if (currId >= MAX_U32_VAL) {
       logger.warn("Exceeding `numberIdGenerator` limit. Collisions may occur");

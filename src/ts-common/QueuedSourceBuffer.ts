@@ -10,8 +10,8 @@ enum SourceBufferOperation {
  * Will be converted into an `PushQueueItem` once in the queue
  */
 interface PushAction {
-  type : SourceBufferOperation.Push;
-  value : BufferSource;
+  type: SourceBufferOperation.Push;
+  value: BufferSource;
 }
 
 /**
@@ -19,34 +19,30 @@ interface PushAction {
  * Will be converted into an `RemoveQueueItem` once in the queue
  */
 interface RemoveAction {
-  type : SourceBufferOperation.Remove;
-  value : {
-    start : number;
-    end : number;
+  type: SourceBufferOperation.Remove;
+  value: {
+    start: number;
+    end: number;
   };
 }
 
 /** Actions understood by the QueuedSourceBuffer. */
-type QSBAction =
-  PushAction |
-  RemoveAction;
+type QSBAction = PushAction | RemoveAction;
 
 /** Item waiting in the queue to push a new chunk to the SourceBuffer. */
 interface PushQueueItem extends PushAction {
-  resolve : () => void;
-  reject : (err : Error) => void;
+  resolve: () => void;
+  reject: (err: Error) => void;
 }
 
 /** Item waiting in the queue to remove segment(s) from the SourceBuffer. */
 interface RemoveQueueItem extends RemoveAction {
-  resolve : () => void;
-  reject : (err : Error) => void;
+  resolve: () => void;
+  reject: (err: Error) => void;
 }
 
 /** Action waiting in the queue. */
-type QSBQueueItem =
-  PushQueueItem |
-  RemoveQueueItem;
+type QSBQueueItem = PushQueueItem | RemoveQueueItem;
 
 /**
  * Allows to push and remove new Segments to a SourceBuffer in a FIFO queue (not
@@ -64,13 +60,13 @@ type QSBQueueItem =
  */
 export default class QueuedSourceBuffer {
   /** SourceBuffer implementation. */
-  private readonly _sourceBuffer : SourceBuffer;
+  private readonly _sourceBuffer: SourceBuffer;
 
   /**
    * Queue of awaited buffer "operations".
    * The first element in this array will be the first performed.
    */
-  private _queue : QSBQueueItem[];
+  private _queue: QSBQueueItem[];
 
   /**
    * Information about the current operation processed by the
@@ -78,15 +74,15 @@ export default class QueuedSourceBuffer {
    * If equal to null, it means that no operation from the queue is currently
    * being processed.
    */
-  private _pendingTask : QSBQueueItem | null;
+  private _pendingTask: QSBQueueItem | null;
 
-  private _dispose : Array<() => void>;
+  private _dispose: Array<() => void>;
 
   /**
    * @constructor
    * @param {SourceBuffer} sourceBuffer
    */
-  constructor(sourceBuffer : SourceBuffer) {
+  constructor(sourceBuffer: SourceBuffer) {
     this._sourceBuffer = sourceBuffer;
     this._queue = [];
     this._pendingTask = null;
@@ -103,7 +99,6 @@ export default class QueuedSourceBuffer {
 
     const onError = this._onPendingTaskError.bind(this);
 
-
     const _onUpdateEnd = () => {
       this._flush();
     };
@@ -111,11 +106,13 @@ export default class QueuedSourceBuffer {
     sourceBuffer.addEventListener("error", onError);
     sourceBuffer.addEventListener("updateend", _onUpdateEnd);
 
-    this._dispose = [() => {
-      clearInterval(intervalId);
-      sourceBuffer.removeEventListener("error", onError);
-      sourceBuffer.removeEventListener("updateend", _onUpdateEnd);
-    }];
+    this._dispose = [
+      () => {
+        clearInterval(intervalId);
+        sourceBuffer.removeEventListener("error", onError);
+        sourceBuffer.removeEventListener("updateend", _onUpdateEnd);
+      },
+    ];
   }
 
   /**
@@ -128,7 +125,7 @@ export default class QueuedSourceBuffer {
    * @param {BufferSource} data
    * @returns {Promise}
    */
-  public push(data: BufferSource) : Promise<void> {
+  public push(data: BufferSource): Promise<void> {
     logger.debug("QSB: receiving order to push data to the SourceBuffer");
     return this._addToQueue({ type: SourceBufferOperation.Push, value: data });
   }
@@ -139,7 +136,7 @@ export default class QueuedSourceBuffer {
    * @param {number} end - end position, in seconds
    * @returns {Promise}
    */
-  public removeBuffer(start : number, end : number) : Promise<void> {
+  public removeBuffer(start: number, end: number): Promise<void> {
     logger.debug(
       "QSB: receiving order to remove data from the SourceBuffer",
       start,
@@ -155,7 +152,7 @@ export default class QueuedSourceBuffer {
    * Returns the currently buffered data, in a TimeRanges object.
    * @returns {TimeRanges}
    */
-  public getBufferedRanges() : TimeRanges {
+  public getBufferedRanges(): TimeRanges {
     return this._sourceBuffer.buffered;
   }
 
@@ -166,8 +163,8 @@ export default class QueuedSourceBuffer {
    * function.
    * @private
    */
-  public dispose() : void {
-    this._dispose.forEach(disposeFn => disposeFn());
+  public dispose(): void {
+    this._dispose.forEach((disposeFn) => disposeFn());
 
     if (this._pendingTask !== null) {
       this._pendingTask.reject(new Error("QueuedSourceBuffer Cancelled"));
@@ -196,13 +193,14 @@ export default class QueuedSourceBuffer {
    * @private
    * @param {*} err
    */
-  private _onPendingTaskError(err : unknown) : void {
-    const error = err instanceof Error ?
-      err :
-      new Error(
-        "An unknown error occured when doing operations " +
-        "on the SourceBuffer"
-      );
+  private _onPendingTaskError(err: unknown): void {
+    const error =
+      err instanceof Error
+        ? err
+        : new Error(
+            "An unknown error occured when doing operations " +
+              "on the SourceBuffer"
+          );
 
     if (this._pendingTask != null) {
       this._pendingTask.reject(error);
@@ -216,11 +214,10 @@ export default class QueuedSourceBuffer {
    * @param {Object} operation
    * @returns {Promise}
    */
-  private _addToQueue(operation : QSBAction) : Promise<void> {
+  private _addToQueue(operation: QSBAction): Promise<void> {
     return new Promise((resolve, reject) => {
       const shouldRestartQueue =
-        this._queue.length === 0 &&
-        this._pendingTask === null;
+        this._queue.length === 0 && this._pendingTask === null;
       const queueItem = { resolve, reject, ...operation };
       this._queue.push(queueItem);
       if (shouldRestartQueue) {
@@ -233,7 +230,7 @@ export default class QueuedSourceBuffer {
    * Perform next task if one.
    * @private
    */
-  private _flush() : void {
+  private _flush(): void {
     if (this._sourceBuffer.updating) {
       return; // still processing `this._pendingTask`
     }
@@ -244,7 +241,8 @@ export default class QueuedSourceBuffer {
       this._pendingTask = null;
       resolve();
       return this._flush(); // Go to next item in queue
-    } else { // if this._pendingTask is null, go to next item in queue
+    } else {
+      // if this._pendingTask is null, go to next item in queue
       const nextItem = this._queue.shift();
       if (nextItem === undefined) {
         return; // we have nothing left to do
@@ -267,11 +265,7 @@ export default class QueuedSourceBuffer {
 
         case SourceBufferOperation.Remove:
           const { start, end } = this._pendingTask.value;
-          logger.debug(
-            "QSB: removing data from SourceBuffer",
-            start,
-            end
-          );
+          logger.debug("QSB: removing data from SourceBuffer", start, end);
           this._sourceBuffer.remove(start, end);
           break;
 
@@ -311,4 +305,3 @@ export default class QueuedSourceBuffer {
 function assertUnreachable(_: never): never {
   throw new Error("Unreachable path taken");
 }
-

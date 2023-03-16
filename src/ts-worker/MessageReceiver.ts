@@ -6,34 +6,31 @@ import {
   MainMessageType,
   WorkerMessageType,
 } from "../ts-common/types";
-import initializeWasm, {
-  MediaObservation,
-} from "../wasm/wasp_hls";
+import initializeWasm, { MediaObservation } from "../wasm/wasp_hls";
 import { stopObservingPlayback } from "./bindings";
-import {
-  ContentInfo,
-  playerInstance,
-  updateDispatcherConfig,
-} from "./globals";
+import { ContentInfo, playerInstance, updateDispatcherConfig } from "./globals";
 import postMessageToMain from "./postMessage";
 import { resetTransmuxer } from "./transmux";
 
 let wasInitializedCalled = false;
 
 export default function MessageReceiver() {
-  onmessage = function(evt: MessageEvent<MainMessage>) {
+  onmessage = function (evt: MessageEvent<MainMessage>) {
     if (evt.origin !== "") {
       logger.error("Unexpected trans-origin message");
       return;
     }
     const { data } = evt;
-    if (typeof data !== "object" || data === null || typeof data.type === "undefined") {
+    if (
+      typeof data !== "object" ||
+      data === null ||
+      typeof data.type === "undefined"
+    ) {
       logger.error("unexpected main message");
       return;
     }
 
     switch (data.type) {
-
       case MainMessageType.Initialization:
         if (wasInitializedCalled) {
           return handleInitializationError(
@@ -77,7 +74,7 @@ export default function MessageReceiver() {
           contentInfo === null ||
           contentInfo.contentId !== data.value.contentId
         ) {
-          return ;
+          return;
         }
         try {
           dispatcher.stop();
@@ -97,7 +94,8 @@ export default function MessageReceiver() {
         const dispatcher = playerInstance.getDispatcher();
         const contentInfo = playerInstance.getContentInfo();
         if (
-          dispatcher === null || contentInfo === null ||
+          dispatcher === null ||
+          contentInfo === null ||
           contentInfo.mediaSourceObj?.mediaSourceId !== data.value.mediaSourceId
         ) {
           return;
@@ -110,7 +108,8 @@ export default function MessageReceiver() {
         const dispatcher = playerInstance.getDispatcher();
         const contentInfo = playerInstance.getContentInfo();
         if (
-          dispatcher === null || contentInfo === null ||
+          dispatcher === null ||
+          contentInfo === null ||
           contentInfo.mediaSourceObj?.mediaSourceId !== data.value.mediaSourceId
         ) {
           return;
@@ -119,12 +118,12 @@ export default function MessageReceiver() {
         break;
       }
 
-
       case MainMessageType.MediaObservation: {
         const dispatcher = playerInstance.getDispatcher();
         const contentInfo = playerInstance.getContentInfo();
         if (
-          dispatcher === null || contentInfo === null ||
+          dispatcher === null ||
+          contentInfo === null ||
           contentInfo.mediaSourceObj?.mediaSourceId !== data.value.mediaSourceId
         ) {
           return;
@@ -147,7 +146,8 @@ export default function MessageReceiver() {
         const dispatcher = playerInstance.getDispatcher();
         const contentInfo = playerInstance.getContentInfo();
         if (
-          dispatcher === null || contentInfo === null ||
+          dispatcher === null ||
+          contentInfo === null ||
           contentInfo.mediaSourceObj?.mediaSourceId !== data.value.mediaSourceId
         ) {
           return;
@@ -226,7 +226,7 @@ export default function MessageReceiver() {
           contentInfo === null ||
           contentInfo.contentId !== data.value.contentId
         ) {
-          return ;
+          return;
         }
         dispatcher.set_audio_track(data.value.trackId ?? undefined);
         break;
@@ -242,7 +242,7 @@ export default function MessageReceiver() {
           contentInfo === null ||
           contentInfo.contentId !== data.value.contentId
         ) {
-          return ;
+          return;
         }
         if (data.value.variantId === null) {
           dispatcher.unlock_variant();
@@ -255,8 +255,11 @@ export default function MessageReceiver() {
   };
 }
 
-function handleInitializationError(err: unknown, code: InitializationErrorCode) {
-  let message : string | undefined;
+function handleInitializationError(
+  err: unknown,
+  code: InitializationErrorCode
+) {
+  let message: string | undefined;
   if (typeof err === "string") {
     message = err;
   } else if (err instanceof Error) {
@@ -290,12 +293,14 @@ function initialize(
   hasWorkerMse: boolean,
   config: WaspHlsPlayerConfig
 ) {
-  initializeWasm(fetch(wasmUrl)).then((wasm) => {
-    playerInstance.start(hasWorkerMse, config, wasm);
-    postMessageToMain({ type: WorkerMessageType.Initialized, value: null });
-  }).catch(err => {
-    handleInitializationError(err, InitializationErrorCode.WasmRequestError);
-  });
+  initializeWasm(fetch(wasmUrl))
+    .then((wasm) => {
+      playerInstance.start(hasWorkerMse, config, wasm);
+      postMessageToMain({ type: WorkerMessageType.Initialized, value: null });
+    })
+    .catch((err) => {
+      handleInitializationError(err, InitializationErrorCode.WasmRequestError);
+    });
 }
 
 function dispose() {

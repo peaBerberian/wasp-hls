@@ -1,7 +1,4 @@
-import {
-  MediaObservation,
-  PlaybackTickReason,
-} from "../ts-common/types";
+import { MediaObservation, PlaybackTickReason } from "../ts-common/types";
 
 /**
  * Events for which a new playback observation is sent.
@@ -57,7 +54,7 @@ export default function observePlayback(
       return;
     }
     isStopped = true;
-    listenerRemovers.forEach(removeCb => removeCb());
+    listenerRemovers.forEach((removeCb) => removeCb());
     listenerRemovers.length = 0;
     if (timeoutId !== undefined) {
       clearTimeout(timeoutId);
@@ -81,14 +78,8 @@ export default function observePlayback(
       buffered[offset + 1] = videoElement.buffered.end(i);
     }
 
-    const {
-      currentTime,
-      readyState,
-      paused,
-      seeking,
-      ended,
-      duration,
-    } = videoElement;
+    const { currentTime, readyState, paused, seeking, ended, duration } =
+      videoElement;
     onNewObservation({
       mediaSourceId,
       reason,

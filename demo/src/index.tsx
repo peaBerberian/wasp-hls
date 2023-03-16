@@ -1,9 +1,6 @@
 import * as React from "react";
 import * as ReactDOM from "react-dom/client";
-import {
-  logger,
-  LoggerLevels,
-} from "../../src";
+import { logger, LoggerLevels } from "../../src";
 import Header from "./components/Header";
 import PlayerContainersWrapper from "./components/PlayerContainersWrapper";
 
@@ -16,7 +13,7 @@ logger.setLevel(LoggerLevels.Debug);
 /* eslint-enable @typescript-eslint/no-unsafe-member-access */
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
-window.onload = function() : void {
+window.onload = function (): void {
   const rootElt = document.getElementById("main");
   if (rootElt === null) {
     console.error("Error: missing `main` element");
@@ -27,5 +24,6 @@ window.onload = function() : void {
     <React.StrictMode>
       <Header />
       <PlayerContainersWrapper />
-    </React.StrictMode>);
+    </React.StrictMode>
+  );
 };

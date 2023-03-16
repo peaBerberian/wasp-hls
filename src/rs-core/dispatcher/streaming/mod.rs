@@ -7,11 +7,11 @@ use crate::{
             format_audio_tracks_for_js, format_source_buffer_creation_err_for_js,
             format_variants_info_for_js,
         },
-        jsAnnounceFetchedContent, jsAnnounceVariantUpdate, jsSendOtherError,
+        jsAnnounceFetchedContent, jsAnnounceTrackUpdate, jsAnnounceVariantUpdate, jsSendOtherError,
         jsSendPlaylistParsingError, jsSendSegmentRequestError, jsSendSourceBufferCreationError,
         jsSetMediaSourceDuration, jsStartObservingPlayback, jsStopObservingPlayback, jsTimer,
         jsUpdateContentInfo, JsMemoryBlob, MediaObservation, MediaType, PlaybackTickReason,
-        PlaylistType, RequestId, SourceBufferId, TimerId, TimerReason, jsAnnounceTrackUpdate,
+        PlaylistType, RequestId, SourceBufferId, TimerId, TimerReason,
     },
     media_element::{PushMetadata, SourceBufferCreationError},
     parser::MultiVariantPlaylist,
@@ -189,16 +189,9 @@ impl Dispatcher {
                 } else {
                     playlist_store.curr_audio_track_id()
                 };
-                jsAnnounceFetchedContent(
-                    variants_info,
-                    audio_tracks_info
-                );
+                jsAnnounceFetchedContent(variants_info, audio_tracks_info);
                 jsAnnounceVariantUpdate(playlist_store.curr_variant().map(|v| v.id()));
-                jsAnnounceTrackUpdate(
-                    MediaType::Audio,
-                    curr_audio_track,
-                    is_selected,
-                );
+                jsAnnounceTrackUpdate(MediaType::Audio, curr_audio_track, is_selected);
             }
         }
     }

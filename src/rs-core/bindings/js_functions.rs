@@ -221,7 +221,7 @@ extern "C" {
     pub fn jsAnnounceTrackUpdate(
         media_type: MediaType,
         current_audio_track: Option<&str>,
-        is_audio_track_selected: bool
+        is_audio_track_selected: bool,
     );
 
     pub fn jsStartRebuffering();

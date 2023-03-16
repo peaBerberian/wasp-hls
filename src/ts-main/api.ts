@@ -1,8 +1,6 @@
 import EventEmitter from "../ts-common/EventEmitter";
 import idGenerator from "../ts-common/idGenerator";
-import logger, {
-  LoggerLevel,
-} from "../ts-common/logger";
+import logger, { LoggerLevel } from "../ts-common/logger";
 import noop from "../ts-common/noop";
 import {
   AudioTrackInfo,
@@ -13,18 +11,10 @@ import {
   WorkerMessageType,
 } from "../ts-common/types";
 import { MediaType } from "../wasm/wasp_hls";
-import {
-  WaspInitializationError,
-} from "./errors";
+import { WaspInitializationError } from "./errors";
 import postMessageToWorker from "./postMessageToWorker";
-import {
-  ContentMetadata,
-  PlayerState,
-} from "./types";
-import {
-  requestStopForContent,
-  waitForLoad,
-} from "./utils";
+import { ContentMetadata, PlayerState } from "./types";
+import { requestStopForContent, waitForLoad } from "./utils";
 import {
   onAppendBufferMessage,
   onAttachMediaSourceMessage,
@@ -191,7 +181,7 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
    * `null` when this `WaspHlsPlayer` hasn't had a succesful initialization yet
    * or if it has been disposed.
    */
-  private __worker__ : Worker | null;
+  private __worker__: Worker | null;
 
   /**
    * Properties associated to the content currently playing or being loaded.
@@ -272,7 +262,7 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
    * @param {Object} opts
    * @returns {Promise}
    */
-  public initialize(opts: InitializationOptions) : Promise<void> {
+  public initialize(opts: InitializationOptions): Promise<void> {
     try {
       if (this.initializationStatus !== InitializationStatus.Uninitialized) {
         throw new Error("WaspHlsPlayer already initialized");
@@ -287,8 +277,7 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
       });
       this.__startWorker__(workerUrl, wasmUrl, resolveProm, rejectProm);
       return ret;
-    }
-    catch (err) {
+    } catch (err) {
       this.initializationStatus = InitializationStatus.Errored;
       return Promise.reject(err);
     }
@@ -367,7 +356,7 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
    * @see PlayerState
    * @returns {string}
    */
-  public getPlayerState() : PlayerState {
+  public getPlayerState(): PlayerState {
     if (this.__contentMetadata__ === null) {
       return PlayerState.Stopped;
     }
@@ -408,8 +397,8 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
     if (this.getPlayerState() !== PlayerState.Loaded) {
       throw new Error("Cannot seek: no content loaded.");
     }
-    this.videoElement.currentTime = position +
-      (this.__contentMetadata__?.mediaOffset ?? 0);
+    this.videoElement.currentTime =
+      position + (this.__contentMetadata__?.mediaOffset ?? 0);
   }
 
   public getMediaOffset(): number | undefined {
@@ -438,8 +427,9 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
    * @returns {boolean}
    */
   public isPlaying(): boolean {
-    return this.getPlayerState() === PlayerState.Loaded &&
-            !this.videoElement.paused;
+    return (
+      this.getPlayerState() === PlayerState.Loaded && !this.videoElement.paused
+    );
   }
 
   /**
@@ -498,8 +488,9 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
     if (this.getPlayerState() !== PlayerState.Loaded) {
       throw new Error("Cannot resume: no content loaded.");
     }
-    this.videoElement.play()
-      .catch(() => { /* noop */});
+    this.videoElement.play().catch(() => {
+      /* noop */
+    });
   }
 
   /**
@@ -569,15 +560,15 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
     return this.__contentMetadata__?.wantedSpeed ?? 1;
   }
 
-  public getMinimumPosition() : number | undefined {
+  public getMinimumPosition(): number | undefined {
     return this.__contentMetadata__?.minimumPosition;
   }
 
-  public getMaximumPosition() : number | undefined {
+  public getMaximumPosition(): number | undefined {
     return this.__contentMetadata__?.maximumPosition;
   }
 
-  public getError() : Error | null {
+  public getError(): Error | null {
     return this.__contentMetadata__?.error ?? null;
   }
 
@@ -670,7 +661,10 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
     });
     this.__worker__ = null;
     if (this.__logLevelChangeListener__ !== null) {
-      logger.removeEventListener("onLogLevelChange", this.__logLevelChangeListener__);
+      logger.removeEventListener(
+        "onLogLevelChange",
+        this.__logLevelChangeListener__
+      );
     }
     this.videoElement.src = "";
   }
@@ -687,7 +681,8 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
     postMessageToWorker(worker, {
       type: MainMessageType.Initialization,
       value: {
-        hasWorkerMse: typeof MediaSource === "function" &&
+        hasWorkerMse:
+          typeof MediaSource === "function" &&
           /* eslint-disable-next-line */
           (MediaSource as any).canConstructInDedicatedWorker === true,
         wasmUrl,
@@ -697,14 +692,21 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
     });
 
     if (this.__logLevelChangeListener__ !== null) {
-      logger.removeEventListener("onLogLevelChange", this.__logLevelChangeListener__);
+      logger.removeEventListener(
+        "onLogLevelChange",
+        this.__logLevelChangeListener__
+      );
     }
     logger.addEventListener("onLogLevelChange", onLogLevelChange);
     this.__logLevelChangeListener__ = onLogLevelChange;
 
     worker.onmessage = (evt: MessageEvent<WorkerMessage>) => {
       const { data } = evt;
-      if (typeof data !== "object" || data === null || typeof data.type === "undefined") {
+      if (
+        typeof data !== "object" ||
+        data === null ||
+        typeof data.type === "undefined"
+      ) {
         logger.error("unexpected Worker message");
         return;
       }
@@ -730,10 +732,18 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
           onSeekMessage(data, this.__contentMetadata__, this.videoElement);
           break;
         case WorkerMessageType.UpdatePlaybackRate:
-          onUpdatePlaybackRateMessage(data, this.__contentMetadata__, this.videoElement);
+          onUpdatePlaybackRateMessage(
+            data,
+            this.__contentMetadata__,
+            this.videoElement
+          );
           break;
         case WorkerMessageType.AttachMediaSource:
-          onAttachMediaSourceMessage(data, this.__contentMetadata__, this.videoElement);
+          onAttachMediaSourceMessage(
+            data,
+            this.__contentMetadata__,
+            this.videoElement
+          );
           this.__startListeningToLoadedEvent__();
           break;
         case WorkerMessageType.CreateMediaSource:
@@ -746,10 +756,18 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
           this.__startListeningToLoadedEvent__();
           break;
         case WorkerMessageType.UpdateMediaSourceDuration:
-          onUpdateMediaSourceDurationMessage(data, this.__contentMetadata__, worker);
+          onUpdateMediaSourceDurationMessage(
+            data,
+            this.__contentMetadata__,
+            worker
+          );
           break;
         case WorkerMessageType.ClearMediaSource:
-          onClearMediaSourceMessage(data, this.__contentMetadata__, this.videoElement);
+          onClearMediaSourceMessage(
+            data,
+            this.__contentMetadata__,
+            this.videoElement
+          );
           break;
         case WorkerMessageType.CreateSourceBuffer:
           onCreateSourceBufferMessage(data, this.__contentMetadata__, worker);
@@ -778,7 +796,9 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
           onMediaOffsetUpdateMessage(data, this.__contentMetadata__);
           break;
         case WorkerMessageType.MultiVariantPlaylistParsed:
-          if (onMultiVariantPlaylistParsedMessage(data, this.__contentMetadata__)) {
+          if (
+            onMultiVariantPlaylistParsedMessage(data, this.__contentMetadata__)
+          ) {
             this.trigger("variantsListUpdate", this.getVariantsList());
             this.trigger("audioTrackListUpdate", this.getAudioTrackList());
           }
@@ -821,19 +841,23 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
           }
           break;
         case WorkerMessageType.RebufferingStarted:
-          if (onRebufferingStartedMessage(
-            data,
-            this.__contentMetadata__,
-            this.videoElement)
+          if (
+            onRebufferingStartedMessage(
+              data,
+              this.__contentMetadata__,
+              this.videoElement
+            )
           ) {
             this.trigger("rebufferingStarted", null);
           }
           break;
         case WorkerMessageType.RebufferingEnded:
-          if (onRebufferingEndedMessage(
-            data,
-            this.__contentMetadata__,
-            this.videoElement)
+          if (
+            onRebufferingEndedMessage(
+              data,
+              this.__contentMetadata__,
+              this.videoElement
+            )
           ) {
             this.trigger("rebufferingEnded", null);
           }
@@ -842,7 +866,6 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
         default:
           assertNever(data);
       }
-
     };
 
     // TODO check on which case this is triggered

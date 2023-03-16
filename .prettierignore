@@ -1,0 +1,9 @@
+/.git
+/build
+/src/rs-core
+/doc
+/node_modules
+/target
+/.gitignore
+/Cargo.lock
+/package-lock.json

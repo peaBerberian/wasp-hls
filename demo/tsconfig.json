@@ -15,12 +15,8 @@
     "noUnusedParameters": true,
     "noUnusedLocals": true,
     "moduleResolution": "node",
-    "typeRoots": [
-      "./node_modules/@types"
-    ],
+    "typeRoots": ["./node_modules/@types"],
     "jsx": "react"
   },
-  "include": [
-    "./src/**/*"
-  ]
+  "include": ["./src/**/*"]
 }

@@ -8,13 +8,11 @@ import WaspHlsPlayer from "../../../src";
  * content will be loaded
  * @returns {Object}
  */
-export default React.memo(function ContentInput(
-  {
-    player,
-  } : {
-    player : WaspHlsPlayer;
-  }
-) : JSX.Element {
+export default React.memo(function ContentInput({
+  player,
+}: {
+  player: WaspHlsPlayer;
+}): JSX.Element {
   const nameEltId = React.useId();
 
   // TODO better input management
@@ -25,16 +23,17 @@ export default React.memo(function ContentInput(
     }
     player.loadContent(inputElRef.current.value);
   }, [player]);
-  const onKeyDown = React.useCallback((e: { key: string }) => {
-    if (e.key === "Enter") {
-      loadContent();
-    }
-  }, [loadContent]);
+  const onKeyDown = React.useCallback(
+    (e: { key: string }) => {
+      if (e.key === "Enter") {
+        loadContent();
+      }
+    },
+    [loadContent]
+  );
   return (
-    <div
-      className = "inputs-container"
-    >
-      <label htmlFor={`url${nameEltId}`} >
+    <div className="inputs-container">
+      <label htmlFor={`url${nameEltId}`}>
         {"URL to HLS MultiVariant (a.k.a. Master) Playlist:"}
       </label>
       <br />
@@ -49,10 +48,7 @@ export default React.memo(function ContentInput(
         defaultValue="https://storage.googleapis.com/shaka-demo-assets/angel-one-hls/hls.m3u8"
       />
 
-      <button
-        className="loading-button white-button"
-        onClick={loadContent}
-      >
+      <button className="loading-button white-button" onClick={loadContent}>
         Load
       </button>
     </div>

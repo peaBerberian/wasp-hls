@@ -1,7 +1,5 @@
 import * as React from "react";
-import WaspHlsPlayer, {
-  PlayerState,
-} from "../../../src";
+import WaspHlsPlayer, { PlayerState } from "../../../src";
 import {
   exitFullscreen,
   isFullscreen,
@@ -10,20 +8,20 @@ import {
 import ControlBar from "./ControlBar";
 import Spinner from "./Spinner";
 
-export default React.memo(function VideoPlayer(
-  {
-    player,
-  } : {
-    player : WaspHlsPlayer;
-  }
-) : JSX.Element {
-  const playerContainerRef = React.useRef<HTMLDivElement|null>(null);
-  const [isInFullScreenMode, setIsInFullscreenMode] = React.useState(isFullscreen());
+export default React.memo(function VideoPlayer({
+  player,
+}: {
+  player: WaspHlsPlayer;
+}): JSX.Element {
+  const playerContainerRef = React.useRef<HTMLDivElement | null>(null);
+  const [isInFullScreenMode, setIsInFullscreenMode] = React.useState(
+    isFullscreen()
+  );
   const [isVideoClickable, setIsVideoClickable] = React.useState(false);
   const [shouldShowSpinner, setShouldShowSpinner] = React.useState(
     player.getPlayerState() === PlayerState.Loading || player.isRebuffering()
   );
-  const [error, setError] = React.useState<Error|null>(null);
+  const [error, setError] = React.useState<Error | null>(null);
   const [wrapperStyle, setWrapperStyle] = React.useState({});
 
   // Inserting already-existing DOM into React looks a little weird
@@ -143,44 +141,38 @@ export default React.memo(function VideoPlayer(
     }
   }, [togglePlayPause, isVideoClickable]);
 
-  return <div
-    className="video-container"
-    ref={playerContainerRef}
-    style={wrapperStyle}
-  >
+  return (
     <div
-      className={"video-element-wrapper " + (isVideoClickable ? "clickable" : "")}
-      onClick={onVideoWrapperClick}
-      ref={videoWrapperRef}
-    />
-    {
-      error !== null ?
-        <div className="video-element-error">
-          <div className="video-element-error-name">
-            {error.name}
-          </div>
-          <div className="video-element-error-message">
-            {error.message}
-          </div>
-        </div> :
-        null
-    }
-    {
-      shouldShowSpinner ?
-        <Spinner /> :
-        null
-    }
-    <ControlBar
-      player={player}
-      playerContainerRef={playerContainerRef}
-      isInFullScreenMode={isInFullScreenMode}
-      toggleFullScreen={() => {
-        if (isFullscreen()) {
-          exitFullscreen();
-        } else if (playerContainerRef.current !== null) {
-          requestFullscreen(playerContainerRef.current);
+      className="video-container"
+      ref={playerContainerRef}
+      style={wrapperStyle}
+    >
+      <div
+        className={
+          "video-element-wrapper " + (isVideoClickable ? "clickable" : "")
         }
-      }}
-    />
-  </div>;
+        onClick={onVideoWrapperClick}
+        ref={videoWrapperRef}
+      />
+      {error !== null ? (
+        <div className="video-element-error">
+          <div className="video-element-error-name">{error.name}</div>
+          <div className="video-element-error-message">{error.message}</div>
+        </div>
+      ) : null}
+      {shouldShowSpinner ? <Spinner /> : null}
+      <ControlBar
+        player={player}
+        playerContainerRef={playerContainerRef}
+        isInFullScreenMode={isInFullScreenMode}
+        toggleFullScreen={() => {
+          if (isFullscreen()) {
+            exitFullscreen();
+          } else if (playerContainerRef.current !== null) {
+            requestFullscreen(playerContainerRef.current);
+          }
+        }}
+      />
+    </div>
+  );
 });

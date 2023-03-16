@@ -19,7 +19,7 @@ export default React.memo(function VolumeBar({
 }): JSX.Element {
   const element = React.useRef<HTMLDivElement>(null);
 
-  const getMouseVolume = React.useCallback((event: { clientX : number }) => {
+  const getMouseVolume = React.useCallback((event: { clientX: number }) => {
     if (element.current === null) {
       return;
     }
@@ -42,7 +42,8 @@ export default React.memo(function VolumeBar({
         if (newVolume !== undefined) {
           onVolumeChange(newVolume);
         }
-      }}>
+      }}
+    >
       <div
         className="volume-bar-current"
         style={{ width: String(volume * 100) + "%" }}

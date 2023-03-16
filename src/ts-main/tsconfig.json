@@ -14,12 +14,7 @@
     "noUnusedParameters": true,
     "noUnusedLocals": true,
     "moduleResolution": "node",
-    "typeRoots": [
-      "./node_modules/@types"
-    ]
+    "typeRoots": ["./node_modules/@types"]
   },
-  "include": [
-    "./*.ts",
-    "./**/*.ts"
-  ]
+  "include": ["./*.ts", "./**/*.ts"]
 }

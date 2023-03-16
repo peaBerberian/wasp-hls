@@ -2,7 +2,10 @@ import { MainMessageType } from "../ts-common/types";
 import postMessageToWorker from "./postMessageToWorker";
 import { ContentMetadata } from "./types";
 
-export function getErrorInformation(err: unknown, defaultMsg: string) : {
+export function getErrorInformation(
+  err: unknown,
+  defaultMsg: string
+): {
   name: string | undefined;
   message: string;
 } {
@@ -16,7 +19,7 @@ export function getErrorInformation(err: unknown, defaultMsg: string) : {
 export function requestStopForContent(
   metadata: ContentMetadata,
   worker: Worker | null
-) : void {
+): void {
   // Preventively free some resource that should not impact the Worker much.
   metadata.stopPlaybackObservations?.();
   metadata.loadingAborter?.abort();
@@ -30,9 +33,9 @@ export function requestStopForContent(
 }
 
 export function waitForLoad(
-  videoElement : HTMLMediaElement,
-  abortSignal : AbortSignal
-) : Promise<void> {
+  videoElement: HTMLMediaElement,
+  abortSignal: AbortSignal
+): Promise<void> {
   return new Promise<void>((res, rej) => {
     if (videoElement.readyState >= HTMLMediaElement.HAVE_ENOUGH_DATA) {
       res();
@@ -68,7 +71,7 @@ export function clearElementSrc(element: HTMLMediaElement): void {
   // screen, even if the track elements are properly removed, due to browser
   // issues.
   // Bug seen on Firefox (I forgot which version) and Chrome 96.
-  const { textTracks } = element;
+  const { textTracks } = element;
   if (textTracks != null) {
     for (let i = 0; i < textTracks.length; i++) {
       textTracks[i].mode = "disabled";

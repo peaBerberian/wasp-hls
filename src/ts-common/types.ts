@@ -9,30 +9,27 @@ import {
 } from "../wasm/wasp_hls";
 import { LoggerLevel } from "./logger";
 
-export {
-  MediaSourceReadyState,
-  PlaybackTickReason,
-};
+export { MediaSourceReadyState, PlaybackTickReason };
 
 /** Message sent from the main thread to the worker. */
 export type MainMessage =
-  InitializationMainMessage |
-  LoadContentMainMessage |
-  StopContentMainMessage |
-  DisposePlayerMainMessage |
-  MediaSourceStateChangedMainMessage |
-  CreateMediaSourceErrorMainMessage |
-  SetMediaSourceDurationErrorMainMessage |
-  CreateSourceBufferErrorMainMessage |
-  MediaObservationMainMessage |
-  SourceBufferOperationErrorMainMessage |
-  SourceBufferOperationSuccessMainMessage |
-  EndOfStreamErrorMainMessage |
-  UpdateWantedSpeedMainMessage |
-  UpdateLoggerLevelMainMessage |
-  LockVariantMainMessage |
-  UpdateConfigMainMessage |
-  SetAudioTrackMainMessage;
+  | InitializationMainMessage
+  | LoadContentMainMessage
+  | StopContentMainMessage
+  | DisposePlayerMainMessage
+  | MediaSourceStateChangedMainMessage
+  | CreateMediaSourceErrorMainMessage
+  | SetMediaSourceDurationErrorMainMessage
+  | CreateSourceBufferErrorMainMessage
+  | MediaObservationMainMessage
+  | SourceBufferOperationErrorMainMessage
+  | SourceBufferOperationSuccessMainMessage
+  | EndOfStreamErrorMainMessage
+  | UpdateWantedSpeedMainMessage
+  | UpdateLoggerLevelMainMessage
+  | LockVariantMainMessage
+  | UpdateConfigMainMessage
+  | SetAudioTrackMainMessage;
 
 /**
  * Discriminants (value of the `type` property) for messages sent by the main
@@ -63,45 +60,40 @@ export const enum MainMessageType {
 
 /** Message sent from the worker to the main thread. */
 export type WorkerMessage =
-
   // Related to WebWorker initialization
 
-  InitializedWorkerMessage |
-  InitializationErrorWorkerMessage |
+  | InitializedWorkerMessage
+  | InitializationErrorWorkerMessage
 
   // Related to content information
-
-  MultiVariantPlaylistParsedWorkerMessage |
-  ContentTimeBoundsUpdateWorkerMessage |
-  MediaOffsetUpdateWorkerMessage |
-  VariantUpdateWorkerMessage |
-  TrackUpdateWorkerMessage |
+  | MultiVariantPlaylistParsedWorkerMessage
+  | ContentTimeBoundsUpdateWorkerMessage
+  | MediaOffsetUpdateWorkerMessage
+  | VariantUpdateWorkerMessage
+  | TrackUpdateWorkerMessage
 
   // HTMLMediaElement/MSE actions
-
-  SeekWorkerMessage |
-  UpdatePlaybackRateWorkerMessage |
-  AttachMediaSourceWorkerMessage |
-  CreateMediaSourceWorkerMessage |
-  SetMediaSourceDurationWorkerMessage |
-  ClearMediaSourceWorkerMessage |
-  CreateSourceBufferWorkerMessage |
-  AppendBufferWorkerMessage |
-  RemoveBufferWorkerMessage |
-  EndOfStreamWorkerMessage |
+  | SeekWorkerMessage
+  | UpdatePlaybackRateWorkerMessage
+  | AttachMediaSourceWorkerMessage
+  | CreateMediaSourceWorkerMessage
+  | SetMediaSourceDurationWorkerMessage
+  | ClearMediaSourceWorkerMessage
+  | CreateSourceBufferWorkerMessage
+  | AppendBufferWorkerMessage
+  | RemoveBufferWorkerMessage
+  | EndOfStreamWorkerMessage
 
   // Playback conditions
-
-  StartPlaybackObservationWorkerMessage |
-  StopPlaybackObservationWorkerMessage |
-  RebufferingStartedWorkerMessage |
-  RebufferingEndedWorkerMessage |
+  | StartPlaybackObservationWorkerMessage
+  | StopPlaybackObservationWorkerMessage
+  | RebufferingStartedWorkerMessage
+  | RebufferingEndedWorkerMessage
 
   // Misc
-
-  ErrorWorkerMessage |
-  WarningWorkerMessage |
-  ContentStoppedWorkerMessage;
+  | ErrorWorkerMessage
+  | WarningWorkerMessage
+  | ContentStoppedWorkerMessage;
 
 /**
  * Discriminants (value of the `type` property) for messages sent by the worker.
@@ -210,12 +202,13 @@ export interface ErrorWorkerMessage {
      */
     contentId: string;
 
-    errorInfo: UnitializedErrorWorkerInfo |
-      PlaylistParsingErrorWorkerInfo |
-      PlaylistRequestErrorWorkerInfo |
-      SegmentRequestErrorWorkerInfo |
-      SourceBufferCreationErrorWorkerInfo |
-      OtherErrorWorkerInfo;
+    errorInfo:
+      | UnitializedErrorWorkerInfo
+      | PlaylistParsingErrorWorkerInfo
+      | PlaylistRequestErrorWorkerInfo
+      | SegmentRequestErrorWorkerInfo
+      | SourceBufferCreationErrorWorkerInfo
+      | OtherErrorWorkerInfo;
 
     /**
      * If set, human-readable string describing the error, for debugging
@@ -242,12 +235,13 @@ export interface WarningWorkerMessage {
      */
     contentId?: string;
 
-    errorInfo: UnitializedErrorWorkerInfo |
-      PlaylistParsingErrorWorkerInfo |
-      PlaylistRequestErrorWorkerInfo |
-      SegmentRequestErrorWorkerInfo |
-      SourceBufferCreationErrorWorkerInfo |
-      OtherErrorWorkerInfo;
+    errorInfo:
+      | UnitializedErrorWorkerInfo
+      | PlaylistParsingErrorWorkerInfo
+      | PlaylistRequestErrorWorkerInfo
+      | SegmentRequestErrorWorkerInfo
+      | SourceBufferCreationErrorWorkerInfo
+      | OtherErrorWorkerInfo;
 
     /**
      * If set, human-readable string describing the error, for debugging
@@ -375,10 +369,12 @@ export interface TrackUpdateWorkerMessage {
      */
     contentId: string;
     mediaType: MediaType;
-    audioTrack?: {
-      current: string;
-      isSelected: boolean;
-    } | undefined;
+    audioTrack?:
+      | {
+          current: string;
+          isSelected: boolean;
+        }
+      | undefined;
   };
 }
 
@@ -461,7 +457,7 @@ export interface AttachMediaSourceWorkerMessage {
      * This is the same `contentId` value that on the related
      * `LoadContentMainMessage`.
      */
-    contentId : string;
+    contentId: string;
     /**
      * The `MediaSource`'s handle to attach to the HTMLMediaElement.
      * Can be `undefined` in wich case a `src is provided instead.
@@ -497,7 +493,7 @@ export interface CreateMediaSourceWorkerMessage {
      * This is the same `contentId` value that on the related
      * `LoadContentMainMessage`.
      */
-    contentId : string;
+    contentId: string;
     /**
      * Identify the corresponding MediaSource to create.
      * The main thread should keep that value for ensuring that future messages

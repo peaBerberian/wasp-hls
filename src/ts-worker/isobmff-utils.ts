@@ -8,7 +8,7 @@
  * @param {Uint8Array} buffer
  * @returns {Number | undefined}
  */
-function getTrackFragmentDecodeTime(buffer : Uint8Array) : number | undefined {
+function getTrackFragmentDecodeTime(buffer: Uint8Array): number | undefined {
   const traf = getTRAF(buffer);
   if (traf === null) {
     return undefined;
@@ -18,9 +18,11 @@ function getTrackFragmentDecodeTime(buffer : Uint8Array) : number | undefined {
     return undefined;
   }
   const version = tfdt[0];
-  return version === 1 ? be8toi(tfdt, 4) :
-         version === 0 ? be4toi(tfdt, 4) :
-                         undefined;
+  return version === 1
+    ? be8toi(tfdt, 4)
+    : version === 0
+    ? be4toi(tfdt, 4)
+    : undefined;
 }
 
 /**
@@ -31,28 +33,30 @@ function getTrackFragmentDecodeTime(buffer : Uint8Array) : number | undefined {
  * @param {Uint8Array} buffer
  * @returns {number | undefined}
  */
-function getDurationFromTrun(buffer : Uint8Array) : number | undefined {
+function getDurationFromTrun(buffer: Uint8Array): number | undefined {
   const trafs = getTRAFs(buffer);
   if (trafs.length === 0) {
     return undefined;
   }
 
-  let completeDuration : number = 0;
+  let completeDuration: number = 0;
   for (const traf of trafs) {
-    const trun = getBoxContent(traf, 0x7472756E /* trun */);
+    const trun = getBoxContent(traf, 0x7472756e /* trun */);
     if (trun === null) {
       return undefined;
     }
     let cursor = 0;
-    const version = trun[cursor]; cursor += 1;
+    const version = trun[cursor];
+    cursor += 1;
     if (version > 1) {
       return undefined;
     }
 
-    const flags = be3toi(trun, cursor); cursor += 3;
+    const flags = be3toi(trun, cursor);
+    cursor += 3;
     const hasSampleDuration = (flags & 0x000100) > 0;
 
-    let defaultDuration : number | undefined = 0;
+    let defaultDuration: number | undefined = 0;
     if (!hasSampleDuration) {
       defaultDuration = getDefaultDurationFromTFHDInTRAF(traf);
       if (defaultDuration === undefined) {
@@ -66,7 +70,8 @@ function getDurationFromTrun(buffer : Uint8Array) : number | undefined {
     const hasSampleFlags = (flags & 0x000400) > 0;
     const hasSampleCompositionOffset = (flags & 0x000800) > 0;
 
-    const sampleCounts = be4toi(trun, cursor); cursor += 4;
+    const sampleCounts = be4toi(trun, cursor);
+    cursor += 4;
 
     if (hasDataOffset) {
       cursor += 4;
@@ -108,22 +113,25 @@ function getDurationFromTrun(buffer : Uint8Array) : number | undefined {
  * @param {Uint8Array} buffer
  * @returns {Number | undefined}
  */
-function getMDHDTimescale(buffer : Uint8Array) : number | undefined {
+function getMDHDTimescale(buffer: Uint8Array): number | undefined {
   const mdia = getMDIA(buffer);
   if (mdia === null) {
     return undefined;
   }
 
-  const mdhd = getBoxContent(mdia, 0x6D646864  /* "mdhd" */);
+  const mdhd = getBoxContent(mdia, 0x6d646864 /* "mdhd" */);
   if (mdhd === null) {
     return undefined;
   }
 
   let cursor = 0;
-  const version = mdhd[cursor]; cursor += 4;
-  return version === 1 ? be4toi(mdhd, cursor + 16) :
-         version === 0 ? be4toi(mdhd, cursor + 8) :
-                         undefined;
+  const version = mdhd[cursor];
+  cursor += 4;
+  return version === 1
+    ? be4toi(mdhd, cursor + 16)
+    : version === 0
+    ? be4toi(mdhd, cursor + 8)
+    : undefined;
 }
 
 /**
@@ -134,7 +142,9 @@ function getMDHDTimescale(buffer : Uint8Array) : number | undefined {
  * @param {Uint8Array} traf
  * @returns {number|undefined}
  */
-function getDefaultDurationFromTFHDInTRAF(traf : Uint8Array) : number | undefined {
+function getDefaultDurationFromTFHDInTRAF(
+  traf: Uint8Array
+): number | undefined {
   const tfhd = getBoxContent(traf, 0x74666864 /* tfhd */);
   if (tfhd === null) {
     return undefined;
@@ -142,7 +152,8 @@ function getDefaultDurationFromTFHDInTRAF(traf : Uint8Array) : number | undefine
 
   let cursor = /* version */ 1;
 
-  const flags = be3toi(tfhd, cursor); cursor += 3;
+  const flags = be3toi(tfhd, cursor);
+  cursor += 3;
   const hasBaseDataOffset = (flags & 0x000001) > 0;
   const hasSampleDescriptionIndex = (flags & 0x000002) > 0;
   const hasDefaultSampleDuration = (flags & 0x000008) > 0;
@@ -171,8 +182,8 @@ function getDefaultDurationFromTFHDInTRAF(traf : Uint8Array) : number | undefine
  * @param {Uint8Array} buffer
  * @returns {Uint8Array|null}
  */
-function getTRAF(buffer : Uint8Array) : Uint8Array|null {
-  const moof = getBoxContent(buffer, 0x6D6F6F66 /* moof */);
+function getTRAF(buffer: Uint8Array): Uint8Array | null {
+  const moof = getBoxContent(buffer, 0x6d6f6f66 /* moof */);
   if (moof === null) {
     return null;
   }
@@ -187,9 +198,9 @@ function getTRAF(buffer : Uint8Array) : Uint8Array|null {
  * @param {Uint8Array} buffer
  * @returns {Array.<Uint8Array>}
  */
-function getTRAFs(buffer : Uint8Array) : Uint8Array[] {
-  const moofs = getBoxesContent(buffer, 0x6D6F6F66 /* moof */);
-  return moofs.reduce((acc : Uint8Array[], moof : Uint8Array) => {
+function getTRAFs(buffer: Uint8Array): Uint8Array[] {
+  const moofs = getBoxesContent(buffer, 0x6d6f6f66 /* moof */);
+  return moofs.reduce((acc: Uint8Array[], moof: Uint8Array) => {
     const traf = getBoxContent(moof, 0x74726166 /* traf */);
     if (traf !== null) {
       acc.push(traf);
@@ -205,18 +216,18 @@ function getTRAFs(buffer : Uint8Array) : Uint8Array[] {
  * @param {Uint8Array} buf
  * @returns {Uint8Array|null}
  */
-function getMDIA(buf : Uint8Array) : Uint8Array|null {
-  const moov = getBoxContent(buf, 0x6D6F6F76 /* moov */);
+function getMDIA(buf: Uint8Array): Uint8Array | null {
+  const moov = getBoxContent(buf, 0x6d6f6f76 /* moov */);
   if (moov === null) {
     return null;
   }
 
-  const trak = getBoxContent(moov, 0x7472616B /* "trak" */);
+  const trak = getBoxContent(moov, 0x7472616b /* "trak" */);
   if (trak === null) {
     return null;
   }
 
-  return getBoxContent(trak, 0x6D646961 /* "mdia" */);
+  return getBoxContent(trak, 0x6d646961 /* "mdia" */);
 }
 
 /**
@@ -227,10 +238,9 @@ function getMDIA(buf : Uint8Array) : Uint8Array|null {
  * generated from encoding the corresponding ASCII in big endian.
  * @returns {UInt8Array|null}
  */
-function getBoxContent(buf : Uint8Array, boxName : number) : Uint8Array|null {
+function getBoxContent(buf: Uint8Array, boxName: number): Uint8Array | null {
   const offsets = getBoxOffsets(buf, boxName);
-  return offsets !== null ? buf.subarray(offsets[1], offsets[2]) :
-                            null;
+  return offsets !== null ? buf.subarray(offsets[1], offsets[2]) : null;
 }
 
 /**
@@ -241,7 +251,7 @@ function getBoxContent(buf : Uint8Array, boxName : number) : Uint8Array|null {
  * generated from encoding the corresponding ASCII in big endian.
  * @returns {Array.<Uint8Array>}
  */
-function getBoxesContent(buf : Uint8Array, boxName : number) : Uint8Array[] {
+function getBoxesContent(buf: Uint8Array, boxName: number): Uint8Array[] {
   const ret = [];
   let currentBuf = buf;
   while (true) {
@@ -278,17 +288,20 @@ function getBoxesContent(buf : Uint8Array, boxName : number) : Uint8Array[] {
  * @returns {Array.<number>|null}
  */
 function getBoxOffsets(
-  buf : Uint8Array,
-  boxName : number
-) : [ number /* start byte */,
+  buf: Uint8Array,
+  boxName: number
+):
+  | [
+      number /* start byte */,
       number /* First byte after the size and name (where the content begins)*/,
-      number /* end byte, not included. */] |
-    null {
+      number /* end byte, not included. */
+    ]
+  | null {
   const len = buf.length;
 
   let boxBaseOffset = 0;
-  let name : number;
-  let lastBoxSize : number = 0;
+  let name: number;
+  let lastBoxSize: number = 0;
   let lastOffset;
   while (boxBaseOffset + 8 <= len) {
     lastOffset = boxBaseOffset;
@@ -312,7 +325,7 @@ function getBoxOffsets(
       throw new Error("ISOBMFF: Size out of range");
     }
     if (name === boxName) {
-      if (boxName  === 0x75756964 /* === "uuid" */) {
+      if (boxName === 0x75756964 /* === "uuid" */) {
         lastOffset += 16; // Skip uuid name
       }
       return [boxBaseOffset, lastOffset, boxBaseOffset + lastBoxSize];
@@ -329,10 +342,12 @@ function getBoxOffsets(
  * @param {Number} offset - The offset (from the start of the given array)
  * @returns {Number}
  */
-function be3toi(bytes : Uint8Array, offset : number) : number {
-  return ((bytes[offset + 0] * 0x0010000) +
-          (bytes[offset + 1] * 0x0000100) +
-          (bytes[offset + 2]));
+function be3toi(bytes: Uint8Array, offset: number): number {
+  return (
+    bytes[offset + 0] * 0x0010000 +
+    bytes[offset + 1] * 0x0000100 +
+    bytes[offset + 2]
+  );
 }
 
 /**
@@ -341,11 +356,13 @@ function be3toi(bytes : Uint8Array, offset : number) : number {
  * @param {Number} offset - The offset (from the start of the given array)
  * @returns {Number}
  */
-function be4toi(bytes : Uint8Array, offset : number) : number {
-  return ((bytes[offset + 0] * 0x1000000) +
-          (bytes[offset + 1] * 0x0010000) +
-          (bytes[offset + 2] * 0x0000100) +
-          (bytes[offset + 3]));
+function be4toi(bytes: Uint8Array, offset: number): number {
+  return (
+    bytes[offset + 0] * 0x1000000 +
+    bytes[offset + 1] * 0x0010000 +
+    bytes[offset + 2] * 0x0000100 +
+    bytes[offset + 3]
+  );
 }
 
 /**
@@ -354,20 +371,18 @@ function be4toi(bytes : Uint8Array, offset : number) : number {
  * @param {Number} offset - The offset (from the start of the given array)
  * @returns {Number}
  */
-function be8toi(bytes : Uint8Array, offset : number) : number {
-  return (((bytes[offset + 0] * 0x1000000) +
-           (bytes[offset + 1] * 0x0010000) +
-           (bytes[offset + 2] * 0x0000100) +
-           (bytes[offset + 3])) * 0x100000000 +
-
-         (bytes[offset + 4] * 0x1000000) +
-         (bytes[offset + 5] * 0x0010000) +
-         (bytes[offset + 6] * 0x0000100) +
-         (bytes[offset + 7]));
+function be8toi(bytes: Uint8Array, offset: number): number {
+  return (
+    (bytes[offset + 0] * 0x1000000 +
+      bytes[offset + 1] * 0x0010000 +
+      bytes[offset + 2] * 0x0000100 +
+      bytes[offset + 3]) *
+      0x100000000 +
+    bytes[offset + 4] * 0x1000000 +
+    bytes[offset + 5] * 0x0010000 +
+    bytes[offset + 6] * 0x0000100 +
+    bytes[offset + 7]
+  );
 }
 
-export {
-  getDurationFromTrun,
-  getTrackFragmentDecodeTime,
-  getMDHDTimescale,
-};
+export { getDurationFromTrun, getTrackFragmentDecodeTime, getMDHDTimescale };

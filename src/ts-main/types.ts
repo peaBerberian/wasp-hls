@@ -104,10 +104,12 @@ export interface ContentMetadata {
 
   audioTracks: AudioTrackInfo[];
 
-  currentAudioTrack: {
-    id: string;
-    isSelected: boolean;
-  } | undefined;
+  currentAudioTrack:
+    | {
+        id: string;
+        isSelected: boolean;
+      }
+    | undefined;
 
   lockedVariant: string | null;
 
@@ -119,13 +121,13 @@ export interface ContentMetadata {
 /** Enumerates the various "states" the WaspHlsPlayer can be in. */
 export const enum PlayerState {
   /** No content is currently loaded or waiting to load. */
-  Stopped="Stopped",
+  Stopped = "Stopped",
   /** A content is currently being loaded but not ready for playback yet. */
-  Loading="Loading",
+  Loading = "Loading",
   /** A content is loaded. */
-  Loaded="Loaded",
+  Loaded = "Loaded",
   /** The last content loaded failed on error. */
-  Error="Error",
+  Error = "Error",
 }
 
 export { VariantInfo };

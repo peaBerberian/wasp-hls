@@ -1,17 +1,12 @@
 import * as React from "react";
 
-export default React.memo(function CreateNewPlayerButton(
-  {
-    onClick,
-  } : {
-    onClick : () => void;
-  }
-) : JSX.Element {
+export default React.memo(function CreateNewPlayerButton({
+  onClick,
+}: {
+  onClick: () => void;
+}): JSX.Element {
   return (
-    <button
-      className="create-new-player white-button"
-      onClick={onClick}
-    >
+    <button className="create-new-player white-button" onClick={onClick}>
       {"Create new Player"}
     </button>
   );

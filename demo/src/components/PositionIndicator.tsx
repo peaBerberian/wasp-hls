@@ -14,21 +14,20 @@ export default React.memo(function PositionInfos({
   position: number;
   duration: number;
 }) {
-  const convertTime = duration >= 60*60 ? toHours : toMinutes;
-  if (isNaN(position) || isNaN(duration) || !isFinite(position) || !isFinite(duration)) {
+  const convertTime = duration >= 60 * 60 ? toHours : toMinutes;
+  if (
+    isNaN(position) ||
+    isNaN(duration) ||
+    !isFinite(position) ||
+    !isFinite(duration)
+  ) {
     return null;
   }
   return (
     <div className="position-info">
-      <span className="current-position">
-        { convertTime(position) }
-      </span>
-      <span className="separator">
-        {" / "}
-      </span>
-      <span className="duration">
-        { convertTime(duration) }
-      </span>
+      <span className="current-position">{convertTime(position)}</span>
+      <span className="separator">{" / "}</span>
+      <span className="duration">{convertTime(duration)}</span>
     </div>
   );
 });

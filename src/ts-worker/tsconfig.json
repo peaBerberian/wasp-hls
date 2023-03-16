@@ -14,13 +14,7 @@
     "noUnusedParameters": true,
     "noUnusedLocals": true,
     "moduleResolution": "node",
-    "typeRoots": [
-      "./node_modules/@types",
-      "./mse-in-worker.d.ts"
-    ]
+    "typeRoots": ["./node_modules/@types", "./mse-in-worker.d.ts"]
   },
-  "include": [
-    "./*.ts",
-    "./**/*.ts"
-  ]
+  "include": ["./*.ts", "./**/*.ts"]
 }

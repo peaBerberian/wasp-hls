@@ -11,7 +11,7 @@ export interface WorkerInfo {
 
 class PlayerInstance {
   public hasWorkerMse: boolean | undefined;
-  private  _instanceInfo: WorkerInfo | null;
+  private _instanceInfo: WorkerInfo | null;
   constructor() {
     this._instanceInfo = null;
     this.hasWorkerMse = undefined;
@@ -38,12 +38,10 @@ class PlayerInstance {
     requestsStore.freeEverything();
   }
 
-  public changeContent(
-    content: ContentInfo
-  ) {
+  public changeContent(content: ContentInfo) {
     if (this._instanceInfo === null) {
       // TODO log error
-      return ;
+      return;
     }
     jsMemoryResources.freeEverything();
     requestsStore.freeEverything();
@@ -62,7 +60,6 @@ class PlayerInstance {
     return this._instanceInfo?.content ?? null;
   }
 }
-
 
 class GenericStore<T> {
   private _store: Partial<Record<ResourceId, T>>;
@@ -102,9 +99,7 @@ export interface RequestObject {
 export interface SourceBufferInstanceInfo<HasMseInWorker extends boolean> {
   id: SourceBufferId;
   lastInitTimescale: number | undefined;
-  sourceBuffer: HasMseInWorker extends true ?
-    QueuedSourceBuffer :
-    null;
+  sourceBuffer: HasMseInWorker extends true ? QueuedSourceBuffer : null;
   transmuxer: null | ((input: Uint8Array) => Uint8Array | null);
 }
 
@@ -126,7 +121,10 @@ export interface MainMediaSourceInstanceInfo {
 
 export interface ContentInfo {
   contentId: string;
-  mediaSourceObj: WorkerMediaSourceInstanceInfo | MainMediaSourceInstanceInfo | null;
+  mediaSourceObj:
+    | WorkerMediaSourceInstanceInfo
+    | MainMediaSourceInstanceInfo
+    | null;
   observationsObj: {
     removeEventListeners: () => void;
     timeoutId: number | undefined;
@@ -187,8 +185,10 @@ export function updateDispatcherConfig(
   }
 }
 
-export function getMediaSourceObj(
-) : MainMediaSourceInstanceInfo | WorkerMediaSourceInstanceInfo | undefined {
+export function getMediaSourceObj():
+  | MainMediaSourceInstanceInfo
+  | WorkerMediaSourceInstanceInfo
+  | undefined {
   const contentInfo = playerInstance.getContentInfo();
   if (contentInfo === null) {
     return undefined;

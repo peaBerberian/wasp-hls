@@ -1,9 +1,5 @@
-import logger, {
-  LoggerLevel,
-} from "./ts-common/logger";
-import WaspHlsPlayer, {
-  PlayerState,
-} from "./ts-main";
+import logger, { LoggerLevel } from "./ts-common/logger";
+import WaspHlsPlayer, { PlayerState } from "./ts-main";
 
 // TODO only debug mode?
 /* eslint-disable */
@@ -19,9 +15,5 @@ const LoggerLevels = {
   None: LoggerLevel.None,
 } as const;
 
-export {
-  PlayerState,
-  logger,
-  LoggerLevels,
-};
+export { PlayerState, logger, LoggerLevels };
 export default WaspHlsPlayer;

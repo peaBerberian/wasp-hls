@@ -6,12 +6,12 @@
 Wasp-hls is an [HLS](https://en.wikipedia.org/wiki/HTTP_Live_Streaming) media
 player for the web which:
 
-  1. Relies the most possible on WebAssembly (Written initially in the
-     [Rust](https://www.rust-lang.org/) language)
+1. Relies the most possible on WebAssembly (Written initially in the
+   [Rust](https://www.rust-lang.org/) language)
 
-  2. Runs mostly in a Web Worker (even for media buffering when APIs are
-     available), to reduce the influence an heavy UI can have on playback (and
-     in some situations vice-versa).
+2. Runs mostly in a Web Worker (even for media buffering when APIs are
+   available), to reduce the influence an heavy UI can have on playback (and
+   in some situations vice-versa).
 
 Note that this is only a personal project as well as a proof of concept and it
 is still heavily in development.
@@ -24,205 +24,215 @@ so this is not something totally out of the blue.
 
 The reasons why I started this project are mainly:
 
-  - to see how IO-heavy logic (like we have here with many requests, media
-    segments streaming, playback observation, network metrics etc.) using web
-    APIs only exposed to JavaScript could be conjugated with WebAssembly and
-    Rust.
+- to see how IO-heavy logic (like we have here with many requests, media
+  segments streaming, playback observation, network metrics etc.) using web
+  APIs only exposed to JavaScript could be conjugated with WebAssembly and
+  Rust.
 
-  - to experiment with a big-enough WebAssembly and Web Worker-based library:
-    how should it interact with applications written in JavaScript?
+- to experiment with a big-enough WebAssembly and Web Worker-based library:
+  how should it interact with applications written in JavaScript?
 
-  - to learn more about the HLS streaming protocol, for which the RxPlayer does
-    not provide first class support (yet?)
+- to learn more about the HLS streaming protocol, for which the RxPlayer does
+  not provide first class support (yet?)
 
-  - to see how I would write a complex beast like a Media player if restarting
-    from scratch (though the situation is very different here, due to the
-    difference in the language used).
+- to see how I would write a complex beast like a Media player if restarting
+  from scratch (though the situation is very different here, due to the
+  difference in the language used).
 
-  - to see if there's any real performance and/or memory related advantage (or
-    disadvantage) in relying on WebAssembly for the core logic of a media
-    player, in various situations (multiple players on the same page, large 4k
-    segments, web workers, mse-in-worker).
+- to see if there's any real performance and/or memory related advantage (or
+  disadvantage) in relying on WebAssembly for the core logic of a media
+  player, in various situations (multiple players on the same page, large 4k
+  segments, web workers, mse-in-worker).
 
-  - to play with a Web Worker-based media player, and find out its influence
-    in terms of API definition, synchronization difficulties, performance issues
-    etc.
+- to play with a Web Worker-based media player, and find out its influence
+  in terms of API definition, synchronization difficulties, performance issues
+  etc.
 
-  - to work on and improve my Rust skills
+- to work on and improve my Rust skills
 
-  - To try relying on [wasm\_bindgen](https://github.com/rustwasm/wasm-bindgen)
-    on a sufficiently complex library.
+- To try relying on [wasm_bindgen](https://github.com/rustwasm/wasm-bindgen)
+  on a sufficiently complex library.
 
 ## What's left to do?
 
 A lot:
 
 Type of contents:
-  - [x] Play HLS VoD contents
-  - [x] Transcode mpeg-ts (thanks to mux.js for now)
-  - [x] Play HLS live contents _(for now require presence of
-    `EXT-X-PROGRAM-DATE-TIME` tag in media playlist)_
-  - [ ] Proper support of HLS low-latency contents.
-    _Priority: average_
+
+- [x] Play HLS VoD contents
+- [x] Transcode mpeg-ts (thanks to mux.js for now)
+- [x] Play HLS live contents _(for now require presence of
+      `EXT-X-PROGRAM-DATE-TIME` tag in media playlist)_
+- [ ] Proper support of HLS low-latency contents.
+      _Priority: average_
 
 Worker-related features:
-  - [x] Load content-related resources and run main logic loop in worker
-  - [x] Use MSE-in-Worker when available
-  - [x] Rely on main thread for MSE when MSE-in-Worker is not available
+
+- [x] Load content-related resources and run main logic loop in worker
+- [x] Use MSE-in-Worker when available
+- [x] Rely on main thread for MSE when MSE-in-Worker is not available
 
 Adaptive BitRate:
-  - [x] Choose variant based on throughtput-based estimates
-  - [x] Allow application to list and select its own variant (quality) and know
-    the current one
-  - [ ] Also choose variant based on buffer-based estimates.
-    _Priority: average_
-  - [ ] Logic to detect sudden large fall in bandwidth
-    _Priority: average_
+
+- [x] Choose variant based on throughtput-based estimates
+- [x] Allow application to list and select its own variant (quality) and know
+      the current one
+- [ ] Also choose variant based on buffer-based estimates.
+      _Priority: average_
+- [ ] Logic to detect sudden large fall in bandwidth
+      _Priority: average_
 
 Request Scheduling:
-  - [x] Lazy Media Playlist downloading
-  - [x] Media Playlist refreshing for live contents
-  - [x] Buffer goal implementation (as in: stop loading segment once enough to fill
-    the buffer up to a certain point are loaded)
-  - [x] Parallel audio and video segment loading
-  - [X] Priorization between audio and video segment requests (to e.g. stop
-    doing audio segment requests when video ones become urgent).
-  - [X] Retry of failed requests with an exponential backoff.
-  - [X] Perform range requests for segments if needed
+
+- [x] Lazy Media Playlist downloading
+- [x] Media Playlist refreshing for live contents
+- [x] Buffer goal implementation (as in: stop loading segment once enough to fill
+      the buffer up to a certain point are loaded)
+- [x] Parallel audio and video segment loading
+- [x] Priorization between audio and video segment requests (to e.g. stop
+      doing audio segment requests when video ones become urgent).
+- [x] Retry of failed requests with an exponential backoff.
+- [x] Perform range requests for segments if needed
 
 Buffers:
-  - [x] End of stream support (as in: actually end when playback reached the end!)
-  - [x] Multiple simultaneous type of buffers support (for now only audio and video)
-  - [ ] Proper handling of `QuotaExceededError` after pushing segments (when low
-    on memory).
-    This is generally not needed as the browser should already handle some kind of
-    garbage collection but some platforms still may have issues when memory is
-    constrained.
-    _Priority: low_
-  - [ ] Inventory storing which quality is where in the buffers, both for API reasons
-    and for several optimizations (though quality identification seems more difficult
-    to implement in HLS than in DASH due to the fact that HLS only link variants to
-    bitrate, not the actual audio and video streams - but it should be doable).
-    _Priority: very low_
+
+- [x] End of stream support (as in: actually end when playback reached the end!)
+- [x] Multiple simultaneous type of buffers support (for now only audio and video)
+- [ ] Proper handling of `QuotaExceededError` after pushing segments (when low
+      on memory).
+      This is generally not needed as the browser should already handle some kind of
+      garbage collection but some platforms still may have issues when memory is
+      constrained.
+      _Priority: low_
+- [ ] Inventory storing which quality is where in the buffers, both for API reasons
+      and for several optimizations (though quality identification seems more difficult
+      to implement in HLS than in DASH due to the fact that HLS only link variants to
+      bitrate, not the actual audio and video streams - but it should be doable).
+      _Priority: very low_
 
 Tracks:
-  - [ ] Provide API to set an audio track
-    _Priority: high_
-  - [ ] Provide API to set a video track
-    _Priority: low_
-  - [ ] Allow text track selection and support at least one text track format
-    (TTML IMSC1 or webVTT)
-    _Priority: low_
+
+- [ ] Provide API to set an audio track
+      _Priority: high_
+- [ ] Provide API to set a video track
+      _Priority: low_
+- [ ] Allow text track selection and support at least one text track format
+      (TTML IMSC1 or webVTT)
+      _Priority: low_
 
 Decryption:
-  - [ ] Support content decryption.
-    _Priority: very low_
+
+- [ ] Support content decryption.
+      _Priority: very low_
 
 Miscellaneous:
-  - [x] Error API
-  - [ ] Discontinuity handling.
-    _Priority: average_
-  - [ ] Delta playlist handling.
-    _Priority: low_
-  - [ ] Content Steering handling.
-    _Priority: low_
-  - [ ] WebAssembly-based mpeg-ts transcoder.
-    _Priority: low_
+
+- [x] Error API
+- [ ] Discontinuity handling.
+      _Priority: average_
+- [ ] Delta playlist handling.
+      _Priority: low_
+- [ ] Content Steering handling.
+      _Priority: low_
+- [ ] WebAssembly-based mpeg-ts transcoder.
+      _Priority: low_
 
 Playlist tags specifically considered (unchecked ones are mainly just ignored,
 most do not prevent playback):
-  - [X] EXT-X-ENDLIST: Parsed to know if a playlist needs to be refreshed or
-    not, but also to detect if we're playing an unfinished live content to
-    play close to the live edge by default.
-  - [X] EXTINF: Only the indicated duration of a segment is considered, not
-    the title for which we have no use for now. Both integer and float durations
-    should be handled.
-  - [X] EXT-X-PROGRAM-DATE-TIME: Used to determine the starting position of
-    segments as stored by the player - which may be different than the actual
-    media time once the corresponding segment is pushed.
-    The units/scale indicated by this tag will be preferred over the real media
-    time in the player APIs.
-  - [X] EXT-X-BYTERANGE: Used for range requests
-  - [X] EXT-X-PLAYLIST-TYPE: Used To know if a Playlist may be refreshed
-  - [X] EXT-X-TARGETDURATION: Useful for heuristics for playlist refresh
-  - [X] EXT-X-START: Relied on for the default starting position.
-  - EXT-X-MAP:
-    - [X] URI: Used to fetch the initialization segment if one is present
-    - [X] BYTERANGE: To perform a range request for the initialization segment
-  - EXT-X-MEDIA:
-    - [X] TYPE: Both AUDIO and VIDEO are handled. SUBTITLES and CLOSED-CAPTIONS
-      are just ignored for now.
-    - [X] URI
-    - [X] GROUP-ID
-    - [X] DEFAULT
-    - [X] AUTOSELECT
-    - [X] STABLE-RENDITION-ID: Help to identify a Media Playlist with its URI
-    - [ ] LANGUAGE: No track selection API yet
-    - [ ] ASSOC-LANGUAGE: No track selection API yet
-    - [ ] NAME: No track selection API yet
-    - [ ] FORCED: As the SUBTITLES TYPE is not handled yet, we don't have to use
-      this one
-    - [ ] INSTREAM-ID: As the CLOSED-CAPTIONS TYPE is not handled yet, we don't
-      have to use this one
-    - [ ] CHARACTERISTICS: No track selection API yet
-    - [ ] CHANNELS: No track selection API yet
-  - EXT-X-STREAM-INF:
-    - [x] BANDWIDTH: Used to select the right variant in function of the
-      bandwidth
-    - [X] CODECS: Considered when pushing the segment but NOT to filter only
-      compatible renditions yet. Should probably also be used for that in the
-      future.
-    - [X] AUDIO: As no track selection API exist yet, only the most prioritized
-      audio media playlist is then considered
-    - [X] VIDEO: As no track selection API exist yet, only the most prioritized
-      video media playlsit is then considered
-    - [X] RESOLUTION: Used to describe variant in variant selection API
-    - [X] FRAME-RATE: Used to describe variant in variant selection API
-    - [X] STABLE-VARIANT-ID: Used for variant-identification, else, its URI is
-      used.
-    - [ ] AVERAGE-BANDWIDTH: Not used yet. I don't know if it's useful for us
-      here yet.
-    - [ ] SCORE: Not considered yet, but should be used alongside BANDWIDTH to
-      select a variant. It does not seem hard to implement...
-    - [ ] SUPPLEMENTAL-CODECS: In our web use case, I'm not sure if this is only
-      useful for track selection API or if filtering also needs to be done based
-      on this.
-    - [ ] SUBTITLES: No subtitles support for now
-    - [ ] CLOSED-CAPTIONS: We just ignore that one for now
-    - [ ] PATHWAY-ID: Content Steering not handled yet
-    - [ ] HDCP-LEVEL: DRM are not handled for now
-    - [ ] ALLOWED-CPC: DRM are not handled for now
-  - [ ] EXT-X-GAP
-  - [ ] EXT-X-VERSION: Not specifically considered for now, most differences
-    handled until now had compatible behaviors from version to version
-  - [ ] EXT-X-INDEPENDENT-SEGMENTS: Might needs to be considered once we're
-    doing some flushing?
-  - [ ] EXT-X-DEFINE: Seems rare enough, so may be supported if the time is
-    taken...
-  - [ ] EXT-X-MEDIA-SEQUENCE: Not sure of what this allows. To check...
-  - [ ] EXT-X-I-FRAMES-ONLY: To handle one day, perhaps (very low priority)
-  - [ ] EXT-X-PART: low-latency related
-  - [ ] EXT-X-PART-INF: low-latency related
-  - [ ] EXT-X-SERVER-CONTROL: low-latency related?
-  - [ ] EXT-X-BITRATE
-  - [ ] EXT-X-DATERANGE: Might be used for an event emitting API?
-  - [ ] EXT-X-SKIP
-  - [ ] EXT-X-PRELOAD-HINT
-  - [ ] EXT-X-RENDITION-REPORT
-  - [ ] EXT-X-I-FRAME-STREAM-INF
-  - [ ] EXT-X-SESSION-DATA
-  - [ ] EXT-X-SESSION-KEY
-  - [ ] EXT-X-CONTENT-STEERING
-  - [ ] EXT-X-KEY: decryption and related tags are very low priority
-  - [ ] EXT-X-DISCONTINUITY: I'm under the impression in our scenario that it
-        only is useful to increment discontinuity sequences, which we have no
-        need for...
-  - [ ] EXT-X-DISCONTINUITY-SEQUENCE: I don't think we need this, at least I
-        didn't encounter a case for it now that isn't handled by other tags.
+
+- [x] EXT-X-ENDLIST: Parsed to know if a playlist needs to be refreshed or
+      not, but also to detect if we're playing an unfinished live content to
+      play close to the live edge by default.
+- [x] EXTINF: Only the indicated duration of a segment is considered, not
+      the title for which we have no use for now. Both integer and float durations
+      should be handled.
+- [x] EXT-X-PROGRAM-DATE-TIME: Used to determine the starting position of
+      segments as stored by the player - which may be different than the actual
+      media time once the corresponding segment is pushed.
+      The units/scale indicated by this tag will be preferred over the real media
+      time in the player APIs.
+- [x] EXT-X-BYTERANGE: Used for range requests
+- [x] EXT-X-PLAYLIST-TYPE: Used To know if a Playlist may be refreshed
+- [x] EXT-X-TARGETDURATION: Useful for heuristics for playlist refresh
+- [x] EXT-X-START: Relied on for the default starting position.
+- EXT-X-MAP:
+  - [x] URI: Used to fetch the initialization segment if one is present
+  - [x] BYTERANGE: To perform a range request for the initialization segment
+- EXT-X-MEDIA:
+  - [x] TYPE: Both AUDIO and VIDEO are handled. SUBTITLES and CLOSED-CAPTIONS
+        are just ignored for now.
+  - [x] URI
+  - [x] GROUP-ID
+  - [x] DEFAULT
+  - [x] AUTOSELECT
+  - [x] STABLE-RENDITION-ID: Help to identify a Media Playlist with its URI
+  - [ ] LANGUAGE: No track selection API yet
+  - [ ] ASSOC-LANGUAGE: No track selection API yet
+  - [ ] NAME: No track selection API yet
+  - [ ] FORCED: As the SUBTITLES TYPE is not handled yet, we don't have to use
+        this one
+  - [ ] INSTREAM-ID: As the CLOSED-CAPTIONS TYPE is not handled yet, we don't
+        have to use this one
+  - [ ] CHARACTERISTICS: No track selection API yet
+  - [ ] CHANNELS: No track selection API yet
+- EXT-X-STREAM-INF:
+  - [x] BANDWIDTH: Used to select the right variant in function of the
+        bandwidth
+  - [x] CODECS: Considered when pushing the segment but NOT to filter only
+        compatible renditions yet. Should probably also be used for that in the
+        future.
+  - [x] AUDIO: As no track selection API exist yet, only the most prioritized
+        audio media playlist is then considered
+  - [x] VIDEO: As no track selection API exist yet, only the most prioritized
+        video media playlsit is then considered
+  - [x] RESOLUTION: Used to describe variant in variant selection API
+  - [x] FRAME-RATE: Used to describe variant in variant selection API
+  - [x] STABLE-VARIANT-ID: Used for variant-identification, else, its URI is
+        used.
+  - [ ] AVERAGE-BANDWIDTH: Not used yet. I don't know if it's useful for us
+        here yet.
+  - [ ] SCORE: Not considered yet, but should be used alongside BANDWIDTH to
+        select a variant. It does not seem hard to implement...
+  - [ ] SUPPLEMENTAL-CODECS: In our web use case, I'm not sure if this is only
+        useful for track selection API or if filtering also needs to be done based
+        on this.
+  - [ ] SUBTITLES: No subtitles support for now
+  - [ ] CLOSED-CAPTIONS: We just ignore that one for now
+  - [ ] PATHWAY-ID: Content Steering not handled yet
+  - [ ] HDCP-LEVEL: DRM are not handled for now
+  - [ ] ALLOWED-CPC: DRM are not handled for now
+- [ ] EXT-X-GAP
+- [ ] EXT-X-VERSION: Not specifically considered for now, most differences
+      handled until now had compatible behaviors from version to version
+- [ ] EXT-X-INDEPENDENT-SEGMENTS: Might needs to be considered once we're
+      doing some flushing?
+- [ ] EXT-X-DEFINE: Seems rare enough, so may be supported if the time is
+      taken...
+- [ ] EXT-X-MEDIA-SEQUENCE: Not sure of what this allows. To check...
+- [ ] EXT-X-I-FRAMES-ONLY: To handle one day, perhaps (very low priority)
+- [ ] EXT-X-PART: low-latency related
+- [ ] EXT-X-PART-INF: low-latency related
+- [ ] EXT-X-SERVER-CONTROL: low-latency related?
+- [ ] EXT-X-BITRATE
+- [ ] EXT-X-DATERANGE: Might be used for an event emitting API?
+- [ ] EXT-X-SKIP
+- [ ] EXT-X-PRELOAD-HINT
+- [ ] EXT-X-RENDITION-REPORT
+- [ ] EXT-X-I-FRAME-STREAM-INF
+- [ ] EXT-X-SESSION-DATA
+- [ ] EXT-X-SESSION-KEY
+- [ ] EXT-X-CONTENT-STEERING
+- [ ] EXT-X-KEY: decryption and related tags are very low priority
+- [ ] EXT-X-DISCONTINUITY: I'm under the impression in our scenario that it
+      only is useful to increment discontinuity sequences, which we have no
+      need for...
+- [ ] EXT-X-DISCONTINUITY-SEQUENCE: I don't think we need this, at least I
+      didn't encounter a case for it now that isn't handled by other tags.
 
 ## Architecture
 
 The architecture of the project is as follow:
+
 ```
       +------------------------------------------------------------------------------+
       |                                                                              |
@@ -270,97 +280,99 @@ The architecture of the project is as follow:
 Here's a definition of terms and blocks in this schema, from left to right and
 top to bottom:
 
-  - **JS API**: Implement the library's API, callable from JS applications.
+- **JS API**: Implement the library's API, callable from JS applications.
 
-    The JS API is defined in the `src/ts-main/api.ts` file.
+  The JS API is defined in the `src/ts-main/api.ts` file.
 
-  - **Main thread**: On top of the corresponding line is the code running in the
-    main thread, alongside your application.
+- **Main thread**: On top of the corresponding line is the code running in the
+  main thread, alongside your application.
 
-    It hosts the API as well as everything that needs to interact with the page,
-    such as handling the video element.
+  It hosts the API as well as everything that needs to interact with the page,
+  such as handling the video element.
 
-    The corresponding code runs in the `src/ts-main/` directory.
+  The corresponding code runs in the `src/ts-main/` directory.
 
-  - **Web Worker**: Below the corresponding line is the code running in a single
-    Web Worker. In it runs the main logic of the application.
+- **Web Worker**: Below the corresponding line is the code running in a single
+  Web Worker. In it runs the main logic of the application.
 
-    That way, actions such as heavy UI interactions will only have a minimal
-    impact on media buffering, reducing the risk of rebuffering and improving
-    the user experience.
+  That way, actions such as heavy UI interactions will only have a minimal
+  impact on media buffering, reducing the risk of rebuffering and improving
+  the user experience.
 
-    The corresponding code runs in:
-      - the `src/ts-worker/` directory for the TypeScript part of the code
-        (compiled into JavaScript once the library is built).
-      - the `src/rs-core/` directory for the Rust part of the code (compiled
-        into WebAssembly once the library is built).
+  The corresponding code runs in:
 
-  - **MessageReceiver**: Entry point of the Web Worker, to which the API post
-    messages to.
+  - the `src/ts-worker/` directory for the TypeScript part of the code
+    (compiled into JavaScript once the library is built).
+  - the `src/rs-core/` directory for the Rust part of the code (compiled
+    into WebAssembly once the library is built).
 
-    The MessageReceiver is defined in the `src/ts-worker/MessageReceiver.ts`
-    file.
+- **MessageReceiver**: Entry point of the Web Worker, to which the API post
+  messages to.
 
-  - **TS bindings**: Provide web APIs to the WebAssembly part, for example media
-    buffering APIs. Also call event listeners on the Rust-side on various
-    events.
+  The MessageReceiver is defined in the `src/ts-worker/MessageReceiver.ts`
+  file.
 
-    Some Web API can only be called on the main thread, which is why the TS
-    bindings sometimes need to post messages back to the API.
+- **TS bindings**: Provide web APIs to the WebAssembly part, for example media
+  buffering APIs. Also call event listeners on the Rust-side on various
+  events.
 
-    The TS bindings are defined in the `src/ts-worker/bindings.ts` file.
+  Some Web API can only be called on the main thread, which is why the TS
+  bindings sometimes need to post messages back to the API.
 
-  - **Javascript (once compiled)**: higher than the corresponding line is the
-    code written in TypeScript, which is then compiled to JavaScript.
+  The TS bindings are defined in the `src/ts-worker/bindings.ts` file.
 
-    That code is present in the following directories:
-      - `src/ts-main/` for the code running in the main thread, such as the
-        API
-      - `src/ts-worker/` for the code running on the WebWorker
+- **Javascript (once compiled)**: higher than the corresponding line is the
+  code written in TypeScript, which is then compiled to JavaScript.
 
-  - **WebAssembly (once compiled)**: Lower than the corresponding line is the
-    of code written in Rust - that will be compiled to WebAssembly - present in
-    the `src/rs-core` directory.
+  That code is present in the following directories:
 
-  - **Dispatcher**: Entry point of the Rust logic. Receive orders and/or events,
-    and call the right modules in the right order.
+  - `src/ts-main/` for the code running in the main thread, such as the
+    API
+  - `src/ts-worker/` for the code running on the WebWorker
 
-    The Dispatcher is defined in the `src/rs-core/dispatcher/` directory.
+- **WebAssembly (once compiled)**: Lower than the corresponding line is the
+  of code written in Rust - that will be compiled to WebAssembly - present in
+  the `src/rs-core` directory.
 
-  - **Rs bindings**: Define both TypeScript functions exposed by TS bindings but
-    also "event listeners" (which are technically a part of the Dispatcher)
-    which will be called by TS bindings on various events.
+- **Dispatcher**: Entry point of the Rust logic. Receive orders and/or events,
+  and call the right modules in the right order.
 
-    Rs bindings are defined in the `src/rs-core/bindings/` directory.
+  The Dispatcher is defined in the `src/rs-core/dispatcher/` directory.
 
-  - **Requester**: Schedule playlist and segment requests.
+- **Rs bindings**: Define both TypeScript functions exposed by TS bindings but
+  also "event listeners" (which are technically a part of the Dispatcher)
+  which will be called by TS bindings on various events.
 
-    The Requester is defined in the `src/rs-core/requester/` directory.
+  Rs bindings are defined in the `src/rs-core/bindings/` directory.
 
-  - **NextSegmentSelector**: Keep track of the next segments that should be
-    requested
+- **Requester**: Schedule playlist and segment requests.
 
-    The NextSegmentSelector is defined in the `src/rs-core/segment_selector/`
-    directory.
+  The Requester is defined in the `src/rs-core/requester/` directory.
 
-  - **AdaptiveQualitySelector**: Implement Adaptive BitRate (a.k.a. ABR)
-    management, such as calculating the network bandwidth, to be able to
-    choose the best variant and media selected.
+- **NextSegmentSelector**: Keep track of the next segments that should be
+  requested
 
-    The AdaptiveQualitySelector is defined in the `src/rs-core/adaptive/`
-    directory.
+  The NextSegmentSelector is defined in the `src/rs-core/segment_selector/`
+  directory.
 
-  - **PlaylistStore**: Parses and stores the metadata of the current content as
-    well as keep tracks of the current variant and media playlists selected.
+- **AdaptiveQualitySelector**: Implement Adaptive BitRate (a.k.a. ABR)
+  management, such as calculating the network bandwidth, to be able to
+  choose the best variant and media selected.
 
-    The PlaylistStore is defined in the `src/rs-core/playlist_store/`
-    directory.
+  The AdaptiveQualitySelector is defined in the `src/rs-core/adaptive/`
+  directory.
 
-  - **MediaElementReference**: Interface to interact with the media element in
-    the web page, as well as to buffer media.
+- **PlaylistStore**: Parses and stores the metadata of the current content as
+  well as keep tracks of the current variant and media playlists selected.
 
-    The MediaElementReference is defined in the `src/rs-core/media_element/`
-    directory.
+  The PlaylistStore is defined in the `src/rs-core/playlist_store/`
+  directory.
 
-  - **Modules**: Specialized blocks of the Rust logic doing specific tasks,
-    potentially calling Rs bindings when wanting to call web API.
+- **MediaElementReference**: Interface to interact with the media element in
+  the web page, as well as to buffer media.
+
+  The MediaElementReference is defined in the `src/rs-core/media_element/`
+  directory.
+
+- **Modules**: Specialized blocks of the Rust logic doing specific tasks,
+  potentially calling Rs bindings when wanting to call web API.

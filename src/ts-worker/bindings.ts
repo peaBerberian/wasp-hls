@@ -1,7 +1,11 @@
 import idGenerator from "../ts-common/idGenerator.js";
 import logger from "../ts-common/logger.js";
 import QueuedSourceBuffer from "../ts-common/QueuedSourceBuffer.js";
-import { AudioTrackInfo, VariantInfo, WorkerMessageType } from "../ts-common/types.js";
+import {
+  AudioTrackInfo,
+  VariantInfo,
+  WorkerMessageType,
+} from "../ts-common/types.js";
 import {
   LogLevel,
   MediaType,
@@ -41,20 +45,17 @@ import {
   getTrackFragmentDecodeTime,
 } from "./isobmff-utils.js";
 import postMessageToMain from "./postMessage.js";
-import {
-  getTransmuxedType,
-  shouldTransmux,
-  transmux,
-} from "./transmux.js";
+import { getTransmuxedType, shouldTransmux, transmux } from "./transmux.js";
 import { formatErrMessage } from "./utils.js";
 
 // Some environments (such as Safari Desktop) weirdly do not support
 // `performance.now` inside a WebWorker
-const timerFn = typeof performance !== "object" ||
+const timerFn =
+  typeof performance !== "object" ||
   performance === null ||
-  typeof performance.now !== "function" ?
-   Date.now.bind(Date) :
-  performance.now.bind(performance);
+  typeof performance.now !== "function"
+    ? Date.now.bind(Date)
+    : performance.now.bind(performance);
 
 const generateMediaSourceId = idGenerator();
 const cachedTextDecoder = new TextDecoder("utf-8", {
@@ -77,9 +78,9 @@ export function sendSegmentRequestError(
     return;
   }
   postMessageToMain({
-    type: fatal ?
-      WorkerMessageType.Error as const :
-      WorkerMessageType.Warning as const,
+    type: fatal
+      ? (WorkerMessageType.Error as const)
+      : (WorkerMessageType.Warning as const),
     value: {
       contentId,
       errorInfo: {
@@ -109,9 +110,9 @@ export function sendOtherError(
     return;
   }
   postMessageToMain({
-    type: fatal ?
-      WorkerMessageType.Error as const :
-      WorkerMessageType.Warning as const,
+    type: fatal
+      ? (WorkerMessageType.Error as const)
+      : (WorkerMessageType.Warning as const),
     value: {
       contentId,
       message,
@@ -137,9 +138,9 @@ export function sendPlaylistParsingError(
     return;
   }
   postMessageToMain({
-    type: fatal ?
-      WorkerMessageType.Error as const :
-      WorkerMessageType.Warning as const,
+    type: fatal
+      ? (WorkerMessageType.Error as const)
+      : (WorkerMessageType.Warning as const),
     value: {
       contentId,
       message,
@@ -160,7 +161,7 @@ export function sendPlaylistParsingError(
  */
 export function getResourceData(
   resourceId: ResourceId
-) : Uint8Array | undefined {
+): Uint8Array | undefined {
   return jsMemoryResources.get(resourceId);
 }
 
@@ -198,7 +199,6 @@ export function timer(duration: number, reason: TimerReason): TimerId {
       return;
     }
     dispatcher.on_timer_ended(timerId, reason);
-
   }, duration);
   return timerId;
 }
@@ -228,7 +228,7 @@ export function doFetch(
   const currentRequestId = requestsStore.create({ abortController });
   const timestampBef = timerFn();
 
-  let timeoutTimeoutId : number | undefined;
+  let timeoutTimeoutId: number | undefined;
   if (timeout !== undefined) {
     timeoutTimeoutId = setTimeout(() => {
       timeouted = true;
@@ -240,7 +240,7 @@ export function doFetch(
     headers.push(["Range", `${rangeStart}-${rangeEnd ?? ""}`]);
   }
   fetch(url, { signal: abortController.signal, headers })
-    .then(async res => {
+    .then(async (res) => {
       if (timeoutTimeoutId !== undefined) {
         clearTimeout(timeoutTimeoutId);
       }
@@ -265,7 +265,7 @@ export function doFetch(
         );
       }
     })
-    .catch(err => {
+    .catch((err) => {
       requestsStore.delete(currentRequestId);
       const dispatcher = playerInstance.getDispatcher();
       if (timeouted) {
@@ -284,7 +284,7 @@ export function doFetch(
  * @param {number} id
  * @returns {boolean}
  */
-export function abortRequest(id: RequestId) : boolean {
+export function abortRequest(id: RequestId): boolean {
   const requestObj = requestsStore.get(id);
   if (requestObj !== undefined) {
     requestObj.abortController.abort();
@@ -294,7 +294,9 @@ export function abortRequest(id: RequestId) : boolean {
     // made (e.g. what if a request failure associated to that request was already
     // scheduled yet another request is made synchronously with the same RequestId?).
     /* eslint-disable-next-line @typescript-eslint/no-floating-promises */
-    Promise.resolve().then(() => { requestsStore.delete(id); });
+    Promise.resolve().then(() => {
+      requestsStore.delete(id);
+    });
     return true;
   }
   return false;
@@ -324,7 +326,7 @@ export function seek(position: number): void {
   const contentInfo = playerInstance.getContentInfo();
   if (contentInfo === null || contentInfo.mediaSourceObj === null) {
     logger.error("Attempting to seek when no MediaSource is created");
-    return ;
+    return;
   }
   postMessageToMain({
     type: WorkerMessageType.Seek,
@@ -341,8 +343,10 @@ export function seek(position: number): void {
 export function setPlaybackRate(position: number): void {
   const contentInfo = playerInstance.getContentInfo();
   if (contentInfo === null || contentInfo.mediaSourceObj === null) {
-    logger.error("Attempting to set playback rate when no MediaSource is created");
-    return ;
+    logger.error(
+      "Attempting to set playback rate when no MediaSource is created"
+    );
+    return;
   }
   postMessageToMain({
     type: WorkerMessageType.UpdatePlaybackRate,
@@ -407,32 +411,35 @@ export function attachMediaSource(): AttachMediaSourceResult {
         sourceBuffers: [],
         nextSourceBufferId: 0,
       };
-      postMessageToMain({
-        type: WorkerMessageType.AttachMediaSource,
-        value: {
-          contentId: contentInfo.contentId,
-          /* eslint-disable-next-line */
-          handle,
-          src: objectURL,
-          mediaSourceId,
+      postMessageToMain(
+        {
+          type: WorkerMessageType.AttachMediaSource,
+          value: {
+            contentId: contentInfo.contentId,
+            /* eslint-disable-next-line */
+            handle,
+            src: objectURL,
+            mediaSourceId,
+          },
         },
-      }, handle !== undefined ? [handle] : []);
+        handle !== undefined ? [handle] : []
+      );
     }
 
     function onMediaSourceEnded(): void {
-      playerInstance.getDispatcher()?.on_media_source_state_change(
-        MediaSourceReadyState.Ended
-      );
+      playerInstance
+        .getDispatcher()
+        ?.on_media_source_state_change(MediaSourceReadyState.Ended);
     }
     function onMediaSourceOpen(): void {
-      playerInstance.getDispatcher()?.on_media_source_state_change(
-        MediaSourceReadyState.Open
-      );
+      playerInstance
+        .getDispatcher()
+        ?.on_media_source_state_change(MediaSourceReadyState.Open);
     }
     function onMediaSourceClose(): void {
-      playerInstance.getDispatcher()?.on_media_source_state_change(
-        MediaSourceReadyState.Closed
-      );
+      playerInstance
+        .getDispatcher()
+        ?.on_media_source_state_change(MediaSourceReadyState.Closed);
     }
   } catch (e) {
     return AttachMediaSourceResult.error(
@@ -459,10 +466,7 @@ export function removeMediaSource(): RemoveMediaSourceResult {
   }
 
   if (contentInfo.mediaSourceObj.type === "worker") {
-    const {
-      mediaSource,
-      removeEventListeners,
-    } = contentInfo.mediaSourceObj;
+    const { mediaSource, removeEventListeners } = contentInfo.mediaSourceObj;
     removeEventListeners();
 
     if (mediaSource !== null && mediaSource.readyState !== "closed") {
@@ -477,10 +481,11 @@ export function removeMediaSource(): RemoveMediaSourceResult {
               sourceBuffer.abort();
             }
             mediaSource.removeSourceBuffer(sourceBuffer);
-          }
-          catch (e) {
-            const msg =
-              formatErrMessage(e, "Unknown error while removing SourceBuffer");
+          } catch (e) {
+            const msg = formatErrMessage(
+              e,
+              "Unknown error while removing SourceBuffer"
+            );
             logger.error("Could not remove SourceBuffer: " + msg);
             return RemoveMediaSourceResult.error(
               RemoveMediaSourceErrorCode.UnknownError,
@@ -508,12 +513,12 @@ export function setMediaSourceDuration(
 ): MediaSourceDurationUpdateResult {
   const contentInfo = playerInstance.getContentInfo();
   if (contentInfo === null) {
-    return  MediaSourceDurationUpdateResult.error(
+    return MediaSourceDurationUpdateResult.error(
       MediaSourceDurationUpdateErrorCode.NoMediaSourceAttached
     );
   }
   if (contentInfo.mediaSourceObj === null) {
-    return  MediaSourceDurationUpdateResult.error(
+    return MediaSourceDurationUpdateResult.error(
       MediaSourceDurationUpdateErrorCode.NoMediaSourceAttached
     );
   }
@@ -543,10 +548,8 @@ export function setMediaSourceDuration(
  * @param {*} e
  * @returns {string|undefined}
  */
-export function getErrorMessage(e: unknown) : string | undefined {
-  return e instanceof Error ?
-    e.message :
-    undefined;
+export function getErrorMessage(e: unknown): string | undefined {
+  return e instanceof Error ? e.message : undefined;
 }
 
 /**
@@ -571,10 +574,7 @@ export function addSourceBuffer(
   }
 
   if (contentInfo.mediaSourceObj.type === "main") {
-    const {
-      sourceBuffers,
-      nextSourceBufferId,
-    } = contentInfo.mediaSourceObj;
+    const { sourceBuffers, nextSourceBufferId } = contentInfo.mediaSourceObj;
     try {
       let mimeType = typ;
       if (shouldTransmux(typ)) {
@@ -598,19 +598,18 @@ export function addSourceBuffer(
       });
       return AddSourceBufferResult.success(sourceBufferId);
     } catch (err) {
-      const msg =
-        formatErrMessage(err, "Unknown error while creating Sourcebuffer");
+      const msg = formatErrMessage(
+        err,
+        "Unknown error while creating Sourcebuffer"
+      );
       return AddSourceBufferResult.error(
         AddSourceBufferErrorCode.UnknownError,
         msg
       );
     }
   } else {
-    const {
-      mediaSource,
-      sourceBuffers,
-      nextSourceBufferId,
-    } = contentInfo.mediaSourceObj;
+    const { mediaSource, sourceBuffers, nextSourceBufferId } =
+      contentInfo.mediaSourceObj;
     if (mediaSource.readyState === "closed") {
       return AddSourceBufferResult.error(
         AddSourceBufferErrorCode.MediaSourceIsClosed
@@ -638,8 +637,10 @@ export function addSourceBuffer(
       contentInfo.mediaSourceObj.nextSourceBufferId++;
       return AddSourceBufferResult.success(sourceBufferId);
     } catch (err) {
-      const msg =
-        formatErrMessage(err, "Unknown error while creating Sourcebuffer");
+      const msg = formatErrMessage(
+        err,
+        "Unknown error while creating Sourcebuffer"
+      );
       if (!(err instanceof Error)) {
         return AddSourceBufferResult.error(
           AddSourceBufferErrorCode.UnknownError,
@@ -693,8 +694,9 @@ export function appendBuffer(
 
   // Weirdly enough TypeScript is only able to type-check when findIndex is
   // used then used as an index. Not when `find` is used directly.
-  const sourceBufferObjIdx = mediaSourceObj.sourceBuffers
-    .findIndex(({ id }) => id === sourceBufferId);
+  const sourceBufferObjIdx = mediaSourceObj.sourceBuffers.findIndex(
+    ({ id }) => id === sourceBufferId
+  );
   if (sourceBufferObjIdx < -1) {
     return AppendBufferResult.error(
       AppendBufferErrorCode.NoSourceBuffer,
@@ -715,9 +717,10 @@ export function appendBuffer(
         );
       }
     } catch (err) {
-
-      const msg =
-        formatErrMessage(err, "Unknown error while transmuxing segment");
+      const msg = formatErrMessage(
+        err,
+        "Unknown error while transmuxing segment"
+      );
       return AppendBufferResult.error(
         AppendBufferErrorCode.TransmuxerError,
         msg
@@ -740,31 +743,39 @@ export function appendBuffer(
   }
   try {
     if (sourceBufferObj.sourceBuffer !== null) {
-      sourceBufferObj.sourceBuffer.push(segment)
+      sourceBufferObj.sourceBuffer
+        .push(segment)
         .then(() => {
           try {
-            playerInstance.getDispatcher()?.on_source_buffer_update(sourceBufferId);
+            playerInstance
+              .getDispatcher()
+              ?.on_source_buffer_update(sourceBufferId);
           } catch (err) {
             logger.error("Error when calling `on_source_buffer_update`", err);
           }
         })
         .catch(() => {
           try {
-            playerInstance.getDispatcher()?.on_source_buffer_error(sourceBufferId);
+            playerInstance
+              .getDispatcher()
+              ?.on_source_buffer_error(sourceBufferId);
           } catch (err) {
             logger.error("Error when calling `on_source_buffer_error`", err);
           }
         });
     } else {
       const buffer = segment.buffer;
-      postMessageToMain({
-        type: WorkerMessageType.AppendBuffer,
-        value: {
-          mediaSourceId: mediaSourceObj.mediaSourceId,
-          sourceBufferId,
-          data: buffer,
+      postMessageToMain(
+        {
+          type: WorkerMessageType.AppendBuffer,
+          value: {
+            mediaSourceId: mediaSourceObj.mediaSourceId,
+            sourceBufferId,
+            data: buffer,
+          },
         },
-      }, [buffer]);
+        [buffer]
+      );
     }
   } catch (err) {
     return AppendBufferResult.error(AppendBufferErrorCode.UnknownError);
@@ -793,25 +804,31 @@ export function removeBuffer(
     }
 
     if (mediaSourceObj.type === "worker") {
-      const sourceBuffer = mediaSourceObj.sourceBuffers
-        .find(({ id }) => id === sourceBufferId);
+      const sourceBuffer = mediaSourceObj.sourceBuffers.find(
+        ({ id }) => id === sourceBufferId
+      );
       if (sourceBuffer === undefined) {
         return RemoveBufferResult.error(
           RemoveBufferErrorCode.SourceBufferNotFound,
           "SourceBuffer linked to the given id not found."
         );
       }
-      sourceBuffer.sourceBuffer.removeBuffer(start, end)
+      sourceBuffer.sourceBuffer
+        .removeBuffer(start, end)
         .then(() => {
           try {
-            playerInstance.getDispatcher()?.on_source_buffer_update(sourceBufferId);
+            playerInstance
+              .getDispatcher()
+              ?.on_source_buffer_update(sourceBufferId);
           } catch (err) {
             logger.error("Error when calling `on_source_buffer_update`", err);
           }
         })
         .catch(() => {
           try {
-            playerInstance.getDispatcher()?.on_source_buffer_error(sourceBufferId);
+            playerInstance
+              .getDispatcher()
+              ?.on_source_buffer_error(sourceBufferId);
           } catch (err) {
             logger.error("Error when calling `on_source_buffer_error`", err);
           }
@@ -829,10 +846,7 @@ export function removeBuffer(
     }
   } catch (err) {
     const msg = formatErrMessage(err, "Unknown error while removing buffer");
-    return RemoveBufferResult.error(
-      RemoveBufferErrorCode.UnknownError,
-      msg
-    );
+    return RemoveBufferResult.error(RemoveBufferErrorCode.UnknownError, msg);
   }
   return RemoveBufferResult.success();
 }
@@ -858,11 +872,11 @@ export function endOfStream(): EndOfStreamResult {
       });
     }
   } catch (err) {
-    const msg = formatErrMessage(err, "Unknown error while calling endOfStream");
-    return EndOfStreamResult.error(
-      EndOfStreamErrorCode.UnknownError,
-      msg
+    const msg = formatErrMessage(
+      err,
+      "Unknown error while calling endOfStream"
     );
+    return EndOfStreamResult.error(EndOfStreamErrorCode.UnknownError, msg);
   }
   return EndOfStreamResult.success();
 }
@@ -921,7 +935,7 @@ export function setMediaOffset(mediaOffset: number) {
  * @param {number} resourceId
  * @returns {boolean}
  */
-export function freeResource(resourceId: ResourceId) : boolean {
+export function freeResource(resourceId: ResourceId): boolean {
   if (jsMemoryResources.get(resourceId) === undefined) {
     return false;
   }
@@ -937,7 +951,7 @@ export function freeResource(resourceId: ResourceId) : boolean {
 function getTimeInformationFromMp4(
   segment: Uint8Array,
   initTimescale: number
-) : ({ time: number; duration: number | undefined }) | null {
+): { time: number; duration: number | undefined } | null {
   const baseDecodeTime = getTrackFragmentDecodeTime(segment);
   if (baseDecodeTime === undefined) {
     return null;
@@ -945,9 +959,8 @@ function getTimeInformationFromMp4(
   const trunDuration = getDurationFromTrun(segment);
   return {
     time: baseDecodeTime / initTimescale,
-    duration: trunDuration === undefined ?
-      undefined :
-      trunDuration / initTimescale,
+    duration:
+      trunDuration === undefined ? undefined : trunDuration / initTimescale,
   };
 }
 
@@ -958,10 +971,10 @@ function getTimeInformationFromMp4(
 export function updateContentInfo(
   minimumPosition: number | undefined,
   maximumPosition: number | undefined
-) : void {
+): void {
   const contentInfo = playerInstance.getContentInfo();
   if (contentInfo === null) {
-    return ;
+    return;
   }
   postMessageToMain({
     type: WorkerMessageType.ContentTimeBoundsUpdate,
@@ -980,9 +993,9 @@ export function announceFetchedContent(
   const contentInfo = playerInstance.getContentInfo();
   const memory = playerInstance.getCurrentWasmMemory();
   if (contentInfo === null || memory === null) {
-    return ;
+    return;
   }
-  const variantInfoObj : VariantInfo[] = [];
+  const variantInfoObj: VariantInfo[] = [];
   {
     let i = 0;
     i++; // Skip number of variants
@@ -1015,7 +1028,7 @@ export function announceFetchedContent(
       });
     }
   }
-  const audioTracksObj : AudioTrackInfo[] = [];
+  const audioTracksObj: AudioTrackInfo[] = [];
   {
     let i = 0;
     i++; // Skip number of audio tracks
@@ -1028,7 +1041,11 @@ export function announceFetchedContent(
 
       const languageLen = audioTracksInfo[i];
       i++;
-      const languageU8 = new Uint8Array(memory.buffer, audioTracksInfo[i], languageLen);
+      const languageU8 = new Uint8Array(
+        memory.buffer,
+        audioTracksInfo[i],
+        languageLen
+      );
       i++;
       const language = cachedTextDecoder.decode(languageU8);
 
@@ -1078,29 +1095,27 @@ export function announceTrackUpdate(
   const contentInfo = playerInstance.getContentInfo();
   const memory = playerInstance.getCurrentWasmMemory();
   if (contentInfo === null || memory === null) {
-    return ;
+    return;
   }
   postMessageToMain({
     type: WorkerMessageType.TrackUpdate,
     value: {
       mediaType,
       contentId: contentInfo.contentId,
-      audioTrack: currentAudioTrack ?
-        {
-          current: currentAudioTrack,
-          isSelected: isAudioTrackSelected,
-        } :
-        undefined,
+      audioTrack: currentAudioTrack
+        ? {
+            current: currentAudioTrack,
+            isSelected: isAudioTrackSelected,
+          }
+        : undefined,
     },
   });
 }
 
-export function announceVariantUpdate(
-  variantId: string | undefined
-): void {
+export function announceVariantUpdate(variantId: string | undefined): void {
   const contentInfo = playerInstance.getContentInfo();
   if (contentInfo === null) {
-    return ;
+    return;
   }
   postMessageToMain({
     type: WorkerMessageType.VariantUpdate,
@@ -1111,11 +1126,13 @@ export function announceVariantUpdate(
   });
 }
 
-export function startRebuffering() : void {
+export function startRebuffering(): void {
   const contentInfo = playerInstance.getContentInfo();
   if (contentInfo === null || contentInfo.mediaSourceObj === null) {
-    logger.error("Attempting to start rebuffering when no MediaSource is created");
-    return ;
+    logger.error(
+      "Attempting to start rebuffering when no MediaSource is created"
+    );
+    return;
   }
   postMessageToMain({
     type: WorkerMessageType.RebufferingStarted,
@@ -1126,11 +1143,13 @@ export function startRebuffering() : void {
   });
 }
 
-export function stopRebuffering() : void {
+export function stopRebuffering(): void {
   const contentInfo = playerInstance.getContentInfo();
   if (contentInfo === null || contentInfo.mediaSourceObj === null) {
-    logger.error("Attempting to stop rebuffering when no MediaSource is created");
-    return ;
+    logger.error(
+      "Attempting to stop rebuffering when no MediaSource is created"
+    );
+    return;
   }
   postMessageToMain({
     type: WorkerMessageType.RebufferingEnded,

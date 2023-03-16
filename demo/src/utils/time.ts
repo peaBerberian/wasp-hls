@@ -1,6 +1,7 @@
 export function toSeconds(timeInSeconds: number): string {
   const toInt = Math.floor(timeInSeconds);
-  if (!toInt) { // TODO differentiate NaN from 0?
+  if (!toInt) {
+    // TODO differentiate NaN from 0?
     return "00";
   }
 
@@ -9,7 +10,8 @@ export function toSeconds(timeInSeconds: number): string {
 
 export function toMinutes(timeInSeconds: number): string {
   const toInt = Math.floor(timeInSeconds);
-  if (!toInt) { // TODO differentiate NaN from 0?
+  if (!toInt) {
+    // TODO differentiate NaN from 0?
     return "00:00";
   }
 
@@ -20,13 +22,17 @@ export function toMinutes(timeInSeconds: number): string {
 
   const numberOfMinutes = Math.floor(toInt / 60);
   const numberOfSecondsRemaining = toInt % 60;
-  return String(numberOfMinutes).padStart(2, "0") +
-    ":" + String(numberOfSecondsRemaining).padStart(2, "0");
+  return (
+    String(numberOfMinutes).padStart(2, "0") +
+    ":" +
+    String(numberOfSecondsRemaining).padStart(2, "0")
+  );
 }
 
 export function toHours(timeInSeconds: number) {
   const toInt = Math.floor(timeInSeconds);
-  if (!toInt) { // TODO differentiate NaN from 0?
+  if (!toInt) {
+    // TODO differentiate NaN from 0?
     return "00:00";
   }
 
@@ -38,13 +44,20 @@ export function toHours(timeInSeconds: number) {
   const numberOfMinutes = Math.floor(toInt / 60);
   const numberOfSecondsRemaining = toInt % 60;
   if (numberOfMinutes < 60) {
-    return (String(numberOfMinutes)).padStart(2, "0") +
-      ":" + (String(numberOfSecondsRemaining)).padStart(2, "0");
+    return (
+      String(numberOfMinutes).padStart(2, "0") +
+      ":" +
+      String(numberOfSecondsRemaining).padStart(2, "0")
+    );
   }
 
   const numberOfHours = Math.floor(numberOfMinutes / 60);
   const numberOfMinutesRemaining = numberOfMinutes % 60;
-  return (String(numberOfHours)).padStart(2, "0") +
-    ":" + (String(numberOfMinutesRemaining)).padStart(2, "0") +
-    ":" + (String(numberOfSecondsRemaining)).padStart(2, "0");
+  return (
+    String(numberOfHours).padStart(2, "0") +
+    ":" +
+    String(numberOfMinutesRemaining).padStart(2, "0") +
+    ":" +
+    String(numberOfSecondsRemaining).padStart(2, "0")
+  );
 }
