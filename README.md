@@ -55,12 +55,11 @@ The reasons why I started this project are mainly:
 
 ## What's left to do?
 
-A lot:
+We already have a lot of features but there's still some left work:
 
 Type of contents:
 
 - [x] Play HLS VoD contents
-- [x] Transcode mpeg-ts (thanks to mux.js for now)
 - [x] Play HLS live contents _(for now require presence of
       `EXT-X-PROGRAM-DATE-TIME` tag in media playlist)_
 - [ ] Proper support of HLS low-latency contents.
@@ -79,25 +78,33 @@ Adaptive BitRate:
       the current one
 - [ ] Also choose variant based on buffer-based estimates.
       _Priority: average_
-- [ ] Logic to detect sudden large fall in bandwidth
+- [ ] Logic to detect sudden large fall in bandwidth before the end of a current
+      request.
       _Priority: average_
 
 Request Scheduling:
 
 - [x] Lazy Media Playlist downloading
 - [x] Media Playlist refreshing for live contents
-- [x] Buffer goal implementation (as in: stop loading segment once enough to fill
-      the buffer up to a certain point are loaded)
+- [x] Buffer goal implementation (as in: stop loading segments once enough to
+      fill the buffer up to a certain point are loaded)
 - [x] Parallel audio and video segment loading
 - [x] Priorization between audio and video segment requests (to e.g. stop
       doing audio segment requests when video ones become urgent).
 - [x] Retry of failed requests with an exponential backoff.
 - [x] Perform range requests for segments if needed
+- [ ] Parallel initialization segment and first media segment loading.
+      _Priority: average_
 
-Buffers:
+Media demuxing/decoding, and buffer handling:
 
+- [x] Transcode mpeg-ts (thanks to mux.js for now)
 - [x] End of stream support (as in: actually end when playback reached the end!)
 - [x] Multiple simultaneous type of buffers support (for now only audio and video)
+- [x] Automatically filter out codecs not supported by the current environment.
+- [ ] Discontinuity handling.
+      _Priority: average_
+      _Priority: average_
 - [ ] Proper handling of `QuotaExceededError` after pushing segments (when low
       on memory).
       This is generally not needed as the browser should already handle some kind of
@@ -109,33 +116,27 @@ Buffers:
       to implement in HLS than in DASH due to the fact that HLS only link variants to
       bitrate, not the actual audio and video streams - but it should be doable).
       _Priority: very low_
+- [ ] WebAssembly-based mpeg-ts transcoder.
+      _Priority: low_
 
 Tracks:
 
-- [ ] Provide API to set an audio track
-      _Priority: high_
+- [x] Provide API to set an audio track
 - [ ] Provide API to set a video track
       _Priority: low_
 - [ ] Allow text track selection and support at least one text track format
-      (TTML IMSC1 or webVTT)
+      (TTML IMSC1 or webVTT) - through a JS library first?
       _Priority: low_
-
-Decryption:
-
-- [ ] Support content decryption.
-      _Priority: very low_
 
 Miscellaneous:
 
 - [x] Error API
-- [ ] Discontinuity handling.
-      _Priority: average_
 - [ ] Delta playlist handling.
       _Priority: low_
 - [ ] Content Steering handling.
       _Priority: low_
-- [ ] WebAssembly-based mpeg-ts transcoder.
-      _Priority: low_
+- [ ] Support content decryption.
+      _Priority: very low_
 
 Playlist tags specifically considered (unchecked ones are mainly just ignored,
 most do not prevent playback):
