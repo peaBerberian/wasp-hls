@@ -225,7 +225,7 @@ extern "C" {
         is_audio_track_selected: bool,
     );
 
-    pub fn jsAnnounceBrokenLock();
+    pub fn jsAnnounceVariantLockStatusChange(variant_id: Option<&str>);
 
     pub fn jsStartRebuffering();
     pub fn jsStopRebuffering();

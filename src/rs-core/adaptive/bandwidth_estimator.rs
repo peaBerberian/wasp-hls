@@ -11,7 +11,7 @@ const MINIMUM_TOTAL_BYTES: u64 = 150_000;
 /// The minimum between both is then taken into consideration to ensure a sudden fall in bandwidth
 /// has a lasting impact on estimates and that we only raise that estimate once it raised for
 /// enough time.
-pub struct BandwithEstimator {
+pub(crate) struct BandwithEstimator {
     fast_ewma: Ewma,
     slow_ewma: Ewma,
     bytes_sampled: u64,
@@ -19,7 +19,7 @@ pub struct BandwithEstimator {
 
 impl BandwithEstimator {
     /// Creates a new `BandwithEstimator`
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             fast_ewma: Ewma::new(FAST_EWMA_HALF_LIFE),
             slow_ewma: Ewma::new(SLOW_EWMA_HALF_LIFE),
@@ -32,7 +32,7 @@ impl BandwithEstimator {
     /// You may want to call this method after a new resource was loaded, in the
     /// case where you want to consider this request in the whole bandwidth
     /// estimation logic.
-    pub fn add_sample(&mut self, duration_ms: f64, size_bytes: u32) {
+    pub(crate) fn add_sample(&mut self, duration_ms: f64, size_bytes: u32) {
         if size_bytes < MINIMUM_CHUNK_SIZE {
             return;
         }
@@ -46,7 +46,7 @@ impl BandwithEstimator {
     /// Get the current estimate made by the `BandwithEstimator`.
     ///
     /// Returns `None` if it does not have enough data to produce a estimate yet.
-    pub fn get_estimate(&self) -> Option<f64> {
+    pub(crate) fn get_estimate(&self) -> Option<f64> {
         if self.bytes_sampled < MINIMUM_TOTAL_BYTES {
             None
         } else {
@@ -59,7 +59,7 @@ impl BandwithEstimator {
     }
 
     /// Reset the `BandwithEstimator` as if there was no sample added yet.
-    pub fn reset(&mut self) {
+    pub(crate) fn reset(&mut self) {
         self.fast_ewma = Ewma::new(FAST_EWMA_HALF_LIFE);
         self.slow_ewma = Ewma::new(SLOW_EWMA_HALF_LIFE);
         self.bytes_sampled = 0;

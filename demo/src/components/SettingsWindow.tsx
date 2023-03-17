@@ -30,6 +30,7 @@ function SettingsWindow({ player }: { player: WaspHlsPlayer }): JSX.Element {
   }, [speed, player]);
 
   React.useEffect(() => {
+    player.addEventListener("variantLockUpdate", onVariantLockUpdate);
     player.addEventListener("variantUpdate", onVariantUpdate);
     player.addEventListener("variantListUpdate", onVariantListUpdate);
     player.addEventListener("audioTrackUpdate", onAudioTrackUpdate);
@@ -41,6 +42,7 @@ function SettingsWindow({ player }: { player: WaspHlsPlayer }): JSX.Element {
     setIsAutoVariant(player.getLockedVariant() === null);
     setSpeed(player.getSpeed());
     return () => {
+      player.removeEventListener("variantLockUpdate", onVariantLockUpdate);
       player.removeEventListener("variantUpdate", onVariantUpdate);
       player.removeEventListener("variantListUpdate", onVariantListUpdate);
       player.removeEventListener("playerStateChange", onPlayerStateChange);
@@ -48,6 +50,10 @@ function SettingsWindow({ player }: { player: WaspHlsPlayer }): JSX.Element {
 
     function onVariantUpdate(v: VariantInfo | undefined) {
       setVariant(v);
+    }
+
+    function onVariantLockUpdate(v: VariantInfo | null) {
+      setIsAutoVariant(v === null);
     }
 
     function onVariantListUpdate(vl: VariantInfo[]) {

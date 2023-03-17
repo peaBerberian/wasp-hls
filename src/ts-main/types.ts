@@ -111,7 +111,7 @@ export interface ContentMetadata {
       }
     | undefined;
 
-  lockedVariant: string | null;
+  lockedVariant: VariantInfo | null;
 
   loadingAborter: AbortController | undefined;
 

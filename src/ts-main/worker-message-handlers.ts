@@ -29,6 +29,7 @@ import {
   MainMessageType,
   FlushWorkerMessage,
   AreTypesSupportedWorkerMessage,
+  VariantLockStatusChangeWorkerMessage,
 } from "../ts-common/types";
 import { MediaType } from "../wasm/wasp_hls";
 import {
@@ -821,6 +822,48 @@ export function onVariantUpdateMessage(
   }
   if (variant !== contentMetadata.currVariant) {
     contentMetadata.currVariant = variant;
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Handles `VariantLockStatusChangeWorkerMessage` messages.
+ * @param {Object} msg - The worker's message received.
+ * @param {Object|null} contentMetadata - Metadata of the content currently
+ * playing. `null` if no content is currently playing.
+ * This object may be mutated.
+ * @returns {boolean} - `true` if the lock status has changed
+ */
+export function onVariantLockStatusChangeMessage(
+  msg: VariantLockStatusChangeWorkerMessage,
+  contentMetadata: ContentMetadata | null
+): boolean {
+  if (contentMetadata?.contentId !== msg.value.contentId) {
+    logger.info("API: Ignoring warning due to wrong `contentId`");
+    return false;
+  }
+  if (msg.value.lockedVariant === null) {
+    if (contentMetadata.lockedVariant !== null) {
+      contentMetadata.lockedVariant = null;
+      return true;
+    }
+    return false;
+  }
+
+  const variant = contentMetadata.variants.find(
+    (v) => v.id === msg.value.lockedVariant
+  );
+  if (variant === undefined) {
+    logger.warn("API: VariantLockStatusChange for an unfound variant");
+    if (contentMetadata.lockedVariant !== null) {
+      contentMetadata.lockedVariant = null;
+      return true;
+    }
+    return false;
+  }
+  if (variant !== contentMetadata.lockedVariant) {
+    contentMetadata.lockedVariant = variant;
     return true;
   }
   return false;

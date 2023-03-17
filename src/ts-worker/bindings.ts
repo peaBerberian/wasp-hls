@@ -1243,3 +1243,16 @@ export function isTypeSupported(
       /* noop */
     });
 }
+
+export function announceVariantLockStatusChange(variantId: string | undefined): void {
+  const contentInfo = playerInstance.getContentInfo();
+  if (contentInfo === null) {
+    return;
+  }
+  postMessageToMain({
+    type: WorkerMessageType.VariantLockStatusChange,
+    value: {
+      lockedVariant: variantId ?? null,
+    },
+  });
+}

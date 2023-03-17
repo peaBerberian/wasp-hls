@@ -73,6 +73,7 @@ export type WorkerMessage =
   | MediaOffsetUpdateWorkerMessage
   | VariantUpdateWorkerMessage
   | TrackUpdateWorkerMessage
+  | VariantLockStatusChangeWorkerMessage
 
   // HTMLMediaElement/MSE actions
   | SeekWorkerMessage
@@ -131,6 +132,7 @@ export const enum WorkerMessageType {
   RebufferingEnded = "rebuf-end",
   MediaOffsetUpdate = "media-off-upd",
   VariantUpdate = "variant-upd",
+  VariantLockStatusChange = "variant-lck-upd",
   AreTypesSupported = "are-types-supp",
 }
 
@@ -369,7 +371,7 @@ export interface TrackUpdateWorkerMessage {
   type: WorkerMessageType.TrackUpdate;
   value: {
     /**
-     * The identifier for the content on which an error was received.
+     * The identifier for the content for which the message was sent.
      * This is the same `contentId` value that on the related
      * `LoadContentMainMessage`.
      */
@@ -381,6 +383,19 @@ export interface TrackUpdateWorkerMessage {
           isSelected: boolean;
         }
       | undefined;
+  };
+}
+
+export interface VariantLockStatusChangeWorkerMessage {
+  type: WorkerMessageType.VariantLockStatusChange;
+  value: {
+    /**
+     * The identifier for the content for which the message was sent.
+     * This is the same `contentId` value that on the related
+     * `LoadContentMainMessage`.
+     */
+    contentId: string;
+    lockedVariant: string | null;
   };
 }
 

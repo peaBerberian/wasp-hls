@@ -14,7 +14,7 @@ use super::{Dispatcher, PlayerReadyState};
 ///
 /// Note that these are not the only methods callable by JavaScript. There's
 /// also "event_listeners" which as its name point at, should be called when particular
-/// events happen. Such "event_listeners" are defined in its own file:
+/// events happen. Such "event_listeners" are defined in its own file.
 #[wasm_bindgen]
 impl Dispatcher {
     /// Create a new `Dispatcher` allowing to load a content on the HTMLMediaElement that should be
@@ -87,15 +87,15 @@ impl Dispatcher {
     }
 
     pub fn lock_variant(&mut self, variant_id: String) {
-        self.inner_lock_variant(variant_id)
+        self.lock_variant_core(variant_id)
     }
 
     pub fn unlock_variant(&mut self) {
-        self.inner_unlock_variant()
+        self.unlock_variant_core()
     }
 
     pub fn set_audio_track(&mut self, track_id: Option<String>) {
-        self.inner_set_audio_track(track_id)
+        self.set_audio_track_core(track_id)
     }
 
     pub fn set_segment_request_timeout(&mut self, timeout: Option<f64>) {

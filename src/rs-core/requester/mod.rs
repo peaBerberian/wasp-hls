@@ -219,7 +219,7 @@ pub(crate) struct PlaylistRequestInfo {
 }
 
 /// Metadata associated with a pending media segment request.
-pub struct WaitingSegmentInfo {
+pub(crate) struct WaitingSegmentInfo {
     /// type of media of the segment requested
     pub(crate) media_type: MediaType,
 
@@ -312,7 +312,11 @@ pub(crate) enum FinishedRequestType {
 pub(crate) enum RetryResult {
     NotFound,
     Retried,
-    Failed((FinishedRequestType, RequestErrorReason)),
+    Failed {
+        request_type: FinishedRequestType,
+        reason: RequestErrorReason,
+        status: Option<u32>,
+    },
 }
 
 impl Requester {
@@ -564,13 +568,13 @@ impl Requester {
                 .iter()
                 .position(|x| x.request_id == request_id)
             {
-                self.retry_pending_segment_request(pos, reason)
+                self.retry_pending_segment_request(pos, reason, status)
             } else if let Some(pos) = self
                 .pending_playlist_requests
                 .iter()
                 .position(|x| x.request_id == request_id)
             {
-                self.retry_playlist_segment_request(pos, reason)
+                self.retry_playlist_segment_request(pos, reason, status)
             } else {
                 Logger::info(&format!("Req: Request to retry not found, id:{request_id}"));
                 RetryResult::NotFound
@@ -579,7 +583,11 @@ impl Requester {
             Logger::info(&format!("Req: Cannot retry request id:{request_id}"));
             match self.end_pending_request(request_id) {
                 None => RetryResult::NotFound,
-                Some(req) => RetryResult::Failed((req, RequestErrorReason::Error)),
+                Some(req) => RetryResult::Failed {
+                    request_type: req,
+                    reason: RequestErrorReason::Error,
+                    status,
+                },
             }
         }
     }
@@ -721,6 +729,7 @@ impl Requester {
         &mut self,
         pos: usize,
         reason: RequestErrorReason,
+        status: Option<u32>,
     ) -> RetryResult {
         let req = &mut self.pending_segment_requests[pos];
         if req.attempts_failed >= 3 {
@@ -729,7 +738,11 @@ impl Requester {
                 req.request_id, req.attempts_failed
             ));
             let seg = self.pending_segment_requests.remove(pos);
-            RetryResult::Failed((FinishedRequestType::Segment(seg), reason))
+            RetryResult::Failed {
+                request_type: FinishedRequestType::Segment(seg),
+                reason,
+                status,
+            }
         } else {
             req.attempts_failed += 1;
             req.is_waiting_for_retry = true;
@@ -752,6 +765,7 @@ impl Requester {
         &mut self,
         pos: usize,
         reason: RequestErrorReason,
+        status: Option<u32>,
     ) -> RetryResult {
         let req = &mut self.pending_playlist_requests[pos];
         if req.attempts_failed >= 3 {
@@ -760,7 +774,11 @@ impl Requester {
                 req.request_id, req.attempts_failed
             ));
             let pl = self.pending_playlist_requests.remove(pos);
-            RetryResult::Failed((FinishedRequestType::Playlist(pl), reason))
+            RetryResult::Failed {
+                request_type: FinishedRequestType::Playlist(pl),
+                reason,
+                status,
+            }
         } else {
             req.attempts_failed += 1;
             req.is_waiting_for_retry = true;
@@ -790,6 +808,7 @@ impl Requester {
         &mut self,
         request_id: RequestId,
         reason: RequestErrorReason,
+        status: Option<u32>,
     ) -> RetryResult {
         let pos = self
             .pending_playlist_requests
@@ -798,7 +817,11 @@ impl Requester {
         if let Some(pos) = pos {
             if self.pending_playlist_requests[pos].attempts_failed >= 3 {
                 let seg = self.pending_playlist_requests.remove(pos);
-                RetryResult::Failed((FinishedRequestType::Playlist(seg), reason))
+                RetryResult::Failed {
+                    request_type: FinishedRequestType::Playlist(seg),
+                    reason,
+                    status,
+                }
             } else {
                 self.pending_playlist_requests[pos].attempts_failed += 1;
                 self.pending_playlist_requests[pos].is_waiting_for_retry = true;

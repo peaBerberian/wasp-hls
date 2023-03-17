@@ -1,13 +1,7 @@
 use crate::{
     dispatcher::{Dispatcher, MediaSourceReadyState},
     utils::url::Url,
-    wasm_bindgen,
-};
-
-use super::{
-    jsGetResourceData,
-    js_functions::{self, RequestId, SourceBufferId},
-    ResourceId, TimerId, TimerReason,
+    wasm_bindgen, bindings::{jsGetResourceData, RequestId, ResourceId, SourceBufferId, TimerReason, TimerId, jsFreeResource},
 };
 
 /// Methods triggered on JavaScript events by the JavaScript code.
@@ -41,8 +35,7 @@ impl Dispatcher {
         duration_ms: f64, // TODO Rust-side?
     ) {
         let resource_handle = JsMemoryBlob::from_resource_id(resource_id);
-        Dispatcher::on_request_succeeded(
-            self,
+        self.on_request_succeeded(
             request_id,
             resource_handle,
             Url::new(final_url),
@@ -72,7 +65,7 @@ impl Dispatcher {
         has_timeouted: bool,
         status: Option<u32>,
     ) {
-        Dispatcher::on_request_failed_inner(self, request_id, has_timeouted, status);
+        self.on_request_failed_core(request_id, has_timeouted, status);
     }
 
     /// The JS code should call this method when the MediaSource's readyState changed.
@@ -81,7 +74,7 @@ impl Dispatcher {
     ///
     /// * `state` - The new `readyState` of the MediaSource.
     pub fn on_media_source_state_change(&mut self, state: MediaSourceReadyState) {
-        Dispatcher::internal_on_media_source_state_change(self, state);
+        self.on_media_source_state_change_core(state);
     }
 
     /// The JS code should call this method when a SourceBuffer emits an `updateend`
@@ -93,7 +86,7 @@ impl Dispatcher {
     ///   SourceBuffer was created. This allows the `Dispatcher` to identify
     ///   which SourceBuffer actually emitted this event.
     pub fn on_source_buffer_update(&mut self, source_buffer_id: SourceBufferId) {
-        Dispatcher::internal_on_source_buffer_update(self, source_buffer_id);
+        self.on_source_buffer_update_core(source_buffer_id);
     }
 
     /// The JS code should call this method when a SourceBuffer emits an `error`
@@ -105,7 +98,7 @@ impl Dispatcher {
     ///   SourceBuffer was created. This allows the `Dispatcher` to identify
     ///   which SourceBuffer actually emitted this event.
     pub fn on_source_buffer_error(&mut self, source_buffer_id: SourceBufferId) {
-        Dispatcher::internal_on_source_buffer_error(self, source_buffer_id);
+        self.on_source_buffer_error_core(source_buffer_id);
     }
 
     /// The JS code should call this method once regular playback "tick" are enabled
@@ -115,7 +108,7 @@ impl Dispatcher {
     /// (seek operations, end of the streams, known stalls etc.) until
     /// `jsStopObservingPlayback` is called.
     pub fn on_playback_tick(&mut self, observation: MediaObservation) {
-        Dispatcher::on_observation(self, observation);
+        self.on_observation(observation);
     }
 
     /// The JS code should call this method each time a timer started with the `jsTimer`
@@ -134,14 +127,14 @@ impl Dispatcher {
     pub fn on_timer_ended(&mut self, id: TimerId, reason: TimerReason) {
         match reason {
             TimerReason::MediaPlaylistRefresh => {
-                Dispatcher::on_playlist_refresh_timer_ended(self, id)
+                self.on_playlist_refresh_timer_ended(id)
             }
-            TimerReason::RetryRequest => Dispatcher::on_retry_request(self, id),
+            TimerReason::RetryRequest => self.on_retry_request(id),
         }
     }
 
     pub fn on_codecs_support_update(&mut self) {
-        Dispatcher::inner_on_codecs_support_update(self);
+        self.on_codecs_support_update_core();
     }
 }
 
@@ -210,7 +203,7 @@ impl JsMemoryBlob {
 
 impl Drop for JsMemoryBlob {
     fn drop(&mut self) {
-        js_functions::jsFreeResource(self.id);
+        jsFreeResource(self.id);
     }
 }
 

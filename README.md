@@ -240,23 +240,23 @@ The architecture of the project is as follow:
       |                                   JS API                                     |
       |                                                                              |
       +------------------------------------------------------------------------------+
-  ^                    |   ^                                        ^
-  | Main thread        |   |                                        |
------------------------|---|----------------------------------------|-------------------
-  | Web Worker         |   |                                        |
-  V                    V   |                                        |
-      +-----------------------------------+        +--------------------------------+
-      |                                   |        |                                |
-      |          MessageReceiver          |        |           TS bindings          |
-      |                                   |        |                                |
-      +-----------------------------------+        +--------------------------------+
-                        |                                 ^                |
-  ^ JavaScript          |                                 |                |
-  | (once compiled)     |                                 |                |
----------------------------------------------------------------------------------------
-  |  WebAssembly        |                                 |                |
-  V  (once compiled)    |                                 |                |
-                        V                                 |                V
+  ^                    |   ^                                  ^
+  | Main thread        |   |                                  |
+-----------------------|---|----------------------------------|-----------------------
+  | Web Worker         |   |                                  |
+  V                    V   |                                  |
+      +-----------------------------------+   +--------------------------------+
+      |                                   |   |                                |
+      |          MessageReceiver          |   |           TS bindings          |
+      |                                   |   |                                |
+      +-----------------------------------+   +--------------------------------+
+                        |                       |                  ^
+  ^ JavaScript          |                       |                  |
+  | (once compiled)     |                       |                  |
+------------------------|-----------------------|------------------|-------------------
+  |  WebAssembly        |                       |                  |
+  V  (once compiled)    |                       |                  |
+                        V                       V                  |
 +-------------------------------------------------+      +-------------------+
 |                   Dispatcher                    |<-----|    Rs Bindings    |
 +-------------------------------------------------+      +-------------------+
@@ -340,9 +340,7 @@ top to bottom:
 
   The Dispatcher is defined in the `src/rs-core/dispatcher/` directory.
 
-- **Rs bindings**: Define both TypeScript functions exposed by TS bindings but
-  also "event listeners" (which are technically a part of the Dispatcher)
-  which will be called by TS bindings on various events.
+- **Rs bindings**: Define JavaScript functions exposed by TS bindings.
 
   Rs bindings are defined in the `src/rs-core/bindings/` directory.
 

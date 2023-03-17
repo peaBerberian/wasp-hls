@@ -1,21 +1,25 @@
 use std::cmp::Ordering;
 
-use super::{Dispatcher, MediaSourceReadyState, PlayerReadyState};
+use super::{Dispatcher, MediaSourceReadyState, PlayerReadyState, JsMemoryBlob, MediaObservation, PlaybackTickReason};
 use crate::{
     bindings::{
         formatters::{
             format_audio_tracks_for_js, format_source_buffer_creation_err_for_js,
             format_variants_info_for_js,
         },
-        jsAnnounceFetchedContent, jsAnnounceTrackUpdate, jsAnnounceVariantUpdate, jsSendOtherError,
-        jsSendPlaylistParsingError, jsSendSegmentRequestError, jsSendSourceBufferCreationError,
-        jsSetMediaSourceDuration, jsStartObservingPlayback, jsStopObservingPlayback, jsTimer,
-        jsUpdateContentInfo, JsMemoryBlob, MediaObservation, MediaType, PlaybackTickReason,
-        PlaylistType, RequestId, SourceBufferId, TimerId, TimerReason, jsAnnounceBrokenLock,
+        jsAnnounceFetchedContent, jsAnnounceTrackUpdate, jsAnnounceVariantLockStatusChange,
+        jsAnnounceVariantUpdate, jsSendOtherError, jsSendPlaylistParsingError,
+        jsSendSegmentRequestError, jsSendSourceBufferCreationError, jsSetMediaSourceDuration,
+        jsStartObservingPlayback, jsStopObservingPlayback, jsTimer, jsUpdateContentInfo,
+        MediaType, PlaylistType, RequestId,
+        SourceBufferId, TimerId, TimerReason,
     },
     media_element::{PushMetadata, SourceBufferCreationError},
     parser::MultiVariantPlaylist,
-    playlist_store::{MediaPlaylistPermanentId, PlaylistStore, VariantUpdateResult, SetAudioTrackResponse},
+    playlist_store::{
+        LockVariantResponse, MediaPlaylistPermanentId, PlaylistStore, SetAudioTrackResponse,
+        VariantUpdateResult,
+    },
     requester::{
         FinishedRequestType, PlaylistFileType, PlaylistRequestInfo, RetryResult, SegmentRequestInfo,
     },
@@ -25,7 +29,7 @@ use crate::{
 };
 
 impl Dispatcher {
-    pub(crate) fn on_request_succeeded(
+    pub(super) fn on_request_succeeded(
         &mut self,
         request_id: RequestId,
         data: JsMemoryBlob,
@@ -44,7 +48,7 @@ impl Dispatcher {
         }
     }
 
-    pub(crate) fn on_request_failed_inner(
+    pub(super) fn on_request_failed_core(
         &mut self,
         request_id: RequestId,
         has_timeouted: bool,
@@ -54,7 +58,11 @@ impl Dispatcher {
             .requester
             .on_pending_request_failure(request_id, has_timeouted, status)
         {
-            RetryResult::Failed((FinishedRequestType::Segment(s), reason)) => {
+            RetryResult::Failed {
+                request_type: FinishedRequestType::Segment(s),
+                reason,
+                status,
+            } => {
                 jsSendSegmentRequestError(
                     true,
                     s.url.get_ref(),
@@ -62,11 +70,17 @@ impl Dispatcher {
                     s.time_info.map(|t| vec![t.0, t.1]),
                     s.media_type,
                     reason,
-                    None,
-                ); // TODO status
+                    status,
+                );
                 self.internal_stop();
             }
-            RetryResult::Failed((FinishedRequestType::Playlist(_), _reason)) => {
+            RetryResult::Failed {
+                request_type: FinishedRequestType::Playlist(_),
+                ..
+                // reason,
+                // status,
+            } => {
+                // TODO real playlist request error
                 jsSendOtherError(
                     true,
                     crate::bindings::OtherErrorCode::Unknown,
@@ -157,7 +171,7 @@ impl Dispatcher {
             return;
         }
 
-        if playlist_store.variants().is_empty() {
+        if playlist_store.all_variants().is_empty() {
             jsSendPlaylistParsingError(
                 true,
                 PlaylistType::MultiVariantPlaylist,
@@ -169,8 +183,8 @@ impl Dispatcher {
         }
 
         use PlaylistFileType::*;
-        // TODO lowest/latest bandwidth first?
-        playlist_store.update_curr_bandwidth(2_000_000.);
+        // TODO lowest/latest bandwidth first? Option?
+        playlist_store.update_curr_bandwidth(500_000.);
         [MediaType::Video, MediaType::Audio]
             .into_iter()
             .for_each(|mt| {
@@ -193,7 +207,7 @@ impl Dispatcher {
         // Because one of the rules of those bindings is to copy all pointed data
         // synchronously on call, we should not encounter any issue.
         let variants_info =
-            unsafe { format_variants_info_for_js(playlist_store.variants().as_slice()) };
+            unsafe { format_variants_info_for_js(playlist_store.all_variants().as_slice()) };
         let audio_tracks_info =
             unsafe { format_audio_tracks_for_js(playlist_store.audio_tracks()) };
         let selected_audio_track = playlist_store.selected_audio_track_id();
@@ -208,7 +222,7 @@ impl Dispatcher {
         jsAnnounceTrackUpdate(MediaType::Audio, curr_audio_track, is_selected);
     }
 
-    pub(crate) fn inner_on_codecs_support_update(&mut self) {
+    pub(super) fn on_codecs_support_update_core(&mut self) {
         if let Some(ref mut playlist_store) = self.playlist_store {
             if self.ready_state <= PlayerReadyState::Loading && !playlist_store.are_codecs_checked()
             {
@@ -275,11 +289,8 @@ impl Dispatcher {
         media_type: MediaType,
     ) -> Option<Result<(), SourceBufferCreationError>> {
         let content = self.playlist_store.as_mut()?;
-
         let media_playlist = content.curr_media_playlist(media_type)?;
         let mime_type = media_playlist.mime_type(media_type).unwrap_or("");
-
-        // TODO to_string should be unneeded here as &str is sufficient
         let codecs = content
             .curr_variant()?
             .codecs(media_type)
@@ -290,7 +301,7 @@ impl Dispatcher {
         )
     }
 
-    pub(crate) fn internal_on_media_source_state_change(&mut self, state: MediaSourceReadyState) {
+    pub(super) fn on_media_source_state_change_core(&mut self, state: MediaSourceReadyState) {
         Logger::info(&format!("MediaSource state changed: {:?}", state));
         self.media_element_ref
             .update_media_source_ready_state(state);
@@ -299,12 +310,12 @@ impl Dispatcher {
         }
     }
 
-    pub(crate) fn internal_on_source_buffer_update(&mut self, source_buffer_id: SourceBufferId) {
+    pub(super) fn on_source_buffer_update_core(&mut self, source_buffer_id: SourceBufferId) {
         self.media_element_ref
             .on_source_buffer_update(source_buffer_id);
     }
 
-    pub(crate) fn internal_on_source_buffer_error(&mut self, _source_buffer_id: SourceBufferId) {
+    pub(super) fn on_source_buffer_error_core(&mut self, _source_buffer_id: SourceBufferId) {
         // TODO check QuotaExceededError and so on...
         // TODO better error
         jsSendOtherError(
@@ -315,7 +326,7 @@ impl Dispatcher {
         self.internal_stop();
     }
 
-    pub fn on_observation(&mut self, observation: MediaObservation) {
+    pub(super) fn on_observation(&mut self, observation: MediaObservation) {
         let reason = observation.reason();
         Logger::debug(&format!(
             "Tick received: {:?} {}",
@@ -329,7 +340,7 @@ impl Dispatcher {
         }
     }
 
-    pub fn on_regular_tick(&mut self) {
+    pub(super) fn on_regular_tick(&mut self) {
         let wanted_pos = self.media_element_ref.wanted_position();
         self.last_position = wanted_pos;
 
@@ -345,17 +356,17 @@ impl Dispatcher {
         }
     }
 
-    pub fn on_seek(&mut self) {
+    pub(super) fn on_seek(&mut self) {
         let wanted_pos = self.media_element_ref.wanted_position();
         self.segment_selectors.reset_position(wanted_pos - 0.5);
 
-        // TODO better logic than aborting everything on seek?
+        // TODO better logic than aborting everything on seek
         self.requester.abort_all_segments();
         self.requester.update_base_position(Some(wanted_pos));
         self.check_segments_to_request()
     }
 
-    pub fn check_segments_to_request(&mut self) {
+    pub(super) fn check_segments_to_request(&mut self) {
         match self.playlist_store.as_ref() {
             None => {}
             Some(pl) => {
@@ -383,7 +394,7 @@ impl Dispatcher {
         }
     }
 
-    pub fn internal_stop(&mut self) {
+    pub(super) fn internal_stop(&mut self) {
         Logger::info("Stopping current content (if one) and resetting player");
         self.requester.reset();
         jsStopObservingPlayback();
@@ -457,16 +468,37 @@ impl Dispatcher {
         }
     }
 
-    pub(super) fn inner_lock_variant(&mut self, variant_id: String) {
+    pub(super) fn lock_variant_core(&mut self, variant_id: String) {
         if let Some(pl) = self.playlist_store.as_mut() {
+            let is_audio_track_selected = pl.curr_audio_track_id().is_some();
             match pl.lock_variant(&variant_id) {
-                None => Logger::warn("Locked variant not found"),
-                Some(update) => self.handle_variant_update(update, true),
+                LockVariantResponse::NoVariantWithId => {
+                    Logger::warn("Locked variant not found");
+                    jsSendOtherError(
+                        false,
+                        crate::bindings::OtherErrorCode::Unknown,
+                        Some("Wanted locked variant not found"),
+                    );
+                }
+                LockVariantResponse::VariantLocked {
+                    updates,
+                    audio_track_change,
+                } => {
+                    if let Some(track_id) = audio_track_change {
+                        jsAnnounceTrackUpdate(
+                            MediaType::Audio,
+                            Some(track_id),
+                            is_audio_track_selected,
+                        );
+                    }
+                    jsAnnounceVariantLockStatusChange(Some(&variant_id));
+                    self.handle_variant_update(updates, true);
+                }
             }
         }
     }
 
-    pub(super) fn inner_unlock_variant(&mut self) {
+    pub(super) fn unlock_variant_core(&mut self) {
         if let Some(pl) = self.playlist_store.as_mut() {
             let update = pl.unlock_variant();
             self.handle_variant_update(update, false);
@@ -482,13 +514,13 @@ impl Dispatcher {
                 return;
             }
         };
-        self.on_media_playlist_changed(&changed_media_types, flush || has_improved, flush);
+        self.handle_media_playlist_update(&changed_media_types, flush || has_improved, flush);
         if let Some(pl) = self.playlist_store.as_mut() {
             jsAnnounceVariantUpdate(pl.curr_variant().map(|v| v.id()));
         }
     }
 
-    fn on_media_playlist_changed(
+    fn handle_media_playlist_update(
         &mut self,
         changed_media_types: &[MediaType],
         abort_prev: bool,
@@ -557,7 +589,7 @@ impl Dispatcher {
         self.check_segments_to_request();
     }
 
-    pub fn on_playlist_refresh_timer_ended(&mut self, id: TimerId) {
+    pub(super) fn on_playlist_refresh_timer_ended(&mut self, id: TimerId) {
         let found = self.playlist_refresh_timers.iter().position(|x| x.0 == id);
         if let Some(idx) = found {
             let (_, playlist_type) = self.playlist_refresh_timers.remove(idx);
@@ -581,22 +613,23 @@ impl Dispatcher {
         }
     }
 
-    pub fn on_retry_request(&mut self, id: TimerId) {
+    pub(super) fn on_retry_request(&mut self, id: TimerId) {
         self.requester.on_timer_finished(id);
     }
 
-    pub fn inner_set_audio_track(&mut self, track_id: Option<String>) {
+    pub(super) fn set_audio_track_core(&mut self, track_id: Option<String>) {
         if let Some(ref mut pl) = self.playlist_store {
             match pl.set_audio_track(track_id) {
-                SetAudioTrackResponse::AudioMediaUpdate =>
-                    self.on_media_playlist_changed(&[MediaType::Audio], true, true),
-                SetAudioTrackResponse::VariantUpdate((update, was_lock_broken)) => {
-                    self.handle_variant_update(update, true);
-                    if was_lock_broken {
-                        jsAnnounceBrokenLock();
+                SetAudioTrackResponse::AudioMediaUpdate => {
+                    self.handle_media_playlist_update(&[MediaType::Audio], true, true)
+                }
+                SetAudioTrackResponse::VariantUpdate { updates, unlocked_variant } => {
+                    self.handle_variant_update(updates, true);
+                    if unlocked_variant {
+                        jsAnnounceVariantLockStatusChange(None);
                     }
-                },
-                _ => {},
+                }
+                _ => {}
             }
         }
     }

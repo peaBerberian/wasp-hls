@@ -2,7 +2,7 @@ use crate::parser::SegmentInfo;
 use std::slice::Iter;
 
 #[derive(Clone, Debug)]
-pub struct SegmentQueue {
+pub(crate) struct SegmentQueue {
     last_seg_start: Option<f64>,
     initial_pos: f64,
 }

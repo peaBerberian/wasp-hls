@@ -1,9 +1,9 @@
 use crate::bindings::{
     jsAttachMediaSource, jsEndOfStream, jsRemoveMediaSource, jsSeek, jsSetMediaOffset,
     jsSetPlaybackRate, jsStartRebuffering, jsStopRebuffering, AttachMediaSourceErrorCode, JsResult,
-    MediaObservation, MediaType, SourceBufferId,
+    MediaType, SourceBufferId,
 };
-use crate::dispatcher::MediaSourceReadyState;
+use crate::dispatcher::{MediaSourceReadyState, MediaObservation};
 use crate::Logger;
 
 mod source_buffers;

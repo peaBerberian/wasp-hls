@@ -9,7 +9,10 @@ use crate::{
 };
 
 mod api;
-mod streaming;
+mod core;
+mod event_listeners;
+
+pub(crate) use event_listeners::{JsMemoryBlob, MediaObservation, PlaybackTickReason};
 
 /// The `Dispatcher` is the player Interface exported to the JavaScript-side,
 /// providing an API to load contents and influence various parameters about playback.

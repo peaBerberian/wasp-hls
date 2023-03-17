@@ -6,50 +6,50 @@ use crate::{
 mod segment_queue;
 use segment_queue::SegmentQueue;
 
-pub struct NextSegmentSelectors {
+pub(crate) struct NextSegmentSelectors {
     audio: NextSegmentSelector,
     video: NextSegmentSelector,
 }
 
 impl NextSegmentSelectors {
-    pub fn new(base_pos: f64, buffer_goal: f64) -> Self {
+    pub(crate) fn new(base_pos: f64, buffer_goal: f64) -> Self {
         Self {
             audio: NextSegmentSelector::new(base_pos, buffer_goal),
             video: NextSegmentSelector::new(base_pos, buffer_goal),
         }
     }
 
-    pub fn update_buffer_goal(&mut self, buffer_goal: f64) {
+    pub(crate) fn update_buffer_goal(&mut self, buffer_goal: f64) {
         self.audio.buffer_goal = buffer_goal;
         self.video.buffer_goal = buffer_goal;
     }
 
-    pub fn get(&self, media_type: MediaType) -> &NextSegmentSelector {
+    pub(crate) fn get(&self, media_type: MediaType) -> &NextSegmentSelector {
         match media_type {
             MediaType::Audio => &self.audio,
             MediaType::Video => &self.video,
         }
     }
 
-    pub fn get_mut(&mut self, media_type: MediaType) -> &mut NextSegmentSelector {
+    pub(crate) fn get_mut(&mut self, media_type: MediaType) -> &mut NextSegmentSelector {
         match media_type {
             MediaType::Audio => &mut self.audio,
             MediaType::Video => &mut self.video,
         }
     }
 
-    pub fn update_base_position(&mut self, pos: f64) {
+    pub(crate) fn update_base_position(&mut self, pos: f64) {
         self.audio.update_base_position(pos);
         self.video.update_base_position(pos);
     }
 
-    pub fn reset_position(&mut self, pos: f64) {
+    pub(crate) fn reset_position(&mut self, pos: f64) {
         let pos = f64::max(0., pos);
         self.audio.reset_position(pos);
         self.video.reset_position(pos);
     }
 
-    pub fn reset_position_for_type(&mut self, mt: MediaType, pos: f64) {
+    pub(crate) fn reset_position_for_type(&mut self, mt: MediaType, pos: f64) {
         let pos = f64::max(0., pos);
         match mt {
             MediaType::Audio => self.audio.reset_position(pos),
@@ -58,7 +58,7 @@ impl NextSegmentSelectors {
     }
 }
 
-pub struct NextSegmentSelector {
+pub(crate) struct NextSegmentSelector {
     /// Interface allowing to keep track of which audio and video segments we need to load next.
     segment_queue: SegmentQueue,
 
@@ -99,11 +99,11 @@ impl NextSegmentSelector {
         }
     }
 
-    pub fn reset_init_segment(&mut self) {
+    pub(crate) fn reset_init_segment(&mut self) {
         self.init_status = InitializationSegmentSelectorStatus::Unreturned;
     }
 
-    pub fn rollback(&mut self) {
+    pub(crate) fn rollback(&mut self) {
         if let Some(pos) = self.last_validated_position {
             self.segment_queue.validate_start(pos);
         } else {
@@ -115,11 +115,11 @@ impl NextSegmentSelector {
         }
     }
 
-    pub fn update_base_position(&mut self, base_pos: f64) {
+    pub(crate) fn update_base_position(&mut self, base_pos: f64) {
         self.base_pos = base_pos;
     }
 
-    pub fn reset_position(&mut self, pos: f64) {
+    pub(crate) fn reset_position(&mut self, pos: f64) {
         self.base_pos = pos;
         self.last_returned_position = None;
         self.last_validated_position = None;
@@ -127,15 +127,15 @@ impl NextSegmentSelector {
         self.segment_queue = SegmentQueue::new(pos);
     }
 
-    pub fn validate_init(&mut self) {
+    pub(crate) fn validate_init(&mut self) {
         self.init_status = InitializationSegmentSelectorStatus::Validated;
     }
 
-    pub fn validate_media(&mut self, pos: f64) {
+    pub(crate) fn validate_media(&mut self, pos: f64) {
         self.last_validated_position = Some(pos);
     }
 
-    pub fn get_next_segment_info<'a>(&mut self, pl: &'a MediaPlaylist) -> NextSegmentInfo<'a> {
+    pub(crate) fn get_next_segment_info<'a>(&mut self, pl: &'a MediaPlaylist) -> NextSegmentInfo<'a> {
         if self.init_status == InitializationSegmentSelectorStatus::Unreturned {
             if let Some(i) = pl.init_segment() {
                 self.init_status = InitializationSegmentSelectorStatus::Returned;
@@ -159,7 +159,7 @@ impl NextSegmentSelector {
     }
 }
 
-pub enum NextSegmentInfo<'a> {
+pub(crate) enum NextSegmentInfo<'a> {
     None,
     MediaSegment(&'a SegmentInfo),
     InitSegment(&'a MapInfo),

@@ -41,6 +41,7 @@ import {
   onTrackUpdateMessage,
   onFlushMessage,
   onAreTypesSupportedMessage,
+  onVariantLockStatusChangeMessage,
 } from "./worker-message-handlers";
 
 const DEFAULT_MPEG2_TS_TYPE =
@@ -114,6 +115,8 @@ interface WaspHlsPlayerEvents {
   audioTrackListUpdate: AudioTrackInfo[];
 
   variantListUpdate: VariantInfo[];
+
+  variantLockUpdate : VariantInfo | null;
 }
 
 /** Various statuses that may be set for a WaspHlsPlayer's initialization. */
@@ -620,7 +623,6 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
     if (this.__contentMetadata__ === null) {
       throw new Error("No content loaded");
     }
-    this.__contentMetadata__.lockedVariant = variantId;
     postMessageToWorker(this.__worker__, {
       type: MainMessageType.LockVariant,
       value: {
@@ -637,7 +639,6 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
     if (this.__contentMetadata__ === null) {
       throw new Error("No content loaded");
     }
-    this.__contentMetadata__.lockedVariant = null;
     postMessageToWorker(this.__worker__, {
       type: MainMessageType.LockVariant,
       value: {
@@ -647,7 +648,7 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
     });
   }
 
-  public getLockedVariant(): string | null {
+  public getLockedVariant(): VariantInfo | null {
     return this.__contentMetadata__?.lockedVariant ?? null;
   }
 
@@ -827,6 +828,13 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
             this.trigger("variantUpdate", this.getCurrentVariant());
           }
           break;
+
+        case WorkerMessageType.VariantLockStatusChange:
+          if (onVariantLockStatusChangeMessage(data, this.__contentMetadata__)) {
+            this.trigger("variantLockUpdate", this.getLockedVariant());
+          }
+          break;
+
         case WorkerMessageType.Error: {
           const error = onErrorMessage(data, this.__contentMetadata__);
           if (error !== null) {

@@ -7,13 +7,13 @@ use crate::{
 };
 use std::{cmp::Ordering, io::BufRead};
 
-pub use crate::parser::MediaPlaylistPermanentId;
+pub(crate) use crate::parser::MediaPlaylistPermanentId;
 
 /// Stores information about the current loaded MultiVariant Playlist and its sub-playlists:
 ///   - Information on the MultiVariant Playlist itself.
 ///   - On the current variant selected.
 ///   - Information on the different audio and video Media Playlists selected.
-pub struct PlaylistStore {
+pub(crate) struct PlaylistStore {
     /// A struct representing the "MultiVariant Playlist", a.k.a. "Master Playlist" of
     /// the currently loaded HLS content.
     playlist: MultiVariantPlaylist,
@@ -254,10 +254,9 @@ impl PlaylistStore {
         if self.is_variant_locked() {
             VariantUpdateResult::Unchanged
         } else {
-            self.update_variant(best_variant_position(
-                &self.variants_for_curr_track(),
-                self.last_bandwidth,
-            ))
+            let wanted_variants = &self.variants_for_curr_track();
+            let id = best_variant_id(wanted_variants, self.last_bandwidth);
+            self.update_variant(id)
         }
     }
 
@@ -271,35 +270,35 @@ impl PlaylistStore {
     /// variant.
     pub(crate) fn lock_variant(&mut self, variant_id: &str) -> LockVariantResponse {
         let variants = self.all_variants();
-        let pos = variants
-            .iter()
-            .position(|x| x.id() == variant_id)
-            .or(if variants.is_empty() {
-                None
-            } else {
-                Some(variants.len() - 1)
-            });
+        let pos = variants.iter().find(|x| x.id() == variant_id);
 
-        if let Some(pos) = pos {
+        if let Some(_) = pos {
             self.is_variant_locked = true;
-            let prev_track_id = self.curr_audio_track.as_deref()
+            let prev_track_id = self
+                .curr_audio_track
+                .as_deref()
                 .or_else(|| self.curr_audio_track_id());
-            let updates = self.update_variant(Some(pos));
-            let new_track_id = self.curr_audio_track.as_deref()
+            let updates = self.update_variant(Some(variant_id));
+            let new_track_id = self
+                .curr_audio_track
+                .as_deref()
                 .or_else(|| self.curr_audio_track_id());
-            let track_changed = match (prev_track_id, new_track_id) {
-                (Some(prev_id), Some(new_id)) =>
+            let audio_track_change = match (prev_track_id, new_track_id) {
+                (Some(prev_id), Some(new_id)) => {
                     if prev_id == new_id {
                         Some(new_id)
                     } else {
                         None
                     }
-                (None, Some(new_id)) =>
-                    Some(new_id),
+                }
+                (None, Some(new_id)) => Some(new_id),
                 _ => None,
             };
             // XXX TODO jsAnnounceTrackUpdate
-            LockVariantResponse::VariantLocked { updates, track_changed }
+            LockVariantResponse::VariantLocked {
+                updates,
+                audio_track_change,
+            }
         } else {
             self.is_variant_locked = false;
             LockVariantResponse::NoVariantWithId
@@ -312,7 +311,7 @@ impl PlaylistStore {
     /// let adaptive streaming choose the right one instead.
     pub(crate) fn unlock_variant(&mut self) -> VariantUpdateResult {
         self.is_variant_locked = false;
-        self.update_variant(best_variant_position(
+        self.update_variant(best_variant_id(
             &self.variants_for_curr_track(),
             self.last_bandwidth,
         ))
@@ -458,13 +457,13 @@ impl PlaylistStore {
                 // current variant, re-check the best variant to have with the new track.
                 let old_variant_locked = self.is_variant_locked;
                 self.is_variant_locked = false;
-                let variant_update = self.update_variant(best_variant_position(
-                        &self.variants_for_curr_track(),
-                        self.last_bandwidth,
+                let variant_update = self.update_variant(best_variant_id(
+                    &self.variants_for_curr_track(),
+                    self.last_bandwidth,
                 ));
                 SetAudioTrackResponse::VariantUpdate {
                     updates: variant_update,
-                    unlocked: old_variant_locked
+                    unlocked_variant: old_variant_locked,
                 }
             } else if new_audio_id != self.curr_audio_id {
                 self.curr_audio_id = new_audio_id;
@@ -479,17 +478,14 @@ impl PlaylistStore {
 
     /// Run the variant update logic from its index in the variants array and return the result of
     /// doing so
-    fn update_variant(&mut self, index: Option<usize>) -> VariantUpdateResult {
-        // XXX TODO
-
-        let new_id = index.map(|i| self.variants().get(i).unwrap().id());
+    fn update_variant(&mut self, new_id: Option<&str>) -> VariantUpdateResult {
         if new_id != self.curr_variant_id.as_deref() {
             if let Some(id) = new_id {
                 let prev_bandwidth = self.curr_variant().map(|v| v.bandwidth());
                 let new_bandwidth = self.playlist.variant(id).map(|v| v.bandwidth());
                 let prev_audio_id = self.curr_audio_id.clone();
                 let prev_video_id = self.curr_video_id.clone();
-                self.set_curr_variant(id.to_owned());
+                self.set_curr_variant_and_media_id(id.to_owned());
 
                 let mut updates = vec![];
                 if self.curr_audio_id != prev_audio_id {
@@ -518,7 +514,7 @@ impl PlaylistStore {
     }
 
     /// Internally update the current variant chosen as well as its corresponding other media.
-    fn set_curr_variant(&mut self, variant_id: String) {
+    fn set_curr_variant_and_media_id(&mut self, variant_id: String) {
         let variant = self.playlist.variant(&variant_id).unwrap();
         self.curr_variant_id = Some(variant_id);
         self.curr_video_id = self.playlist.video_media_playlist_id_for(variant);
@@ -530,15 +526,12 @@ impl PlaylistStore {
 
 /// In the slice of references to `VariantStream`s ordered by bandwidth ascending, find the closest
 /// `VariantStream` with a lower or equal bandwidth to the one given and returns its index.
-fn best_variant_position(variants: &[&VariantStream], bandwidth: f64) -> Option<usize> {
+fn best_variant_id<'a>(variants: &[&'a VariantStream], bandwidth: f64) -> Option<&'a str> {
     variants
         .iter()
-        .position(|x| (x.bandwidth() as f64) > bandwidth)
-        .or(if variants.is_empty() {
-            None
-        } else {
-            Some(variants.len() - 1)
-        })
+        .find(|x| (x.bandwidth() as f64) > bandwidth)
+        .or(variants.last())
+        .map(|v| v.id())
 }
 
 /// Response returned by `PlaylistStore` method which may update the current
@@ -571,7 +564,7 @@ pub enum VariantUpdateResult {
 }
 
 /// Result of calling the `set_audio_track` `PlaylistStore`'s method
-pub enum SetAudioTrackResponse {
+pub(crate) enum SetAudioTrackResponse {
     /// The audio track change led to a change of the Media Playlist for the audio.
     ///
     /// Because variants may be or not be linked to a given audio track it is also possible that
@@ -584,12 +577,13 @@ pub enum SetAudioTrackResponse {
     /// Because variants may be or not be linked to a given audio track it is also possible that the
     /// list of currently adaptively switchable variants has changed.
     ///
-    /// The `updates` element of the associated struct is the result of such update, the `unlocked`
+    /// The `updates` element of the associated struct is the result of such update, the
+    /// `unlocked_variant`
     /// element is whether or not the previous variant was previously "locked" in place, in which
     /// case the lock has been completely disabled.
     VariantUpdate {
         updates: VariantUpdateResult,
-        unlocked: bool,
+        unlocked_variant: bool,
     },
 
     /// No Media Playlist nor the current variant were changed due to this track change.
@@ -599,10 +593,10 @@ pub enum SetAudioTrackResponse {
     NoMediaUpdate,
 }
 
-pub enum LockVariantResponse<'a> {
+pub(crate) enum LockVariantResponse<'a> {
     NoVariantWithId,
     VariantLocked {
         updates: VariantUpdateResult,
-        track_changed: Option<&'a str>,
+        audio_track_change: Option<&'a str>,
     },
 }
