@@ -95,6 +95,9 @@ impl PlaylistStore {
     pub(crate) fn check_codecs(&mut self) -> bool {
         let mut are_all_codecs_checked = true;
         self.playlist.variants_mut().iter_mut().for_each(|v| {
+            if v.supported().is_some() {
+                return
+            }
             [MediaType::Video, MediaType::Audio]
                 .into_iter()
                 .for_each(|mt| {
