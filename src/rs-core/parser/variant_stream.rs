@@ -353,177 +353,172 @@ impl VariantStream {
                     Logger::warn("Attribute Name not followed by equal sign");
                     break;
                 }
-                Some(idx) => {
-                    match &variant_line[offset..offset + idx] {
-                        "AVERAGE-BANDWIDTH" => {
-                            let (parsed, end_offset) =
-                                parse_decimal_integer(variant_line, offset + idx + 1);
-                            offset = end_offset + 1;
-                            if let Ok(val) = parsed {
-                                average_bandwitdh = Some(val);
-                            } else {
-                                Logger::warn("Unparsable AVERAGE-BANDWIDTH value");
-                            }
-                        }
-                        "BANDWIDTH" => {
-                            let (parsed, end_offset) =
-                                parse_decimal_integer(variant_line, offset + idx + 1);
-                            offset = end_offset + 1;
-                            if let Ok(val) = parsed {
-                                bandwidth = Some(val);
-                            } else {
-                                Logger::warn("Unparsable BANDWIDTH value");
-                            }
-                        }
-                        "CODECS" => {
-                            let (parsed, end_offset) =
-                                parse_comma_separated_list(variant_line, offset + idx + 1);
-                            offset = end_offset + 1;
-                            if let Ok(val) = parsed {
-                                codecs = val
-                                    .iter()
-                                    .map(|c| {
-                                        (guess_media_type_from_codec(c), (*c).to_owned())
-                                    })
-                                    .collect();
-                            } else {
-                                Logger::warn("Unparsable CODECS value");
-                            }
-                        }
-                        "FRAME-RATE" => {
-                            let (parsed, end_offset) =
-                                parse_decimal_floating_point(variant_line, offset + idx + 1);
-                            offset = end_offset + 1;
-                            if let Ok(val) = parsed {
-                                frame_rate = Some(val);
-                            } else {
-                                Logger::warn("Unparsable FRAME-RATE value");
-                            }
-                        }
-                        "HDCP-LEVEL" => {
-                            let (parsed, end_offset) =
-                                parse_enumerated_string(variant_line, offset + idx + 1);
-                            offset = end_offset + 1;
-                            hdcp_level = match parsed {
-                                "TYPE-0" => HdcpLevel::Type0,
-                                "TYPE-1" => HdcpLevel::Type1,
-                                "NONE" => HdcpLevel::None,
-                                _ => HdcpLevel::Unknown,
-                            };
-                        }
-                        "PROGRAM-ID" => {
-                            let (parsed, end_offset) =
-                                parse_decimal_integer(variant_line, offset + idx + 1);
-                            offset = end_offset + 1;
-                            if let Ok(val) = parsed {
-                                program_id = Some(val);
-                            } else {
-                                Logger::warn("Unparsable PROGRAM-ID value");
-                            }
-                        }
-                        "RESOLUTION" => {
-                            let (parsed, end_offset) =
-                                parse_resolution(variant_line, offset + idx + 1);
-                            offset = end_offset + 1;
-                            if let Ok(res) = parsed {
-                                resolution = Some(VideoResolution {
-                                    height: res.height,
-                                    width: res.width,
-                                });
-                            } else {
-                                Logger::warn("Unparsable RESOLUTION value");
-                            }
-                        }
-                        "SCORE" => {
-                            let (parsed, end_offset) =
-                                parse_decimal_floating_point(variant_line, offset + idx + 1);
-                            offset = end_offset + 1;
-                            if let Ok(val) = parsed {
-                                score = Some(val);
-                            } else {
-                                Logger::warn("Unparsable SCORE value");
-                            }
-                        }
-                        "STABLE-VARIANT-ID" => {
-                            let (parsed, end_offset) =
-                                parse_quoted_string(variant_line, offset + idx + 1);
-                            offset = end_offset + 1;
-                            if let Ok(val) = parsed {
-                                stable_variant_id = Some(val.to_owned());
-                            } else {
-                                Logger::warn("Unparsable STABLE-VARIANT-ID value");
-                            }
-                        }
-                        "AUDIO" => {
-                            let (parsed, end_offset) =
-                                parse_quoted_string(variant_line, offset + idx + 1);
-                            offset = end_offset + 1;
-                            if let Ok(val) = parsed {
-                                audio = Some(val.to_owned());
-                            } else {
-                                Logger::warn("Unparsable AUDIO value");
-                            }
-                        }
-                        "VIDEO" => {
-                            let (parsed, end_offset) =
-                                parse_quoted_string(variant_line, offset + idx + 1);
-                            offset = end_offset + 1;
-                            if let Ok(val) = parsed {
-                                video = Some(val.to_owned());
-                            } else {
-                                Logger::warn("Unparsable VIDEO value");
-                            }
-                        }
-                        "SUBTITLES" => {
-                            let (parsed, end_offset) =
-                                parse_quoted_string(variant_line, offset + idx + 1);
-                            offset = end_offset + 1;
-                            if let Ok(val) = parsed {
-                                subtitles = Some(val.to_owned());
-                            } else {
-                                Logger::warn("Unparsable SUBTITLES value");
-                            }
-                        }
-                        "CLOSED-CAPTIONS" => {
-                            if variant_line[offset + idx + 1..].starts_with("NONE") {
-                                offset = skip_attribute_list_value(variant_line, offset + idx + 1);
-                            } else {
-                                let (parsed, end_offset) =
-                                    parse_quoted_string(variant_line, offset + idx + 1);
-                                offset = end_offset + 1;
-                                if let Ok(val) = parsed {
-                                    closed_captions = Some(val.to_owned());
-                                } else {
-                                    Logger::warn("Unparsable CLOSED-CAPTIONS value");
-                                }
-                            }
-                        }
-                        "VIDEO-RANGE" => {
-                            let (parsed, end_offset) =
-                                parse_enumerated_string(variant_line, offset + idx + 1);
-                            offset = end_offset + 1;
-                            video_range = match parsed {
-                                "SDR" => VideoDynamicRange::Sdr,
-                                "HLG" => VideoDynamicRange::Hlg,
-                                "PQ" => VideoDynamicRange::Pq,
-                                _ => VideoDynamicRange::Unknown,
-                            };
-                        }
-                        "PATHWAY-ID" => {
-                            let (parsed, end_offset) =
-                                parse_quoted_string(variant_line, offset + idx + 1);
-                            offset = end_offset + 1;
-                            if let Ok(val) = parsed {
-                                pathway_id = Some(val.to_owned());
-                            } else {
-                                Logger::warn("Unparsable PATHWAY-ID value");
-                            }
-                        }
-                        _ => {
-                            offset = skip_attribute_list_value(variant_line, offset + idx + 1) + 1;
+                Some(idx) => match &variant_line[offset..offset + idx] {
+                    "AVERAGE-BANDWIDTH" => {
+                        let (parsed, end_offset) =
+                            parse_decimal_integer(variant_line, offset + idx + 1);
+                        offset = end_offset + 1;
+                        if let Ok(val) = parsed {
+                            average_bandwitdh = Some(val);
+                        } else {
+                            Logger::warn("Unparsable AVERAGE-BANDWIDTH value");
                         }
                     }
-                }
+                    "BANDWIDTH" => {
+                        let (parsed, end_offset) =
+                            parse_decimal_integer(variant_line, offset + idx + 1);
+                        offset = end_offset + 1;
+                        if let Ok(val) = parsed {
+                            bandwidth = Some(val);
+                        } else {
+                            Logger::warn("Unparsable BANDWIDTH value");
+                        }
+                    }
+                    "CODECS" => {
+                        let (parsed, end_offset) =
+                            parse_comma_separated_list(variant_line, offset + idx + 1);
+                        offset = end_offset + 1;
+                        if let Ok(val) = parsed {
+                            codecs = val
+                                .iter()
+                                .map(|c| (guess_media_type_from_codec(c), (*c).to_owned()))
+                                .collect();
+                        } else {
+                            Logger::warn("Unparsable CODECS value");
+                        }
+                    }
+                    "FRAME-RATE" => {
+                        let (parsed, end_offset) =
+                            parse_decimal_floating_point(variant_line, offset + idx + 1);
+                        offset = end_offset + 1;
+                        if let Ok(val) = parsed {
+                            frame_rate = Some(val);
+                        } else {
+                            Logger::warn("Unparsable FRAME-RATE value");
+                        }
+                    }
+                    "HDCP-LEVEL" => {
+                        let (parsed, end_offset) =
+                            parse_enumerated_string(variant_line, offset + idx + 1);
+                        offset = end_offset + 1;
+                        hdcp_level = match parsed {
+                            "TYPE-0" => HdcpLevel::Type0,
+                            "TYPE-1" => HdcpLevel::Type1,
+                            "NONE" => HdcpLevel::None,
+                            _ => HdcpLevel::Unknown,
+                        };
+                    }
+                    "PROGRAM-ID" => {
+                        let (parsed, end_offset) =
+                            parse_decimal_integer(variant_line, offset + idx + 1);
+                        offset = end_offset + 1;
+                        if let Ok(val) = parsed {
+                            program_id = Some(val);
+                        } else {
+                            Logger::warn("Unparsable PROGRAM-ID value");
+                        }
+                    }
+                    "RESOLUTION" => {
+                        let (parsed, end_offset) = parse_resolution(variant_line, offset + idx + 1);
+                        offset = end_offset + 1;
+                        if let Ok(res) = parsed {
+                            resolution = Some(VideoResolution {
+                                height: res.height,
+                                width: res.width,
+                            });
+                        } else {
+                            Logger::warn("Unparsable RESOLUTION value");
+                        }
+                    }
+                    "SCORE" => {
+                        let (parsed, end_offset) =
+                            parse_decimal_floating_point(variant_line, offset + idx + 1);
+                        offset = end_offset + 1;
+                        if let Ok(val) = parsed {
+                            score = Some(val);
+                        } else {
+                            Logger::warn("Unparsable SCORE value");
+                        }
+                    }
+                    "STABLE-VARIANT-ID" => {
+                        let (parsed, end_offset) =
+                            parse_quoted_string(variant_line, offset + idx + 1);
+                        offset = end_offset + 1;
+                        if let Ok(val) = parsed {
+                            stable_variant_id = Some(val.to_owned());
+                        } else {
+                            Logger::warn("Unparsable STABLE-VARIANT-ID value");
+                        }
+                    }
+                    "AUDIO" => {
+                        let (parsed, end_offset) =
+                            parse_quoted_string(variant_line, offset + idx + 1);
+                        offset = end_offset + 1;
+                        if let Ok(val) = parsed {
+                            audio = Some(val.to_owned());
+                        } else {
+                            Logger::warn("Unparsable AUDIO value");
+                        }
+                    }
+                    "VIDEO" => {
+                        let (parsed, end_offset) =
+                            parse_quoted_string(variant_line, offset + idx + 1);
+                        offset = end_offset + 1;
+                        if let Ok(val) = parsed {
+                            video = Some(val.to_owned());
+                        } else {
+                            Logger::warn("Unparsable VIDEO value");
+                        }
+                    }
+                    "SUBTITLES" => {
+                        let (parsed, end_offset) =
+                            parse_quoted_string(variant_line, offset + idx + 1);
+                        offset = end_offset + 1;
+                        if let Ok(val) = parsed {
+                            subtitles = Some(val.to_owned());
+                        } else {
+                            Logger::warn("Unparsable SUBTITLES value");
+                        }
+                    }
+                    "CLOSED-CAPTIONS" => {
+                        if variant_line[offset + idx + 1..].starts_with("NONE") {
+                            offset = skip_attribute_list_value(variant_line, offset + idx + 1);
+                        } else {
+                            let (parsed, end_offset) =
+                                parse_quoted_string(variant_line, offset + idx + 1);
+                            offset = end_offset + 1;
+                            if let Ok(val) = parsed {
+                                closed_captions = Some(val.to_owned());
+                            } else {
+                                Logger::warn("Unparsable CLOSED-CAPTIONS value");
+                            }
+                        }
+                    }
+                    "VIDEO-RANGE" => {
+                        let (parsed, end_offset) =
+                            parse_enumerated_string(variant_line, offset + idx + 1);
+                        offset = end_offset + 1;
+                        video_range = match parsed {
+                            "SDR" => VideoDynamicRange::Sdr,
+                            "HLG" => VideoDynamicRange::Hlg,
+                            "PQ" => VideoDynamicRange::Pq,
+                            _ => VideoDynamicRange::Unknown,
+                        };
+                    }
+                    "PATHWAY-ID" => {
+                        let (parsed, end_offset) =
+                            parse_quoted_string(variant_line, offset + idx + 1);
+                        offset = end_offset + 1;
+                        if let Ok(val) = parsed {
+                            pathway_id = Some(val.to_owned());
+                        } else {
+                            Logger::warn("Unparsable PATHWAY-ID value");
+                        }
+                    }
+                    _ => {
+                        offset = skip_attribute_list_value(variant_line, offset + idx + 1) + 1;
+                    }
+                },
             }
         }
 
@@ -575,8 +570,8 @@ fn guess_media_type_from_codec(codec: &str) -> Option<MediaType> {
         "ec-3" | "ac-3" => Some(MediaType::Audio),
         "avc1" | "avc3" => Some(MediaType::Video),
         "hvc1" | "hev1" => Some(MediaType::Video),
-        "dvh1" | "dvhe" =>  Some(MediaType::Video),
-        _ => None
+        "dvh1" | "dvhe" => Some(MediaType::Video),
+        _ => None,
     }
 }
 

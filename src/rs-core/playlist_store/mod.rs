@@ -125,7 +125,7 @@ impl PlaylistStore {
         let mut are_all_codecs_checked = true;
         self.playlist.variants_mut().iter_mut().for_each(|v| {
             if v.supported().is_some() {
-                return
+                return;
             }
             [MediaType::Video, MediaType::Audio]
                 .into_iter()
@@ -270,18 +270,13 @@ impl PlaylistStore {
     pub(crate) fn update_curr_bandwidth(&mut self, bandwidth: f64) -> VariantUpdateResult {
         self.last_bandwidth = bandwidth;
         if self.is_variant_locked() {
-            return VariantUpdateResult::Unchanged;
+            VariantUpdateResult::Unchanged
+        } else {
+            self.update_variant(best_variant_position(
+                &self.playlist.supported_variants(),
+                self.last_bandwidth,
+            ))
         }
-        let variants = self.playlist.supported_variants();
-        let best_variant_idx = variants
-            .iter()
-            .position(|x| (x.bandwidth() as f64) > bandwidth)
-            .or(if variants.is_empty() {
-                None
-            } else {
-                Some(variants.len() - 1)
-            });
-        self.update_variant(best_variant_idx)
     }
 
     /// Force a given variant and prevent it from changing, by communicating its `id`.
@@ -315,7 +310,10 @@ impl PlaylistStore {
     /// let adaptive streaming choose the right one instead.
     pub(crate) fn unlock_variant(&mut self) -> VariantUpdateResult {
         self.is_variant_locked = false;
-        self.update_curr_bandwidth(self.last_bandwidth)
+        self.update_variant(best_variant_position(
+            &self.playlist.supported_variants(),
+            self.last_bandwidth,
+        ))
     }
 
     /// Returns `true` if a variant is currently locked, preventing adaptive streaming
@@ -514,4 +512,15 @@ impl PlaylistStore {
             .playlist
             .audio_media_playlist_id_for(variant, self.curr_audio_track.as_deref());
     }
+}
+
+fn best_variant_position(variants: &[&VariantStream], bandwidth: f64) -> Option<usize> {
+    variants
+        .iter()
+        .position(|x| (x.bandwidth() as f64) > bandwidth)
+        .or(if variants.is_empty() {
+            None
+        } else {
+            Some(variants.len() - 1)
+        })
 }
