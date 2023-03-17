@@ -199,7 +199,7 @@ impl PlaylistStore {
 
     /// Returns vec describing all available variant streams in the current MultiVariantPlaylist.
     pub(crate) fn variants(&self) -> Vec<&VariantStream> {
-        self.playlist.supported_variants()
+        self.playlist.supported_variants(self.curr_audio_track.as_deref())
     }
 
     /// Estimates the duration of the current content based on the currently selected audio and
@@ -273,7 +273,7 @@ impl PlaylistStore {
             VariantUpdateResult::Unchanged
         } else {
             self.update_variant(best_variant_position(
-                &self.playlist.supported_variants(),
+                &self.variants(),
                 self.last_bandwidth,
             ))
         }
@@ -287,7 +287,7 @@ impl PlaylistStore {
     /// The returned option is `None` if the `variant_id` given is not found to correspond
     /// to any existing variant and contains the corresponding update when set.
     pub(crate) fn lock_variant(&mut self, variant_id: &str) -> Option<VariantUpdateResult> {
-        let variants = self.playlist.supported_variants();
+        let variants = self.variants();
         let pos = variants
             .iter()
             .position(|x| x.id() == variant_id)
@@ -311,7 +311,7 @@ impl PlaylistStore {
     pub(crate) fn unlock_variant(&mut self) -> VariantUpdateResult {
         self.is_variant_locked = false;
         self.update_variant(best_variant_position(
-            &self.playlist.supported_variants(),
+            &self.variants(),
             self.last_bandwidth,
         ))
     }
@@ -443,29 +443,39 @@ impl PlaylistStore {
     /// selection of one (by giving `None` as argument).
     ///
     /// Returns `true` if this call led to a changement for the Audio Media Playlist.
-    pub(crate) fn set_audio_track(&mut self, track_id: Option<String>) -> bool {
+    pub(crate) fn set_audio_track(&mut self, track_id: Option<String>) -> SetAudioTrackResponse {
         self.curr_audio_track = track_id;
 
         if let Some(variant) = self.curr_variant() {
             let new_audio_id = self
                 .playlist
-                // TODO handle case where current variant not compatible with track
                 .audio_media_playlist_id_for(variant, self.curr_audio_track.as_deref());
-            if new_audio_id != self.curr_audio_id {
+
+            if new_audio_id.is_none() && !self.curr_audio_id.is_none() {
+                let old_varian_locked = self.is_variant_locked;
+                self.is_variant_locked = false;
+                // We may be in a case where the choosen track is not available in the
+                // current variant, re-check the best variant to have with the new track.
+                let variant_update = self.update_variant(best_variant_position(
+                        &self.variants(),
+                        self.last_bandwidth,
+                ));
+                SetAudioTrackResponse::VariantUpdate((variant_update, old_varian_locked))
+            } else if new_audio_id != self.curr_audio_id {
                 self.curr_audio_id = new_audio_id;
-                true
+                SetAudioTrackResponse::AudioMediaUpdate
             } else {
-                false
+                SetAudioTrackResponse::NoMediaUpdate
             }
         } else {
-            false
+            SetAudioTrackResponse::NoMediaUpdate
         }
     }
 
     /// Run the variant update logic from its index in the variants array and return the result of
     /// doing so
     fn update_variant(&mut self, index: Option<usize>) -> VariantUpdateResult {
-        let new_id = index.map(|i| self.playlist.supported_variants().get(i).unwrap().id());
+        let new_id = index.map(|i| self.variants().get(i).unwrap().id());
         if new_id != self.curr_variant_id.as_deref() {
             if let Some(id) = new_id {
                 let prev_bandwidth = self.curr_variant().map(|v| v.bandwidth());
@@ -504,16 +514,15 @@ impl PlaylistStore {
     fn set_curr_variant(&mut self, variant_id: String) {
         let variant = self.playlist.variant(&variant_id).unwrap();
         self.curr_variant_id = Some(variant_id);
-
         self.curr_video_id = self.playlist.video_media_playlist_id_for(variant);
-
-        // TODO handle case where current variant not compatible with track
         self.curr_audio_id = self
             .playlist
             .audio_media_playlist_id_for(variant, self.curr_audio_track.as_deref());
     }
 }
 
+/// In the slice of references to `VariantStream`s ordered by bandwidth ascending, find the closest
+/// `VariantStream` with a lower or equal bandwidth to the one given and returns its index.
 fn best_variant_position(variants: &[&VariantStream], bandwidth: f64) -> Option<usize> {
     variants
         .iter()
@@ -523,4 +532,36 @@ fn best_variant_position(variants: &[&VariantStream], bandwidth: f64) -> Option<
         } else {
             Some(variants.len() - 1)
         })
+}
+
+/// Result of calling the `set_audio_track` `PlaylistStore`'s method
+pub enum SetAudioTrackResponse {
+    /// The audio track change led to a change of the Media Playlist for the
+    /// audio.
+    ///
+    /// Because variants may be or not be linked to a given audio track it is
+    /// also possible that the list of currently switchable variants has
+    /// changed.
+    AudioMediaUpdate,
+
+    /// The audio track change led to a change for the currently-chosen variant
+    /// due to the previous one not being compatible with the new chosen audio
+    /// track.
+    ///
+    /// Because variants may be or not be linked to a given audio track it is
+    /// also possible that the list of currently switchable variants has
+    /// changed.
+    ///
+    /// The first element of the associated tuple is the result of such update,
+    /// the second is whether or not the previous variant was previously
+    /// "locked" in place, in which case the lock has been completely disabled.
+    VariantUpdate((VariantUpdateResult, bool)),
+
+    /// No Media Playlist nor the current variant were changed due to this track
+    /// chabge.
+    ///
+    /// Because variants may be or not be linked to a given audio track it is
+    /// however possible that the list of currently switchable variants has
+    /// changed.
+    NoMediaUpdate,
 }

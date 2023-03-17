@@ -112,11 +112,28 @@ impl MultiVariantPlaylist {
 
     /// Returns information on all known variants linked to this `MultiVariantPlaylist`, ordered by
     /// `bandwidth` ascending, for which all codecs are known to be supported.
-    pub(crate) fn supported_variants(&self) -> Vec<&VariantStream> {
-        self.variants
-            .iter()
-            .filter(|v| v.supported().unwrap_or(false))
-            .collect()
+    pub(crate) fn supported_variants(
+        &self,
+        curr_audio_track: Option<&str>
+    ) -> Vec<&VariantStream> {
+        if let Some(track_id) = curr_audio_track {
+            let group_ids = self.audio_tracks.groups_for(track_id);
+            self.variants
+                .iter()
+                .filter(|v|
+                    if let Some(group) = v.audio_group() {
+                        group_ids.contains(&group) && v.supported().unwrap_or(false)
+                    } else {
+                        false
+                    }
+                )
+                .collect()
+        } else {
+            self.variants
+                .iter()
+                .filter(|v| v.supported().unwrap_or(false))
+                .collect()
+        }
     }
 
     /// Returns mutable reference to information on all known variants linked to this

@@ -225,6 +225,12 @@ extern "C" {
         is_audio_track_selected: bool,
     );
 
+    pub fn jsAnnounceBrokenLock(
+        media_type: MediaType,
+        current_audio_track: Option<&str>,
+        is_audio_track_selected: bool,
+    );
+
     pub fn jsStartRebuffering();
     pub fn jsStopRebuffering();
 

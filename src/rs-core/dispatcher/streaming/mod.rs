@@ -15,7 +15,7 @@ use crate::{
     },
     media_element::{PushMetadata, SourceBufferCreationError},
     parser::MultiVariantPlaylist,
-    playlist_store::{MediaPlaylistPermanentId, PlaylistStore, VariantUpdateResult},
+    playlist_store::{MediaPlaylistPermanentId, PlaylistStore, VariantUpdateResult, SetAudioTrackResponse},
     requester::{
         FinishedRequestType, PlaylistFileType, PlaylistRequestInfo, RetryResult, SegmentRequestInfo,
     },
@@ -482,7 +482,7 @@ impl Dispatcher {
                 return;
             }
         };
-        self.on_media_playlist_changed(&changed_media_types, has_improved, flush);
+        self.on_media_playlist_changed(&changed_media_types, flush || has_improved, flush);
         if let Some(pl) = self.playlist_store.as_mut() {
             jsAnnounceVariantUpdate(pl.curr_variant().map(|v| v.id()));
         }
@@ -587,9 +587,19 @@ impl Dispatcher {
 
     pub fn inner_set_audio_track(&mut self, track_id: Option<String>) {
         if let Some(ref mut pl) = self.playlist_store {
-            if pl.set_audio_track(track_id) {
-                self.on_media_playlist_changed(&[MediaType::Audio], true, true);
+            match pl.set_audio_track(track_id) {
+                SetAudioTrackResponse::AudioMediaUpdate =>
+                    self.on_media_playlist_changed(&[MediaType::Audio], true, true),
+                SetAudioTrackResponse::VariantUpdate((update, was_lock_broken)) => {
+                    self.handle_variant_update(update, true);
+                    if was_lock_broken {
+                        jsAnnounceBrokenLock();
+                    }
+                },
+                _ => {},
             }
+            let variants_info =
+                unsafe { format_variants_info_for_js(playlist_store.variants().as_slice()) };
         }
     }
 }

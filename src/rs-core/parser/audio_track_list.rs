@@ -38,6 +38,17 @@ impl AudioTrackList {
         }
     }
 
+    pub(super) fn groups_for(&self, id: &str) -> Vec<&str> {
+        self.iter()
+            .find(|t| t.id() == id)
+            .map(|t|
+                t.media_tags
+                    .iter()
+                    .map(|m| m.group_id())
+                    .collect())
+            .unwrap_or(vec![])
+    }
+
     pub(super) fn track_for_media(&self, id: &str) -> Option<&AudioTrack> {
         self.iter()
             .find(|t| t.media_tags.iter().any(|m| m.id() == id))
