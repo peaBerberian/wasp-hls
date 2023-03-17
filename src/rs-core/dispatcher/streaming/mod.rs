@@ -11,7 +11,7 @@ use crate::{
         jsSendPlaylistParsingError, jsSendSegmentRequestError, jsSendSourceBufferCreationError,
         jsSetMediaSourceDuration, jsStartObservingPlayback, jsStopObservingPlayback, jsTimer,
         jsUpdateContentInfo, JsMemoryBlob, MediaObservation, MediaType, PlaybackTickReason,
-        PlaylistType, RequestId, SourceBufferId, TimerId, TimerReason,
+        PlaylistType, RequestId, SourceBufferId, TimerId, TimerReason, jsAnnounceBrokenLock,
     },
     media_element::{PushMetadata, SourceBufferCreationError},
     parser::MultiVariantPlaylist,
@@ -598,8 +598,6 @@ impl Dispatcher {
                 },
                 _ => {},
             }
-            let variants_info =
-                unsafe { format_variants_info_for_js(playlist_store.variants().as_slice()) };
         }
     }
 }
