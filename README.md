@@ -258,7 +258,7 @@ The architecture of the project is as follow:
   V  (once compiled)    |                       |                  |
                         V                       V                  |
 +-------------------------------------------------+      +-------------------+
-|                   Dispatcher                    |<-----|    Rs Bindings    |
+|                   Dispatcher                    |      |    Rs Bindings    |
 +-------------------------------------------------+      +-------------------+
     |            |         |                   | |                ^
     |            |         |                   | |                |
