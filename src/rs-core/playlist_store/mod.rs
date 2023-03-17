@@ -254,9 +254,7 @@ impl PlaylistStore {
         if self.is_variant_locked() {
             VariantUpdateResult::Unchanged
         } else {
-            let wanted_variants = &self.variants_for_curr_track();
-            let id = best_variant_id(wanted_variants, self.last_bandwidth);
-            self.update_variant(id)
+            self.update_variant(None)
         }
     }
 
@@ -272,12 +270,16 @@ impl PlaylistStore {
         let variants = self.all_variants();
         let pos = variants.iter().find(|x| x.id() == variant_id);
 
-        if let Some(_) = pos {
+        if pos.is_some() {
             self.is_variant_locked = true;
+
+            // TODO better change detection
             let prev_track_id = self
                 .curr_audio_track
-                .as_deref()
-                .or_else(|| self.curr_audio_track_id());
+                .clone()
+                .or_else(||
+                    self.curr_audio_track_id().map(|id| id.to_string())
+                );
             let updates = self.update_variant(Some(variant_id));
             let new_track_id = self
                 .curr_audio_track
@@ -311,10 +313,7 @@ impl PlaylistStore {
     /// let adaptive streaming choose the right one instead.
     pub(crate) fn unlock_variant(&mut self) -> VariantUpdateResult {
         self.is_variant_locked = false;
-        self.update_variant(best_variant_id(
-            &self.variants_for_curr_track(),
-            self.last_bandwidth,
-        ))
+        self.update_variant(None)
     }
 
     /// Returns `true` if a variant is currently locked, preventing adaptive streaming
@@ -452,15 +451,12 @@ impl PlaylistStore {
                 .playlist
                 .audio_media_playlist_id_for(variant, self.curr_audio_track.as_deref());
 
-            if new_audio_id.is_none() && !self.curr_audio_id.is_none() {
+            if new_audio_id.is_none() && self.curr_audio_id.is_some() {
                 // We may be in a case where the choosen track is not available in the
                 // current variant, re-check the best variant to have with the new track.
                 let old_variant_locked = self.is_variant_locked;
                 self.is_variant_locked = false;
-                let variant_update = self.update_variant(best_variant_id(
-                    &self.variants_for_curr_track(),
-                    self.last_bandwidth,
-                ));
+                let variant_update = self.update_variant(None);
                 SetAudioTrackResponse::VariantUpdate {
                     updates: variant_update,
                     unlocked_variant: old_variant_locked,
@@ -469,16 +465,21 @@ impl PlaylistStore {
                 self.curr_audio_id = new_audio_id;
                 SetAudioTrackResponse::AudioMediaUpdate
             } else {
-                SetAudioTrackResponse::NoMediaUpdate
+                SetAudioTrackResponse::NoUpdate
             }
         } else {
-            SetAudioTrackResponse::NoMediaUpdate
+            SetAudioTrackResponse::NoUpdate
         }
     }
 
-    /// Run the variant update logic from its index in the variants array and return the result of
-    /// doing so
-    fn update_variant(&mut self, new_id: Option<&str>) -> VariantUpdateResult {
+    /// Select the best variant available according to your bandwidth and track choice
+    fn update_variant(&mut self, variant_id: Option<&str>) -> VariantUpdateResult {
+        let new_id = if let Some(id) = variant_id {
+            Some(id)
+        } else {
+            let wanted_variants = &self.variants_for_curr_track();
+            best_variant_id(wanted_variants, self.last_bandwidth)
+        };
         if new_id != self.curr_variant_id.as_deref() {
             if let Some(id) = new_id {
                 let prev_bandwidth = self.curr_variant().map(|v| v.bandwidth());
@@ -564,6 +565,7 @@ pub enum VariantUpdateResult {
 }
 
 /// Result of calling the `set_audio_track` `PlaylistStore`'s method
+#[allow(clippy::enum_variant_names)]
 pub(crate) enum SetAudioTrackResponse {
     /// The audio track change led to a change of the Media Playlist for the audio.
     ///
@@ -590,7 +592,7 @@ pub(crate) enum SetAudioTrackResponse {
     ///
     /// Because variants may be or not be linked to a given audio track it is however possible that
     /// the list of currently adaptively switchable variants has changed.
-    NoMediaUpdate,
+    NoUpdate,
 }
 
 pub(crate) enum LockVariantResponse<'a> {
