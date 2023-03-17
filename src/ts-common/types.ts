@@ -25,6 +25,7 @@ export type MainMessage =
   | SourceBufferOperationErrorMainMessage
   | SourceBufferOperationSuccessMainMessage
   | EndOfStreamErrorMainMessage
+  | CodecsSupportUpdateMainMessage
   | UpdateWantedSpeedMainMessage
   | UpdateLoggerLevelMainMessage
   | LockVariantMainMessage
@@ -56,6 +57,7 @@ export const enum MainMessageType {
   UpdateConfig = "upd-conf",
   LockVariant = "lock-var",
   SetAudioTrack = "set-audio",
+  CodecsSupportUpdate = "codecs-support-upd",
 }
 
 /** Message sent from the worker to the main thread. */
@@ -84,6 +86,7 @@ export type WorkerMessage =
   | AppendBufferWorkerMessage
   | RemoveBufferWorkerMessage
   | EndOfStreamWorkerMessage
+  | AreTypesSupportedWorkerMessage
 
   // Playback conditions
   | StartPlaybackObservationWorkerMessage
@@ -128,6 +131,7 @@ export const enum WorkerMessageType {
   RebufferingEnded = "rebuf-end",
   MediaOffsetUpdate = "media-off-upd",
   VariantUpdate = "variant-upd",
+  AreTypesSupported = "are-types-supp",
 }
 
 /**
@@ -707,6 +711,20 @@ export interface EndOfStreamWorkerMessage {
 }
 
 /**
+ * Sent when the worker wants to call the `MediaSource.isTypeSupported` static
+ * method to check codec support.
+ *
+ * A `CodecsSupportUpdateMainMessage` is then expected in response from the main
+ * thread.
+ */
+export interface AreTypesSupportedWorkerMessage {
+  type: WorkerMessageType.AreTypesSupported;
+  value: {
+    mimeTypes: string[];
+  };
+}
+
+/**
  * Sent when the worker wants to enter a rebuffering period, to build back
  * buffer.
  */
@@ -798,7 +816,15 @@ export interface InitializationMainMessage {
      * If `true` the current browser has the MSE-in-worker feature.
      * `false` otherwise.
      */
-    hasWorkerMse: boolean;
+    hasMseInWorker: boolean;
+
+    /**
+     * If `true`, mpeg2 transport stream can be used a segment container on the
+     * current environment.
+     *
+     * If `false`, they have to be transmuxed first.
+     */
+    canDemuxMpeg2Ts: boolean;
 
     /** Url to the WASM part of the WaspHlsPlayer */
     wasmUrl: string;
@@ -1027,6 +1053,18 @@ export interface EndOfStreamErrorMainMessage {
     message: string;
     /** The error's name. */
     name?: string | undefined;
+  };
+}
+
+/**
+ * Sent by the main thread to a Worker to report about codec support, generally
+ * (but not obligatorily) in response to a `AreTypesSupportedWorkerMessage`
+ * worker message.
+ */
+export interface CodecsSupportUpdateMainMessage {
+  type: MainMessageType.CodecsSupportUpdate;
+  value: {
+    mimeTypes: Partial<Record<string, boolean>>;
   };
 }
 

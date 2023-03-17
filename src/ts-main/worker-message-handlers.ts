@@ -28,6 +28,7 @@ import {
   TrackUpdateWorkerMessage,
   MainMessageType,
   FlushWorkerMessage,
+  AreTypesSupportedWorkerMessage,
 } from "../ts-common/types";
 import { MediaType } from "../wasm/wasp_hls";
 import {
@@ -911,4 +912,27 @@ function bindMediaSource(
     videoElement.src = "";
     videoElement.removeAttribute("src");
   };
+}
+
+/**
+ * Handles `AreTypesSupportedWorkerMessage` messages.
+ * Returns `true` if a new rebuffering period has ended and `false ` either
+ * if no rebuffering period has ended or if we were not in a rebuffering
+ * period before.
+ * @param {Object} msg - The worker's message received.
+ * @param {Worker} worker - The WebWorker concerned, messages may be sent back
+ * to it.
+ */
+export function onAreTypesSupportedMessage(
+  msg: AreTypesSupportedWorkerMessage,
+  worker: Worker
+): void {
+  const res: Partial<Record<string, boolean>> = {};
+  for (const mimeType of msg.value.mimeTypes) {
+    res[mimeType] = MediaSource.isTypeSupported(mimeType);
+  }
+  postMessageToWorker(worker, {
+    type: MainMessageType.CodecsSupportUpdate,
+    value: { mimeTypes: res },
+  });
 }

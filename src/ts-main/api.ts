@@ -1,3 +1,4 @@
+import assertNever from "../ts-common/assertNever";
 import EventEmitter from "../ts-common/EventEmitter";
 import idGenerator from "../ts-common/idGenerator";
 import logger, { LoggerLevel } from "../ts-common/logger";
@@ -39,7 +40,11 @@ import {
   onVariantUpdateMessage,
   onTrackUpdateMessage,
   onFlushMessage,
+  onAreTypesSupportedMessage,
 } from "./worker-message-handlers";
+
+const DEFAULT_MPEG2_TS_TYPE =
+  "video/mp2t;codecs=\"avc1.4D401F\"";
 
 // Allows to ensure a never-seen-before identifier is used for each content.
 const generateContentId = idGenerator();
@@ -681,10 +686,13 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
     postMessageToWorker(worker, {
       type: MainMessageType.Initialization,
       value: {
-        hasWorkerMse:
+        hasMseInWorker:
           typeof MediaSource === "function" &&
           /* eslint-disable-next-line */
           (MediaSource as any).canConstructInDedicatedWorker === true,
+        canDemuxMpeg2Ts:
+          typeof MediaSource === "function" &&
+          MediaSource.isTypeSupported(DEFAULT_MPEG2_TS_TYPE),
         wasmUrl,
         logLevel: logger.getLevel(),
         initialConfig: this.__config__,
@@ -867,6 +875,10 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
           }
           break;
 
+        case WorkerMessageType.AreTypesSupported:
+          onAreTypesSupportedMessage(data, worker);
+          break;
+
         default:
           assertNever(data);
       }
@@ -912,8 +924,4 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
       }
     );
   }
-}
-
-function assertNever(_arg: never): void {
-  throw new Error("This function should never be called");
 }

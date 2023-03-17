@@ -163,6 +163,8 @@ pub struct VariantStream {
     /// Pathway.
     pathway_id: Option<String>,
 
+    supported: Option<bool>,
+
     context: Option<MediaPlaylistContext>,
     // TODO
     // ALLOWED-CPC
@@ -243,6 +245,14 @@ pub enum VariantParsingError {
 }
 
 impl VariantStream {
+    pub(crate) fn supported(&self) -> Option<bool> {
+        self.supported
+    }
+
+    pub(crate) fn update_support(&mut self, supported: bool) {
+        self.supported = Some(supported);
+    }
+
     pub(crate) fn has_type(&self, media_type: MediaType) -> bool {
         self.codecs
             .iter()
@@ -373,14 +383,7 @@ impl VariantStream {
                                 codecs = val
                                     .iter()
                                     .map(|c| {
-                                        // TODO more codecs
-                                        let mut media_type: Option<MediaType> = None;
-                                        if c.starts_with("mp4a") {
-                                            media_type = Some(MediaType::Audio);
-                                        } else if c.starts_with("avc") || c.starts_with("hvc") {
-                                            media_type = Some(MediaType::Video);
-                                        }
-                                        (media_type, (*c).to_owned())
+                                        (guess_media_type_from_codec(c), (*c).to_owned())
                                     })
                                     .collect();
                             } else {
@@ -551,6 +554,7 @@ impl VariantStream {
                 video,
                 video_range,
                 context: None,
+                supported: None,
             })
         } else {
             Err(VariantParsingError::MissingBandwidth)
@@ -559,5 +563,29 @@ impl VariantStream {
 
     pub(super) fn communicate_context(&mut self, context: MediaPlaylistContext) {
         self.context = Some(context);
+    }
+}
+
+fn guess_media_type_from_codec(codec: &str) -> Option<MediaType> {
+    let (base, _) = split_codec(codec);
+
+    // TODO more codecs
+    match base {
+        "mp4a" => Some(MediaType::Audio),
+        "ec-3" | "ac-3" => Some(MediaType::Audio),
+        "avc1" | "avc3" => Some(MediaType::Video),
+        "hvc1" | "hev1" => Some(MediaType::Video),
+        "dvh1" | "dvhe" =>  Some(MediaType::Video),
+        _ => None
+    }
+}
+
+fn split_codec(codec: &str) -> (&str, &str) {
+    let position = codec.find('.');
+    if let Some(position) = position {
+        let both_parts = codec.split_at(position);
+        (both_parts.0, both_parts.1.split_at(0).1)
+    } else {
+        (codec, "")
     }
 }

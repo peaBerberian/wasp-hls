@@ -139,6 +139,10 @@ impl Dispatcher {
             TimerReason::RetryRequest => Dispatcher::on_retry_request(self, id),
         }
     }
+
+    pub fn on_codecs_support_update(&mut self) {
+        Dispatcher::inner_on_codecs_support_update(self);
+    }
 }
 
 /// Identify the event that lead to the `MediaObservation` being sent.

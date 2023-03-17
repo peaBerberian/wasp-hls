@@ -142,56 +142,77 @@ impl Dispatcher {
             Ok(pl) => {
                 Logger::info("MultiVariant Playlist parsed successfully");
                 self.playlist_store = Some(PlaylistStore::new(pl));
-                let playlist_store = self.playlist_store.as_mut().unwrap();
-                if playlist_store.variants().is_empty() {
-                    jsSendPlaylistParsingError(
-                        true,
-                        PlaylistType::MultiVariantPlaylist,
-                        None,
-                        Some("Error while parsing MultiVariantPlaylist: no variant found."),
-                    );
-                    self.internal_stop();
-                    return;
+                self.on_multivariant_playlist_ready();
+            }
+        }
+    }
+
+    fn on_multivariant_playlist_ready(&mut self) {
+        if self.playlist_store.is_none() {
+            return;
+        }
+        let playlist_store = self.playlist_store.as_mut().unwrap();
+        if !playlist_store.check_codecs() {
+            // Awaiting some codecs to anounce support.
+            return;
+        }
+
+        if playlist_store.variants().is_empty() {
+            jsSendPlaylistParsingError(
+                true,
+                PlaylistType::MultiVariantPlaylist,
+                None,
+                Some("Error while parsing MultiVariantPlaylist: no compatible variant found."),
+            );
+            self.internal_stop();
+            return;
+        }
+
+        use PlaylistFileType::*;
+        // TODO lowest/latest bandwidth first?
+        playlist_store.update_curr_bandwidth(2_000_000.);
+        [MediaType::Video, MediaType::Audio]
+            .into_iter()
+            .for_each(|mt| {
+                if let Some(id) = playlist_store.curr_media_playlist_id(mt) {
+                    if let Some(url) = playlist_store.media_playlist_url(id) {
+                        let id = id.clone();
+                        let url = url.clone();
+                        self.requester.fetch_playlist(url, MediaPlaylist { id });
+                    }
                 }
+            });
 
-                use PlaylistFileType::*;
-                // TODO lowest/latest bandwidth first?
-                playlist_store.update_curr_bandwidth(2_000_000.);
-                [MediaType::Video, MediaType::Audio]
-                    .into_iter()
-                    .for_each(|mt| {
-                        if let Some(id) = playlist_store.curr_media_playlist_id(mt) {
-                            if let Some(url) = playlist_store.media_playlist_url(id) {
-                                let id = id.clone();
-                                let url = url.clone();
-                                self.requester.fetch_playlist(url, MediaPlaylist { id });
-                            }
-                        }
-                    });
+        // SAFETY: The following lines are unsafe because they may actually define raw pointers
+        // to point to Rust's heap memory and put it in the returned values.
+        //
+        // However, we're calling the JS binding function it is communicated to directly
+        // after and thus before the corresponding underlying data had a chance to be
+        // dropped.
+        //
+        // Because one of the rules of those bindings is to copy all pointed data
+        // synchronously on call, we should not encounter any issue.
+        let variants_info =
+            unsafe { format_variants_info_for_js(playlist_store.variants().as_slice()) };
+        let audio_tracks_info =
+            unsafe { format_audio_tracks_for_js(playlist_store.audio_tracks()) };
+        let selected_audio_track = playlist_store.selected_audio_track_id();
+        let is_selected = selected_audio_track.is_some();
+        let curr_audio_track = if let Some(selected) = selected_audio_track {
+            Some(selected)
+        } else {
+            playlist_store.curr_audio_track_id()
+        };
+        jsAnnounceFetchedContent(variants_info, audio_tracks_info);
+        jsAnnounceVariantUpdate(playlist_store.curr_variant().map(|v| v.id()));
+        jsAnnounceTrackUpdate(MediaType::Audio, curr_audio_track, is_selected);
+    }
 
-                // SAFETY: The following lines are unsafe because they may actually define raw pointers
-                // to point to Rust's heap memory and put it in the returned values.
-                //
-                // However, we're calling the JS binding function it is communicated to directly
-                // after and thus before the corresponding underlying data had a chance to be
-                // dropped.
-                //
-                // Because one of the rules of those bindings is to copy all pointed data
-                // synchronously on call, we should not encounter any issue.
-                let variants_info =
-                    unsafe { format_variants_info_for_js(playlist_store.variants()) };
-                let audio_tracks_info =
-                    unsafe { format_audio_tracks_for_js(playlist_store.audio_tracks()) };
-                let selected_audio_track = playlist_store.selected_audio_track_id();
-                let is_selected = selected_audio_track.is_some();
-                let curr_audio_track = if let Some(selected) = selected_audio_track {
-                    Some(selected)
-                } else {
-                    playlist_store.curr_audio_track_id()
-                };
-                jsAnnounceFetchedContent(variants_info, audio_tracks_info);
-                jsAnnounceVariantUpdate(playlist_store.curr_variant().map(|v| v.id()));
-                jsAnnounceTrackUpdate(MediaType::Audio, curr_audio_track, is_selected);
+    pub(crate) fn inner_on_codecs_support_update(&mut self) {
+        if let Some(ref mut playlist_store) = self.playlist_store {
+            if self.ready_state <= PlayerReadyState::Loading && !playlist_store.are_codecs_checked()
+            {
+                self.on_multivariant_playlist_ready()
             }
         }
     }

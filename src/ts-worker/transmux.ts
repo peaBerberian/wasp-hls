@@ -11,28 +11,11 @@
 import muxjs from "mux.js";
 import logger from "../ts-common/logger.js";
 import { MediaType } from "../wasm/wasp_hls.js";
+import { canTransmux } from "./utils.js";
+
+(globalThis as any).hasTransmuxer = true;
 
 let transmuxer: any;
-
-const MPEG_TS_REGEXP = /^[a-z]+\/mp2t;/i;
-export function isMpegTsType(typ: string): boolean {
-  return MPEG_TS_REGEXP.test(typ);
-}
-
-export function shouldTransmux(typ: string) {
-  if (!canTransmux(typ)) {
-    return false;
-  }
-  if (typeof MediaSource === "undefined") {
-    // TODO truly test support?
-    return true;
-  }
-  return !MediaSource.isTypeSupported(typ);
-}
-
-export function canTransmux(typ: string): boolean {
-  return isMpegTsType(typ);
-}
 
 export function getTransmuxedType(typ: string, mediaType: MediaType): string {
   if (!canTransmux(typ)) {

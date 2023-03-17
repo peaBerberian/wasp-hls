@@ -1,5 +1,5 @@
 use crate::{
-    bindings::MediaType,
+    bindings::{jsIsTypeSupported, MediaType},
     parser::{
         AudioTrack, MediaPlaylist, MediaPlaylistUpdateError, MultiVariantPlaylist, VariantStream,
     },
@@ -40,6 +40,8 @@ pub struct PlaylistStore {
 
     /// Store the last communicated bandwidth
     last_bandwidth: f64,
+
+    codecs_checked: bool,
 }
 
 /// Response returned by `PlaylistStore` method which may update the current
@@ -82,7 +84,31 @@ impl PlaylistStore {
             curr_audio_track: None,
             is_variant_locked: false,
             last_bandwidth: 0.,
+            codecs_checked: false,
         }
+    }
+
+    pub(crate) fn are_codecs_checked(&self) -> bool {
+        self.codecs_checked
+    }
+
+    pub(crate) fn check_codecs(&mut self) -> bool {
+        let mut are_all_codecs_checked = true;
+        self.playlist.variants_mut().iter_mut().for_each(|v| {
+            [MediaType::Video, MediaType::Audio]
+                .into_iter()
+                .for_each(|mt| {
+                    if let Some(codec) = v.codecs(mt) {
+                        if let Some(is_supported) = jsIsTypeSupported(mt, &codec) {
+                            v.update_support(is_supported);
+                        } else {
+                            are_all_codecs_checked = false;
+                            jsIsTypeSupported(mt, &codec);
+                        }
+                    }
+                });
+        });
+        are_all_codecs_checked
     }
 
     /// Returns a reference to the `Url` to the MultiVariantPlaylist stored by this PlaylistStore
@@ -144,8 +170,8 @@ impl PlaylistStore {
     }
 
     /// Returns vec describing all available variant streams in the current MultiVariantPlaylist.
-    pub(crate) fn variants(&self) -> &[VariantStream] {
-        self.playlist.variants()
+    pub(crate) fn variants(&self) -> Vec<&VariantStream> {
+        self.playlist.supported_variants()
     }
 
     /// Estimates the duration of the current content based on the currently selected audio and
@@ -218,7 +244,7 @@ impl PlaylistStore {
         if self.is_variant_locked() {
             return VariantUpdateResult::Unchanged;
         }
-        let variants = self.playlist.variants();
+        let variants = self.playlist.supported_variants();
         let best_variant_idx = variants
             .iter()
             .position(|x| (x.bandwidth() as f64) > bandwidth)
@@ -238,7 +264,7 @@ impl PlaylistStore {
     /// The returned option is `None` if the `variant_id` given is not found to correspond
     /// to any existing variant and contains the corresponding update when set.
     pub(crate) fn lock_variant(&mut self, variant_id: &str) -> Option<VariantUpdateResult> {
-        let variants = self.playlist.variants();
+        let variants = self.playlist.supported_variants();
         let pos = variants
             .iter()
             .position(|x| x.id() == variant_id)
@@ -399,7 +425,7 @@ impl PlaylistStore {
 
     /// Run the variant update logic from its index in the variants array and return the result of doing so
     fn update_variant(&mut self, index: Option<usize>) -> VariantUpdateResult {
-        let new_id = index.map(|i| self.playlist.variants().get(i).unwrap().id());
+        let new_id = index.map(|i| self.playlist.supported_variants().get(i).unwrap().id());
         if new_id != self.curr_variant_id.as_deref() {
             if let Some(id) = new_id {
                 let prev_bandwidth = self.curr_variant().map(|v| v.bandwidth());

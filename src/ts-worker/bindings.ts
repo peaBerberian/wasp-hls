@@ -30,6 +30,7 @@ import {
   PlaylistType,
 } from "../wasm/wasp_hls.js";
 import {
+  cachedCodecsSupport,
   jsMemoryResources,
   RequestId,
   requestsStore,
@@ -45,8 +46,8 @@ import {
   getTrackFragmentDecodeTime,
 } from "./isobmff-utils.js";
 import postMessageToMain from "./postMessage.js";
-import { getTransmuxedType, shouldTransmux, transmux } from "./transmux.js";
-import { formatErrMessage } from "./utils.js";
+import { getTransmuxedType, transmux } from "./transmux.js";
+import { formatErrMessage, shouldTransmux } from "./utils.js";
 
 // Some environments (such as Safari Desktop) weirdly do not support
 // `performance.now` inside a WebWorker
@@ -383,7 +384,7 @@ export function attachMediaSource(): AttachMediaSourceResult {
   }
 
   try {
-    if (playerInstance.hasWorkerMse !== true) {
+    if (playerInstance.hasMseInWorker() !== true) {
       const mediaSourceId = generateMediaSourceId();
       contentInfo.mediaSourceObj = {
         nextSourceBufferId: 0,
@@ -1179,4 +1180,66 @@ export function stopRebuffering(): void {
 
 export function getRandom(): number {
   return Math.random();
+}
+
+const codecsToAskForSupport = new Set<string>();
+let isCurrentlyWaitingToAskSupport = false;
+
+export function isTypeSupported(
+  mediaType: MediaType,
+  codec: string
+): boolean | undefined {
+  const mimeTypes = [];
+  let mimeTypePrefix: string;
+  switch (mediaType) {
+    case MediaType.Audio:
+      mimeTypePrefix = "audio/";
+      break;
+    case MediaType.Video:
+      mimeTypePrefix = "video/";
+      break;
+    default:
+      logger.error("Unknown MediaType");
+      return false;
+  }
+  if (playerInstance.canDemuxMpeg2Ts() === true) {
+    mimeTypes.push(`${mimeTypePrefix}mp2t;codecs=\"${codec}\"`);
+  }
+  mimeTypes.push(`${mimeTypePrefix}mp4;codecs=\"${codec}\"`);
+
+  // TODO keep somewhere which one is supported to be able to know if
+  // transmuxing is necessary or not
+  if (playerInstance.hasMseInWorker() === true) {
+    return mimeTypes.some(mimeType =>MediaSource.isTypeSupported(mimeType));
+  }
+  const cached = mimeTypes.map(mimeType => cachedCodecsSupport.get(mimeType))
+    .filter(isSupported => isSupported !== undefined);
+  if (cached.length > 0) {
+    return cached.some(isSupported => isSupported);
+  }
+
+  mimeTypes.forEach(mimeType =>
+    codecsToAskForSupport.add(mimeType)
+  );
+  if (isCurrentlyWaitingToAskSupport) {
+    return undefined;
+  }
+  isCurrentlyWaitingToAskSupport = true;
+
+  // We here schedule a micro-task to pool multiple synchronous calls to
+  // `isTypeSupported` together when asking it to the main thread.
+  Promise.resolve()
+    .then(() => {
+      isCurrentlyWaitingToAskSupport = false;
+      postMessageToMain({
+        type: WorkerMessageType.AreTypesSupported,
+        value: {
+          mimeTypes: Array.from(codecsToAskForSupport.keys()),
+        },
+      });
+      codecsToAskForSupport.clear();
+    })
+    .catch(() => {
+      /* noop */
+    });
 }

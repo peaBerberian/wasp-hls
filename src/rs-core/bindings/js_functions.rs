@@ -106,6 +106,8 @@ extern "C" {
     // `AddSourceBufferResult` for more details on the return value.
     pub fn jsAddSourceBuffer(media_type: MediaType, typ: &str) -> AddSourceBufferResult;
 
+    pub fn jsIsTypeSupported(media_type: MediaType, typ: &str) -> Option<bool>;
+
     // Append media data to the given SourceBuffer.
     //
     // This process is asynchronous, meaning that the data might not be appended

@@ -1,3 +1,4 @@
+import assertNever from "../ts-common/assertNever";
 import logger from "../ts-common/logger";
 import {
   MainMessage,
@@ -8,7 +9,13 @@ import {
 } from "../ts-common/types";
 import initializeWasm, { MediaObservation } from "../wasm/wasp_hls";
 import { stopObservingPlayback } from "./bindings";
-import { ContentInfo, playerInstance, updateDispatcherConfig } from "./globals";
+import {
+  cachedCodecsSupport,
+  ContentInfo,
+  playerInstance,
+  updateDispatcherConfig,
+  WorkerContext,
+} from "./globals";
 import postMessageToMain from "./postMessage";
 import { resetTransmuxer } from "./transmux";
 
@@ -40,8 +47,11 @@ export default function MessageReceiver() {
         }
         logger.setLevel(data.value.logLevel);
         wasInitializedCalled = true;
-        const { wasmUrl, hasWorkerMse } = data.value;
-        initialize(wasmUrl, hasWorkerMse, data.value.initialConfig);
+        const { wasmUrl, hasMseInWorker, canDemuxMpeg2Ts } = data.value;
+        initialize(wasmUrl, data.value.initialConfig, {
+          hasMseInWorker,
+          canDemuxMpeg2Ts,
+        });
         break;
 
       case MainMessageType.DisposePlayer:
@@ -251,6 +261,35 @@ export default function MessageReceiver() {
         }
         break;
       }
+
+      case MainMessageType.CodecsSupportUpdate:
+        const { mimeTypes } = data.value;
+        const keys = Object.keys(mimeTypes);
+        if (cachedCodecsSupport.size + keys.length > 50) {
+          cachedCodecsSupport.clear();
+        }
+        for (const key of keys) {
+          const value = mimeTypes[key];
+          if (value !== undefined) {
+            cachedCodecsSupport.set(key, value);
+          }
+        }
+        const dispatcher = playerInstance.getDispatcher();
+        if (dispatcher !== null) {
+          dispatcher.on_codecs_support_update();
+        }
+        break;
+
+      case MainMessageType.SourceBufferOperationError:
+        // TODO
+        break;
+
+      case MainMessageType.EndOfStreamError:
+        // TODO
+        break;
+
+      default:
+        assertNever(data);
     }
   };
 }
@@ -290,12 +329,12 @@ function postUnitializedWorkerError(contentId: string): void {
 
 function initialize(
   wasmUrl: string,
-  hasWorkerMse: boolean,
-  config: WaspHlsPlayerConfig
+  config: WaspHlsPlayerConfig,
+  context: WorkerContext
 ) {
   initializeWasm(fetch(wasmUrl))
     .then((wasm) => {
-      playerInstance.start(hasWorkerMse, config, wasm);
+      playerInstance.start(wasm, config, context);
       postMessageToMain({ type: WorkerMessageType.Initialized, value: null });
     })
     .catch((err) => {

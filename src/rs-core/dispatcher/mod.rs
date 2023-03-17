@@ -50,7 +50,6 @@ pub struct Dispatcher {
 
     segment_selectors: NextSegmentSelectors,
 
-    // TODO move to playlist_store?
     playlist_refresh_timers: Vec<(TimerId, PlaylistFileType)>,
 }
 

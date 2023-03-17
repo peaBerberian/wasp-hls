@@ -3,32 +3,38 @@ import QueuedSourceBuffer from "../ts-common/QueuedSourceBuffer";
 import { WaspHlsPlayerConfig } from "../ts-common/types";
 import { Dispatcher, InitOutput } from "../wasm/wasp_hls";
 
-export interface WorkerInfo {
-  wasm: InitOutput;
-  dispatcher: Dispatcher;
-  content: ContentInfo | null;
+export interface WorkerContext {
+  hasMseInWorker: boolean;
+  canDemuxMpeg2Ts: boolean;
 }
 
 class PlayerInstance {
-  public hasWorkerMse: boolean | undefined;
   private _instanceInfo: WorkerInfo | null;
   constructor() {
     this._instanceInfo = null;
-    this.hasWorkerMse = undefined;
+  }
+
+  public hasMseInWorker(): boolean | undefined {
+    return this._instanceInfo?.hasMseInWorker;
+  }
+
+  public canDemuxMpeg2Ts(): boolean | undefined {
+    return this._instanceInfo?.canDemuxMpeg2Ts;
   }
 
   public start(
-    hasWorkerMse: boolean,
+    wasm: InitOutput,
     config: WaspHlsPlayerConfig,
-    wasm: InitOutput
+    context: WorkerContext
   ) {
-    this.hasWorkerMse = hasWorkerMse;
     const dispatcher = new Dispatcher();
     updateDispatcherConfig(dispatcher, config);
     this._instanceInfo = {
       wasm,
       dispatcher,
       content: null,
+      hasMseInWorker: context.hasMseInWorker,
+      canDemuxMpeg2Ts: context.canDemuxMpeg2Ts,
     };
   }
 
@@ -131,6 +137,7 @@ export interface ContentInfo {
   } | null;
 }
 
+export const cachedCodecsSupport: Map<string, boolean> = new Map();
 export const playerInstance = new PlayerInstance();
 export const jsMemoryResources = new GenericStore<Uint8Array>();
 export const requestsStore = new GenericStore<RequestObject>();
@@ -204,3 +211,11 @@ export type TimerId = number;
 export type RequestId = number;
 export type SourceBufferId = number;
 export type ResourceId = number;
+
+interface WorkerInfo {
+  wasm: InitOutput;
+  dispatcher: Dispatcher;
+  content: ContentInfo | null;
+  hasMseInWorker: boolean;
+  canDemuxMpeg2Ts: boolean;
+}
