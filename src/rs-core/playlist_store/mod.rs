@@ -9,12 +9,12 @@ use std::{cmp::Ordering, io::BufRead};
 
 pub use crate::parser::MediaPlaylistPermanentId;
 
-/// Stores information about the current loaded playlist:
-///   - The playlist itself.
-///   - The current variant selected.
-///   - The different audio and video media playlist selected.
+/// Stores information about the current loaded MultiVariant Playlist and its sub-playlists:
+///   - Information on the MultiVariant Playlist itself.
+///   - On the current variant selected.
+///   - Information on the different audio and video Media Playlists selected.
 pub struct PlaylistStore {
-    /// A struct representing the `MultiVariant Playlist`, a.k.a. `Master Playlist` of
+    /// A struct representing the "MultiVariant Playlist", a.k.a. "Master Playlist" of
     /// the currently loaded HLS content.
     playlist: MultiVariantPlaylist,
 
@@ -41,6 +41,10 @@ pub struct PlaylistStore {
     /// Store the last communicated bandwidth
     last_bandwidth: f64,
 
+    /// Before actually playing a content, supported codecs need to be checked
+    /// to avoid mistakenly choosing an unsupported codec.
+    /// This bool is set to `true` only once ALL codecs in the
+    /// `MultiVariantPlaylist` have been properly checked.
     codecs_checked: bool,
 }
 
@@ -88,10 +92,35 @@ impl PlaylistStore {
         }
     }
 
+    /// Returns a reference to the `Url` to the MultiVariant Playlist stored by this
+    /// `PlaylistStore`.
+    pub(crate) fn url(&self) -> &Url {
+        self.playlist.url()
+    }
+
+    /// Returns `true` once all codecs present in the `MultiVariantPlaylist` object
+    /// have been checked.
+    ///
+    /// Until then, unchecked `MediaPlaylist` objects, its properties, and segments should not be
+    /// relied on.
+    ///
+    /// To allow all codecs to be checked, call the `check_codecs` method.
     pub(crate) fn are_codecs_checked(&self) -> bool {
         self.codecs_checked
     }
 
+    /// Check which codecs present in the `MultiVariantPlaylist` are supported.
+    ///
+    /// This allows the playlist store to know which variant can actually be relied on.
+    /// As such you should be extra careful when using the `PlaylistStore` before that check has
+    /// been completely done.
+    ///
+    /// Returns `true` if all codecs in the `MultiVariantPlaylist` could have been checked or
+    /// `false` if it still await a response from JavaScript. As that response can be asynchronous
+    /// it is given back to the corresponding Dispatcher's event listener function.
+    ///
+    /// Once that even listener has been called, `check_codecs` can be called again, until it
+    /// returns `true`.
     pub(crate) fn check_codecs(&mut self) -> bool {
         let mut are_all_codecs_checked = true;
         self.playlist.variants_mut().iter_mut().for_each(|v| {
@@ -111,12 +140,8 @@ impl PlaylistStore {
                     }
                 });
         });
+        self.codecs_checked = are_all_codecs_checked;
         are_all_codecs_checked
-    }
-
-    /// Returns a reference to the `Url` to the MultiVariantPlaylist stored by this PlaylistStore
-    pub(crate) fn url(&self) -> &Url {
-        self.playlist.url()
     }
 
     /// Returns the list of tuples listing loaded media playlists.
@@ -392,12 +417,21 @@ impl PlaylistStore {
         }
     }
 
+    /// Returns the `id` of the `AudioTrack` object which is associated to the current audio
+    /// media loaded.
+    ///
+    /// Returns `None` if no current audio media is known currently or if no `AudioTrack` is
+    /// linked to it.
     pub(crate) fn curr_audio_track_id(&self) -> Option<&str> {
         self.playlist
             .audio_track_for_media_id(self.curr_audio_id.as_ref()?)
             .map(|p| p.id())
     }
 
+    /// Returns the `id` of the `AudioTrack` object explicitely selected through the
+    /// `set_audio_track` API.
+    ///
+    /// Returns `None` if no audio track is currently selected.
     pub(crate) fn selected_audio_track_id(&self) -> Option<&str> {
         self.curr_audio_track.as_deref()
     }
@@ -407,6 +441,10 @@ impl PlaylistStore {
         self.playlist.audio_tracks()
     }
 
+    /// Explicitely select an `AudioTrack` based on its `id` property or disable the explicit
+    /// selection of one (by giving `None` as argument).
+    ///
+    /// Returns `true` if this call led to a changement for the Audio Media Playlist.
     pub(crate) fn set_audio_track(&mut self, track_id: Option<String>) -> bool {
         self.curr_audio_track = track_id;
 
@@ -426,7 +464,8 @@ impl PlaylistStore {
         }
     }
 
-    /// Run the variant update logic from its index in the variants array and return the result of doing so
+    /// Run the variant update logic from its index in the variants array and return the result of
+    /// doing so
     fn update_variant(&mut self, index: Option<usize>) -> VariantUpdateResult {
         let new_id = index.map(|i| self.playlist.supported_variants().get(i).unwrap().id());
         if new_id != self.curr_variant_id.as_deref() {
@@ -475,12 +514,4 @@ impl PlaylistStore {
             .playlist
             .audio_media_playlist_id_for(variant, self.curr_audio_track.as_deref());
     }
-}
-
-/// Current state a given Media Playlist, defined either by a veriant stream or a media tag in the
-/// MultiVariantPlaylist is loaded or not.
-pub enum MediaPlaylistLoadedState {
-    None,
-    Loaded,
-    NotLoaded,
 }
