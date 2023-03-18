@@ -334,6 +334,7 @@ impl VariantStream {
     pub(super) fn create_from_stream_inf(
         variant_line: &str,
         url: Url,
+        base_uri: &str,
         id: u32,
     ) -> Result<Self, VariantParsingError> {
         let mut bandwidth: Option<u64> = None;
@@ -532,6 +533,11 @@ impl VariantStream {
             }
         }
 
+        let url = if url.is_absolute() {
+            url
+        } else {
+            Url::from_relative(base_uri, url)
+        };
         if let Some(bandwidth) = bandwidth {
             Ok(Self {
                 id,
