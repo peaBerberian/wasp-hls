@@ -1019,12 +1019,8 @@ export function announceFetchedContent(
     let i = 0;
     i++; // Skip number of variants
     while (i < variantInfo.length) {
-      const idLen = variantInfo[i];
+      const id = variantInfo[i];
       i++;
-
-      const idU8 = new Uint8Array(memory.buffer, variantInfo[i], idLen);
-      i++;
-      const id = cachedTextDecoder.decode(idU8);
 
       const height = variantInfo[i];
       i++;
@@ -1052,11 +1048,8 @@ export function announceFetchedContent(
     let i = 0;
     i++; // Skip number of audio tracks
     while (i < audioTracksInfo.length) {
-      const idLen = audioTracksInfo[i];
+      const id = variantInfo[i];
       i++;
-      const idU8 = new Uint8Array(memory.buffer, audioTracksInfo[i], idLen);
-      i++;
-      const id = cachedTextDecoder.decode(idU8);
 
       const languageLen = audioTracksInfo[i];
       i++;
@@ -1108,7 +1101,7 @@ export function announceFetchedContent(
 
 export function announceTrackUpdate(
   mediaType: MediaType,
-  currentAudioTrack: string,
+  currentAudioTrack: number,
   isAudioTrackSelected: boolean
 ): void {
   const contentInfo = playerInstance.getContentInfo();
@@ -1131,7 +1124,7 @@ export function announceTrackUpdate(
   });
 }
 
-export function announceVariantUpdate(variantId: string | undefined): void {
+export function announceVariantUpdate(variantId: number | undefined): void {
   const contentInfo = playerInstance.getContentInfo();
   if (contentInfo === null) {
     return;
@@ -1210,17 +1203,16 @@ export function isTypeSupported(
   // TODO keep somewhere which one is supported to be able to know if
   // transmuxing is necessary or not
   if (playerInstance.hasMseInWorker() === true) {
-    return mimeTypes.some(mimeType =>MediaSource.isTypeSupported(mimeType));
+    return mimeTypes.some((mimeType) => MediaSource.isTypeSupported(mimeType));
   }
-  const cached = mimeTypes.map(mimeType => cachedCodecsSupport.get(mimeType))
-    .filter(isSupported => isSupported !== undefined);
+  const cached = mimeTypes
+    .map((mimeType) => cachedCodecsSupport.get(mimeType))
+    .filter((isSupported) => isSupported !== undefined);
   if (cached.length > 0) {
-    return cached.some(isSupported => isSupported);
+    return cached.some((isSupported) => isSupported);
   }
 
-  mimeTypes.forEach(mimeType =>
-    codecsToAskForSupport.add(mimeType)
-  );
+  mimeTypes.forEach((mimeType) => codecsToAskForSupport.add(mimeType));
   if (isCurrentlyWaitingToAskSupport) {
     return undefined;
   }
@@ -1244,7 +1236,9 @@ export function isTypeSupported(
     });
 }
 
-export function announceVariantLockStatusChange(variantId: string | undefined): void {
+export function announceVariantLockStatusChange(
+  variantId: number | undefined
+): void {
   const contentInfo = playerInstance.getContentInfo();
   if (contentInfo === null) {
     return;
@@ -1252,6 +1246,7 @@ export function announceVariantLockStatusChange(variantId: string | undefined): 
   postMessageToMain({
     type: WorkerMessageType.VariantLockStatusChange,
     value: {
+      contentId: contentInfo.contentId,
       lockedVariant: variantId ?? null,
     },
   });

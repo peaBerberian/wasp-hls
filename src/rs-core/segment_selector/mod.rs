@@ -135,7 +135,10 @@ impl NextSegmentSelector {
         self.last_validated_position = Some(pos);
     }
 
-    pub(crate) fn get_next_segment_info<'a>(&mut self, pl: &'a MediaPlaylist) -> NextSegmentInfo<'a> {
+    pub(crate) fn get_next_segment_info<'a>(
+        &mut self,
+        pl: &'a MediaPlaylist,
+    ) -> NextSegmentInfo<'a> {
         if self.init_status == InitializationSegmentSelectorStatus::Unreturned {
             if let Some(i) = pl.init_segment() {
                 self.init_status = InitializationSegmentSelectorStatus::Returned;

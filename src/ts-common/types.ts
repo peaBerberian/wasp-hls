@@ -379,7 +379,7 @@ export interface TrackUpdateWorkerMessage {
     mediaType: MediaType;
     audioTrack?:
       | {
-          current: string;
+          current: number;
           isSelected: boolean;
         }
       | undefined;
@@ -395,12 +395,12 @@ export interface VariantLockStatusChangeWorkerMessage {
      * `LoadContentMainMessage`.
      */
     contentId: string;
-    lockedVariant: string | null;
+    lockedVariant: number | null;
   };
 }
 
 export interface VariantInfo {
-  id: string;
+  id: number;
   width: number;
   height: number;
   frameRate: number;
@@ -408,7 +408,7 @@ export interface VariantInfo {
 }
 
 export interface AudioTrackInfo {
-  id: string;
+  id: number;
   language?: string | undefined;
   assocLanguage?: string | undefined;
   name: string;
@@ -815,7 +815,7 @@ export interface VariantUpdateWorkerMessage {
      * present on the various events concerning that content.
      */
     contentId: string;
-    variantId: string | undefined;
+    variantId: number | undefined;
   };
 }
 
@@ -1116,7 +1116,7 @@ export interface LockVariantMainMessage {
      * `LoadContentMainMessage`.
      */
     contentId: string;
-    variantId: string | null;
+    variantId: number | null;
   };
 }
 
@@ -1129,7 +1129,7 @@ export interface SetAudioTrackMainMessage {
      * `LoadContentMainMessage`.
      */
     contentId: string;
-    trackId: string | null;
+    trackId: number | null;
   };
 }
 

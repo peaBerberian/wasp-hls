@@ -86,7 +86,7 @@ impl Dispatcher {
         self.internal_stop();
     }
 
-    pub fn lock_variant(&mut self, variant_id: String) {
+    pub fn lock_variant(&mut self, variant_id: u32) {
         self.lock_variant_core(variant_id)
     }
 
@@ -94,7 +94,7 @@ impl Dispatcher {
         self.unlock_variant_core()
     }
 
-    pub fn set_audio_track(&mut self, track_id: Option<String>) {
+    pub fn set_audio_track(&mut self, track_id: Option<u32>) {
         self.set_audio_track_core(track_id)
     }
 

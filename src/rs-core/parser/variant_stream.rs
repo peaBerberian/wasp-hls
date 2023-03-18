@@ -13,14 +13,20 @@ use crate::{bindings::MediaType, utils::url::Url, Logger};
 /// Stucture representing the HLS concept of a "variant stream".
 #[derive(Debug)]
 pub struct VariantStream {
-    /// Stable identifier for the URI within the parent Multivariant Playlist.
+    /// Identifier for the VariantStream unique for the current
+    /// `MultiVariantPlaylist` object it is a part of.
+    id: u32,
+
+    /// Stable identifier for the URI within the parent MultiVariant Playlist
+    /// even in the case a different MultiVariant fetched in the meantime,
+    /// whereas `id` may change if the MultiVariant Playlist is refreshed.
     ///
     /// This identifier allows the URI of the Variant Stream to
     /// change between two distinct downloads of the Multivariant
     /// Playlist. IDs are matched using a byte-for-byte comparison.
     /// All `VariantStream` in a Multivariant Playlist with the same
     /// `url` value SHOULD use the same `id`.
-    id: String,
+    stable_id: Option<String>,
 
     /// Url of the "Media Playlist" corresponding to the main rendition of this
     /// variant stream.
@@ -285,8 +291,12 @@ impl VariantStream {
         self.frame_rate
     }
 
-    pub(crate) fn id(&self) -> &str {
-        &self.id
+    pub(crate) fn id(&self) -> u32 {
+        self.id
+    }
+
+    pub(crate) fn stable_id(&self) -> Option<&str> {
+        self.stable_id.as_deref()
     }
 
     pub(crate) fn url(&self) -> &Url {
@@ -324,7 +334,7 @@ impl VariantStream {
     pub(super) fn create_from_stream_inf(
         variant_line: &str,
         url: Url,
-        base_uri: &str,
+        id: u32,
     ) -> Result<Self, VariantParsingError> {
         let mut bandwidth: Option<u64> = None;
         let mut resolution: Option<VideoResolution> = None;
@@ -522,16 +532,10 @@ impl VariantStream {
             }
         }
 
-        let id = stable_variant_id.unwrap_or_else(|| url.clone().take());
-        let url = if url.is_absolute() {
-            url
-        } else {
-            Url::from_relative(base_uri, url)
-        };
-
         if let Some(bandwidth) = bandwidth {
             Ok(Self {
                 id,
+                stable_id: stable_variant_id,
                 audio,
                 average_bandwitdh,
                 bandwidth,

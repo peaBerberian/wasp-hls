@@ -1,6 +1,9 @@
 use std::cmp::Ordering;
 
-use super::{Dispatcher, MediaSourceReadyState, PlayerReadyState, JsMemoryBlob, MediaObservation, PlaybackTickReason};
+use super::{
+    Dispatcher, JsMemoryBlob, MediaObservation, MediaSourceReadyState, PlaybackTickReason,
+    PlayerReadyState,
+};
 use crate::{
     bindings::{
         formatters::{
@@ -10,9 +13,8 @@ use crate::{
         jsAnnounceFetchedContent, jsAnnounceTrackUpdate, jsAnnounceVariantLockStatusChange,
         jsAnnounceVariantUpdate, jsSendOtherError, jsSendPlaylistParsingError,
         jsSendSegmentRequestError, jsSendSourceBufferCreationError, jsSetMediaSourceDuration,
-        jsStartObservingPlayback, jsStopObservingPlayback, jsTimer, jsUpdateContentInfo,
-        MediaType, PlaylistType, RequestId,
-        SourceBufferId, TimerId, TimerReason,
+        jsStartObservingPlayback, jsStopObservingPlayback, jsTimer, jsUpdateContentInfo, MediaType,
+        PlaylistType, RequestId, SourceBufferId, TimerId, TimerReason,
     },
     media_element::{PushMetadata, SourceBufferCreationError},
     parser::MultiVariantPlaylist,
@@ -468,10 +470,10 @@ impl Dispatcher {
         }
     }
 
-    pub(super) fn lock_variant_core(&mut self, variant_id: String) {
+    pub(super) fn lock_variant_core(&mut self, variant_id: u32) {
         if let Some(pl) = self.playlist_store.as_mut() {
             let is_audio_track_selected = pl.curr_audio_track_id().is_some();
-            match pl.lock_variant(&variant_id) {
+            match pl.lock_variant(variant_id) {
                 LockVariantResponse::NoVariantWithId => {
                     Logger::warn("Locked variant not found");
                     jsSendOtherError(
@@ -491,7 +493,7 @@ impl Dispatcher {
                             is_audio_track_selected,
                         );
                     }
-                    jsAnnounceVariantLockStatusChange(Some(&variant_id));
+                    jsAnnounceVariantLockStatusChange(Some(variant_id));
                     self.handle_variant_update(updates, true);
                 }
             }
@@ -617,13 +619,16 @@ impl Dispatcher {
         self.requester.on_timer_finished(id);
     }
 
-    pub(super) fn set_audio_track_core(&mut self, track_id: Option<String>) {
+    pub(super) fn set_audio_track_core(&mut self, track_id: Option<u32>) {
         if let Some(ref mut pl) = self.playlist_store {
             match pl.set_audio_track(track_id) {
                 SetAudioTrackResponse::AudioMediaUpdate => {
                     self.handle_media_playlist_update(&[MediaType::Audio], true, true)
                 }
-                SetAudioTrackResponse::VariantUpdate { updates, unlocked_variant } => {
+                SetAudioTrackResponse::VariantUpdate {
+                    updates,
+                    unlocked_variant,
+                } => {
                     self.handle_variant_update(updates, true);
                     if unlocked_variant {
                         jsAnnounceVariantLockStatusChange(None);

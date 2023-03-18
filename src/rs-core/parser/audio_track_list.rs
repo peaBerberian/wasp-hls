@@ -38,24 +38,24 @@ impl AudioTrackList {
         }
     }
 
-    pub(super) fn groups_for(&self, id: &str) -> Vec<&str> {
+    pub(super) fn groups_for(&self, id: u32) -> Vec<&str> {
         self.iter()
             .find(|t| t.id() == id)
             .map(|t| t.media_tags.iter().map(|m| m.group_id()).collect())
             .unwrap_or(vec![])
     }
 
-    pub(super) fn track_for_media(&self, id: &str) -> Option<&AudioTrack> {
+    pub(super) fn track_for_media(&self, id: u32) -> Option<&AudioTrack> {
         self.iter()
             .find(|t| t.media_tags.iter().any(|m| m.id() == id))
     }
 
-    pub(super) fn get_media(&self, id: &str) -> Option<&MediaTag> {
+    pub(super) fn get_media(&self, id: u32) -> Option<&MediaTag> {
         self.iter()
             .find_map(|t| t.media_tags.iter().find(|m| m.id() == id))
     }
 
-    pub(super) fn get_mut_media(&mut self, id: &str) -> Option<&mut MediaTag> {
+    pub(super) fn get_mut_media(&mut self, id: u32) -> Option<&mut MediaTag> {
         self.iter_mut()
             .find_map(|t| t.media_tags.iter_mut().find(|m| m.id() == id))
     }
@@ -85,13 +85,13 @@ impl DerefMut for AudioTrackList {
 }
 
 pub struct AudioTrack {
-    id: String,
+    id: u32,
     pub(self) media_tags: Vec<MediaTag>,
 }
 
 impl AudioTrack {
-    pub fn id(&self) -> &str {
-        &self.id
+    pub fn id(&self) -> u32 {
+        self.id
     }
     pub fn language(&self) -> Option<&str> {
         self.media_tags.first().and_then(|t| t.language())

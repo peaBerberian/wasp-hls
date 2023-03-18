@@ -217,15 +217,15 @@ extern "C" {
 
     pub fn jsAnnounceFetchedContent(variant_info: Vec<u32>, audio_tracks_info: Vec<u32>);
 
-    pub fn jsAnnounceVariantUpdate(variant_id: Option<&str>);
+    pub fn jsAnnounceVariantUpdate(variant_id: Option<u32>);
 
     pub fn jsAnnounceTrackUpdate(
         media_type: MediaType,
-        current_audio_track: Option<&str>,
+        current_audio_track: Option<u32>,
         is_audio_track_selected: bool,
     );
 
-    pub fn jsAnnounceVariantLockStatusChange(variant_id: Option<&str>);
+    pub fn jsAnnounceVariantLockStatusChange(variant_id: Option<u32>);
 
     pub fn jsStartRebuffering();
     pub fn jsStopRebuffering();

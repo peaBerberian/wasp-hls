@@ -27,6 +27,8 @@ pub struct MultiVariantPlaylist {
     /// once they are loaded and parsed.
     context: Option<MediaPlaylistContext>,
 
+    last_id: u32,
+
     /// Url of the MultiVariant Playlist once it is fetched (post a potential HTTP redirect).
     url: Url,
 }
@@ -38,7 +40,7 @@ impl MultiVariantPlaylist {
         playlist: impl io::BufRead,
         url: Url,
     ) -> Result<Self, MultiVariantPlaylistParsingError> {
-        let playlist_base_url = url.pathname();
+        let mut last_id = 0u32;
         let mut variants: Vec<VariantStream> = vec![];
         let mut audio_media: Vec<MediaTag> = vec![];
         let mut other_media: Vec<MediaTag> = vec![];
@@ -72,15 +74,14 @@ impl MultiVariantPlaylist {
                                 Some(Ok(l)) => Url::new(l),
                             };
 
-                        let variant = VariantStream::create_from_stream_inf(
-                            &str_line,
-                            variant_url,
-                            playlist_base_url,
-                        )?;
+                        let variant =
+                            VariantStream::create_from_stream_inf(&str_line, variant_url, last_id)?;
+                        last_id += 1;
                         variants.push(variant);
                     }
                     "-X-MEDIA" => {
-                        let media = MediaTag::create(&str_line, &url)?;
+                        let media = MediaTag::create(&str_line, &url, last_id)?;
+                        last_id += 1;
                         if media.typ() == MediaTagType::Audio {
                             audio_media.push(media);
                         } else {
@@ -97,6 +98,7 @@ impl MultiVariantPlaylist {
         }
         variants.sort_by_key(|x| x.bandwidth());
         Ok(MultiVariantPlaylist {
+            last_id,
             url,
             variants,
             audio_tracks: AudioTrackList::new(audio_media),
@@ -122,7 +124,7 @@ impl MultiVariantPlaylist {
     /// Returns information on all known variants linked to this `MultiVariantPlaylist`, ordered by
     /// `bandwidth` ascending, for which all codecs are known to be supported and which are linked
     /// to the given track_id
-    pub(crate) fn supported_variants_for_audio(&self, track_id: &str) -> Vec<&VariantStream> {
+    pub(crate) fn supported_variants_for_audio(&self, track_id: u32) -> Vec<&VariantStream> {
         let group_ids = self.audio_tracks.groups_for(track_id);
         self.variants
             .iter()
@@ -146,8 +148,8 @@ impl MultiVariantPlaylist {
     /// its `id`.
     ///
     /// Returns `None` if no variant with that `id` are found.
-    pub(crate) fn variant(&self, variant_id: &str) -> Option<&VariantStream> {
-        self.variants.iter().find(|v| v.id() == variant_id)
+    pub(crate) fn variant(&self, id: u32) -> Option<&VariantStream> {
+        self.variants.iter().find(|v| v.id() == id)
     }
 
     /// Returns the `MediaPlaylist` object of the default Media Playlist linked to the variant
@@ -155,8 +157,8 @@ impl MultiVariantPlaylist {
     ///
     /// Returns `None` either if the variant does not exist or if it does but its `MediaPlaylist`
     /// hasn't been fetched yet.
-    pub(crate) fn variant_default_playlist(&self, variant_id: &str) -> Option<&MediaPlaylist> {
-        self.variant(variant_id).and_then(|v| v.media_playlist())
+    pub(crate) fn variant_default_playlist(&self, id: u32) -> Option<&MediaPlaylist> {
+        self.variant(id).and_then(|v| v.media_playlist())
     }
 
     /// Returns the `id` of the video media that should be chosen when loading the variant given
@@ -189,7 +191,7 @@ impl MultiVariantPlaylist {
     pub(crate) fn audio_media_playlist_id_for(
         &self,
         curr_variant: &VariantStream,
-        curr_audio_track: Option<&str>,
+        curr_audio_track: Option<u32>,
     ) -> Option<MediaPlaylistPermanentId> {
         if let Some(group_id) = curr_variant.audio_group() {
             if let Some(track_id) = curr_audio_track {
@@ -247,7 +249,7 @@ impl MultiVariantPlaylist {
     /// Returns `null` either if no audio media is found with that `id` or if there is but no
     /// particular `Url` is linked to it (e.g. because its corresponding data is directly in
     /// segments of the variant's MediaPlaylist).
-    fn audio_url(&self, media_id: &str) -> Option<&Url> {
+    fn audio_url(&self, media_id: u32) -> Option<&Url> {
         self.audio_tracks.get_media(media_id).and_then(|x| {
             if let Some(playlist) = x.media_playlist() {
                 Some(playlist.url())
@@ -261,13 +263,13 @@ impl MultiVariantPlaylist {
     ///
     /// Returns `None` either if the given `id` isn't linked to any media, if it has no
     /// linked `MediaPlaylist` or if its Media Playlist hasn't been fetched yet.
-    fn audio_playlist(&self, media_id: &str) -> Option<&MediaPlaylist> {
+    fn audio_playlist(&self, media_id: u32) -> Option<&MediaPlaylist> {
         self.audio_tracks
             .get_media(media_id)
             .and_then(|x| x.media_playlist())
     }
 
-    fn other_media_playlist(&self, media_id: &str) -> Option<&MediaPlaylist> {
+    fn other_media_playlist(&self, media_id: u32) -> Option<&MediaPlaylist> {
         self.other_media
             .iter()
             .find(|x| x.id() == media_id)
@@ -278,7 +280,7 @@ impl MultiVariantPlaylist {
         self.variants.get(idx)
     }
 
-    fn other_media_url(&self, media_id: &str) -> Option<&Url> {
+    fn other_media_url(&self, media_id: u32) -> Option<&Url> {
         self.other_media
             .iter()
             .find(|x| x.id() == media_id)
@@ -344,7 +346,7 @@ impl MultiVariantPlaylist {
 
     fn update_variant_media_playlist(
         &mut self,
-        variant_id: &str,
+        variant_id: u32,
         media_playlist_data: impl io::BufRead,
         url: Url,
     ) -> Result<&MediaPlaylist, MediaPlaylistUpdateError> {
@@ -358,7 +360,7 @@ impl MultiVariantPlaylist {
 
     fn update_audio_media_playlist(
         &mut self,
-        id: &str,
+        id: u32,
         media_playlist_data: impl io::BufRead,
         url: Url,
     ) -> Result<&MediaPlaylist, MediaPlaylistUpdateError> {
@@ -370,7 +372,7 @@ impl MultiVariantPlaylist {
 
     fn update_other_media_playlist(
         &mut self,
-        media_tag_id: &str,
+        media_tag_id: u32,
         media_playlist_data: impl io::BufRead,
         url: Url,
     ) -> Result<&MediaPlaylist, MediaPlaylistUpdateError> {
@@ -539,11 +541,11 @@ impl From<MediaPlaylistParsingError> for MediaPlaylistUpdateError {
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct MediaPlaylistPermanentId {
     location: MediaPlaylistUrlLocation,
-    id: String,
+    id: u32,
 }
 
 impl MediaPlaylistPermanentId {
-    fn new(location: MediaPlaylistUrlLocation, id: String) -> Self {
+    fn new(location: MediaPlaylistUrlLocation, id: u32) -> Self {
         Self { location, id }
     }
 
@@ -551,8 +553,8 @@ impl MediaPlaylistPermanentId {
         self.location
     }
 
-    fn id(&self) -> &str {
-        self.id.as_str()
+    fn id(&self) -> u32 {
+        self.id
     }
 }
 

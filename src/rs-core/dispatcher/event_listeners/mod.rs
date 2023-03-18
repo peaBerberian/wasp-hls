@@ -1,7 +1,11 @@
 use crate::{
+    bindings::{
+        jsFreeResource, jsGetResourceData, RequestId, ResourceId, SourceBufferId, TimerId,
+        TimerReason,
+    },
     dispatcher::{Dispatcher, MediaSourceReadyState},
     utils::url::Url,
-    wasm_bindgen, bindings::{jsGetResourceData, RequestId, ResourceId, SourceBufferId, TimerReason, TimerId, jsFreeResource},
+    wasm_bindgen,
 };
 
 /// Methods triggered on JavaScript events by the JavaScript code.
@@ -126,9 +130,7 @@ impl Dispatcher {
     ///   to simplify the logic handling a resolved timer.
     pub fn on_timer_ended(&mut self, id: TimerId, reason: TimerReason) {
         match reason {
-            TimerReason::MediaPlaylistRefresh => {
-                self.on_playlist_refresh_timer_ended(id)
-            }
+            TimerReason::MediaPlaylistRefresh => self.on_playlist_refresh_timer_ended(id),
             TimerReason::RetryRequest => self.on_retry_request(id),
         }
     }

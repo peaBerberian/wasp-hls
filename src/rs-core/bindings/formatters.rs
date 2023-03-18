@@ -9,9 +9,7 @@ pub(crate) unsafe fn format_variants_info_for_js(variants: &[&VariantStream]) ->
     let mut ret: Vec<u32> = vec![];
     ret.push(variants.len() as u32);
     variants.iter().for_each(|v| {
-        let id = v.id();
-        ret.push(id.len() as u32);
-        ret.push(id.as_ptr() as u32); // The unsafe-related part
+        ret.push(v.id());
         let resolution = v.resolution().unwrap_or(&NULL_RESOLUTION);
         ret.push(resolution.height());
         ret.push(resolution.width());
@@ -71,9 +69,7 @@ pub(crate) unsafe fn format_audio_tracks_for_js(tracks: &[AudioTrack]) -> Vec<u3
     let mut ret: Vec<u32> = vec![];
     ret.push(tracks.len() as u32);
     tracks.iter().for_each(|t| {
-        let id = t.id();
-        ret.push(id.len() as u32);
-        ret.push(id.as_ptr() as u32);
+        ret.push(t.id());
 
         let language = t.language().unwrap_or("");
         ret.push(language.len() as u32);

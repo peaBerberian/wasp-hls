@@ -10,12 +10,18 @@ use std::io::BufRead;
 /// Structure describing a "Media tag" in the HLS Multivariant Playlist.
 #[derive(Debug)]
 pub struct MediaTag {
-    /// Stable identifier for the URI within the parent Multivariant Playlist.
+    /// Identifier for the MediaTag unique for the current
+    /// `MultiVariantPlaylist` object it is a part of.
+    id: u32,
+
+    /// Stable identifier for the URI within the parent MultiVariant Playlist
+    /// even in the case a different MultiVariant fetched in the meantime,
+    /// whereas `id` may change if the MultiVariant Playlist is refreshed.
     ///
     /// This identifier allows the URI of the Variant Stream to
     /// change between two distinct downloads of the Multivariant
     /// Playlist. IDs are matched using a byte-for-byte comparison.
-    id: String,
+    stable_id: Option<String>,
 
     /// Media Playlist associated to this media tag.
     /// `None` if it does not exists or if not yet loaded.
@@ -106,6 +112,7 @@ impl MediaTag {
     pub(super) fn create(
         media_line: &str,
         multi_variant_playlist_url: &Url,
+        id: u32,
     ) -> Result<Self, MediaTagParsingError> {
         let playlist_base_url = multi_variant_playlist_url.pathname();
         let mut typ: Option<MediaTagType> = None;
@@ -252,9 +259,6 @@ impl MediaTag {
             return Err(MediaTagParsingError::MissingName);
         };
 
-        let id = stable_rendition_id
-            .or_else(|| url.as_ref().map(|u| u.clone().take()))
-            .unwrap_or_else(|| format!("{group_id}{multi_variant_playlist_url}"));
         url = url.map(|u| {
             if u.is_absolute() {
                 u
@@ -264,6 +268,7 @@ impl MediaTag {
         });
         Ok(MediaTag {
             id,
+            stable_id: stable_rendition_id,
             media_playlist: None,
             typ,
             url,
@@ -294,8 +299,12 @@ impl MediaTag {
         Ok(self.media_playlist.as_ref().unwrap())
     }
 
-    pub(crate) fn id(&self) -> &str {
-        self.id.as_str()
+    pub(crate) fn id(&self) -> u32 {
+        self.id
+    }
+
+    pub(crate) fn stable_id(&self) -> Option<&str> {
+        self.stable_id.as_deref()
     }
 
     pub(crate) fn url(&self) -> Option<&Url> {

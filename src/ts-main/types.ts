@@ -106,7 +106,7 @@ export interface ContentMetadata {
 
   currentAudioTrack:
     | {
-        id: string;
+        id: number;
         isSelected: boolean;
       }
     | undefined;

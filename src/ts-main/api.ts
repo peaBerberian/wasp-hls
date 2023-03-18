@@ -44,8 +44,7 @@ import {
   onVariantLockStatusChangeMessage,
 } from "./worker-message-handlers";
 
-const DEFAULT_MPEG2_TS_TYPE =
-  "video/mp2t;codecs=\"avc1.4D401F\"";
+const DEFAULT_MPEG2_TS_TYPE = 'video/mp2t;codecs="avc1.4D401F"';
 
 // Allows to ensure a never-seen-before identifier is used for each content.
 const generateContentId = idGenerator();
@@ -116,7 +115,7 @@ interface WaspHlsPlayerEvents {
 
   variantListUpdate: VariantInfo[];
 
-  variantLockUpdate : VariantInfo | null;
+  variantLockUpdate: VariantInfo | null;
 }
 
 /** Various statuses that may be set for a WaspHlsPlayer's initialization. */
@@ -600,7 +599,7 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
     return this.getAudioTrackList()?.find((a) => a.id === id);
   }
 
-  public setAudioTrack(trackId: string | null): void {
+  public setAudioTrack(trackId: number | null): void {
     if (this.__worker__ === null) {
       throw new Error("The Player is not initialized or disposed.");
     }
@@ -616,7 +615,7 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
     });
   }
 
-  public lockVariant(variantId: string) {
+  public lockVariant(variantId: number) {
     if (this.__worker__ === null) {
       throw new Error("The Player is not initialized or disposed.");
     }
@@ -830,7 +829,9 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
           break;
 
         case WorkerMessageType.VariantLockStatusChange:
-          if (onVariantLockStatusChangeMessage(data, this.__contentMetadata__)) {
+          if (
+            onVariantLockStatusChangeMessage(data, this.__contentMetadata__)
+          ) {
             this.trigger("variantLockUpdate", this.getLockedVariant());
           }
           break;
