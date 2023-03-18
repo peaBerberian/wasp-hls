@@ -98,12 +98,11 @@ Request Scheduling:
 
 Media demuxing/decoding, and buffer handling:
 
-- [x] Transcode mpeg-ts (thanks to mux.js for now)
+- [x] Transmux mpeg-ts (thanks to mux.js for now)
 - [x] End of stream support (as in: actually end when playback reached the end!)
 - [x] Multiple simultaneous type of buffers support (for now only audio and video)
 - [x] Automatically filter out codecs not supported by the current environment.
 - [ ] Discontinuity handling.
-      _Priority: average_
       _Priority: average_
 - [ ] Proper handling of `QuotaExceededError` after pushing segments (when low
       on memory).
@@ -166,7 +165,9 @@ most do not prevent playback):
   - [x] GROUP-ID
   - [x] DEFAULT
   - [x] AUTOSELECT
-  - [x] STABLE-RENDITION-ID: Help to identify a Media Playlist with its URI
+  - [x] STABLE-RENDITION-ID: Used both for Media Playlist identification (its
+        URI is relied on if it does not exists) if one is linked to it, but also
+        may be re-used for defining a unique track identifier in some API.
   - [x] LANGUAGE: In audio track selection API
   - [x] ASSOC-LANGUAGE: In audio track selection API
   - [x] NAME: In audio track selection API
@@ -179,19 +180,17 @@ most do not prevent playback):
 - EXT-X-STREAM-INF:
   - [x] BANDWIDTH: Used to select the right variant in function of the
         bandwidth
-  - [x] CODECS: Considered when pushing the segment but NOT to filter only
-        compatible renditions yet. Should probably also be used for that in the
-        future.
-  - [x] AUDIO: As no track selection API exist yet, only the most prioritized
+  - [x] CODECS: Used for checking support (and filtering out if that's not the
+        case, and for initializing buffers with the right info).
+  - [x] AUDIO
         audio media playlist is then considered
-  - [x] VIDEO: As no track selection API exist yet, only the most prioritized
-        video media playlsit is then considered
+  - [x] VIDEO: As no video track selection API exist yet, only the most
+        prioritized video media playlist is considered
   - [x] RESOLUTION: Used to describe variant in variant selection API
   - [x] FRAME-RATE: Used to describe variant in variant selection API
   - [x] STABLE-VARIANT-ID: Used for variant-identification, else, its URI is
         used.
-  - [ ] AVERAGE-BANDWIDTH: Not used yet. I don't know if it's useful for us
-        here yet.
+  - [ ] AVERAGE-BANDWIDTH: Not used yet. I don't know if it's useful yet.
   - [ ] SCORE: Not considered yet, but should be used alongside BANDWIDTH to
         select a variant. It does not seem hard to implement...
   - [ ] SUPPLEMENTAL-CODECS: In our web use case, I'm not sure if this is only
@@ -206,7 +205,7 @@ most do not prevent playback):
 - [ ] EXT-X-VERSION: Not specifically considered for now, most differences
       handled until now had compatible behaviors from version to version
 - [ ] EXT-X-INDEPENDENT-SEGMENTS: Might needs to be considered once we're
-      doing some flushing?
+      doing some manual cleaning?
 - [ ] EXT-X-DEFINE: Seems rare enough, so may be supported if the time is
       taken...
 - [ ] EXT-X-MEDIA-SEQUENCE: Not sure of what this allows. To check...
