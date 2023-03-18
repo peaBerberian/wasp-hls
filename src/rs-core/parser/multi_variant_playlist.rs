@@ -41,6 +41,7 @@ impl MultiVariantPlaylist {
         url: Url,
     ) -> Result<Self, MultiVariantPlaylistParsingError> {
         let mut last_id = 0u32;
+        let playlist_base_url = url.pathname();
         let mut variants: Vec<VariantStream> = vec![];
         let mut audio_media: Vec<MediaTag> = vec![];
         let mut other_media: Vec<MediaTag> = vec![];
@@ -74,8 +75,12 @@ impl MultiVariantPlaylist {
                                 Some(Ok(l)) => Url::new(l),
                             };
 
-                        let variant =
-                            VariantStream::create_from_stream_inf(&str_line, variant_url, last_id)?;
+                        let variant = VariantStream::create_from_stream_inf(
+                            &str_line,
+                            variant_url,
+                            playlist_base_url,
+                            last_id,
+                        )?;
                         last_id += 1;
                         variants.push(variant);
                     }
