@@ -6,6 +6,7 @@ use crate::bindings::{
 use crate::dispatcher::{MediaSourceReadyState, MediaObservation};
 use crate::Logger;
 
+// mod segment_inventory;
 mod source_buffers;
 
 use source_buffers::{PushSegmentError, RemoveDataError};
@@ -438,7 +439,7 @@ impl MediaElementReference {
     fn is_buffer_ended(&self, media_type: MediaType) -> bool {
         match self.get_buffer(media_type) {
             None => true,
-            Some(sb) => sb.is_last_segment_pushed() && sb.get_segment_queue().is_empty(),
+            Some(sb) => sb.is_last_segment_pushed() && !sb.operations_pending(),
         }
     }
 

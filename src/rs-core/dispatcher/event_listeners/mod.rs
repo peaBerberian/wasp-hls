@@ -191,7 +191,7 @@ impl JsMemoryBlob {
     }
 
     /// Recuperates the ResourceId behind this `JsMemoryBlob`.
-    pub fn get_id(&self) -> ResourceId {
+    pub fn id(&self) -> ResourceId {
         self.id
     }
 

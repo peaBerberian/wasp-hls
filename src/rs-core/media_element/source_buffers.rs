@@ -1,3 +1,5 @@
+use std::collections::VecDeque;
+
 use crate::bindings::{
     jsAddSourceBuffer, jsAppendBuffer, jsFlush, jsRemoveBuffer, AddSourceBufferErrorCode,
     AppendBufferErrorCode, JsResult, MediaType, ParsedSegmentInfo, SourceBufferId,
@@ -14,7 +16,9 @@ pub(super) struct SourceBuffer {
     id: SourceBufferId,
 
     /// The current queue of operations being performed on the `SourceBuffer`.
-    queue: Vec<SourceBufferQueueElement>,
+    ///
+    /// From the most imminent to the least.
+    queue: VecDeque<SourceBufferQueueElement>,
 
     /// The Content-Type currently linked to the SourceBuffer
     typ: String,
@@ -32,7 +36,12 @@ pub(super) struct SourceBuffer {
     /// The MediaType associated to this `SourceBuffer`.
     media_type: MediaType,
 
-    is_flushed: bool,
+    /// If `true`, the `SourceBuffer` was very recently emptied.
+    ///
+    /// In that situation, various decoding issues may occur after new data is pushed to the
+    /// buffer, so special considerations, such as calling the `jsFlush` function might need to be
+    /// taken on buffer updates.
+    needs_reflush: bool,
 }
 
 impl SourceBuffer {
@@ -43,9 +52,9 @@ impl SourceBuffer {
             Ok(x) => Ok(Self {
                 id: x,
                 typ,
-                queue: vec![],
+                queue: VecDeque::new(),
                 was_used: false,
-                is_flushed: false,
+                needs_reflush: false,
                 last_segment_pushed: false,
                 media_type,
             }),
@@ -61,12 +70,8 @@ impl SourceBuffer {
         self.id
     }
 
-    /// Get the queue of operations which are still pending on the SourceBuffer.
-    ///
-    /// The SourceBuffer performs one operation at a time, in the same order than the elements of
-    /// that queue.
-    pub(super) fn get_segment_queue(&self) -> &[SourceBufferQueueElement] {
-        &self.queue
+    pub(super) fn operations_pending(&self) -> bool {
+        !self.queue.is_empty()
     }
 
     /// Push a new segment to the SourceBuffer.
@@ -80,8 +85,8 @@ impl SourceBuffer {
     ) -> Result<Option<ParsedSegmentInfo>, PushSegmentError> {
         self.last_segment_pushed = false;
         self.was_used = true;
-        let segment_id = metadata.segment_data.get_id();
-        self.queue.push(SourceBufferQueueElement::Push(metadata));
+        let segment_id = metadata.segment_data.id();
+        self.queue.push_back(SourceBufferQueueElement::Push(metadata));
         Logger::debug(&format!("Buffer {} ({}): Pushing", self.id, self.typ));
         match jsAppendBuffer(self.id, segment_id, parse_time_info).result() {
             Err(err) => Err(PushSegmentError::from_append_buffer_error(
@@ -96,7 +101,7 @@ impl SourceBuffer {
     pub(super) fn remove_buffer(&mut self, start: f64, end: f64) {
         self.was_used = true;
         self.queue
-            .push(SourceBufferQueueElement::Remove { start, end });
+            .push_back(SourceBufferQueueElement::Remove { start, end });
         Logger::debug(&format!(
             "Buffer {} ({}): Removing {} {}",
             self.id, self.typ, start, end
@@ -110,13 +115,9 @@ impl SourceBuffer {
     /// the current position. As such a seek will have to be performed once the remove is done
     pub(super) fn flush_buffer(&mut self) {
         self.was_used = true;
-        let start = 0.;
-        let end = f64::INFINITY;
-        self.is_flushed = true;
-        self.queue
-            .push(SourceBufferQueueElement::Remove { start, end });
-        Logger::debug(&format!("Buffer {} ({}): flushing", self.id, self.typ));
-        jsRemoveBuffer(self.id, start, end);
+        self.queue.push_back(SourceBufferQueueElement::Emptying);
+        Logger::debug(&format!("Buffer {} ({}): emptying", self.id, self.typ));
+        jsRemoveBuffer(self.id, 0., f64::INFINITY);
     }
 
     /// Indicate to this `SourceBuffer` that the last chronological segment has been pushed.
@@ -131,29 +132,23 @@ impl SourceBuffer {
 
     /// To call once a `SourceBuffer` operation, either created through `append_buffer` or
     /// `remove_buffer`, has been finished by the underlying MSE SourceBuffer.
-    pub(super) fn on_operation_end(&mut self) -> SourceBufferQueueElement {
-        let queue_elt = self.queue.remove(0);
-        if let SourceBufferQueueElement::Push { .. } = &queue_elt {
-            if self.is_flushed {
-                self.is_flushed = false;
+    pub(super) fn on_operation_end(&mut self) -> Option<SourceBufferQueueElement> {
+        let queue_elt = self.queue.pop_front();
+        match queue_elt {
+            Some(SourceBufferQueueElement::Emptying) => {
+                self.needs_reflush = true;
                 jsFlush();
-            }
-        };
+            },
+            Some(SourceBufferQueueElement::Push { .. }) => {
+                if self.needs_reflush {
+                    self.needs_reflush = false;
+                    jsFlush();
+                }
+            },
+            _ => {},
+        }
         queue_elt
     }
-
-    //     pub(super) fn buffered(&self) -> Vec<(f64, f64)> {
-    //         let buffered = jsGetSourceBufferBuffered(self.id);
-    //         let og_len = buffered.len();
-    //         if og_len % 2 != 0 {
-    //             panic!("Unexpected buffered value: not even.");
-    //         }
-    //         let mut ret : Vec<(f64, f64)> = Vec::with_capacity(og_len / 2);
-    //         for i in 0..og_len / 2 {
-    //             ret.push((buffered[i], buffered[i+1]));
-    //         }
-    //         ret
-    //     }
 }
 
 /// Structure describing a segment that should be pushed to the SourceBuffer.
@@ -186,6 +181,9 @@ pub(crate) enum SourceBufferQueueElement {
     /// Some already-buffered needs to be removed, `start` and `end` giving the
     /// time range of the data to remove, in seconds.
     Remove { start: f64, end: f64 },
+
+    /// The buffer is being completely emptied.
+    Emptying,
 }
 
 use thiserror::Error;
