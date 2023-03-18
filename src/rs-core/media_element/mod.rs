@@ -3,7 +3,7 @@ use crate::bindings::{
     jsSetPlaybackRate, jsStartRebuffering, jsStopRebuffering, AttachMediaSourceErrorCode, JsResult,
     MediaType, SourceBufferId,
 };
-use crate::dispatcher::{MediaSourceReadyState, MediaObservation};
+use crate::dispatcher::{MediaObservation, MediaSourceReadyState};
 use crate::Logger;
 
 // mod segment_inventory;
@@ -439,7 +439,7 @@ impl MediaElementReference {
     fn is_buffer_ended(&self, media_type: MediaType) -> bool {
         match self.get_buffer(media_type) {
             None => true,
-            Some(sb) => sb.is_last_segment_pushed() && !sb.operations_pending(),
+            Some(sb) => sb.is_last_segment_pushed() && !sb.has_operations_pending(),
         }
     }
 

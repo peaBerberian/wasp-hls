@@ -4,8 +4,8 @@ use crate::bindings::{
     jsAddSourceBuffer, jsAppendBuffer, jsFlush, jsRemoveBuffer, AddSourceBufferErrorCode,
     AppendBufferErrorCode, JsResult, MediaType, ParsedSegmentInfo, SourceBufferId,
 };
-use crate::Logger;
 use crate::dispatcher::JsMemoryBlob;
+use crate::Logger;
 
 /// Abstraction over the Media Source Extension's `SourceBuffer` concept.
 ///
@@ -70,7 +70,9 @@ impl SourceBuffer {
         self.id
     }
 
-    pub(super) fn operations_pending(&self) -> bool {
+    /// Returns `true` if there is at least one pending buffer operation that
+    /// isn't finished yet.
+    pub(super) fn has_operations_pending(&self) -> bool {
         !self.queue.is_empty()
     }
 
@@ -86,7 +88,8 @@ impl SourceBuffer {
         self.last_segment_pushed = false;
         self.was_used = true;
         let segment_id = metadata.segment_data.id();
-        self.queue.push_back(SourceBufferQueueElement::Push(metadata));
+        self.queue
+            .push_back(SourceBufferQueueElement::Push(metadata));
         Logger::debug(&format!("Buffer {} ({}): Pushing", self.id, self.typ));
         match jsAppendBuffer(self.id, segment_id, parse_time_info).result() {
             Err(err) => Err(PushSegmentError::from_append_buffer_error(
@@ -138,14 +141,14 @@ impl SourceBuffer {
             Some(SourceBufferQueueElement::Emptying) => {
                 self.needs_reflush = true;
                 jsFlush();
-            },
+            }
             Some(SourceBufferQueueElement::Push { .. }) => {
                 if self.needs_reflush {
                     self.needs_reflush = false;
                     jsFlush();
                 }
-            },
-            _ => {},
+            }
+            _ => {}
         }
         queue_elt
     }
