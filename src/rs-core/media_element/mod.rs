@@ -1,17 +1,19 @@
+use self::segment_inventory::{BufferedSegmentMetadata, SegmentInventory};
+use self::source_buffers::SourceBufferQueueElement;
 use crate::bindings::{
     jsAttachMediaSource, jsEndOfStream, jsRemoveMediaSource, jsSeek, jsSetMediaOffset,
     jsSetPlaybackRate, jsStartRebuffering, jsStopRebuffering, AttachMediaSourceErrorCode, JsResult,
     MediaType, SourceBufferId,
 };
-use crate::dispatcher::{MediaObservation, MediaSourceReadyState};
+use crate::dispatcher::{BufferedRange, MediaObservation, MediaSourceReadyState};
 use crate::Logger;
-
-// mod segment_inventory;
-mod source_buffers;
-
 use source_buffers::{PushSegmentError, RemoveDataError};
 
+pub(crate) use self::segment_inventory::SegmentQualityContext;
 pub(crate) use source_buffers::PushMetadata;
+
+mod segment_inventory;
+mod source_buffers;
 
 /// Structure linked to an HTMLMediaElement which allows to perform media-related actions on it,
 /// such as:
@@ -56,6 +58,9 @@ pub(crate) struct MediaElementReference {
     /// -1. == playback in reverse direction but at normal speed
     /// and so on
     wanted_speed: f64,
+
+    audio_inventory: SegmentInventory,
+    video_inventory: SegmentInventory,
 }
 
 impl MediaElementReference {
@@ -74,6 +79,8 @@ impl MediaElementReference {
             video_buffer: None,
             audio_buffer: None,
             wanted_speed: 1.,
+            audio_inventory: SegmentInventory::new(MediaType::Audio),
+            video_inventory: SegmentInventory::new(MediaType::Video),
         }
     }
 
@@ -89,6 +96,8 @@ impl MediaElementReference {
         self.media_offset = None;
         self.video_buffer = None;
         self.audio_buffer = None;
+        self.audio_inventory.reset();
+        self.video_inventory.reset();
     }
 
     /// Returns the wanted playback rate
@@ -207,6 +216,7 @@ impl MediaElementReference {
                 } else {
                     self.audio_buffer =
                         Some(source_buffers::SourceBuffer::new(media_type, sb_codec)?);
+                    self.audio_inventory.reset();
                     Ok(())
                 }
             }
@@ -216,6 +226,7 @@ impl MediaElementReference {
                 } else {
                     self.video_buffer =
                         Some(source_buffers::SourceBuffer::new(media_type, sb_codec)?);
+                    self.video_inventory.reset();
                     Ok(())
                 }
             }
@@ -231,18 +242,42 @@ impl MediaElementReference {
         &mut self,
         media_type: MediaType,
         metadata: PushMetadata,
+        context: SegmentQualityContext,
     ) -> Result<(), PushSegmentError> {
         let has_media_offset = self.media_offset.is_some();
         match self.get_buffer_mut(media_type) {
             None => Err(PushSegmentError::NoSourceBuffer(media_type)),
+
             Some(sb) => {
+                let metadata_start = metadata.start();
+                let metadata_end = metadata.end();
                 let do_time_parsing = !has_media_offset
                     && (media_type == MediaType::Audio || media_type == MediaType::Video)
-                    && metadata.time_info.is_some();
-                let start = metadata.time_info.map(|t| t.0);
-                let parsed = sb.append_buffer(metadata, do_time_parsing)?;
-                let media_start = parsed.and_then(|p| p.start);
-                if let (Some(segment_start), Some(media_start)) = (start, media_start) {
+                    && metadata_start.is_some();
+
+                let response = sb.append_buffer(metadata, do_time_parsing)?;
+
+                let media_start = response.media_start();
+                let media_end = response.media_duration().and_then(|d| {
+                    media_start.map(|start| start + d)
+                });
+
+                if let (Some(start), Some(end)) =
+                    (media_start.or(metadata_start), media_end.or(metadata_end))
+                {
+                    let inventory_metadata = BufferedSegmentMetadata {
+                        id: response.segment_id(),
+                        start,
+                        end,
+                        context,
+                    };
+                    match media_type {
+                        MediaType::Audio => self.audio_inventory.insert_segment(inventory_metadata),
+                        MediaType::Video => self.video_inventory.insert_segment(inventory_metadata),
+                    };
+                }
+
+                if let (Some(segment_start), Some(media_start)) = (metadata_start, media_start) {
                     let media_offset = media_start - segment_start;
                     Logger::info(&format!(
                         "Setting media offset: {}",
@@ -289,7 +324,18 @@ impl MediaElementReference {
 
     /// Method to call once a `MediaObservation` has been received.
     pub(crate) fn on_observation(&mut self, observation: MediaObservation) {
+        if let Some(buffered) = observation.video_buffered() {
+            self.video_inventory.synchronize(buffered);
+        } else {
+            self.video_inventory.reset();
+        }
+        if let Some(buffered) = observation.audio_buffered() {
+            self.audio_inventory.synchronize(buffered);
+        } else {
+            self.audio_inventory.reset();
+        }
         self.last_observation = Some(observation);
+
         if !self.check_awaiting_seek() {
             let last_observation = self.last_observation.as_ref().unwrap();
             let buffer_gap = get_buffer_gap(last_observation);
@@ -348,15 +394,23 @@ impl MediaElementReference {
 
     /// Callback that should be called once one of the `SourceBuffer` linked to this
     /// `MediaElementReference` has "updated" (meaning: one of its operation has ended).
-    pub(crate) fn on_source_buffer_update(&mut self, source_buffer_id: SourceBufferId) {
+    pub(crate) fn on_source_buffer_update(
+        &mut self,
+        source_buffer_id: SourceBufferId,
+        buffered: BufferedRange,
+    ) {
         if let Some(ref mut sb) = self.audio_buffer {
             if sb.id() == source_buffer_id {
-                sb.on_operation_end();
+                if let Some(SourceBufferQueueElement::Push((_, id))) = sb.on_operation_end() {
+                    self.audio_inventory.validate_segment(id, &buffered);
+                }
             }
         }
         if let Some(ref mut sb) = self.video_buffer {
             if sb.id() == source_buffer_id {
-                sb.on_operation_end();
+                if let Some(SourceBufferQueueElement::Push((_, id))) = sb.on_operation_end() {
+                    self.video_inventory.validate_segment(id, &buffered);
+                }
             }
         }
         self.check_end_of_stream();
@@ -556,7 +610,7 @@ fn get_buffer_gap(observation: &MediaObservation) -> Option<f64> {
     let current_time = observation.current_time();
     let current_buffered = observation
         .buffered()
-        .iter()
+        .into_iter()
         .find(|b| current_time >= b.0 && current_time < b.1);
     Some(current_buffered?.1 - current_time)
 }

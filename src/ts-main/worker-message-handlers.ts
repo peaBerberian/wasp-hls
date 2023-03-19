@@ -1,5 +1,6 @@
 import logger from "../ts-common/logger";
 import QueuedSourceBuffer from "../ts-common/QueuedSourceBuffer";
+import timeRangesToFloat64Array from "../ts-common/timeRangesToFloat64Array";
 import {
   AppendBufferWorkerMessage,
   AttachMediaSourceWorkerMessage,
@@ -30,6 +31,7 @@ import {
   FlushWorkerMessage,
   AreTypesSupportedWorkerMessage,
   VariantLockStatusChangeWorkerMessage,
+  SourceBufferId,
 } from "../ts-common/types";
 import { MediaType } from "../wasm/wasp_hls";
 import {
@@ -374,9 +376,14 @@ export function onAppendBufferMessage(
       sbObject.queuedSourceBuffer
         .push(msg.value.data)
         .then(() => {
+          const buffered = sbObject.queuedSourceBuffer.getBufferedRanges();
           postMessageToWorker(worker, {
             type: MainMessageType.SourceBufferOperationSuccess,
-            value: { mediaSourceId, sourceBufferId },
+            value: {
+              mediaSourceId,
+              sourceBufferId,
+              buffered: timeRangesToFloat64Array(buffered),
+            },
           });
         })
         .catch(handleAppendBufferError);
@@ -425,9 +432,14 @@ export function onRemoveBufferMessage(
       sbObject.queuedSourceBuffer
         .removeBuffer(msg.value.start, msg.value.end)
         .then(() => {
+          const buffered = sbObject.queuedSourceBuffer.getBufferedRanges();
           postMessageToWorker(worker, {
             type: MainMessageType.SourceBufferOperationSuccess,
-            value: { mediaSourceId, sourceBufferId },
+            value: {
+              mediaSourceId,
+              sourceBufferId,
+              buffered: timeRangesToFloat64Array(buffered),
+            },
           });
         })
         .catch(handleRemoveBufferError);
@@ -477,11 +489,24 @@ export function onStartPlaybackObservationMessage(
   contentMetadata.stopPlaybackObservations = observePlayback(
     mediaElement,
     msg.value.mediaSourceId,
-    (value) =>
-      postMessageToWorker(worker, {
-        type: MainMessageType.MediaObservation,
-        value,
-      })
+    (value) => {
+      const sourceBuffersBuffered: Partial<
+        Record<SourceBufferId, Float64Array>
+      > = {};
+
+      for (const sourceBuffer of contentMetadata.sourceBuffers) {
+        const ranges = sourceBuffer.queuedSourceBuffer.getBufferedRanges();
+        const toFloat64 = timeRangesToFloat64Array(ranges);
+        sourceBuffersBuffered[sourceBuffer.sourceBufferId] = toFloat64;
+      }
+      postMessageToWorker(
+        worker,
+        {
+          type: MainMessageType.MediaObservation,
+          value: Object.assign(value, { sourceBuffersBuffered }),
+        }
+      );
+    }
   );
 }
 

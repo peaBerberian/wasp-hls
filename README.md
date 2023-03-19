@@ -76,6 +76,10 @@ Adaptive BitRate:
 - [x] Choose variant based on throughtput-based estimates
 - [x] Allow application to list and select its own variant (quality) and know
       the current one
+- [x] Automatically filter out codecs not supported by the current environment.
+- [ ] Fast-switching (Push on top of already-loaded imminent segments if they
+      prove to be of higher quality, don't if they are of lower quality).
+      _Priority: high_
 - [ ] Also choose variant based on buffer-based estimates.
       _Priority: average_
 - [ ] Logic to detect sudden large fall in bandwidth before the end of a current
@@ -96,12 +100,11 @@ Request Scheduling:
 - [ ] Parallel initialization segment and first media segment loading.
       _Priority: average_
 
-Media demuxing/decoding, and buffer handling:
+Media demuxing/decoding, MSE API and buffer handling:
 
 - [x] Transmux mpeg-ts (thanks to mux.js for now)
 - [x] End of stream support (as in: actually end when playback reached the end!)
 - [x] Multiple simultaneous type of buffers support (for now only audio and video)
-- [x] Automatically filter out codecs not supported by the current environment.
 - [ ] Discontinuity handling.
       _Priority: average_
 - [ ] Proper handling of `QuotaExceededError` after pushing segments (when low
@@ -110,11 +113,6 @@ Media demuxing/decoding, and buffer handling:
       garbage collection but some platforms still may have issues when memory is
       constrained.
       _Priority: low_
-- [ ] Inventory storing which quality is where in the buffers, both for API reasons
-      and for several optimizations (though quality identification seems more difficult
-      to implement in HLS than in DASH due to the fact that HLS only link variants to
-      bitrate, not the actual audio and video streams - but it should be doable).
-      _Priority: very low_
 - [ ] WebAssembly-based mpeg-ts transcoder.
       _Priority: low_
 
@@ -165,7 +163,6 @@ most do not prevent playback):
   - [x] GROUP-ID
   - [x] DEFAULT
   - [x] AUTOSELECT
-  - [x] STABLE-RENDITION-ID: Used both for Media Playlist identification (its
         URI is relied on if it does not exists) if one is linked to it, but also
         may be re-used for defining a unique track identifier in some API.
   - [x] LANGUAGE: In audio track selection API
@@ -176,7 +173,7 @@ most do not prevent playback):
   - [ ] FORCED: As the SUBTITLES TYPE is not handled yet, we don't have to use
         this one
   - [ ] INSTREAM-ID: As the CLOSED-CAPTIONS TYPE is not handled yet, we don't
-        have to use this one
+  - [ ] STABLE-RENDITION-ID: Not really needed for now (only for content steering?)
 - EXT-X-STREAM-INF:
   - [x] BANDWIDTH: Used to select the right variant in function of the
         bandwidth
@@ -188,10 +185,10 @@ most do not prevent playback):
         prioritized video media playlist is considered
   - [x] RESOLUTION: Used to describe variant in variant selection API
   - [x] FRAME-RATE: Used to describe variant in variant selection API
-  - [x] STABLE-VARIANT-ID: Used for variant-identification, else, its URI is
+  - [ ] SCORE: Not considered yet, but should be used alongside BANDWIDTH to
+  - [ ] STABLE-VARIANT-ID: Not really needed for now (only for content steering?)
         used.
   - [ ] AVERAGE-BANDWIDTH: Not used yet. I don't know if it's useful yet.
-  - [ ] SCORE: Not considered yet, but should be used alongside BANDWIDTH to
         select a variant. It does not seem hard to implement...
   - [ ] SUPPLEMENTAL-CODECS: In our web use case, I'm not sure if this is only
         useful for track selection API or if filtering also needs to be done based

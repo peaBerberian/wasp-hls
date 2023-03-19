@@ -1,7 +1,7 @@
 import { numberIdGenerator } from "../ts-common/idGenerator";
 import QueuedSourceBuffer from "../ts-common/QueuedSourceBuffer";
-import { WaspHlsPlayerConfig } from "../ts-common/types";
-import { Dispatcher, InitOutput } from "../wasm/wasp_hls";
+import { SourceBufferId, WaspHlsPlayerConfig } from "../ts-common/types";
+import { Dispatcher, InitOutput, MediaType } from "../wasm/wasp_hls";
 
 export interface WorkerContext {
   hasMseInWorker: boolean;
@@ -104,6 +104,7 @@ export interface RequestObject {
 
 export interface SourceBufferInstanceInfo<HasMseInWorker extends boolean> {
   id: SourceBufferId;
+  mediaType: MediaType;
   lastInitTimescale: number | undefined;
   sourceBuffer: HasMseInWorker extends true ? QueuedSourceBuffer : null;
   transmuxer: null | ((input: Uint8Array) => Uint8Array | null);
@@ -209,7 +210,6 @@ export function getMediaSourceObj():
 
 export type TimerId = number;
 export type RequestId = number;
-export type SourceBufferId = number;
 export type ResourceId = number;
 
 interface WorkerInfo {

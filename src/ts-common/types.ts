@@ -11,6 +11,8 @@ import { LoggerLevel } from "./logger";
 
 export { MediaSourceReadyState, PlaybackTickReason };
 
+export type SourceBufferId = number;
+
 /** Message sent from the main thread to the worker. */
 export type MainMessage =
   | InitializationMainMessage
@@ -591,7 +593,7 @@ export interface CreateSourceBufferWorkerMessage {
      * It is generated from the Worker and it is unique for all SourceBuffers
      * created after associated with the `mediaSourceId`.
      */
-    sourceBufferId: number;
+    sourceBufferId: SourceBufferId;
     /**
      * "Content-Type" associated to the SourceBuffer, that may have to be used
      * when initializing the latter.
@@ -623,7 +625,7 @@ export interface AppendBufferWorkerMessage {
      * It should be the same `sourceBufferId` than the one on the
      * `CreateSourceBufferWorkerMessage`.
      */
-    sourceBufferId: number;
+    sourceBufferId: SourceBufferId;
     /** Raw data to append to the SourceBuffer. */
     data: BufferSource;
   };
@@ -652,7 +654,7 @@ export interface RemoveBufferWorkerMessage {
      * It should be the same `sourceBufferId` than the one on the
      * `CreateSourceBufferWorkerMessage`.
      */
-    sourceBufferId: number;
+    sourceBufferId: SourceBufferId;
     /** Range start, in seconds, of the data that should be removed. */
     start: number;
     /** Range end, in seconds, of the data that should be removed. */
@@ -951,7 +953,7 @@ export interface CreateSourceBufferErrorMainMessage {
   value: {
     mediaSourceId: string;
     /** Identify the SourceBuffer in question. */
-    sourceBufferId: number;
+    sourceBufferId: SourceBufferId;
     /** Error code to better specify the error encountered. */
     code: SourceBufferCreationErrorCode;
     /** The error's message. */
@@ -978,6 +980,10 @@ export interface SetMediaSourceDurationErrorMainMessage {
   };
 }
 
+/**
+ * Sent by the main thread to a Worker when a new media observation, currently
+ * listened to by the Worker, is produced
+ */
 export interface MediaObservationMainMessage {
   type: MainMessageType.MediaObservation;
   value: MediaObservation;
@@ -987,14 +993,42 @@ export interface MediaObservation {
   /** Identify the MediaSource in question. */
   mediaSourceId: string;
 
+  /** What event triggered the Observation. */
   reason: PlaybackTickReason;
-  currentTime: number;
-  readyState: number;
+
+  /**
+   * TimeRange returned by the `buffered` property of the `HTMLMediaElement`,
+   * here serialized into a `Float64Array` of even length (start of first range,
+   * end of first range, start of second range and so on.(
+   */
   buffered: Float64Array;
+
+  /** `currentTime` attribute of the `HTMLMediaElement`. */
+  currentTime: number;
+
+  /** `readyState` attribute of the `HTMLMediaElement`. */
+  readyState: number;
+
+  /** `paused` attribute of the `HTMLMediaElement`. */
   paused: boolean;
+
+  /** `seeking` attribute of the `HTMLMediaElement`. */
   seeking: boolean;
+
+  /** `ended` attribute of the `HTMLMediaElement`. */
   ended: boolean;
+
+  /** `duration` attribute of the `HTMLMediaElement`. */
   duration: number;
+
+  /**
+   * TimeRanges of the each SourceBuffer.
+   * Here serialized into a `Float64Array` of even length (start of first range,
+   * end of first range, start of second range and so on.)
+   *
+   * Set to `null` if `MediaSource` are here created in the worker.
+   */
+  sourceBuffersBuffered: Partial<Record<SourceBufferId, Float64Array>> | null;
 }
 
 /**
@@ -1016,7 +1050,8 @@ export interface SourceBufferOperationSuccessMainMessage {
      * It should be the same `sourceBufferId` than the one on the
      * `CreateSourceBufferWorkerMessage`.
      */
-    sourceBufferId: number;
+    sourceBufferId: SourceBufferId;
+    buffered: Float64Array;
   };
 }
 
@@ -1030,7 +1065,7 @@ export interface SourceBufferOperationErrorMainMessage {
   type: MainMessageType.SourceBufferOperationError;
   value: {
     /** Identify the SourceBuffer in question. */
-    sourceBufferId: number;
+    sourceBufferId: SourceBufferId;
     /** The error's message. */
     message: string;
     /** The error's name. */

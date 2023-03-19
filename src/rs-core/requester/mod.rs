@@ -3,6 +3,7 @@ use crate::{
         formatters::format_range_for_js, jsAbortRequest, jsFetch, jsGetRandom, jsTimer, MediaType,
         RequestErrorReason, RequestId, TimerId, TimerReason,
     },
+    media_element::SegmentQualityContext,
     parser::{ByteRange, SegmentInfo},
     playlist_store::MediaPlaylistPermanentId,
     utils::url::Url,
@@ -221,16 +222,40 @@ pub(crate) struct PlaylistRequestInfo {
 /// Metadata associated with a pending media segment request.
 pub(crate) struct WaitingSegmentInfo {
     /// type of media of the segment requested
-    pub(crate) media_type: MediaType,
+    media_type: MediaType,
 
     /// Url on which the request is done
-    pub(crate) url: Url,
+    url: Url,
 
-    pub(crate) byte_range: Option<ByteRange>,
+    byte_range: Option<ByteRange>,
 
     /// Start and end of the requested segment.
     /// `None` if the segment contains no media data, such as initialization segments
-    pub(crate) time_info: Option<(f64, f64)>,
+    time_info: Option<(f64, f64)>,
+
+    context: SegmentQualityContext,
+}
+
+impl WaitingSegmentInfo {
+    pub(crate) fn media_type(&self) -> MediaType {
+        self.media_type
+    }
+
+    pub(crate) fn url(&self) -> &Url {
+        &self.url
+    }
+
+    pub(crate) fn byte_range(&self) -> Option<&ByteRange> {
+        self.byte_range.as_ref()
+    }
+
+    pub(crate) fn time_info(&self) -> Option<&(f64, f64)> {
+        self.time_info.as_ref()
+    }
+
+    pub(crate) fn context(&self) -> &SegmentQualityContext {
+        &self.context
+    }
 }
 
 pub(crate) trait RequesterSegmentInfo {
@@ -281,27 +306,70 @@ pub(crate) struct SegmentRequestInfo {
     /// ID identifying the request on the JavaScript-side.
     request_id: RequestId,
 
+    context: SegmentQualityContext,
+
     /// type of media of the segment requested
-    pub(crate) media_type: MediaType,
+    media_type: MediaType,
 
     /// Url on which the request is done
-    pub(crate) url: Url,
+    url: Url,
 
-    pub(crate) byte_range: Option<ByteRange>,
+    byte_range: Option<ByteRange>,
 
     /// Start and end of the requested segment.
     /// `None` if the segment contains no media data, such as initialization segments
-    pub(crate) time_info: Option<(f64, f64)>,
+    time_info: Option<(f64, f64)>,
 
     /// Number of time the request has already been attempted.
-    pub(crate) attempts_failed: u32,
+    attempts_failed: u32,
 
     /// If `true` the request is not really pending, we're currently pending for some
     /// timer to finish before retrying it.
     ///
     /// In that case, the `request_id` corresponds to the one of the previous request
     /// and should not be relied on.
-    pub(crate) is_waiting_for_retry: bool,
+    is_waiting_for_retry: bool,
+}
+
+impl SegmentRequestInfo {
+    pub(crate) fn media_type(&self) -> MediaType {
+        self.media_type
+    }
+
+    pub(crate) fn url(&self) -> &Url {
+        &self.url
+    }
+
+    pub(crate) fn byte_range(&self) -> Option<&ByteRange> {
+        self.byte_range.as_ref()
+    }
+
+    pub(crate) fn time_info(&self) -> Option<&(f64, f64)> {
+        self.time_info.as_ref()
+    }
+
+    pub(crate) fn attempts_failed(&self) -> u32 {
+        self.attempts_failed
+    }
+
+    pub(crate) fn is_waiting_for_retry(&self) -> bool {
+        self.is_waiting_for_retry
+    }
+
+    pub(crate) fn context(&self) -> &SegmentQualityContext {
+        &self.context
+    }
+
+    pub(crate) fn deconstruct(
+        self,
+    ) -> (
+        Url,
+        Option<ByteRange>,
+        Option<(f64, f64)>,
+        SegmentQualityContext,
+    ) {
+        (self.url, self.byte_range, self.time_info, self.context)
+    }
 }
 
 pub(crate) enum FinishedRequestType {
@@ -488,8 +556,9 @@ impl Requester {
         media_type: MediaType,
         url: Url,
         byte_range: Option<&ByteRange>,
+        context: SegmentQualityContext,
     ) {
-        self.request_segment_now(&url, byte_range, media_type, None);
+        self.request_segment_now(&url, byte_range, media_type, None, context);
     }
 
     /// Fetch a segment in the right format through the given `url`.
@@ -502,14 +571,25 @@ impl Requester {
     ///
     /// Once the request finishes with success, the `on_request_finished`
     /// function will be called.
-    pub(crate) fn request_media_segment(&mut self, media_type: MediaType, seg: &SegmentInfo) {
+    pub(crate) fn request_media_segment(
+        &mut self,
+        media_type: MediaType,
+        seg: &SegmentInfo,
+        context: SegmentQualityContext,
+    ) {
         Logger::info(&format!(
             "Req: Asking to request {} segment: t: {}, d: {}",
             media_type, seg.start, seg.duration
         ));
         let time_info = Some((seg.start, seg.start + seg.duration));
         if self.can_start_request(seg.start) {
-            self.request_segment_now(&seg.url, seg.byte_range.as_ref(), media_type, time_info)
+            self.request_segment_now(
+                &seg.url,
+                seg.byte_range.as_ref(),
+                media_type,
+                time_info,
+                context,
+            )
         } else {
             Logger::debug("Req: pushing segment request to queue");
             self.segment_waiting_queue.push(WaitingSegmentInfo {
@@ -517,6 +597,7 @@ impl Requester {
                 url: seg.url.clone(),
                 byte_range: seg.byte_range.clone(),
                 time_info,
+                context,
             });
         }
     }
@@ -859,6 +940,7 @@ impl Requester {
                             seg.byte_range.as_ref(),
                             seg.media_type,
                             seg.time_info,
+                            seg.context,
                         );
                     },
                 );
@@ -870,6 +952,7 @@ impl Requester {
                     seg.byte_range.as_ref(),
                     seg.media_type,
                     seg.time_info,
+                    seg.context,
                 );
             }
         }
@@ -919,6 +1002,7 @@ impl Requester {
         byte_range: Option<&ByteRange>,
         media_type: MediaType,
         time_info: Option<(f64, f64)>,
+        context: SegmentQualityContext,
     ) {
         let (range_start, range_end) = format_range_for_js(byte_range);
         let url_ref = url.get_ref();
@@ -939,6 +1023,7 @@ impl Requester {
             time_info,
             attempts_failed: 0,
             is_waiting_for_retry: false,
+            context,
         });
     }
 

@@ -1,5 +1,6 @@
 import assertNever from "../ts-common/assertNever";
 import logger from "../ts-common/logger";
+import timeRangesToFloat64Array from "../ts-common/timeRangesToFloat64Array";
 import {
   MainMessage,
   InitializationErrorCode,
@@ -7,7 +8,11 @@ import {
   MainMessageType,
   WorkerMessageType,
 } from "../ts-common/types";
-import initializeWasm, { MediaObservation } from "../wasm/wasp_hls";
+import initializeWasm, {
+  BufferedRange,
+  MediaObservation,
+  MediaType,
+} from "../wasm/wasp_hls";
 import { stopObservingPlayback } from "./bindings";
 import {
   cachedCodecsSupport,
@@ -125,7 +130,8 @@ export default function MessageReceiver() {
         ) {
           return;
         }
-        dispatcher.on_source_buffer_update(data.value.sourceBufferId);
+        const buffered = new BufferedRange(data.value.buffered);
+        dispatcher.on_source_buffer_update(data.value.sourceBufferId, buffered);
         break;
       }
 
@@ -139,15 +145,52 @@ export default function MessageReceiver() {
         ) {
           return;
         }
+
+        let audioSbBuffered: BufferedRange | undefined;
+        let videoSbBuffered: BufferedRange | undefined;
+
+        if (playerInstance.hasMseInWorker() === true) {
+          for (const sourceBufferInfo of contentInfo.mediaSourceObj
+            .sourceBuffers) {
+            const timeRange =
+              sourceBufferInfo.sourceBuffer?.getBufferedRanges();
+            if (timeRange !== undefined) {
+              const toFloat64 = timeRangesToFloat64Array(timeRange);
+              const bufRange = new BufferedRange(toFloat64);
+              if (sourceBufferInfo.mediaType === MediaType.Audio) {
+                audioSbBuffered = bufRange;
+              } else if (sourceBufferInfo.mediaType === MediaType.Video) {
+                videoSbBuffered = bufRange;
+              }
+            }
+          }
+        } else if (data.value.sourceBuffersBuffered !== null) {
+          const sbBuffered = data.value.sourceBuffersBuffered;
+          for (const sourceBufferInfo of contentInfo.mediaSourceObj
+            .sourceBuffers) {
+            const element = sbBuffered[sourceBufferInfo.id];
+            if (element !== undefined) {
+              const bufRange = new BufferedRange(element);
+              if (sourceBufferInfo.mediaType === MediaType.Audio) {
+                audioSbBuffered = bufRange;
+              } else if (sourceBufferInfo.mediaType === MediaType.Video) {
+                videoSbBuffered = bufRange;
+              }
+            }
+          }
+        }
+        const bufferedTimeRange = new BufferedRange(data.value.buffered);
         const mediaObservation = new MediaObservation(
           data.value.reason,
           data.value.currentTime,
           data.value.readyState,
-          data.value.buffered,
+          bufferedTimeRange,
           data.value.paused,
           data.value.seeking,
           data.value.ended,
-          data.value.duration
+          data.value.duration,
+          audioSbBuffered,
+          videoSbBuffered
         );
         dispatcher.on_playback_tick(mediaObservation);
         break;

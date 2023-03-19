@@ -561,6 +561,10 @@ impl MediaPlaylistPermanentId {
     fn id(&self) -> u32 {
         self.id
     }
+
+    pub(crate) fn as_u32(&self) -> u32 {
+        self.id
+    }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]

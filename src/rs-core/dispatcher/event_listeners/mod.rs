@@ -1,3 +1,5 @@
+use std::{ops::Index, iter::Map, slice::Chunks};
+
 use crate::{
     bindings::{
         jsFreeResource, jsGetResourceData, RequestId, ResourceId, SourceBufferId, TimerId,
@@ -89,8 +91,12 @@ impl Dispatcher {
     /// * `source_buffer_id` - The identifier generated when the
     ///   SourceBuffer was created. This allows the `Dispatcher` to identify
     ///   which SourceBuffer actually emitted this event.
-    pub fn on_source_buffer_update(&mut self, source_buffer_id: SourceBufferId) {
-        self.on_source_buffer_update_core(source_buffer_id);
+    pub fn on_source_buffer_update(
+        &mut self,
+        source_buffer_id: SourceBufferId,
+        buffered: BufferedRange,
+    ) {
+        self.on_source_buffer_update_core(source_buffer_id, buffered);
     }
 
     /// The JS code should call this method when a SourceBuffer emits an `error`
@@ -210,15 +216,85 @@ impl Drop for JsMemoryBlob {
 }
 
 #[wasm_bindgen]
+pub struct BufferedRange {
+    buffered: Vec<f64>,
+}
+
+#[wasm_bindgen]
+impl BufferedRange {
+    #[wasm_bindgen(constructor)]
+    pub fn new(buffered: Vec<f64>) -> Self {
+        if buffered.len() % 2 != 0 {
+            panic!("Incorrect BufferedRange object");
+        }
+        Self { buffered }
+    }
+
+    pub fn len(&self) -> usize {
+        self.buffered.len() / 2
+    }
+
+    pub fn start(&self, idx: usize) -> Option<f64> {
+        self.buffered.get(idx * 2).copied()
+    }
+
+    pub unsafe fn start_unchecked(&self, idx: usize) -> f64 {
+        self.buffered[idx * 2]
+    }
+
+    pub fn end(&self, idx: usize) -> Option<f64> {
+        self.buffered.get((idx * 2) + 1).copied()
+    }
+
+    pub unsafe fn end_unchecked(&self, idx: usize) -> f64 {
+        self.buffered[idx * 2 + 1]
+    }
+}
+
+impl Index<usize> for BufferedRange {
+    type Output = [f64; 2];
+    fn index(&self, index: usize) -> &Self::Output {
+        self.buffered.as_slice()[index..index+1].try_into().unwrap()
+    }
+}
+
+impl BufferedRange {
+    pub(crate) fn range(&self, idx: usize) -> Option<(f64, f64)> {
+        self.buffered
+            .get(idx * 2)
+            .and_then(|s| self.buffered.get((idx * 2) + 1).map(|e| (*s, *e)))
+    }
+
+    pub(crate) fn range_unchecked(&self, idx: usize) -> (f64, f64) {
+        (self.buffered[idx * 2], self.buffered[(idx * 2) + 1])
+    }
+}
+
+impl<'a> IntoIterator for &'a BufferedRange {
+    type Item = (f64, f64);
+
+    // Yep, not easy to look at. Maybe future Rust feature can simplify that mess
+    type IntoIter = Map<Chunks<'a, f64>, fn(&'a[f64]) -> (f64, f64)>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.buffered
+            .chunks(2)
+            .map(|vals| (vals[0], vals[1]))
+    }
+}
+
+#[wasm_bindgen]
 pub struct MediaObservation {
     reason: PlaybackTickReason,
     current_time: f64,
     ready_state: u8,
-    buffered: Vec<(f64, f64)>,
+    buffered: BufferedRange,
     paused: bool,
     seeking: bool,
     ended: bool,
     duration: f64,
+    audio_buffered: Option<BufferedRange>,
+    video_buffered: Option<BufferedRange>,
 }
 
 #[wasm_bindgen]
@@ -229,27 +305,25 @@ impl MediaObservation {
         reason: PlaybackTickReason,
         current_time: f64,
         ready_state: u8,
-        buffered: &[f64],
+        buffered: BufferedRange,
         paused: bool,
         seeking: bool,
         ended: bool,
         duration: f64,
+        audio_buffered: Option<BufferedRange>,
+        video_buffered: Option<BufferedRange>,
     ) -> Self {
-        assert!(buffered.len() % 2 == 0);
-        let mut new_buf = Vec::with_capacity(buffered.len() / 2);
-        for i in 0..buffered.len() / 2 {
-            let offset = i * 2;
-            new_buf.push((buffered[offset], buffered[offset + 1]));
-        }
         Self {
             reason,
             current_time,
             ready_state,
-            buffered: new_buf,
+            buffered,
             paused,
             seeking,
             ended,
             duration,
+            audio_buffered,
+            video_buffered,
         }
     }
 }
@@ -271,7 +345,7 @@ impl MediaObservation {
     }
 
     #[inline(always)]
-    pub fn buffered(&self) -> &[(f64, f64)] {
+    pub fn buffered(&self) -> &BufferedRange {
         &self.buffered
     }
 
@@ -293,5 +367,15 @@ impl MediaObservation {
     #[inline(always)]
     pub fn duration(&self) -> f64 {
         self.duration
+    }
+
+    #[inline(always)]
+    pub fn audio_buffered(&self) -> Option<&BufferedRange> {
+        self.audio_buffered.as_ref()
+    }
+
+    #[inline(always)]
+    pub fn video_buffered(&self) -> Option<&BufferedRange> {
+        self.video_buffered.as_ref()
     }
 }
