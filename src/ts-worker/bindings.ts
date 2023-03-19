@@ -1,8 +1,10 @@
-import idGenerator from "../ts-common/idGenerator.js";
-import logger from "../ts-common/logger.js";
-import QueuedSourceBuffer from "../ts-common/QueuedSourceBuffer.js";
+import idGenerator from "../ts-common/idGenerator";
+import logger from "../ts-common/logger";
+import QueuedSourceBuffer from "../ts-common/QueuedSourceBuffer";
+import timeRangesToFloat64Array from "../ts-common/timeRangesToFloat64Array";
 import {
   AudioTrackInfo,
+  SourceBufferId,
   VariantInfo,
   WorkerMessageType,
 } from "../ts-common/types.js";
@@ -28,6 +30,7 @@ import {
   RequestErrorReason,
   OtherErrorCode,
   PlaylistType,
+  BufferedRange,
 } from "../wasm/wasp_hls.js";
 import {
   cachedCodecsSupport,
@@ -35,7 +38,6 @@ import {
   RequestId,
   requestsStore,
   ResourceId,
-  SourceBufferId,
   playerInstance,
   TimerId,
   getMediaSourceObj,
@@ -302,23 +304,6 @@ export function abortRequest(id: RequestId): boolean {
   }
   return false;
 }
-
-// /**
-//  * @param {number} warningCode
-//  */
-// export function warning(warningCode: WarningCode): void {
-//   const contentInfo = playerInstance.getContentInfo();
-//   if (contentInfo === null) {
-//     return ;
-//   }
-//   postMessageToMain({
-//     type: WorkerMessageType.Warning,
-//     value: {
-//       contentId: contentInfo.contentId,
-//       code: warningCode,
-//     },
-//   });
-// }
 
 /**
  * @param {number} position
@@ -601,6 +586,7 @@ export function addSourceBuffer(
         id: sourceBufferId,
         transmuxer: mimeType === typ ? null : transmux,
         sourceBuffer: null,
+        mediaType,
       });
       contentInfo.mediaSourceObj.nextSourceBufferId++;
       postMessageToMain({
@@ -648,6 +634,7 @@ export function addSourceBuffer(
         id: sourceBufferId,
         sourceBuffer: queuedSourceBuffer,
         transmuxer: mimeType === typ ? null : transmux,
+        mediaType,
       });
       contentInfo.mediaSourceObj.nextSourceBufferId++;
       return AddSourceBufferResult.success(sourceBufferId);
@@ -762,9 +749,13 @@ export function appendBuffer(
         .push(segment)
         .then(() => {
           try {
+            const timeRange = sourceBufferObj.sourceBuffer.getBufferedRanges();
+            const buffered = new BufferedRange(
+              timeRangesToFloat64Array(timeRange)
+            );
             playerInstance
               .getDispatcher()
-              ?.on_source_buffer_update(sourceBufferId);
+              ?.on_source_buffer_update(sourceBufferId, buffered);
           } catch (err) {
             const error = err instanceof Error ? err : "Unknown Error";
             logger.error("Error when calling `on_source_buffer_update`", error);
@@ -821,22 +812,26 @@ export function removeBuffer(
     }
 
     if (mediaSourceObj.type === "worker") {
-      const sourceBuffer = mediaSourceObj.sourceBuffers.find(
+      const sourceBufferObj = mediaSourceObj.sourceBuffers.find(
         ({ id }) => id === sourceBufferId
       );
-      if (sourceBuffer === undefined) {
+      if (sourceBufferObj === undefined) {
         return RemoveBufferResult.error(
           RemoveBufferErrorCode.SourceBufferNotFound,
           "SourceBuffer linked to the given id not found."
         );
       }
-      sourceBuffer.sourceBuffer
+      sourceBufferObj.sourceBuffer
         .removeBuffer(start, end)
         .then(() => {
           try {
+            const timeRange = sourceBufferObj.sourceBuffer.getBufferedRanges();
+            const buffered = new BufferedRange(
+              timeRangesToFloat64Array(timeRange)
+            );
             playerInstance
               .getDispatcher()
-              ?.on_source_buffer_update(sourceBufferId);
+              ?.on_source_buffer_update(sourceBufferId, buffered);
           } catch (err) {
             const error = err instanceof Error ? err : "Unknown Error";
             logger.error("Error when calling `on_source_buffer_update`", error);
@@ -1048,7 +1043,7 @@ export function announceFetchedContent(
     let i = 0;
     i++; // Skip number of audio tracks
     while (i < audioTracksInfo.length) {
-      const id = variantInfo[i];
+      const id = audioTracksInfo[i];
       i++;
 
       const languageLen = audioTracksInfo[i];

@@ -1,5 +1,6 @@
 use crate::{
     bindings::{jsIsTypeSupported, MediaType},
+    media_element::SegmentQualityContext,
     parser::{
         AudioTrack, MediaPlaylist, MediaPlaylistUpdateError, MultiVariantPlaylist, VariantStream,
     },
@@ -288,7 +289,6 @@ impl PlaylistStore {
                 (None, Some(new_id)) => Some(new_id),
                 _ => None,
             };
-            // XXX TODO jsAnnounceTrackUpdate
             LockVariantResponse::VariantLocked {
                 updates,
                 audio_track_change,
@@ -297,8 +297,6 @@ impl PlaylistStore {
             self.is_variant_locked = false;
             LockVariantResponse::NoVariantWithId
         }
-
-        // XXX TODO jsAnnounceBrokenLock
     }
 
     /// Disable a variant lock, previously created through the `lock_variant` method, to
@@ -342,6 +340,14 @@ impl PlaylistStore {
             MediaType::Video => self.curr_video_id.as_ref(),
             MediaType::Audio => self.curr_audio_id.as_ref(),
         }
+    }
+
+    pub(crate) fn curr_context(&self, media_type: MediaType) -> SegmentQualityContext {
+        let score = self
+            .curr_variant_id
+            .and_then(|id| self.playlist.variant(id).map(|v| v.bandwidth() as f64));
+        let quality_id = self.curr_media_playlist_id(media_type).map(|m| m.as_u32());
+        SegmentQualityContext::new(score, quality_id)
     }
 
     /// Returns a reference to the MediaPlaylist currently loaded for the given `MediaType`.

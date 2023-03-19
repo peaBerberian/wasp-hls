@@ -42,6 +42,8 @@ pub(super) struct SourceBuffer {
     /// buffer, so special considerations, such as calling the `jsFlush` function might need to be
     /// taken on buffer updates.
     needs_reflush: bool,
+
+    next_segment_id: u64,
 }
 
 impl SourceBuffer {
@@ -50,6 +52,7 @@ impl SourceBuffer {
         Logger::info(&format!("Creating new {} SourceBuffer", media_type));
         match jsAddSourceBuffer(media_type, &typ).result() {
             Ok(x) => Ok(Self {
+                next_segment_id: 0,
                 id: x,
                 typ,
                 queue: VecDeque::new(),
@@ -84,19 +87,26 @@ impl SourceBuffer {
         &mut self,
         metadata: PushMetadata,
         parse_time_info: bool,
-    ) -> Result<Option<ParsedSegmentInfo>, PushSegmentError> {
+    ) -> Result<AppendBufferResponse, PushSegmentError> {
         self.last_segment_pushed = false;
         self.was_used = true;
-        let segment_id = metadata.segment_data.id();
-        self.queue
-            .push_back(SourceBufferQueueElement::Push(metadata));
+        let segment_data = metadata.segment_data.id();
+        let segment_id = self.next_segment_id;
+        self.next_segment_id += 1;
+        self.queue.push_back(SourceBufferQueueElement::Push((
+            metadata,
+            segment_id,
+        )));
         Logger::debug(&format!("Buffer {} ({}): Pushing", self.id, self.typ));
-        match jsAppendBuffer(self.id, segment_id, parse_time_info).result() {
+        match jsAppendBuffer(self.id, segment_data, parse_time_info).result() {
             Err(err) => Err(PushSegmentError::from_append_buffer_error(
                 self.media_type,
                 err,
             )),
-            Ok(x) => Ok(x),
+            Ok(x) => Ok(AppendBufferResponse {
+                parsed: x,
+                id: segment_id,
+            }),
         }
     }
 
@@ -158,12 +168,13 @@ impl SourceBuffer {
 pub(crate) struct PushMetadata {
     /// Raw data of the segment to push.
     segment_data: JsMemoryBlob,
+
     /// Time information, as a tuple of its start time and end time in seconds as deduced from the
     /// media playlist.
     ///
     /// This should always be defined, unless the segment contains no media data (like for
     /// initialization segments).
-    pub(crate) time_info: Option<(f64, f64)>,
+    time_info: Option<(f64, f64)>,
 }
 
 impl PushMetadata {
@@ -174,12 +185,43 @@ impl PushMetadata {
             time_info,
         }
     }
+
+    pub(crate) fn time_info(&self) -> Option<&(f64, f64)> {
+        self.time_info.as_ref()
+    }
+
+    pub(crate) fn start(&self) -> Option<f64> {
+        self.time_info.map(|t| t.0)
+    }
+
+    pub(crate) fn end(&self) -> Option<f64> {
+        self.time_info.map(|t| t.1)
+    }
+}
+
+pub(crate) struct AppendBufferResponse {
+    parsed: Option<ParsedSegmentInfo>,
+    id: u64,
+}
+
+impl AppendBufferResponse {
+    pub(crate) fn segment_id(&self) -> u64 {
+        self.id
+    }
+
+    pub(crate) fn media_start(&self) -> Option<f64> {
+        self.parsed.as_ref().and_then(|p| p.start)
+    }
+
+    pub(crate) fn media_duration(&self) -> Option<f64> {
+        self.parsed.as_ref().and_then(|p| p.duration)
+    }
 }
 
 /// Enum listing possible operations awaiting to be performed on a `SourceBuffer`.
 pub(crate) enum SourceBufferQueueElement {
     /// A new chunk of media data needs to be pushed.
-    Push(PushMetadata),
+    Push((PushMetadata, u64)),
 
     /// Some already-buffered needs to be removed, `start` and `end` giving the
     /// time range of the data to remove, in seconds.

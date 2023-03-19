@@ -1,4 +1,10 @@
+import timeRangesToFloat64Array from "../ts-common/timeRangesToFloat64Array";
 import { MediaObservation, PlaybackTickReason } from "../ts-common/types";
+
+export type PlaybackObserverObservation = Omit<
+  MediaObservation,
+  "sourceBuffersBuffered"
+>;
 
 /**
  * Events for which a new playback observation is sent.
@@ -27,7 +33,7 @@ const OBSERVATION_EVENTS = [
 export default function observePlayback(
   videoElement: HTMLMediaElement,
   mediaSourceId: string,
-  onNewObservation: (observation: MediaObservation) => void
+  onNewObservation: (observation: PlaybackObserverObservation) => void
 ): () => void {
   /**
    * When set to `true`, "playback observations" have been stopped.
@@ -71,13 +77,7 @@ export default function observePlayback(
       timeoutId = undefined;
     }
 
-    const buffered = new Float64Array(videoElement.buffered.length * 2);
-    for (let i = 0; i < videoElement.buffered.length; i++) {
-      const offset = i * 2;
-      buffered[offset] = videoElement.buffered.start(i);
-      buffered[offset + 1] = videoElement.buffered.end(i);
-    }
-
+    const buffered = timeRangesToFloat64Array(videoElement.buffered);
     const { currentTime, readyState, paused, seeking, ended, duration } =
       videoElement;
     onNewObservation({
