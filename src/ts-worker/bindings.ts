@@ -30,7 +30,7 @@ import {
   RequestErrorReason,
   OtherErrorCode,
   PlaylistType,
-  BufferedRange,
+  JsTimeRanges,
 } from "../wasm/wasp_hls.js";
 import {
   cachedCodecsSupport,
@@ -750,7 +750,7 @@ export function appendBuffer(
         .then(() => {
           try {
             const timeRange = sourceBufferObj.sourceBuffer.getBufferedRanges();
-            const buffered = new BufferedRange(
+            const buffered = new JsTimeRanges(
               timeRangesToFloat64Array(timeRange)
             );
             playerInstance
@@ -826,7 +826,7 @@ export function removeBuffer(
         .then(() => {
           try {
             const timeRange = sourceBufferObj.sourceBuffer.getBufferedRanges();
-            const buffered = new BufferedRange(
+            const buffered = new JsTimeRanges(
               timeRangesToFloat64Array(timeRange)
             );
             playerInstance

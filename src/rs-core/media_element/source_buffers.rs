@@ -5,6 +5,7 @@ use crate::bindings::{
     AppendBufferErrorCode, JsResult, MediaType, ParsedSegmentInfo, SourceBufferId,
 };
 use crate::dispatcher::JsMemoryBlob;
+use crate::requester::SegmentTimeInfo;
 use crate::Logger;
 
 /// Abstraction over the Media Source Extension's `SourceBuffer` concept.
@@ -93,10 +94,8 @@ impl SourceBuffer {
         let segment_data = metadata.segment_data.id();
         let segment_id = self.next_segment_id;
         self.next_segment_id += 1;
-        self.queue.push_back(SourceBufferQueueElement::Push((
-            metadata,
-            segment_id,
-        )));
+        self.queue
+            .push_back(SourceBufferQueueElement::Push((metadata, segment_id)));
         Logger::debug(&format!("Buffer {} ({}): Pushing", self.id, self.typ));
         match jsAppendBuffer(self.id, segment_data, parse_time_info).result() {
             Err(err) => Err(PushSegmentError::from_append_buffer_error(
@@ -174,28 +173,28 @@ pub(crate) struct PushMetadata {
     ///
     /// This should always be defined, unless the segment contains no media data (like for
     /// initialization segments).
-    time_info: Option<(f64, f64)>,
+    time_info: Option<SegmentTimeInfo>,
 }
 
 impl PushMetadata {
     /// Creates a new `PushMetadata`.
-    pub(crate) fn new(segment_data: JsMemoryBlob, time_info: Option<(f64, f64)>) -> Self {
+    pub(crate) fn new(segment_data: JsMemoryBlob, time_info: Option<SegmentTimeInfo>) -> Self {
         Self {
             segment_data,
             time_info,
         }
     }
 
-    pub(crate) fn time_info(&self) -> Option<&(f64, f64)> {
+    pub(crate) fn time_info(&self) -> Option<&SegmentTimeInfo> {
         self.time_info.as_ref()
     }
 
     pub(crate) fn start(&self) -> Option<f64> {
-        self.time_info.map(|t| t.0)
+        self.time_info.as_ref().map(|t| t.start())
     }
 
     pub(crate) fn end(&self) -> Option<f64> {
-        self.time_info.map(|t| t.1)
+        self.time_info.as_ref().map(|t| t.end())
     }
 }
 

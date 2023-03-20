@@ -9,7 +9,7 @@ import {
   WorkerMessageType,
 } from "../ts-common/types";
 import initializeWasm, {
-  BufferedRange,
+  JsTimeRanges,
   MediaObservation,
   MediaType,
 } from "../wasm/wasp_hls";
@@ -130,7 +130,7 @@ export default function MessageReceiver() {
         ) {
           return;
         }
-        const buffered = new BufferedRange(data.value.buffered);
+        const buffered = new JsTimeRanges(data.value.buffered);
         dispatcher.on_source_buffer_update(data.value.sourceBufferId, buffered);
         break;
       }
@@ -146,8 +146,8 @@ export default function MessageReceiver() {
           return;
         }
 
-        let audioSbBuffered: BufferedRange | undefined;
-        let videoSbBuffered: BufferedRange | undefined;
+        let audioSbBuffered: JsTimeRanges | undefined;
+        let videoSbBuffered: JsTimeRanges | undefined;
 
         if (playerInstance.hasMseInWorker() === true) {
           for (const sourceBufferInfo of contentInfo.mediaSourceObj
@@ -156,7 +156,7 @@ export default function MessageReceiver() {
               sourceBufferInfo.sourceBuffer?.getBufferedRanges();
             if (timeRange !== undefined) {
               const toFloat64 = timeRangesToFloat64Array(timeRange);
-              const bufRange = new BufferedRange(toFloat64);
+              const bufRange = new JsTimeRanges(toFloat64);
               if (sourceBufferInfo.mediaType === MediaType.Audio) {
                 audioSbBuffered = bufRange;
               } else if (sourceBufferInfo.mediaType === MediaType.Video) {
@@ -170,7 +170,7 @@ export default function MessageReceiver() {
             .sourceBuffers) {
             const element = sbBuffered[sourceBufferInfo.id];
             if (element !== undefined) {
-              const bufRange = new BufferedRange(element);
+              const bufRange = new JsTimeRanges(element);
               if (sourceBufferInfo.mediaType === MediaType.Audio) {
                 audioSbBuffered = bufRange;
               } else if (sourceBufferInfo.mediaType === MediaType.Video) {
@@ -179,7 +179,7 @@ export default function MessageReceiver() {
             }
           }
         }
-        const bufferedTimeRange = new BufferedRange(data.value.buffered);
+        const bufferedTimeRange = new JsTimeRanges(data.value.buffered);
         const mediaObservation = new MediaObservation(
           data.value.reason,
           data.value.currentTime,

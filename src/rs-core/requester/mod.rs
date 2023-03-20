@@ -231,8 +231,9 @@ pub(crate) struct WaitingSegmentInfo {
 
     /// Start and end of the requested segment.
     /// `None` if the segment contains no media data, such as initialization segments
-    time_info: Option<(f64, f64)>,
+    time_info: Option<SegmentTimeInfo>,
 
+    /// Information about the quality linked to that segment
     context: SegmentQualityContext,
 }
 
@@ -249,7 +250,7 @@ impl WaitingSegmentInfo {
         self.byte_range.as_ref()
     }
 
-    pub(crate) fn time_info(&self) -> Option<&(f64, f64)> {
+    pub(crate) fn time_info(&self) -> Option<&SegmentTimeInfo> {
         self.time_info.as_ref()
     }
 
@@ -271,11 +272,11 @@ impl RequesterSegmentInfo for SegmentRequestInfo {
     }
 
     fn start_time(&self) -> Option<f64> {
-        Some(self.time_info?.0)
+        Some(self.time_info.as_ref()?.start())
     }
 
     fn duration(&self) -> Option<f64> {
-        Some(self.time_info?.1)
+        Some(self.time_info.as_ref()?.duration())
     }
 
     fn url(&self) -> &Url {
@@ -289,15 +290,38 @@ impl RequesterSegmentInfo for WaitingSegmentInfo {
     }
 
     fn start_time(&self) -> Option<f64> {
-        Some(self.time_info?.0)
+        Some(self.time_info.as_ref()?.start())
     }
 
     fn duration(&self) -> Option<f64> {
-        Some(self.time_info?.1)
+        Some(self.time_info.as_ref()?.duration())
     }
 
     fn url(&self) -> &Url {
         &self.url
+    }
+}
+
+pub struct SegmentTimeInfo {
+    start: f64,
+    end: f64,
+}
+
+impl SegmentTimeInfo {
+    pub(crate) fn new(start: f64, end: f64) -> Self {
+        Self { start, end }
+    }
+
+    pub(crate) fn start(&self) -> f64 {
+        self.start
+    }
+
+    pub(crate) fn end(&self) -> f64 {
+        self.end
+    }
+
+    pub(crate) fn duration(&self) -> f64 {
+        self.end - self.start
     }
 }
 
@@ -318,7 +342,7 @@ pub(crate) struct SegmentRequestInfo {
 
     /// Start and end of the requested segment.
     /// `None` if the segment contains no media data, such as initialization segments
-    time_info: Option<(f64, f64)>,
+    time_info: Option<SegmentTimeInfo>,
 
     /// Number of time the request has already been attempted.
     attempts_failed: u32,
@@ -344,7 +368,7 @@ impl SegmentRequestInfo {
         self.byte_range.as_ref()
     }
 
-    pub(crate) fn time_info(&self) -> Option<&(f64, f64)> {
+    pub(crate) fn time_info(&self) -> Option<&SegmentTimeInfo> {
         self.time_info.as_ref()
     }
 
@@ -365,7 +389,7 @@ impl SegmentRequestInfo {
     ) -> (
         Url,
         Option<ByteRange>,
-        Option<(f64, f64)>,
+        Option<SegmentTimeInfo>,
         SegmentQualityContext,
     ) {
         (self.url, self.byte_range, self.time_info, self.context)
@@ -581,7 +605,7 @@ impl Requester {
             "Req: Asking to request {} segment: t: {}, d: {}",
             media_type, seg.start, seg.duration
         ));
-        let time_info = Some((seg.start, seg.start + seg.duration));
+        let time_info = Some(SegmentTimeInfo::new(seg.start, seg.start + seg.duration));
         if self.can_start_request(seg.start) {
             self.request_segment_now(
                 &seg.url,
@@ -1001,7 +1025,7 @@ impl Requester {
         url: &Url,
         byte_range: Option<&ByteRange>,
         media_type: MediaType,
-        time_info: Option<(f64, f64)>,
+        time_info: Option<SegmentTimeInfo>,
         context: SegmentQualityContext,
     ) {
         let (range_start, range_end) = format_range_for_js(byte_range);

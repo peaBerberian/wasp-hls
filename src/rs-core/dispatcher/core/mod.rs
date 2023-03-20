@@ -1,7 +1,7 @@
 use std::cmp::Ordering;
 
 use super::{
-    event_listeners::BufferedRange, Dispatcher, JsMemoryBlob, MediaObservation,
+    event_listeners::JsTimeRanges, Dispatcher, JsMemoryBlob, MediaObservation,
     MediaSourceReadyState, PlaybackTickReason, PlayerReadyState,
 };
 use crate::{
@@ -23,7 +23,8 @@ use crate::{
         VariantUpdateResult,
     },
     requester::{
-        FinishedRequestType, PlaylistFileType, PlaylistRequestInfo, RetryResult, SegmentRequestInfo,
+        FinishedRequestType, PlaylistFileType, PlaylistRequestInfo, RetryResult,
+        SegmentRequestInfo, SegmentTimeInfo,
     },
     segment_selector::NextSegmentInfo,
     utils::url::Url,
@@ -46,7 +47,7 @@ impl Dispatcher {
             Some(FinishedRequestType::Playlist(pl_info)) => {
                 self.on_playlist_fetch_success(pl_info, data.obtain(), final_url)
             }
-            _ => Logger::warn("Unknown request finished"),
+            None => Logger::warn("Unknown request finished"),
         }
     }
 
@@ -70,7 +71,7 @@ impl Dispatcher {
                     true,
                     s.url().get_ref(),
                     time_info.is_none(),
-                    time_info.map(|t| vec![t.0, t.1]),
+                    time_info.map(|t| vec![t.start(), t.end()]),
                     s.media_type(),
                     reason,
                     status,
@@ -116,6 +117,7 @@ impl Dispatcher {
         } else {
             return;
         };
+
         if playlist_store.are_playlists_ready() {
             self.ready_state = PlayerReadyState::AwaitingSegments;
             let start_time = playlist_store.expected_start_time();
@@ -151,7 +153,7 @@ impl Dispatcher {
                 jsSendPlaylistParsingError(
                     true,
                     PlaylistType::MultiVariantPlaylist,
-                    None,
+                    None, // TODO URL?
                     Some(&e.to_string()),
                 );
                 self.internal_stop();
@@ -159,22 +161,25 @@ impl Dispatcher {
             Ok(pl) => {
                 Logger::info("MultiVariant Playlist parsed successfully");
                 self.playlist_store = Some(PlaylistStore::new(pl));
-                self.on_multivariant_playlist_ready();
+                self.check_ready_to_load_media_playlists();
             }
         }
     }
 
-    fn on_multivariant_playlist_ready(&mut self) {
-        if self.playlist_store.is_none() {
+    fn check_ready_to_load_media_playlists(&mut self) {
+        let playlist_store = if let Some(playlist_store) = self.playlist_store.as_mut() {
+            playlist_store
+        } else {
+            // No PlaylistStore == no loaded MultiVariant Playlist yet
             return;
-        }
-        let playlist_store = self.playlist_store.as_mut().unwrap();
+        };
+
         if !playlist_store.check_codecs() {
-            // Awaiting some codecs to anounce support.
+            // Awaiting query about codecs support.
             return;
         }
 
-        if playlist_store.all_variants().is_empty() {
+        if playlist_store.supported_variants().is_empty() {
             jsSendPlaylistParsingError(
                 true,
                 PlaylistType::MultiVariantPlaylist,
@@ -210,7 +215,7 @@ impl Dispatcher {
         // Because one of the rules of those bindings is to copy all pointed data
         // synchronously on call, we should not encounter any issue.
         let variants_info =
-            unsafe { format_variants_info_for_js(playlist_store.all_variants().as_slice()) };
+            unsafe { format_variants_info_for_js(playlist_store.supported_variants().as_slice()) };
         let audio_tracks_info =
             unsafe { format_audio_tracks_for_js(playlist_store.audio_tracks()) };
         let selected_audio_track = playlist_store.selected_audio_track_id();
@@ -227,9 +232,8 @@ impl Dispatcher {
 
     pub(super) fn on_codecs_support_update_core(&mut self) {
         if let Some(ref mut playlist_store) = self.playlist_store {
-            if self.ready_state <= PlayerReadyState::Loading && !playlist_store.are_codecs_checked()
-            {
-                self.on_multivariant_playlist_ready()
+            if self.ready_state <= PlayerReadyState::Loading && playlist_store.check_codecs() {
+                self.check_ready_to_load_media_playlists()
             }
         }
     }
@@ -316,7 +320,7 @@ impl Dispatcher {
     pub(super) fn on_source_buffer_update_core(
         &mut self,
         source_buffer_id: SourceBufferId,
-        buffered: BufferedRange,
+        buffered: JsTimeRanges,
     ) {
         self.media_element_ref
             .on_source_buffer_update(source_buffer_id, buffered);
@@ -356,7 +360,7 @@ impl Dispatcher {
         let was_already_locked = self.requester.lock_segment_requests();
         self.requester.update_base_position(Some(wanted_pos));
         self.segment_selectors
-            .update_base_position(wanted_pos - 0.5);
+            .update_base_position(wanted_pos - 0.2);
         self.check_segments_to_request();
         if !was_already_locked {
             self.requester.unlock_segment_requests();
@@ -365,7 +369,7 @@ impl Dispatcher {
 
     pub(super) fn on_seek(&mut self) {
         let wanted_pos = self.media_element_ref.wanted_position();
-        self.segment_selectors.reset_position(wanted_pos - 0.5);
+        self.segment_selectors.restart_from(wanted_pos - 0.2);
 
         // TODO better logic than aborting everything on seek
         self.requester.abort_all_segments();
@@ -374,41 +378,42 @@ impl Dispatcher {
     }
 
     pub(super) fn check_segments_to_request(&mut self) {
-        match self.playlist_store.as_ref() {
-            None => {}
-            Some(pl_store) => {
-                let was_already_locked = self.requester.lock_segment_requests();
-                [MediaType::Video, MediaType::Audio].iter().for_each(|mt| {
-                    let mt = *mt;
-                    if !self.requester.has_segment_request_pending(mt) {
-                        if let Some(pl) = pl_store.curr_media_playlist(mt) {
-                            match self.segment_selectors.get_mut(mt).get_next_segment_info(pl) {
-                                NextSegmentInfo::None => {}
-                                NextSegmentInfo::InitSegment(i) => {
-                                    self.requester.request_init_segment(
-                                        mt,
-                                        i.uri.clone(),
-                                        i.byte_range.as_ref(),
-                                        // TODO this is ugly and may result to future bug
-                                        // Find a better way to get context with each segment
-                                        pl_store.curr_context(mt),
-                                    )
-                                }
-                                NextSegmentInfo::MediaSegment(seg) => {
-                                    self.requester.request_media_segment(
-                                        mt,
-                                        seg,
-                                        // TODO this is ugly and may result to future bug
-                                        // Find a better way to get context with each segment
-                                        pl_store.curr_context(mt),
-                                    )
-                                }
-                            }
-                        }
-                    }
-                });
-                if !was_already_locked {
-                    self.requester.unlock_segment_requests();
+        let was_already_locked = self.requester.lock_segment_requests();
+        [MediaType::Video, MediaType::Audio].iter().for_each(|mt| {
+            self.check_segment_to_request_for_type(*mt);
+        });
+        if !was_already_locked {
+            self.requester.unlock_segment_requests();
+        }
+    }
+
+    fn check_segment_to_request_for_type(&mut self, media_type: MediaType) {
+        let pl_store = if let Some(playlist_store) = self.playlist_store.as_ref() {
+            playlist_store
+        } else {
+            return;
+        };
+        if !self.requester.has_segment_request_pending(media_type) {
+            let inventory = self.media_element_ref.inventory(media_type);
+
+            // XXX TODO this is ugly and may result to future bug
+            // Find a better way to get context with each MediaPlaylist
+            if let Some(seg_info) = pl_store.curr_media_playlist_segment_info(media_type) {
+                match self
+                    .segment_selectors
+                    .get_mut(media_type)
+                    .most_needed_segment(seg_info.0, seg_info.1, &seg_info.2, inventory)
+                {
+                    NextSegmentInfo::None => {}
+                    NextSegmentInfo::InitSegment(i) => self.requester.request_init_segment(
+                        media_type,
+                        i.uri.clone(),
+                        i.byte_range.as_ref(),
+                        seg_info.2,
+                    ),
+                    NextSegmentInfo::MediaSegment(seg) => self
+                        .requester
+                        .request_media_segment(media_type, seg, seg_info.2),
                 }
             }
         }
@@ -419,7 +424,7 @@ impl Dispatcher {
         self.requester.reset();
         jsStopObservingPlayback();
         self.media_element_ref.reset();
-        self.segment_selectors.reset_position(0.);
+        self.segment_selectors.reset(0.);
         self.playlist_store = None;
         self.last_position = 0.;
         self.playlist_refresh_timers.clear();
@@ -445,9 +450,10 @@ impl Dispatcher {
         &mut self,
         data: JsMemoryBlob,
         media_type: MediaType,
-        time_info: Option<(f64, f64)>,
+        time_info: Option<SegmentTimeInfo>,
         context: SegmentQualityContext,
     ) {
+        let segment_end = time_info.as_ref().map(|t| t.end());
         let md = PushMetadata::new(data, time_info);
         match self.media_element_ref.push_segment(media_type, md, context) {
             Err(x) => {
@@ -459,11 +465,11 @@ impl Dispatcher {
                 self.internal_stop();
             }
             Ok(()) => {
-                if let Some(ti) = time_info {
+                if let Some(segment_end) = segment_end {
                     self.segment_selectors
                         .get_mut(media_type)
-                        .validate_media(ti.0);
-                    if was_last_segment(self.playlist_store.as_ref(), media_type, ti.0) {
+                        .validate_media_until(segment_end);
+                    if was_last_segment(self.playlist_store.as_ref(), media_type, segment_end) {
                         Logger::info(&format!(
                             "Last {} segment request finished, declaring its buffer's end",
                             media_type
@@ -512,8 +518,8 @@ impl Dispatcher {
                             is_audio_track_selected,
                         );
                     }
-                    jsAnnounceVariantLockStatusChange(Some(variant_id));
                     self.handle_variant_update(updates, true);
+                    jsAnnounceVariantLockStatusChange(Some(variant_id));
                 }
             }
         }
@@ -526,21 +532,24 @@ impl Dispatcher {
         }
     }
 
+    /// Perform all actions that should be commonly taken after the current variant changes.
     fn handle_variant_update(&mut self, result: VariantUpdateResult, flush: bool) {
-        let (changed_media_types, has_improved) = match result {
-            VariantUpdateResult::Improved(mt) => (mt, true),
+        let (changed_media_types, has_worsened) = match result {
+            VariantUpdateResult::Improved(mt) => (mt, false),
             VariantUpdateResult::EqualOrUnknown(mt) => (mt, false),
-            VariantUpdateResult::Worsened(mt) => (mt, false),
+            VariantUpdateResult::Worsened(mt) => (mt, true),
             VariantUpdateResult::Unchanged => {
                 return;
             }
         };
-        self.handle_media_playlist_update(&changed_media_types, flush || has_improved, flush);
+        self.handle_media_playlist_update(&changed_media_types, flush || has_worsened, flush);
         if let Some(pl_store) = self.playlist_store.as_mut() {
             jsAnnounceVariantUpdate(pl_store.curr_variant().map(|v| v.id()));
         }
     }
 
+    /// Perform all actions that should be commonly taken after one or multiple of the current Media
+    /// Playlists change.
     fn handle_media_playlist_update(
         &mut self,
         changed_media_types: &[MediaType],
@@ -551,10 +560,10 @@ impl Dispatcher {
             changed_media_types.iter().for_each(|mt| {
                 let mt = *mt;
                 Logger::info(&format!("{} MediaPlaylist changed", mt));
+
+                let selector = self.segment_selectors.get_mut(mt);
                 if abort_prev {
                     self.requester.abort_segments_with_type(mt);
-                    self.segment_selectors
-                        .reset_position_for_type(mt, self.last_position - 0.5);
                 }
                 if flush {
                     if let Err(e) = self.media_element_ref.flush(mt) {
@@ -563,11 +572,8 @@ impl Dispatcher {
                             e
                         ));
                     }
+                    selector.restart_from(self.media_element_ref.wanted_position() - 0.2);
                 }
-                self.requester.abort_segments_with_type(mt);
-                let selector = self.segment_selectors.get_mut(mt);
-                selector.rollback();
-                selector.reset_init_segment();
                 if pl_store.curr_media_playlist(mt).is_none() {
                     if let Some(id) = pl_store.curr_media_playlist_id(mt) {
                         if let Some(url) = pl_store.media_playlist_url(id) {
@@ -596,11 +602,11 @@ impl Dispatcher {
             let media_type = segment_req.media_type();
             match segment_req.time_info() {
                 None => format!("Loaded {} init segment", media_type),
-                Some((start, end)) => format!(
+                Some(time_info) => format!(
                     "Loaded {} segment: t: {}, d: {}",
                     media_type,
-                    start,
-                    end - start
+                    time_info.start(),
+                    time_info.duration()
                 ),
             }
         });

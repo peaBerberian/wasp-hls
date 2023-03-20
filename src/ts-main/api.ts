@@ -44,8 +44,6 @@ import {
   onVariantLockStatusChangeMessage,
 } from "./worker-message-handlers";
 
-const DEFAULT_MPEG2_TS_TYPE = 'video/mp2t;codecs="avc1.4D401F"';
-
 // Allows to ensure a never-seen-before identifier is used for each content.
 const generateContentId = idGenerator();
 
@@ -322,7 +320,7 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
    * TODO return promise?
    * @param {string} url
    */
-  public loadContent(url: string): void {
+  public load(url: string): void {
     if (this.__worker__ === null) {
       throw new Error("The Player is not initialized or disposed.");
     }

@@ -499,13 +499,10 @@ export function onStartPlaybackObservationMessage(
         const toFloat64 = timeRangesToFloat64Array(ranges);
         sourceBuffersBuffered[sourceBuffer.sourceBufferId] = toFloat64;
       }
-      postMessageToWorker(
-        worker,
-        {
-          type: MainMessageType.MediaObservation,
-          value: Object.assign(value, { sourceBuffersBuffered }),
-        }
-      );
+      postMessageToWorker(worker, {
+        type: MainMessageType.MediaObservation,
+        value: Object.assign(value, { sourceBuffersBuffered }),
+      });
     }
   );
 }

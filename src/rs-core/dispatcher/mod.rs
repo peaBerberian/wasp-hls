@@ -13,7 +13,7 @@ mod core;
 mod event_listeners;
 
 pub(crate) use event_listeners::{
-    BufferedRange, JsMemoryBlob, MediaObservation, PlaybackTickReason,
+    JsMemoryBlob, JsTimeRanges, MediaObservation, PlaybackTickReason,
 };
 
 /// The `Dispatcher` is the player Interface exported to the JavaScript-side,
