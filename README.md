@@ -55,7 +55,7 @@ The reasons why I started this project are mainly:
 
 ## What's left to do?
 
-We already have a lot of features but there's still some left work:
+It already has a lot of features but there's still some left work:
 
 Type of contents:
 
@@ -77,9 +77,16 @@ Adaptive BitRate:
 - [x] Allow application to list and select its own variant (quality) and know
       the current one
 - [x] Automatically filter out codecs not supported by the current environment.
-- [ ] Fast-switching (Push on top of already-loaded imminent segments if they
-      prove to be of higher quality, don't if they are of lower quality).
+- [x] Urgent/non-urgent quality switches (Some quality switches lead to request
+      for segments of the previous quality to be immediately interrupted, others
+      await them before actually switching).
+- [ ] Fast-switching (Push on top of already-loaded segments if they prove to be
+      of higher quality - and if doing so won't impact playback).
       _Priority: high_
+- [ ] Smart-switching (I just made-up the name here :D, but basically it's for
+      the opposite situation than the one in which fast-switching is active :
+      don't re-load segments who're already loaded / being pushed with a higher
+      quality).
 - [ ] Also choose variant based on buffer-based estimates.
       _Priority: average_
 - [ ] Logic to detect sudden large fall in bandwidth before the end of a current
@@ -88,10 +95,11 @@ Adaptive BitRate:
 
 Request Scheduling:
 
-- [x] Lazy Media Playlist downloading
+- [x] Lazy Media Playlist downloading (only fetch and refresh them once they ar
+      needed)
 - [x] Media Playlist refreshing for live contents
 - [x] Buffer goal implementation (as in: stop loading segments once enough to
-      fill the buffer up to a certain point are loaded)
+      fill the buffer up to a certain - configurable - point are loaded)
 - [x] Parallel audio and video segment loading
 - [x] Priorization between audio and video segment requests (to e.g. stop
       doing audio segment requests when video ones become urgent).
@@ -102,9 +110,17 @@ Request Scheduling:
 
 Media demuxing/decoding, MSE API and buffer handling:
 
-- [x] Transmux mpeg-ts (thanks to mux.js for now)
-- [x] End of stream support (as in: actually end when playback reached the end!)
-- [x] Multiple simultaneous type of buffers support (for now only audio and video)
+- [x] Transmux mpeg-ts (thanks to mux.js on the worker for now)
+- [x] End of stream support (as in: actually end when playback reaches the end!)
+- [x] Multiple simultaneous type of buffers support (for now only audio and
+      video, through MSE `SourceBuffer`s)
+- [x] Lazy buffer memory management: Don't manually remove old buffers' media
+      data if the browser thinks it's fine. Many players clean it up
+      progressively as it also simplifies the logic (e.g. browser GC detection
+      might become unneeded) but I like the idea of keeping it to e.g. allow
+      seek-back without rebuffering if the current device allows it.
+- [ ] Detect browser Garbage Collection of segments and re-load GCed segment if
+      they are needed again.
 - [ ] Discontinuity handling.
       _Priority: average_
 - [ ] Proper handling of `QuotaExceededError` after pushing segments (when low
@@ -142,8 +158,8 @@ most do not prevent playback):
       not, but also to detect if we're playing an unfinished live content to
       play close to the live edge by default.
 - [x] EXTINF: Only the indicated duration of a segment is considered, not
-      the title for which we have no use for now. Both integer and float durations
-      should be handled.
+      the title for which there's no use for now. Both integer and float
+      durations should be handled.
 - [x] EXT-X-PROGRAM-DATE-TIME: Used to determine the starting position of
       segments as stored by the player - which may be different than the actual
       media time once the corresponding segment is pushed.
@@ -173,6 +189,7 @@ most do not prevent playback):
   - [ ] FORCED: As the SUBTITLES TYPE is not handled yet, we don't have to use
         this one
   - [ ] INSTREAM-ID: As the CLOSED-CAPTIONS TYPE is not handled yet, we don't
+        have to use this one.
   - [ ] STABLE-RENDITION-ID: Not really needed for now (only for content steering?)
 - EXT-X-STREAM-INF:
   - [x] BANDWIDTH: Used to select the right variant in function of the
@@ -186,15 +203,15 @@ most do not prevent playback):
   - [x] RESOLUTION: Used to describe variant in variant selection API
   - [x] FRAME-RATE: Used to describe variant in variant selection API
   - [ ] SCORE: Not considered yet, but should be used alongside BANDWIDTH to
+        select a variant. It does not seem hard to implement...
   - [ ] STABLE-VARIANT-ID: Not really needed for now (only for content steering?)
         used.
   - [ ] AVERAGE-BANDWIDTH: Not used yet. I don't know if it's useful yet.
-        select a variant. It does not seem hard to implement...
   - [ ] SUPPLEMENTAL-CODECS: In our web use case, I'm not sure if this is only
         useful for track selection API or if filtering also needs to be done based
         on this.
   - [ ] SUBTITLES: No subtitles support for now
-  - [ ] CLOSED-CAPTIONS: We just ignore that one for now
+  - [ ] CLOSED-CAPTIONS: that one is just ignored for now
   - [ ] PATHWAY-ID: Content Steering not handled yet
   - [ ] HDCP-LEVEL: DRM are not handled for now
   - [ ] ALLOWED-CPC: DRM are not handled for now
