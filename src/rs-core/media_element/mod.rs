@@ -5,11 +5,11 @@ use crate::bindings::{
     jsSetPlaybackRate, jsStartRebuffering, jsStopRebuffering, AttachMediaSourceErrorCode, JsResult,
     MediaType, SourceBufferId,
 };
-use crate::dispatcher::{BufferedRange, MediaObservation, MediaSourceReadyState};
+use crate::dispatcher::{JsTimeRanges, MediaObservation, MediaSourceReadyState};
 use crate::Logger;
 use source_buffers::{PushSegmentError, RemoveDataError};
 
-pub(crate) use self::segment_inventory::SegmentQualityContext;
+pub(crate) use self::segment_inventory::{BufferedChunk, SegmentQualityContext};
 pub(crate) use source_buffers::PushMetadata;
 
 mod segment_inventory;
@@ -30,6 +30,8 @@ pub(crate) struct MediaElementReference {
     /// Stores the last `MediaObservation` received.
     last_observation: Option<MediaObservation>,
 
+    /// If `true`, we're currently forcing a "rebuffering" mode where the playback rate is set to
+    /// `0` and will only be set back to `wanted_speed` once enough data becomes available again.
     is_rebuffering: bool,
 
     /// Offset used to convert the media position on the HTMLMediaElement (ultimately linked to
@@ -59,7 +61,12 @@ pub(crate) struct MediaElementReference {
     /// and so on
     wanted_speed: f64,
 
+    /// Inventory of buffered segments present in the audio buffer.
+    /// Empty if no audio buffer is present.
     audio_inventory: SegmentInventory,
+
+    /// Inventory of buffered segments present in the video buffer.
+    /// Empty if no video buffer is present.
     video_inventory: SegmentInventory,
 }
 
@@ -142,6 +149,28 @@ impl MediaElementReference {
                     .unwrap_or(last_media_pos)
             }
         }
+    }
+
+    /// Returns the buffered range where the currently wanted position resides
+    /// as a tuple of its start and end values in seconds.
+    ///
+    /// Returns `null` if the wanted_position is not yet present in a buffered range.
+    pub(crate) fn current_range(&self) -> Option<(f64, f64)> {
+        self.last_observation
+            .as_ref()
+            .and_then(|o| o.buffered().range_for(self.wanted_position()))
+    }
+
+    /// Returns the difference between the last position of the last known
+    /// buffered range and the currently wanted position, in seconds.
+    ///
+    /// Basically, it's the amount left to play before rebuffering (or ending
+    /// if no further data is pushed to the buffer.
+    pub(crate) fn last_buffer_gap(&self) -> f64 {
+        self.last_observation
+            .as_ref()
+            .and_then(|o| o.buffered().buffer_gap(self.wanted_position()))
+            .unwrap_or(0.)
     }
 
     /// Perform a seek, that is, move the current position to another one.
@@ -258,9 +287,9 @@ impl MediaElementReference {
                 let response = sb.append_buffer(metadata, do_time_parsing)?;
 
                 let media_start = response.media_start();
-                let media_end = response.media_duration().and_then(|d| {
-                    media_start.map(|start| start + d)
-                });
+                let media_end = response
+                    .media_duration()
+                    .and_then(|d| media_start.map(|start| start + d));
 
                 if let (Some(start), Some(end)) =
                     (media_start.or(metadata_start), media_end.or(metadata_end))
@@ -270,6 +299,11 @@ impl MediaElementReference {
                         start,
                         end,
                         context,
+
+                        // TODO method to push init and method to push media to be sure those
+                        // are never None?
+                        playlist_start: metadata_start.unwrap_or(0.),
+                        playlist_end: metadata_end.unwrap_or(0.),
                     };
                     match media_type {
                         MediaType::Audio => self.audio_inventory.insert_segment(inventory_metadata),
@@ -319,6 +353,13 @@ impl MediaElementReference {
                 sb.flush_buffer();
                 Ok(())
             }
+        }
+    }
+
+    pub(crate) fn inventory(&self, media_type: MediaType) -> &[BufferedChunk] {
+        match media_type {
+            MediaType::Audio => self.audio_inventory.inventory(),
+            MediaType::Video => self.video_inventory.inventory(),
         }
     }
 
@@ -397,7 +438,7 @@ impl MediaElementReference {
     pub(crate) fn on_source_buffer_update(
         &mut self,
         source_buffer_id: SourceBufferId,
-        buffered: BufferedRange,
+        buffered: JsTimeRanges,
     ) {
         if let Some(ref mut sb) = self.audio_buffer {
             if sb.id() == source_buffer_id {

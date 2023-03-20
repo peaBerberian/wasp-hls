@@ -41,6 +41,7 @@ pub struct MapInfo {
 
 #[derive(Clone, Debug)]
 pub struct SegmentInfo {
+    // TODO include SegmentTimeInfo in here?
     pub start: f64,
     pub duration: f64,
     pub byte_range: Option<ByteRange>,

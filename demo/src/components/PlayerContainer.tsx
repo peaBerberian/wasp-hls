@@ -24,8 +24,8 @@ export default React.memo(function PlayerContainer({
     let isRemoved = false;
     const videoElt = document.createElement("video");
     videoElt.className = "video video-small";
-    videoElt.autoplay = true;
     const waspHlsPlayer = new WaspHlsPlayer(videoElt);
+
     /* eslint-disable-next-line */
     (window as any).player = waspHlsPlayer;
     waspHlsPlayer

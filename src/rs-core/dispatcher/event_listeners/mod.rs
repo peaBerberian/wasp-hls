@@ -1,4 +1,4 @@
-use std::{ops::Index, iter::Map, slice::Chunks};
+use std::{iter::Map, ops::Index, slice::Chunks};
 
 use crate::{
     bindings::{
@@ -94,7 +94,7 @@ impl Dispatcher {
     pub fn on_source_buffer_update(
         &mut self,
         source_buffer_id: SourceBufferId,
-        buffered: BufferedRange,
+        buffered: JsTimeRanges,
     ) {
         self.on_source_buffer_update_core(source_buffer_id, buffered);
     }
@@ -216,16 +216,16 @@ impl Drop for JsMemoryBlob {
 }
 
 #[wasm_bindgen]
-pub struct BufferedRange {
+pub struct JsTimeRanges {
     buffered: Vec<f64>,
 }
 
 #[wasm_bindgen]
-impl BufferedRange {
+impl JsTimeRanges {
     #[wasm_bindgen(constructor)]
     pub fn new(buffered: Vec<f64>) -> Self {
         if buffered.len() % 2 != 0 {
-            panic!("Incorrect BufferedRange object");
+            panic!("Incorrect JsTimeRanges object");
         }
         Self { buffered }
     }
@@ -251,14 +251,16 @@ impl BufferedRange {
     }
 }
 
-impl Index<usize> for BufferedRange {
+impl Index<usize> for JsTimeRanges {
     type Output = [f64; 2];
     fn index(&self, index: usize) -> &Self::Output {
-        self.buffered.as_slice()[index..index+1].try_into().unwrap()
+        self.buffered.as_slice()[index..index + 1]
+            .try_into()
+            .unwrap()
     }
 }
 
-impl BufferedRange {
+impl JsTimeRanges {
     pub(crate) fn range(&self, idx: usize) -> Option<(f64, f64)> {
         self.buffered
             .get(idx * 2)
@@ -268,18 +270,29 @@ impl BufferedRange {
     pub(crate) fn range_unchecked(&self, idx: usize) -> (f64, f64) {
         (self.buffered[idx * 2], self.buffered[(idx * 2) + 1])
     }
+
+    pub(crate) fn range_for(&self, pos: f64) -> Option<(f64, f64)> {
+        for range in self.into_iter() {
+            if pos < range.1 {
+                return if pos >= range.0 { Some(range) } else { None };
+            }
+        }
+        None
+    }
+
+    pub(crate) fn buffer_gap(&self, pos: f64) -> Option<f64> {
+        self.range_for(pos).map(|r| r.1 - pos)
+    }
 }
 
-impl<'a> IntoIterator for &'a BufferedRange {
+impl<'a> IntoIterator for &'a JsTimeRanges {
     type Item = (f64, f64);
 
     // Yep, not easy to look at. Maybe future Rust feature can simplify that mess
-    type IntoIter = Map<Chunks<'a, f64>, fn(&'a[f64]) -> (f64, f64)>;
+    type IntoIter = Map<Chunks<'a, f64>, fn(&'a [f64]) -> (f64, f64)>;
 
     fn into_iter(self) -> Self::IntoIter {
-        self.buffered
-            .chunks(2)
-            .map(|vals| (vals[0], vals[1]))
+        self.buffered.chunks(2).map(|vals| (vals[0], vals[1]))
     }
 }
 
@@ -288,13 +301,13 @@ pub struct MediaObservation {
     reason: PlaybackTickReason,
     current_time: f64,
     ready_state: u8,
-    buffered: BufferedRange,
+    buffered: JsTimeRanges,
     paused: bool,
     seeking: bool,
     ended: bool,
     duration: f64,
-    audio_buffered: Option<BufferedRange>,
-    video_buffered: Option<BufferedRange>,
+    audio_buffered: Option<JsTimeRanges>,
+    video_buffered: Option<JsTimeRanges>,
 }
 
 #[wasm_bindgen]
@@ -305,13 +318,13 @@ impl MediaObservation {
         reason: PlaybackTickReason,
         current_time: f64,
         ready_state: u8,
-        buffered: BufferedRange,
+        buffered: JsTimeRanges,
         paused: bool,
         seeking: bool,
         ended: bool,
         duration: f64,
-        audio_buffered: Option<BufferedRange>,
-        video_buffered: Option<BufferedRange>,
+        audio_buffered: Option<JsTimeRanges>,
+        video_buffered: Option<JsTimeRanges>,
     ) -> Self {
         Self {
             reason,
@@ -345,7 +358,7 @@ impl MediaObservation {
     }
 
     #[inline(always)]
-    pub fn buffered(&self) -> &BufferedRange {
+    pub fn buffered(&self) -> &JsTimeRanges {
         &self.buffered
     }
 
@@ -370,12 +383,12 @@ impl MediaObservation {
     }
 
     #[inline(always)]
-    pub fn audio_buffered(&self) -> Option<&BufferedRange> {
+    pub fn audio_buffered(&self) -> Option<&JsTimeRanges> {
         self.audio_buffered.as_ref()
     }
 
     #[inline(always)]
-    pub fn video_buffered(&self) -> Option<&BufferedRange> {
+    pub fn video_buffered(&self) -> Option<&JsTimeRanges> {
         self.video_buffered.as_ref()
     }
 }

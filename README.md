@@ -80,11 +80,11 @@ Adaptive BitRate:
 - [x] Urgent/non-urgent quality switches (Some quality switches lead to request
       for segments of the previous quality to be immediately interrupted, others
       await them before actually switching).
-- [ ] Fast-switching (Push on top of already-loaded segments if they prove to be
-      of higher quality - and if doing so won't impact playback).
-      _Priority: high_
-- [ ] Smart-switching (I just made-up the name here :D, but basically it's for
-      the opposite situation than the one in which fast-switching is active :
+- [x] Fast-switching (Push on top of already-loaded segments if they prove to be
+      of higher quality - and are sufficiently far from playback to lead to
+      rebuffering).
+- [x] Smart-switching (I just made-up the name here :D, but basically it's for
+      the opposite situation than the one in which fast-switching is active:
       don't re-load segments who're already loaded / being pushed with a higher
       quality).
 - [ ] Also choose variant based on buffer-based estimates.
@@ -144,6 +144,8 @@ Tracks:
 Miscellaneous:
 
 - [x] Error API
+- [ ] Initial position API
+      _Priority: average_
 - [ ] Delta playlist handling.
       _Priority: low_
 - [ ] Content Steering handling.

@@ -84,6 +84,7 @@ export default React.memo(function VideoPlayer({
           disableSpinner();
           enableClickableVideo();
           setError(null);
+          player.resume();
           break;
         case PlayerState.Error:
           disableSpinner();

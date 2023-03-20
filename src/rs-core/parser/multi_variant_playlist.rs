@@ -117,6 +117,10 @@ impl MultiVariantPlaylist {
         &self.url
     }
 
+    pub(crate) fn all_variants(&self) -> &[VariantStream] {
+        self.variants.as_slice()
+    }
+
     /// Returns information on all known variants linked to this `MultiVariantPlaylist`, ordered by
     /// `bandwidth` ascending, for which all codecs are known to be supported.
     pub(crate) fn supported_variants(&self) -> Vec<&VariantStream> {
@@ -141,6 +145,12 @@ impl MultiVariantPlaylist {
                 }
             })
             .collect()
+    }
+
+    /// Returns mutable reference to information on all known variants linked to this
+    /// `MultiVariantPlaylist`, ordered by `bandwidth` ascending.
+    pub(crate) fn variants(&mut self) -> &[VariantStream] {
+        self.variants.as_slice()
     }
 
     /// Returns mutable reference to information on all known variants linked to this

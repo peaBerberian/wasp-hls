@@ -21,7 +21,7 @@ export default React.memo(function ContentInput({
     if (inputElRef.current === null) {
       return;
     }
-    player.loadContent(inputElRef.current.value);
+    player.load(inputElRef.current.value);
   }, [player]);
   const onKeyDown = React.useCallback(
     (e: { key: string }) => {
