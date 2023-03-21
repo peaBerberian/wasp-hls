@@ -3,6 +3,31 @@ import { MainMessageType } from "../ts-common/types";
 import postMessageToWorker from "./postMessageToWorker";
 import { ContentMetadata } from "./types";
 
+const DEFAULT_MPEG2_TS_TYPE = 'video/mp2t;codecs="avc1.4D401F"';
+
+const isFirefox = navigator.userAgent.toLowerCase().indexOf("firefox") !== -1;
+
+/**
+ * Returns `true` if the current environment can support mpeg2-ts contents.
+ * @returns {boolean}
+ */
+export function canDemuxMpeg2Ts(): boolean {
+  if (isFirefox) {
+    // Very sadly, Firefox seems to pollute te console with a warning when
+    // testing unsupported mime-types this way.
+    //
+    // As a library, we don't like having side-effect in the console because it
+    // may annoy applications' developers.
+    // Because of this, it is penalized, no MPEG-TS for you, nah! This should
+    // be the case in most (all?) cases anyways.
+    return false;
+  }
+  return (
+    typeof MediaSource === "function" &&
+    MediaSource.isTypeSupported(DEFAULT_MPEG2_TS_TYPE)
+  );
+}
+
 export function getErrorInformation(
   err: unknown,
   defaultMsg: string

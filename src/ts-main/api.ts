@@ -15,7 +15,7 @@ import { MediaType } from "../wasm/wasp_hls";
 import { WaspInitializationError } from "./errors";
 import postMessageToWorker from "./postMessageToWorker";
 import { ContentMetadata, PlayerState } from "./types";
-import { requestStopForContent, waitForLoad } from "./utils";
+import { canDemuxMpeg2Ts, requestStopForContent, waitForLoad } from "./utils";
 import {
   onAppendBufferMessage,
   onAttachMediaSourceMessage,
@@ -688,9 +688,7 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
           typeof MediaSource === "function" &&
           /* eslint-disable-next-line */
           (MediaSource as any).canConstructInDedicatedWorker === true,
-        canDemuxMpeg2Ts:
-          typeof MediaSource === "function" &&
-          MediaSource.isTypeSupported(DEFAULT_MPEG2_TS_TYPE),
+        canDemuxMpeg2Ts: canDemuxMpeg2Ts(),
         wasmUrl,
         logLevel: logger.getLevel(),
         initialConfig: this.__config__,
