@@ -492,7 +492,7 @@ impl SegmentInventory {
                 //  new_segment   :    |====|
                 //  ===>          : |--|====|
                 Logger::debug(&format!(
-                    "SI: {} segment pushed updates end of previous one (s:{}, e:{}, ps: {}, pe:{}",
+                    "SI: {} segment pushed updates end of previous one (s:{}, e:{}, ps: {}, pe:{})",
                     self.media_type, start, end, base_seg.start, base_seg.end
                 ));
 
@@ -638,6 +638,7 @@ impl SegmentInventory {
                 Logger::warn("SI: wanted segment not inserted");
             }
         }
+        self.clean_up();
     }
 
     /// Returns the whole inventory.
@@ -781,6 +782,7 @@ impl SegmentInventory {
             self.inventory.truncate(segment_idx);
         }
         self.process_pending_updates(updates);
+        self.clean_up();
 
         // TODO The following log produces too much output, but is VERY useful while debugging,
         // find a better solution
@@ -800,6 +802,28 @@ impl SegmentInventory {
         // });
     }
 
+    /// Remove segments which became too small from the `SegmentInventory`.
+    fn clean_up(&mut self) {
+        let mut updates: Vec<PendingBufferedChunkModificationTask> = vec![];
+        self.inventory
+            .iter()
+            .enumerate()
+            .for_each(|(seg_idx, seg)| {
+                if seg.last_buffered_end() - seg.last_buffered_start() < 0.01 {
+                    Logger::debug(&format!(
+                        "SI: {} segment became too small removing (s:{}, e:{}, bs:{}, be:{})",
+                        self.media_type,
+                        seg.start,
+                        seg.end,
+                        seg.last_buffered_start(),
+                        seg.last_buffered_end()
+                    ));
+                    updates.push(PendingBufferedChunkModificationTask::Removal(seg_idx));
+                }
+            });
+        self.process_pending_updates(updates);
+    }
+
     fn process_pending_updates(&mut self, mut updates: Vec<PendingBufferedChunkModificationTask>) {
         while let Some(update) = updates.pop() {
             match update {
@@ -809,9 +833,6 @@ impl SegmentInventory {
                 PendingBufferedChunkModificationTask::UpdateStart { index, start } => {
                     if let Some(seg) = self.inventory.get_mut(index) {
                         seg.last_buffered_start = start;
-                        if seg.last_buffered_end - seg.last_buffered_start < 0.01 {
-                            self.inventory.remove(index);
-                        }
                     } else {
                         Logger::error("SI: unfound index when updating start");
                     }
@@ -819,9 +840,6 @@ impl SegmentInventory {
                 PendingBufferedChunkModificationTask::UpdateEnd { index, end } => {
                     if let Some(seg) = self.inventory.get_mut(index) {
                         seg.last_buffered_end = end;
-                        if seg.last_buffered_end - seg.last_buffered_start < 0.01 {
-                            self.inventory.remove(index);
-                        }
                     } else {
                         Logger::error("SI: unfound index when updating end");
                     }
