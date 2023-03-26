@@ -346,7 +346,7 @@ impl SegmentInventory {
                     // Segments are not contiguous yet the range ends after the next one.
                     // Weird but OK
                     Logger::warn(&format!(
-                        "SI: {} range unexpectedly include next segment (re: {}, ps:{}, s:{})",
+                        "SI: {} range unexpectedly include next segment (re: {}, ns:{}, s:{})",
                         self.media_type, range_end, next_buf_start, seg.start
                     ));
                     0.
