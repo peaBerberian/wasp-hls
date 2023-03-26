@@ -2,8 +2,8 @@
 
 ## Description
 
-instantiating a WaspHlsPlayer is a necessary step before using most of its API,
-like `loadContent` to load a new HLS content.
+instantiating a `WaspHlsPlayer` is a necessary step before using most of its API,
+like `load` to load a new HLS content.
 
 It is here that the `HTMLVideoElement` (the `<video />` HTML element) on which
 the content will play is given to the `WaspHlsPlayer`:

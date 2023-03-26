@@ -2,7 +2,7 @@
 
 ## Instantiation
 
-Each WaspHlsPlayer allows to play HLS content on a single video element.
+Each `WaspHlsPlayer` allows to play HLS content on a single video element.
 
 That video element has to be provided on instanciation like this:
 
@@ -10,17 +10,20 @@ That video element has to be provided on instanciation like this:
 const player = new WaspHlsPlayer(videoElement);
 ```
 
-The `WaspHlsPlayer` optionally can take a second argument, which allows to
-overwrite its initial configuration. More information on this object is
-available [in the API documentation (TODO)](TODO).
+More information on the WaspHlsPlayer's constructor can be found [in the
+API documentation page presenting the instantiation step](../API/Instantiation.md).
+
+Note that the `WaspHlsPlayer`'s constructor optionally can take a second
+argument, which allows to overwrite its initial configuration.
+More information on this object is available [in the API documentation](XXX TODO).
 
 Before being ready to load contents on that new instance, we now have to
 "initialize" it, which is an operation described in the next chapter.
 
 ## WaspHlsPlayer initialization
 
-Before it can actually load a content, the `WaspHlsPlayer` needs to have access
-to two files :
+Before it can actually load a content, the `WaspHlsPlayer` needs to let it have
+access to two files:
 
 1. The worker file, which contains code which will run concurrently to your
    application.
@@ -28,9 +31,10 @@ to two files :
 2. The WebAssembly file, used by the worker file to run efficiently its
    internal logic.
 
-Both of those files have to be served via HTTP(S) (through a solution of your
-choosing), and can be communicated to the `WaspHlsPlayer` through its
-`initialize` method:
+Both of those files can be retrieved [in the release page](https://github.com/peaBerberian/wasp-hls/releases)
+(you MUST choose the one linked to your actual `WaspHlsPlayer`'s version).
+They then have to be served via HTTP(S) (through a solution of your choosing),
+and can be communicated to the `WaspHlsPlayer` through its `initialize` method:
 
 ```js
 player
@@ -48,50 +52,5 @@ player
   );
 ```
 
-As you can see, the `initialize` method returns a promise, which is only
-resolved once the initialization process succeeded. You have to wait for
-that condition before using most of the WaspHlsPlayer's methods.
-
-That promise might also reject in the following situations:
-
-- The provided files could not be requested.
-- An issue happened while trying to run and/or compile the given files
-
-In those cases, the promise returned by `initialize` will reject.
-That promise might also reject if the player was disposed (through its `dispose`
-method) before initialization finished with success.
-
-Note that you can check the status of the initialization at any time by looking
-at the WaspHlsPlayer's `initializationStatus` property:
-
-```js
-switch (player.initializationStatus) {
-  case "Uninitialized":
-    console.log("The WaspHlsPlayer has never been initialized.");
-    break;
-
-  case "Initializing":
-    console.log("The WaspHlsPlayer is currently initializing.");
-    break;
-
-  case "Initialized":
-    console.log("The WaspHlsPlayer has been initialized with success.");
-    break;
-
-  case "errored":
-    console.log("The WaspHlsPlayer's initialization has failed.");
-    break;
-
-  case "disposed":
-    console.log("The WaspHlsPlayer's instance has been disposed.");
-    break;
-}
-```
-
-### Note for the WebAssembly file
-
-It is generally recommended for performance reasons to serve WebAssembly files
-with the a `Content-Type` HTTP(S) response header set to `application-wasm`.
-
-Note however that this is not an obligation and that the actual performance
-impact is relatively small.
+For more information on this "initialization" step, you can consult [the API
+documentation page dedicated to it, here](../API/Initialization.md).

@@ -11,7 +11,7 @@ allowing to do so in an optimized way.
 
 The `WaspHlsPlayer` requires both features to be available in environment it
 runs. It also support more advanced features, such as [MSE-in-Workers](https://chromestatus.com/feature/5177263249162240)
-on browser that support them, though it can also run efficiently on
+on browsers that support them, though it can also run efficiently on
 environments without those.
 All of those features should ensure that an heavy UI won't have a huge influence
 on media buffering, as well as ensuring that the media loading, parsing and
@@ -19,12 +19,16 @@ buffering operations won't be felt when interacting with the page.
 
 ## Very quick start
 
-Because on a web browser, both WebWorker and WebAssembly files have to be
+Because on a Web Browser, both WebWorker and WebAssembly files have to be
 loaded separately from your main script, both of those also have to be
-served (on your servers) separately from your application's script, which
-relies on the third part of the `WaspHlsPlayer`: its API.
+served (on your servers) separately from your application's script.
 
-With both of those scripts behind an URL, you can now write:
+You can find them [on the release page](https://github.com/peaBerberian/wasp-hls/releases),
+they are respectively the files whose name starts by "worker" and "wasm", listed
+in the files of the release you're using (on the bottom of the release note).
+
+Once they are hosted on your server, you can now play your HLS content by
+writing:
 
 ```js
 import WaspHlsPlayer from "wasp-hls";
@@ -39,7 +43,7 @@ player
   .then(
     () => {
       // We can now load a content
-      player.loadContent(HLS_MULTIVARIANT_PLAYLIST_URL);
+      player.load(HLS_MULTIVARIANT_PLAYLIST_URL);
     },
     (err) => {
       console.error("Could not initialize WaspHlsPlayer:", err);

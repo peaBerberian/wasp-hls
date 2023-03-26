@@ -7,6 +7,14 @@
     {
       "path": "./Instantiation.md",
       "displayName": "WaspHlsPlayer Instantiation"
+    },
+    {
+      "path": "./Initialization.md",
+      "displayName": "Initialization"
+    },
+    {
+      "path": "./Loading_a_content.md",
+      "displayName": "Loading a content"
     }
   ]
 }
