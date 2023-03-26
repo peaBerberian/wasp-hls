@@ -7,7 +7,7 @@ use crate::{
     },
     dispatcher::{Dispatcher, MediaSourceReadyState},
     utils::url::Url,
-    wasm_bindgen,
+    wasm_bindgen, Logger,
 };
 
 /// Methods triggered on JavaScript events by the JavaScript code.
@@ -224,9 +224,11 @@ impl JsTimeRanges {
     #[wasm_bindgen(constructor)]
     pub fn new(buffered: Vec<f64>) -> Self {
         if buffered.len() % 2 != 0 {
-            panic!("Incorrect JsTimeRanges object");
+            Logger::error("Incorrect JsTimeRanges object");
+            Self { buffered: vec![] }
+        } else {
+            Self { buffered }
         }
-        Self { buffered }
     }
 
     pub fn len(&self) -> usize {
