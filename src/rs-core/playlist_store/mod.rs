@@ -2,8 +2,8 @@ use crate::{
     bindings::{jsIsTypeSupported, MediaType},
     media_element::SegmentQualityContext,
     parser::{
-        AudioTrack, MediaPlaylist, MediaPlaylistUpdateError, MultiVariantPlaylist,
-        VariantStream, SegmentList,
+        AudioTrack, MediaPlaylist, MediaPlaylistUpdateError, MultiVariantPlaylist, SegmentList,
+        VariantStream,
     },
     utils::url::Url,
     Logger,
@@ -125,8 +125,7 @@ impl PlaylistStore {
                 .playlist
                 .supported_variants()
                 .iter()
-                .find(|v| v.id() == self.curr_variant_id)
-                .is_some();
+                .any(|v| v.id() == self.curr_variant_id);
 
             if !curr_variant_still_here {
                 let new_variant_id = self.playlist.supported_variants().get(0).map(|v| v.id());

@@ -421,13 +421,13 @@ impl MediaPlaylist {
         &self.segment_list
     }
 
-//     pub(crate) fn init_segment(&self) -> Option<&InitSegmentInfo> {
-//         self.map.as_ref()
-//     }
+    //     pub(crate) fn init_segment(&self) -> Option<&InitSegmentInfo> {
+    //         self.map.as_ref()
+    //     }
 
-//     pub(crate) fn segment_list(&self) -> &[SegmentInfo] {
-//         &self.segment_list
-//     }
+    //     pub(crate) fn segment_list(&self) -> &[SegmentInfo] {
+    //         &self.segment_list
+    //     }
 
     pub(crate) fn beginning(&self) -> Option<f64> {
         self.segment_list.media().first().map(|s| s.start())

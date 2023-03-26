@@ -23,8 +23,7 @@ use crate::{
         VariantUpdateResult,
     },
     requester::{
-        FinishedRequestType, PlaylistFileType, PlaylistRequestInfo, RetryResult,
-        SegmentRequestInfo,
+        FinishedRequestType, PlaylistFileType, PlaylistRequestInfo, RetryResult, SegmentRequestInfo,
     },
     segment_selector::NextSegmentInfo,
     utils::url::Url,
@@ -164,7 +163,7 @@ impl Dispatcher {
                     Ok(pl_store) => {
                         self.playlist_store = Some(pl_store);
                         self.check_ready_to_load_media_playlists();
-                    },
+                    }
                     Err(err) => {
                         jsSendOtherError(
                             true,
@@ -172,7 +171,7 @@ impl Dispatcher {
                             Some(&err.to_string()),
                         );
                         self.internal_stop();
-                    },
+                    }
                 }
             }
         }
@@ -190,7 +189,7 @@ impl Dispatcher {
             Ok(false) => {
                 // Awaiting query about codecs support.
                 return;
-            },
+            }
             Err(err) => {
                 jsSendOtherError(
                     true,
@@ -199,8 +198,8 @@ impl Dispatcher {
                 );
                 self.internal_stop();
                 return;
-            },
-            _ => {},
+            }
+            _ => {}
         }
 
         if playlist_store.supported_variants().is_empty() {
@@ -255,25 +254,7 @@ impl Dispatcher {
     }
 
     pub(super) fn on_codecs_support_update_core(&mut self) {
-        if let Some(ref mut playlist_store) = self.playlist_store {
-
-            match playlist_store.check_codecs() {
-                Ok(false) => {
-                    // Awaiting query about codecs support.
-                    return;
-                },
-                Err(err) => {
-                    jsSendOtherError(
-                        true,
-                        crate::bindings::OtherErrorCode::Unknown,
-                        Some(&err.to_string()),
-                    );
-                    self.internal_stop();
-                    return;
-                },
-                _ => self.check_ready_to_load_media_playlists(),
-            }
-        }
+        self.check_ready_to_load_media_playlists();
     }
 
     /// Method called as a MediaPlaylist Playlist is loaded

@@ -1,7 +1,7 @@
 use crate::{
     bindings::MediaType,
     media_element::{BufferedChunk, SegmentQualityContext},
-    parser::{SegmentInfo, SegmentList, InitSegmentInfo, SegmentTimeInfo},
+    parser::{InitSegmentInfo, SegmentInfo, SegmentList, SegmentTimeInfo},
     Logger,
 };
 
@@ -209,7 +209,7 @@ impl NextSegmentSelector {
                     ));
                     return prev_end;
                 }
-                if seg_i.is_worse_than(&context) {
+                if seg_i.is_worse_than(context) {
                     // We found a segment of worse quality, we can replace it, unless it is
                     // ending soon, to avoid rebuffering.
                     //
@@ -257,7 +257,7 @@ impl NextSegmentSelector {
                 return Some(seg_start);
             }
         }
-        return None;
+        None
     }
 
     fn recursively_check_most_needed_media_segment<'a>(
@@ -267,7 +267,10 @@ impl NextSegmentSelector {
         inventory: &[BufferedChunk],
     ) -> NextSegmentInfo<'a> {
         let maximum_position = self.buffer_goal + self.base_pos;
-        match self.segment_queue.get_next(media_segments, maximum_position) {
+        match self
+            .segment_queue
+            .get_next(media_segments, maximum_position)
+        {
             None => NextSegmentInfo::None,
             Some(si) => {
                 let segment_end = si.end();
@@ -277,7 +280,8 @@ impl NextSegmentSelector {
                 if self.can_be_skipped(si.start(), segment_end, context, inventory) {
                     Logger::debug(&format!(
                         "Selector: Segment can be skipped (s:{}, d: {})",
-                        si.start(), si.duration()
+                        si.start(),
+                        si.duration()
                     ));
                     let skipped = SegmentTimeInfo::new(si.start(), segment_end);
                     match self
@@ -389,9 +393,7 @@ impl SegmentQueue {
         maximum_position: f64,
     ) -> Option<&'a SegmentInfo> {
         let position = self.validated_pos.unwrap_or(self.initial_pos);
-        let next_seg = media_segments
-            .iter()
-            .find(|s| (s.end()) > position);
+        let next_seg = media_segments.iter().find(|s| (s.end()) > position);
         match next_seg {
             Some(seg) if seg.start() <= maximum_position => next_seg,
             _ => None,

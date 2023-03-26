@@ -359,8 +359,8 @@ impl SegmentInventory {
         };
 
         let mut seg = self.inventory.get_mut(seg_idx).unwrap();
-        seg.start = seg.start + start_correction;
-        seg.end = seg.end + end_correction;
+        seg.start += start_correction;
+        seg.end += end_correction;
         seg.last_buffered_start = seg.start;
         seg.last_buffered_end = seg.end;
         seg.validated = true;

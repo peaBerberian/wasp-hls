@@ -1,4 +1,5 @@
 /// Represent a range of time, from a start to an end, generally in seconds
+#[derive(Clone, Debug)]
 pub struct TimeRange {
     start: f64,
     end: f64,
@@ -16,14 +17,9 @@ impl TimeRange {
 }
 
 /// Abstracts non-contiguous chronological ranges of time, generally expressed in seconds.
+#[derive(Clone, Debug, Default)]
 pub(crate) struct TimeRanges {
     ranges: Vec<TimeRange>,
-}
-
-impl Default for TimeRanges {
-    fn default() -> Self {
-        Self { ranges: vec![] }
-    }
 }
 
 impl TimeRanges {

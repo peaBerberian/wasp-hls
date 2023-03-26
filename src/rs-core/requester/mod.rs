@@ -580,17 +580,13 @@ impl Requester {
     ) {
         Logger::info(&format!(
             "Req: Asking to request {} segment: t: {}, d: {}",
-            media_type, seg.start(), seg.duration()
+            media_type,
+            seg.start(),
+            seg.duration()
         ));
         let time_info = Some(seg.time_info().clone());
         if self.can_start_request(seg.start()) {
-            self.request_segment_now(
-                seg.url(),
-                seg.byte_range(),
-                media_type,
-                time_info,
-                context,
-            )
+            self.request_segment_now(seg.url(), seg.byte_range(), media_type, time_info, context)
         } else {
             Logger::debug("Req: pushing segment request to queue");
             self.segment_waiting_queue.push(WaitingSegmentInfo {
