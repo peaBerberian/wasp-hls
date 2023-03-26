@@ -119,7 +119,7 @@ Media demuxing/decoding, MSE API and buffer handling:
       progressively as it also simplifies the logic (e.g. browser GC detection
       might become unneeded) but I like the idea of keeping it to e.g. allow
       seek-back without rebuffering if the current device allows it.
-- [ ] Detect browser Garbage Collection of segments and re-load GCed segment if
+- [x] Detect browser Garbage Collection of segments and re-load GCed segment if
       they are needed again.
 - [ ] Discontinuity handling.
       _Priority: average_
