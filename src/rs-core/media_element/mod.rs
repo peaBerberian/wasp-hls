@@ -10,7 +10,7 @@ use crate::Logger;
 use source_buffers::{PushSegmentError, RemoveDataError};
 
 pub(crate) use self::segment_inventory::{BufferedChunk, SegmentQualityContext};
-pub(crate) use source_buffers::PushMetadata;
+pub(crate) use source_buffers::SegmentPushData;
 
 mod segment_inventory;
 mod source_buffers;
@@ -270,7 +270,7 @@ impl MediaElementReference {
     pub(crate) fn push_segment(
         &mut self,
         media_type: MediaType,
-        metadata: PushMetadata,
+        metadata: SegmentPushData,
         context: SegmentQualityContext,
     ) -> Result<(), PushSegmentError> {
         let has_media_offset = self.media_offset.is_some();

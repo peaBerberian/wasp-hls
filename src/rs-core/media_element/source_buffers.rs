@@ -44,11 +44,23 @@ pub(super) struct SourceBuffer {
     /// taken on buffer updates.
     needs_reflush: bool,
 
+    /// Identifier for the next pushed media segment.
+    /// Identifying pushed segments this way may be helpful to keep track of when that operation is
+    /// finished.
     next_segment_id: u64,
 }
 
 impl SourceBuffer {
     /// Create a new `SourceBuffer` for the given `MediaType` and the mime-type indicated by `typ`.
+    ///
+    /// # Arguments
+    ///
+    /// * `media_type` - The `MediaType` that will handle this `SourceBuffer`. A `SourceBuffer`
+    ///   handling multiple times at once is expected to:
+    ///     1. At least contain video content
+    ///     2. Be set to `MediaType::Video`, even if it also contains audio for example
+    ///
+    /// * `mime_type` - Mime-type to use when creating this `SourceBuffer` on the JavaScript-side.
     pub(super) fn new(media_type: MediaType, typ: String) -> Result<Self, AddSourceBufferError> {
         Logger::info(&format!("Creating new {} SourceBuffer", media_type));
         match jsAddSourceBuffer(media_type, &typ).result() {
@@ -62,13 +74,13 @@ impl SourceBuffer {
                 last_segment_pushed: false,
                 media_type,
             }),
-            Err(err) => Err(AddSourceBufferError::from_add_source_buffer_error(
+            Err(err) => Err(AddSourceBufferError::from_js_add_source_buffer_error(
                 err, &typ,
             )),
         }
     }
 
-    /// Get the `SourceBufferId`, needed to refer to that SourceBuffer when interacting with
+    /// Returns the `SourceBufferId`, needed to refer to that SourceBuffer when interacting with
     /// JavaScript.
     pub(super) fn id(&self) -> SourceBufferId {
         self.id
@@ -80,25 +92,35 @@ impl SourceBuffer {
         !self.queue.is_empty()
     }
 
-    /// Push a new segment to the SourceBuffer.
+    /// Pushes a new segment to the SourceBuffer.
     ///
     /// If the `parse_time_info` bool in argument is set to `true`, the segment might be parsed to
     /// recuperate its time information which will be returned if found.
+    ///
+    /// # Arguments
+    ///
+    /// * `data` - Actual data AND metadata on the segment you want to push. See
+    /// `SegmentPushData`
+    ///   documentation for more information.
+    ///
+    /// * `parse_time_info` - If set to `true`, the segment's data will be read before pushing it
+    ///   to try recuperate its timing information. If it has been parsed with success, it will
+    ///   be contained in the `AppendBufferResponse` returned by this method.
     pub(super) fn append_buffer(
         &mut self,
-        metadata: PushMetadata,
+        data: SegmentPushData,
         parse_time_info: bool,
     ) -> Result<AppendBufferResponse, PushSegmentError> {
         self.last_segment_pushed = false;
         self.was_used = true;
-        let segment_data = metadata.segment_data.id();
+        let segment_data = data.segment_data.id();
         let segment_id = self.next_segment_id;
         self.next_segment_id += 1;
         self.queue
-            .push_back(SourceBufferQueueElement::Push((metadata, segment_id)));
+            .push_back(SourceBufferQueueElement::Push((data, segment_id)));
         Logger::debug(&format!("Buffer {} ({}): Pushing", self.id, self.typ));
         match jsAppendBuffer(self.id, segment_data, parse_time_info).result() {
-            Err(err) => Err(PushSegmentError::from_append_buffer_error(
+            Err(err) => Err(PushSegmentError::from_js_append_buffer_error(
                 self.media_type,
                 err,
             )),
@@ -109,7 +131,15 @@ impl SourceBuffer {
         }
     }
 
-    /// Remove media data from this `SourceBuffer`, based on a `start` and `end` time in seconds.
+    /// Remove media data from this `SourceBuffer`, based js_on a `start` and `end` time in seconds.
+    ///
+    /// # Arguments
+    ///
+    /// * `start` - Start time, in seconds, of the range of time which should be removed from the
+    /// `SourceBuffer`.
+    ///
+    /// * `end` - End time, in seconds, of the range of time which should be removed from the
+    /// `SourceBuffer`.
     pub(super) fn remove_buffer(&mut self, start: f64, end: f64) {
         self.was_used = true;
         self.queue
@@ -142,8 +172,8 @@ impl SourceBuffer {
         self.last_segment_pushed
     }
 
-    /// To call once a `SourceBuffer` operation, either created through `append_buffer` or
-    /// `remove_buffer`, has been finished by the underlying MSE SourceBuffer.
+    /// To call once a `SourceBuffer` operation, either created through `append_buffer`,
+    /// `remove_buffer` or `flush_buffer` has been finished by the underlying MSE SourceBuffer.
     pub(super) fn on_operation_end(&mut self) -> Option<SourceBufferQueueElement> {
         let queue_elt = self.queue.pop_front();
         match queue_elt {
@@ -164,7 +194,7 @@ impl SourceBuffer {
 }
 
 /// Structure describing a segment that should be pushed to the SourceBuffer.
-pub(crate) struct PushMetadata {
+pub(crate) struct SegmentPushData {
     /// Raw data of the segment to push.
     segment_data: JsMemoryBlob,
 
@@ -176,8 +206,18 @@ pub(crate) struct PushMetadata {
     time_info: Option<SegmentTimeInfo>,
 }
 
-impl PushMetadata {
-    /// Creates a new `PushMetadata`.
+impl SegmentPushData {
+    /// Creates a new `SegmentPushData` object linked to the given data and time information.
+    ///
+    /// The `time_info` parameter should only be set to `None` for initialization segments without
+    /// any media data.
+    ///
+    /// # Arguments
+    ///
+    /// * `segment_data` - The segment's actual data.
+    ///
+    /// * `time_info` - The playlist-originated time information on that segment. It SHOULD NOT be
+    /// set to none if the segment contains decodable media data.
     pub(crate) fn new(segment_data: JsMemoryBlob, time_info: Option<SegmentTimeInfo>) -> Self {
         Self {
             segment_data,
@@ -185,33 +225,59 @@ impl PushMetadata {
         }
     }
 
+    /// Get time information linked to this segment as a reference to its `SegmentTimeInfo` object.
+    ///
+    /// Returns `None` if the segment is an initialization segment without any media data.
     pub(crate) fn time_info(&self) -> Option<&SegmentTimeInfo> {
         self.time_info.as_ref()
     }
 
+    /// Returns start, in seconds, at which the segment starts.
+    ///
+    /// Returns `None` if the segment is an initialization segment without any media data.
     pub(crate) fn start(&self) -> Option<f64> {
         self.time_info.as_ref().map(|t| t.start())
     }
 
+    /// Returns end, in seconds, at which the segment ends.
+    ///
+    /// Returns `None` if the segment is an initialization segment without any media data.
     pub(crate) fn end(&self) -> Option<f64> {
         self.time_info.as_ref().map(|t| t.end())
     }
 }
 
+/// Represents a successful response from the `append_buffer` SourceBuffer's method.
 pub(crate) struct AppendBufferResponse {
+    /// Time information optionally parsed from the segment itself.
     parsed: Option<ParsedSegmentInfo>,
+
+    /// Identifier for the segment, this same identifier will also be returned by
+    /// `on_operation_end` once it finishes the corresponding operation.
     id: u64,
 }
 
 impl AppendBufferResponse {
+    /// Returns the `id` for the pushed segment, this same identifier will also be returned by
+    /// `on_operation_end` once it finishes the corresponding operation.
     pub(crate) fn segment_id(&self) -> u64 {
         self.id
     }
 
+    /// Returns the optionally parsed start time, in seconds, found when parsing the segment's
+    /// internals.
+    ///
+    /// If set it is generally closer to the real segment's start time, once pushed to the browser,
+    /// than what the Media Playlist told us.
     pub(crate) fn media_start(&self) -> Option<f64> {
         self.parsed.as_ref().and_then(|p| p.start)
     }
 
+    /// Returns the optionally parsed duration, in seconds, found when parsing the segment's
+    /// internals.
+    ///
+    /// If set it is generally closer to the real segment's duration, once pushed to the browser,
+    /// than what the Media Playlist told us.
     pub(crate) fn media_duration(&self) -> Option<f64> {
         self.parsed.as_ref().and_then(|p| p.duration)
     }
@@ -220,7 +286,7 @@ impl AppendBufferResponse {
 /// Enum listing possible operations awaiting to be performed on a `SourceBuffer`.
 pub(crate) enum SourceBufferQueueElement {
     /// A new chunk of media data needs to be pushed.
-    Push((PushMetadata, u64)),
+    Push((SegmentPushData, u64)),
 
     /// Some already-buffered needs to be removed, `start` and `end` giving the
     /// time range of the data to remove, in seconds.
@@ -240,16 +306,39 @@ use thiserror::Error;
 /// time.
 #[derive(Debug)]
 pub(super) enum AddSourceBufferError {
+    /// No MediaSource was found to attach that `SourceBuffer`.
     NoMediaSourceAttached { message: String },
+
+    /// The current `MediaSource` instance is in a "closed" state.
+    /// As such it is not possible to attach a `SourceBuffer` to it anymore.
     MediaSourceIsClosed,
+
+    /// A `QuotaExceededError` was received while trying to add the `SourceBuffer`
+    ///
+    /// Such errors are often encountered when another SourceBuffer attached to the same
+    /// MediaSource instance was already updated through a buffer operation.
     QuotaExceededError { message: String },
+
+    /// The given mime-type is not supported
     TypeNotSupportedError { mime_type: String, message: String },
+
+    /// The given mime-type was an empty string
     EmptyMimeType,
+
+    /// An unknown error happened.
     UnknownError { message: String },
 }
 
 impl AddSourceBufferError {
-    fn from_add_source_buffer_error(
+    /// Translate `AppendBufferErrorCode` and its optional accompanying message, as returned by the
+    /// `jsAppendBuffer` JavaScript function, into the corresponding `AddSourceBufferError`.
+    ///
+    /// # Arguments
+    ///
+    /// * `err` - The error received from the `jsAppendBuffer` JavaScript function.
+    ///
+    /// * `mime_type` - Mime-type linked to this SourceBuffer.
+    fn from_js_add_source_buffer_error(
         err: (AddSourceBufferErrorCode, Option<String>),
         mime_type: &str,
     ) -> Self {
@@ -303,7 +392,13 @@ pub(crate) enum PushSegmentError {
 impl PushSegmentError {
     /// Creates a new `PushSegmentError` based on a given `MediaType` and the original error as
     /// returned by the `jsAppendBuffer` binding.
-    fn from_append_buffer_error(
+    ///
+    /// # Arguments
+    ///
+    /// * `media_type` - The `MediaType` linked to the corresponding `SourceBuffer`.
+    ///
+    /// * `err` - The error received from the `jsAppendBuffer` JavaScript function.
+    fn from_js_append_buffer_error(
         media_type: MediaType,
         err: (AppendBufferErrorCode, Option<String>),
     ) -> Self {

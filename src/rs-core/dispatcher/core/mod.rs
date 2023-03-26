@@ -16,7 +16,7 @@ use crate::{
         jsStartObservingPlayback, jsStopObservingPlayback, jsTimer, jsUpdateContentInfo, MediaType,
         PlaylistType, RequestId, SourceBufferId, TimerId, TimerReason,
     },
-    media_element::{PushMetadata, SegmentQualityContext, SourceBufferCreationError},
+    media_element::{SegmentPushData, SegmentQualityContext, SourceBufferCreationError},
     parser::{MultiVariantPlaylist, SegmentTimeInfo},
     playlist_store::{
         LockVariantResponse, MediaPlaylistPermanentId, PlaylistStore, SetAudioTrackResponse,
@@ -470,7 +470,7 @@ impl Dispatcher {
         context: SegmentQualityContext,
     ) {
         let segment_time = time_info.as_ref().map(|t| (t.start(), t.end()));
-        let md = PushMetadata::new(data, time_info);
+        let md = SegmentPushData::new(data, time_info);
         match self.media_element_ref.push_segment(media_type, md, context) {
             Err(x) => {
                 jsSendOtherError(

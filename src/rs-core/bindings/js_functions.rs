@@ -547,7 +547,7 @@ pub enum AddSourceBufferErrorCode {
     /// MediaSource instance was already updated through a buffer operation.
     QuotaExceededError,
 
-    /// The given mime-type and codec  combination is not supported
+    /// The given mime-type and codec combination is not supported
     TypeNotSupportedError,
 
     /// The given mime-type and codec combination is empty
