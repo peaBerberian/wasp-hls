@@ -2,8 +2,8 @@ use crate::{
     bindings::{jsIsTypeSupported, MediaType},
     media_element::SegmentQualityContext,
     parser::{
-        AudioTrack, MapInfo, MediaPlaylist, MediaPlaylistUpdateError, MultiVariantPlaylist,
-        SegmentInfo, VariantStream,
+        AudioTrack, MediaPlaylist, MediaPlaylistUpdateError, MultiVariantPlaylist,
+        VariantStream, SegmentList,
     },
     utils::url::Url,
     Logger,
@@ -389,7 +389,7 @@ impl PlaylistStore {
     pub(crate) fn curr_media_playlist_segment_info(
         &self,
         media_type: MediaType,
-    ) -> Option<(Option<&MapInfo>, &[SegmentInfo], SegmentQualityContext)> {
+    ) -> Option<(&SegmentList, SegmentQualityContext)> {
         if let Some(wanted_id) = match media_type {
             MediaType::Video => &self.curr_video_id,
             MediaType::Audio => &self.curr_audio_id,
@@ -403,7 +403,7 @@ impl PlaylistStore {
                     .bandwidth() as f64;
 
                 let context = SegmentQualityContext::new(score, wanted_id.as_u32());
-                (m.init_segment(), m.segment_list(), context)
+                (m.segment_list(), context)
             })
         } else {
             None
@@ -420,8 +420,9 @@ impl PlaylistStore {
     pub(crate) fn curr_init_segment(&self, media_type: MediaType) -> Option<&Url> {
         self.curr_media_playlist(media_type)
             .as_ref()?
-            .init_segment()
-            .map(|i| &i.uri)
+            .segment_list()
+            .init()
+            .map(|i| i.uri())
     }
 
     /// Returns currently estimated start time in seconds at which to begin playing the content.

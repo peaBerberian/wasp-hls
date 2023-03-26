@@ -5,8 +5,8 @@ use crate::bindings::{
     AppendBufferErrorCode, JsResult, MediaType, ParsedSegmentInfo, SourceBufferId,
 };
 use crate::dispatcher::JsMemoryBlob;
-use crate::requester::SegmentTimeInfo;
 use crate::Logger;
+use crate::parser::SegmentTimeInfo;
 
 /// Abstraction over the Media Source Extension's `SourceBuffer` concept.
 ///

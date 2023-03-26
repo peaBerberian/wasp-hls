@@ -17,14 +17,14 @@ use crate::{
         PlaylistType, RequestId, SourceBufferId, TimerId, TimerReason,
     },
     media_element::{PushMetadata, SegmentQualityContext, SourceBufferCreationError},
-    parser::MultiVariantPlaylist,
+    parser::{MultiVariantPlaylist, SegmentTimeInfo},
     playlist_store::{
         LockVariantResponse, MediaPlaylistPermanentId, PlaylistStore, SetAudioTrackResponse,
         VariantUpdateResult,
     },
     requester::{
         FinishedRequestType, PlaylistFileType, PlaylistRequestInfo, RetryResult,
-        SegmentRequestInfo, SegmentTimeInfo,
+        SegmentRequestInfo,
     },
     segment_selector::NextSegmentInfo,
     utils::url::Url,
@@ -402,18 +402,18 @@ impl Dispatcher {
                 match self
                     .segment_selectors
                     .get_mut(media_type)
-                    .most_needed_segment(seg_info.0, seg_info.1, &seg_info.2, inventory)
+                    .most_needed_segment(seg_info.0, &seg_info.1, inventory)
                 {
                     NextSegmentInfo::None => {}
                     NextSegmentInfo::InitSegment(i) => self.requester.request_init_segment(
                         media_type,
-                        i.uri.clone(),
-                        i.byte_range.as_ref(),
-                        seg_info.2,
+                        i.uri().clone(),
+                        i.byte_range(),
+                        seg_info.1,
                     ),
                     NextSegmentInfo::MediaSegment(seg) => self
                         .requester
-                        .request_media_segment(media_type, seg, seg_info.2),
+                        .request_media_segment(media_type, seg, seg_info.1),
                 }
             }
         }
@@ -678,8 +678,9 @@ fn was_last_segment(
             pl.is_ended()
                 && pl
                     .segment_list()
+                    .media()
                     .last()
-                    .map(|x| x.start == seg_start)
+                    .map(|x| x.start() == seg_start)
                     .unwrap_or(false)
         })
         .unwrap_or(false)

@@ -5,10 +5,10 @@ mod multi_variant_playlist;
 mod utils;
 mod variant_stream;
 
-pub use audio_track_list::AudioTrack;
-pub use media_playlist::{ByteRange, MapInfo, MediaPlaylist, SegmentInfo, SegmentList};
-pub use media_tag::{MediaTag, MediaTagType};
-pub use multi_variant_playlist::{
+pub(crate) use audio_track_list::AudioTrack;
+pub(crate) use media_playlist::{ByteRange, SegmentList, MediaPlaylist, SegmentInfo, InitSegmentInfo, SegmentTimeInfo};
+pub(crate) use media_tag::{MediaTag, MediaTagType};
+pub(crate) use multi_variant_playlist::{
     MediaPlaylistPermanentId, MediaPlaylistUpdateError, MultiVariantPlaylist,
 };
-pub use variant_stream::{VariantStream, VideoResolution};
+pub(crate) use variant_stream::{VariantStream, VideoResolution};

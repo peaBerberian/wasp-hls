@@ -1,8 +1,7 @@
 use crate::{
     bindings::MediaType,
     media_element::{BufferedChunk, SegmentQualityContext},
-    parser::{MapInfo, SegmentInfo},
-    requester::SegmentTimeInfo,
+    parser::{SegmentInfo, SegmentList, InitSegmentInfo, SegmentTimeInfo},
     Logger,
 };
 
@@ -153,10 +152,7 @@ impl NextSegmentSelector {
     /// "validated" init and media segment (see the other methods).
     pub(crate) fn most_needed_segment<'a>(
         &mut self,
-
-        // XXX TODO that's ugly right there
-        init_segment: Option<&'a MapInfo>,
-        segment_list: &'a [SegmentInfo],
+        segment_list: &'a SegmentList,
         context: &SegmentQualityContext,
         inventory: &[BufferedChunk],
     ) -> NextSegmentInfo<'a> {
@@ -174,14 +170,14 @@ impl NextSegmentSelector {
         }
 
         if self.init_status == InitializationSegmentSelectorStatus::Unvalidated {
-            if let Some(i) = init_segment {
+            if let Some(i) = segment_list.init() {
                 return NextSegmentInfo::InitSegment(i);
             } else {
                 self.init_status = InitializationSegmentSelectorStatus::None;
             }
         }
         self.check_skipped_segments(context, inventory);
-        self.recursively_check_most_needed_media_segment(segment_list, context, inventory)
+        self.recursively_check_most_needed_media_segment(segment_list.media(), context, inventory)
     }
 
     /// Starts from `self.base_pos`, look at what is already buffered, and determine a new optimal
@@ -266,35 +262,35 @@ impl NextSegmentSelector {
 
     fn recursively_check_most_needed_media_segment<'a>(
         &mut self,
-        segment_list: &'a [SegmentInfo],
+        media_segments: &'a [SegmentInfo],
         context: &SegmentQualityContext,
         inventory: &[BufferedChunk],
     ) -> NextSegmentInfo<'a> {
         let maximum_position = self.buffer_goal + self.base_pos;
-        match self.segment_queue.get_next(segment_list, maximum_position) {
+        match self.segment_queue.get_next(media_segments, maximum_position) {
             None => NextSegmentInfo::None,
             Some(si) => {
-                let segment_end = si.start + si.duration;
+                let segment_end = si.end();
 
                 // Check for "smart-switching", which is to avoid returning segments who have
                 // already an equal or even better quality in the buffer.
-                if self.can_be_skipped(si.start, segment_end, context, inventory) {
+                if self.can_be_skipped(si.start(), segment_end, context, inventory) {
                     Logger::debug(&format!(
                         "Selector: Segment can be skipped (s:{}, d: {})",
-                        si.start, si.duration
+                        si.start(), si.duration()
                     ));
-                    let skipped = SegmentTimeInfo::new(si.start, segment_end);
+                    let skipped = SegmentTimeInfo::new(si.start(), segment_end);
                     match self
                         .skipped_segments
                         .iter()
-                        .position(|sk| sk.start() > si.start)
+                        .position(|sk| sk.start() > si.start())
                     {
                         Some(pos) => self.skipped_segments.insert(pos, skipped),
                         None => self.skipped_segments.push(skipped),
                     }
                     self.segment_queue.validate_until(segment_end);
                     self.recursively_check_most_needed_media_segment(
-                        segment_list,
+                        media_segments,
                         context,
                         inventory,
                     )
@@ -361,7 +357,7 @@ impl NextSegmentSelector {
 pub(crate) enum NextSegmentInfo<'a> {
     None,
     MediaSegment(&'a SegmentInfo),
-    InitSegment(&'a MapInfo),
+    InitSegment(&'a InitSegmentInfo),
 }
 
 #[derive(Clone, Debug)]
@@ -389,15 +385,15 @@ impl SegmentQueue {
 
     pub(crate) fn get_next<'a>(
         &mut self,
-        segment_list: &'a [SegmentInfo],
+        media_segments: &'a [SegmentInfo],
         maximum_position: f64,
     ) -> Option<&'a SegmentInfo> {
         let position = self.validated_pos.unwrap_or(self.initial_pos);
-        let next_seg = segment_list
+        let next_seg = media_segments
             .iter()
-            .find(|s| (s.start + s.duration) > position);
+            .find(|s| (s.end()) > position);
         match next_seg {
-            Some(seg) if seg.start <= maximum_position => next_seg,
+            Some(seg) if seg.start() <= maximum_position => next_seg,
             _ => None,
         }
     }

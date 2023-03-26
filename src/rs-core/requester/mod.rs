@@ -4,7 +4,7 @@ use crate::{
         RequestErrorReason, RequestId, TimerId, TimerReason,
     },
     media_element::SegmentQualityContext,
-    parser::{ByteRange, SegmentInfo},
+    parser::{ByteRange, SegmentInfo, SegmentTimeInfo},
     playlist_store::MediaPlaylistPermanentId,
     utils::url::Url,
     Logger,
@@ -302,29 +302,6 @@ impl RequesterSegmentInfo for WaitingSegmentInfo {
     }
 }
 
-pub struct SegmentTimeInfo {
-    start: f64,
-    end: f64,
-}
-
-impl SegmentTimeInfo {
-    pub(crate) fn new(start: f64, end: f64) -> Self {
-        Self { start, end }
-    }
-
-    pub(crate) fn start(&self) -> f64 {
-        self.start
-    }
-
-    pub(crate) fn end(&self) -> f64 {
-        self.end
-    }
-
-    pub(crate) fn duration(&self) -> f64 {
-        self.end - self.start
-    }
-}
-
 /// Metadata associated with a pending media segment request.
 pub(crate) struct SegmentRequestInfo {
     /// ID identifying the request on the JavaScript-side.
@@ -603,13 +580,13 @@ impl Requester {
     ) {
         Logger::info(&format!(
             "Req: Asking to request {} segment: t: {}, d: {}",
-            media_type, seg.start, seg.duration
+            media_type, seg.start(), seg.duration()
         ));
-        let time_info = Some(SegmentTimeInfo::new(seg.start, seg.start + seg.duration));
-        if self.can_start_request(seg.start) {
+        let time_info = Some(seg.time_info().clone());
+        if self.can_start_request(seg.start()) {
             self.request_segment_now(
-                &seg.url,
-                seg.byte_range.as_ref(),
+                seg.url(),
+                seg.byte_range(),
                 media_type,
                 time_info,
                 context,
@@ -618,8 +595,8 @@ impl Requester {
             Logger::debug("Req: pushing segment request to queue");
             self.segment_waiting_queue.push(WaitingSegmentInfo {
                 media_type,
-                url: seg.url.clone(),
-                byte_range: seg.byte_range.clone(),
+                url: seg.url().clone(),
+                byte_range: seg.byte_range().cloned(),
                 time_info,
                 context,
             });

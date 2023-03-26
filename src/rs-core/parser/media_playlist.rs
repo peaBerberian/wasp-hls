@@ -11,6 +11,50 @@ use super::{
 
 pub use super::utils::ByteRange;
 
+#[derive(Clone, Debug)]
+pub(crate) struct SegmentTimeInfo {
+    start: f64,
+    duration: f64,
+}
+
+impl SegmentTimeInfo {
+    pub(crate) fn new(start: f64, duration: f64) -> Self {
+        Self { start, duration }
+    }
+
+    pub(crate) fn start(&self) -> f64 {
+        self.start
+    }
+
+    pub(crate) fn end(&self) -> f64 {
+        self.start + self.duration
+    }
+
+    pub(crate) fn duration(&self) -> f64 {
+        self.duration
+    }
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct SegmentList {
+    init: Option<InitSegmentInfo>,
+    media: Vec<SegmentInfo>,
+}
+
+impl SegmentList {
+    fn new(init: Option<InitSegmentInfo>, media: Vec<SegmentInfo>) -> Self {
+        Self { init, media }
+    }
+
+    pub(crate) fn init(&self) -> Option<&InitSegmentInfo> {
+        self.init.as_ref()
+    }
+
+    pub(crate) fn media(&self) -> &[SegmentInfo] {
+        self.media.as_slice()
+    }
+}
+
 /// Structure representing the concept of the `Media Playlist` in HLS.
 #[derive(Clone, Debug)]
 pub struct MediaPlaylist {
@@ -22,8 +66,7 @@ pub struct MediaPlaylist {
     end_list: bool,
     playlist_type: PlaylistType,
     i_frames_only: bool,
-    map: Option<MapInfo>,
-    segment_list: Vec<SegmentInfo>,
+    segment_list: SegmentList,
     url: Url,
     // TODO
     // pub server_control: ServerControl,
@@ -34,18 +77,52 @@ pub struct MediaPlaylist {
 }
 
 #[derive(Clone, Debug)]
-pub struct MapInfo {
-    pub uri: Url,
-    pub byte_range: Option<ByteRange>,
+pub(crate) struct InitSegmentInfo {
+    uri: Url,
+    byte_range: Option<ByteRange>,
+}
+
+impl InitSegmentInfo {
+    pub(crate) fn byte_range(&self) -> Option<&ByteRange> {
+        self.byte_range.as_ref()
+    }
+
+    pub(crate) fn uri(&self) -> &Url {
+        &self.uri
+    }
 }
 
 #[derive(Clone, Debug)]
-pub struct SegmentInfo {
-    // TODO include SegmentTimeInfo in here?
-    pub start: f64,
-    pub duration: f64,
-    pub byte_range: Option<ByteRange>,
-    pub url: Url,
+pub(crate) struct SegmentInfo {
+    time_info: SegmentTimeInfo,
+    byte_range: Option<ByteRange>,
+    url: Url,
+}
+
+impl SegmentInfo {
+    pub(crate) fn start(&self) -> f64 {
+        self.time_info.start()
+    }
+
+    pub(crate) fn end(&self) -> f64 {
+        self.time_info.end()
+    }
+
+    pub(crate) fn duration(&self) -> f64 {
+        self.time_info.duration()
+    }
+
+    pub(crate) fn time_info(&self) -> &SegmentTimeInfo {
+        &self.time_info
+    }
+
+    pub(crate) fn byte_range(&self) -> Option<&ByteRange> {
+        self.byte_range.as_ref()
+    }
+
+    pub(crate) fn url(&self) -> &Url {
+        &self.url
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -69,11 +146,6 @@ pub struct StartAttribute {
 //     part_hold_back: Option<u32>,
 //     can_block_reload: bool,
 // }
-
-#[derive(Clone, Debug)]
-pub struct SegmentList {
-    pub inner: Vec<SegmentInfo>,
-}
 
 #[derive(Debug)]
 pub enum MediaPlaylistParsingError {
@@ -121,13 +193,13 @@ impl MediaPlaylist {
         let mut end_list = false;
         let mut playlist_type = PlaylistType::None;
         let mut i_frames_only = false;
-        let mut map: Option<MapInfo> = None;
+        let mut map: Option<InitSegmentInfo> = None;
         let mut start = None;
 
         let playlist_base_url = url.pathname();
 
         let mut curr_start_time = 0.;
-        let mut segment_list: Vec<SegmentInfo> = vec![];
+        let mut media_segments: Vec<SegmentInfo> = vec![];
         let mut next_segment_duration: Option<f64> = None;
         let mut current_byte: Option<usize> = None;
         let mut next_segment_byte_range: Option<ByteRange> = None;
@@ -245,7 +317,7 @@ impl MediaPlaylist {
                             }
                         }
                         if let Some(url) = map_info_url {
-                            map = Some(MapInfo {
+                            map = Some(InitSegmentInfo {
                                 uri: url,
                                 byte_range: map_info_byte_range,
                             });
@@ -268,12 +340,11 @@ impl MediaPlaylist {
                 };
                 if let Some(duration) = next_segment_duration {
                     let seg = SegmentInfo {
-                        start: curr_start_time,
-                        duration,
+                        time_info: SegmentTimeInfo::new(curr_start_time, duration),
                         byte_range: next_segment_byte_range,
                         url: seg_url,
                     };
-                    segment_list.push(seg);
+                    media_segments.push(seg);
                     curr_start_time += duration;
                     next_segment_duration = None;
                     next_segment_byte_range = None;
@@ -304,8 +375,7 @@ impl MediaPlaylist {
             end_list,
             playlist_type,
             i_frames_only,
-            map,
-            segment_list,
+            segment_list: SegmentList::new(map, media_segments),
             url,
             // TODO
             // server_control,
@@ -319,12 +389,14 @@ impl MediaPlaylist {
             .and_then(|start| {
                 let actual_offset = if start.time_offset < 0. {
                     self.segment_list
+                        .media()
                         .last()
-                        .map(|s| s.start + s.duration + start.time_offset)
+                        .map(|s| s.end() + start.time_offset)
                 } else {
                     self.segment_list
+                        .media()
                         .first()
-                        .map(|s| s.start + start.time_offset)
+                        .map(|s| s.start() + start.time_offset)
                 };
                 actual_offset.map(|a| (a, start.precise))
             })
@@ -332,7 +404,7 @@ impl MediaPlaylist {
                 if is_precise {
                     Some(actual_time)
                 } else {
-                    self.segment_from_pos(actual_time).map(|s| s.start)
+                    self.segment_from_pos(actual_time).map(|s| s.start())
                 }
             })
     }
@@ -345,20 +417,24 @@ impl MediaPlaylist {
         }
     }
 
-    pub(crate) fn init_segment(&self) -> Option<&MapInfo> {
-        self.map.as_ref()
-    }
-
-    pub(crate) fn segment_list(&self) -> &[SegmentInfo] {
+    pub(crate) fn segment_list(&self) -> &SegmentList {
         &self.segment_list
     }
 
+//     pub(crate) fn init_segment(&self) -> Option<&InitSegmentInfo> {
+//         self.map.as_ref()
+//     }
+
+//     pub(crate) fn segment_list(&self) -> &[SegmentInfo] {
+//         &self.segment_list
+//     }
+
     pub(crate) fn beginning(&self) -> Option<f64> {
-        self.segment_list.first().map(|s| s.start)
+        self.segment_list.media().first().map(|s| s.start())
     }
 
     pub(crate) fn ending(&self) -> Option<f64> {
-        self.segment_list.last().map(|s| s.start + s.duration)
+        self.segment_list.media().last().map(|s| s.end())
     }
 
     pub(crate) fn may_be_refreshed(&self) -> bool {
@@ -412,12 +488,13 @@ impl MediaPlaylist {
     }
 
     fn extension(&self) -> Option<&str> {
-        self.segment_list.get(0).map(|s| s.url.extension())
+        self.segment_list.media().get(0).map(|s| s.url.extension())
     }
 
     fn segment_from_pos(&self, pos: f64) -> Option<&SegmentInfo> {
         self.segment_list
+            .media()
             .iter()
-            .find(|s| s.duration > pos && s.start <= pos)
+            .find(|s| s.end() > pos && s.start() <= pos)
     }
 }
