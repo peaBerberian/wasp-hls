@@ -159,7 +159,8 @@ impl Dispatcher {
             }
             Ok(pl) => {
                 Logger::info("MultiVariant Playlist parsed successfully");
-                match PlaylistStore::try_new(pl) {
+                // TODO lowest/latest bandwidth first? Option?
+                match PlaylistStore::try_new(pl, 500_000.) {
                     Ok(pl_store) => {
                         self.playlist_store = Some(pl_store);
                         self.check_ready_to_load_media_playlists();
@@ -214,8 +215,6 @@ impl Dispatcher {
         }
 
         use PlaylistFileType::*;
-        // TODO lowest/latest bandwidth first? Option?
-        playlist_store.update_curr_bandwidth(500_000.);
         [MediaType::Video, MediaType::Audio]
             .into_iter()
             .for_each(|mt| {

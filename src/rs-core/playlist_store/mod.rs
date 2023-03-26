@@ -36,6 +36,11 @@ pub(crate) struct PlaylistStore {
     /// Set to `None` if no audio playlist is chosen.
     curr_audio_id: Option<MediaPlaylistPermanentId>,
 
+    /// `id` identifier for the currently-selected audio track. `None` if no audio track is
+    /// explicitely selected.
+    ///
+    /// Note that unlike `curr_video_id` and `curr_audio_id`, this identifier is not linked to a
+    /// Playlist but to the `id` of the track itself.
     curr_audio_track: Option<u32>,
 
     /// If `true` a variant is being manually locked and as such, cannot change.
@@ -46,6 +51,7 @@ pub(crate) struct PlaylistStore {
 
     /// Before actually playing a content, supported codecs need to be checked
     /// to avoid mistakenly choosing an unsupported codec.
+    ///
     /// This bool is set to `true` only once ALL codecs in the
     /// `MultiVariantPlaylist` have been properly checked.
     codecs_checked: bool,
@@ -54,17 +60,30 @@ pub(crate) struct PlaylistStore {
 impl PlaylistStore {
     /// Create a new `PlaylistStore` based on the given parsed `MultiVariantPlaylist`.
     ///
-    /// Automatically select the variant with the lowest quality (and score) and
-    /// linked tracks.
-    pub(crate) fn try_new(playlist: MultiVariantPlaylist) -> Result<Self, PlaylistStoreError> {
-        let initial_variant = if let Some(v) = playlist.all_variants().get(0) {
-            v
-        } else {
-            return Err(PlaylistStoreError::NoSupportedVariant);
-        };
+    /// Automatically selects the variant with the highest quality (or score if defined) on call.
+    /// Please call `update_curr_bandwidth` to select a variant based on an actual criteria.
+    pub(crate) fn try_new(
+        playlist: MultiVariantPlaylist,
+        initial_bandwidth: f64,
+    ) -> Result<Self, PlaylistStoreError> {
+        Logger::debug(&format!(
+            "PS: Creating new PlaylistStore (bw: {initial_bandwidth})"
+        ));
+        let variants = playlist.all_variants();
+        let initial_variant =
+            if let Some(variant_id) = best_variant_id(variants.iter(), initial_bandwidth) {
+                playlist.variant(variant_id).unwrap()
+            } else if let Some(variant_id) = fallback_variant_id(variants.iter()) {
+                Logger::info("PS: Found no bandwidth-compatible variant amongst all variants");
+                playlist.variant(variant_id).unwrap()
+            } else {
+                Logger::error("PS: Found no variant in the given MultiVariantPlaylist");
+                return Err(PlaylistStoreError::NoSupportedVariant);
+            };
         let curr_variant_id = initial_variant.id();
         let curr_video_id = playlist.video_media_playlist_id_for(initial_variant);
         let curr_audio_id = playlist.audio_media_playlist_id_for(initial_variant, None);
+
         Ok(Self {
             playlist,
             curr_variant_id,
@@ -132,6 +151,7 @@ impl PlaylistStore {
                 if let Some(variant_id) = new_variant_id {
                     self.set_curr_variant_and_media_id(variant_id);
                 } else {
+                    Logger::error("PS: No supported variant in the given MultiVariantPlaylist");
                     return Err(PlaylistStoreError::NoSupportedVariant);
                 }
             }
@@ -298,8 +318,6 @@ impl PlaylistStore {
 
         if pos.is_some() {
             self.is_variant_locked = true;
-
-            // TODO better change detection
             let prev_track_id = self.curr_audio_track.or_else(|| self.curr_audio_track_id());
             let updates = self.update_variant(Some(variant_id));
             let new_track_id = self.curr_audio_track.or_else(|| self.curr_audio_track_id());
@@ -382,7 +400,6 @@ impl PlaylistStore {
         }
     }
 
-    /// TODO better return type
     pub(crate) fn curr_media_playlist_segment_info(
         &self,
         media_type: MediaType,
@@ -392,12 +409,11 @@ impl PlaylistStore {
             MediaType::Audio => &self.curr_audio_id,
         } {
             self.playlist.media_playlist(wanted_id).map(|m| {
-                // TODO if > f64::MAX then set it to f64::MAX?
                 let score: f64 = self
                     .playlist
                     .variant(self.curr_variant_id)
-                    .unwrap()
-                    .bandwidth() as f64;
+                    .map(|v| v.score().unwrap_or(v.bandwidth() as f64))
+                    .unwrap();
 
                 let context = SegmentQualityContext::new(score, wanted_id.as_u32());
                 (m.segment_list(), context)
@@ -518,9 +534,14 @@ impl PlaylistStore {
         let new_id = if let Some(id) = variant_id {
             id
         } else {
-            let wanted_variants = &self.variants_for_curr_track();
-            let id = best_variant_id(wanted_variants, self.last_bandwidth);
-            if let Some(id) = id {
+            let wanted_variants = self.variants_for_curr_track();
+            if let Some(id) = best_variant_id(wanted_variants.into_iter(), self.last_bandwidth) {
+                id
+            } else if let Some(id) = fallback_variant_id(self.variants_for_curr_track().into_iter())
+            {
+                Logger::info(
+                    "PS: Found no bandwidth-compatible variant amongst supported variants",
+                );
                 id
             } else {
                 panic!("No variant to choose from. This should be impossible.");
@@ -564,14 +585,38 @@ impl PlaylistStore {
     }
 }
 
-/// In the slice of references to `VariantStream`s ordered by bandwidth ascending, find the closest
-/// `VariantStream` with a lower or equal bandwidth to the one given and returns its index.
-fn best_variant_id(variants: &[&VariantStream], bandwidth: f64) -> Option<u32> {
+/// From a `DoubleEndedIterator` of references to `VariantStream`s ordered first by `score` then
+/// `bandwidth` ascending, find the best `VariantStream` which is compatible with the given
+/// bandwidth and returns its `id` property.
+fn best_variant_id<'a>(
+    variants: impl DoubleEndedIterator<Item = &'a VariantStream>,
+    bandwidth: f64,
+) -> Option<u32> {
     variants
-        .iter()
-        .find(|x| (x.bandwidth() as f64) > bandwidth)
-        .or(variants.last())
+        .rev()
+        .find(|x| (x.bandwidth() as f64) <= bandwidth)
         .map(|v| v.id())
+}
+
+/// From an `Iterator` of references to `VariantStream`s ordered first by `score` then
+/// `bandwidth` ascending, find the one we should fallback to if none is compatible with our
+/// current bandwidth.
+///
+/// That fallback value is the one of the lowest bandwidth with the highest score.
+fn fallback_variant_id<'a>(variants: impl Iterator<Item = &'a VariantStream>) -> Option<u32> {
+    variants
+        .fold(None, |acc, v| {
+            if let Some((bandwidth, _)) = acc {
+                if v.bandwidth() <= bandwidth {
+                    Some((v.bandwidth(), v.id()))
+                } else {
+                    acc
+                }
+            } else {
+                Some((v.bandwidth(), v.id()))
+            }
+        })
+        .map(|r| r.1)
 }
 
 /// Response returned by `PlaylistStore` method which may update the current

@@ -101,7 +101,21 @@ impl MultiVariantPlaylist {
                 // URI
             }
         }
-        variants.sort_by_key(|x| x.bandwidth());
+
+        use std::cmp::Ordering;
+        variants.sort_by(|a, b| {
+            let cmp = a
+                .score()
+                .unwrap_or(0.)
+                .partial_cmp(&b.score().unwrap_or(0.))
+                .unwrap_or(Ordering::Equal);
+            if cmp == Ordering::Equal {
+                a.bandwidth().cmp(&b.bandwidth())
+            } else {
+                cmp
+            }
+        });
+
         Ok(MultiVariantPlaylist {
             last_id,
             url,

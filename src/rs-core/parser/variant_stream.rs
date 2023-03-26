@@ -303,6 +303,10 @@ impl VariantStream {
         &self.url
     }
 
+    pub(crate) fn score(&self) -> Option<f64> {
+        self.score
+    }
+
     pub(crate) fn bandwidth(&self) -> u64 {
         self.bandwidth
     }

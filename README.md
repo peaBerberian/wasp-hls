@@ -204,8 +204,8 @@ most do not prevent playback):
         prioritized video media playlist is considered
   - [x] RESOLUTION: Used to describe variant in variant selection API
   - [x] FRAME-RATE: Used to describe variant in variant selection API
-  - [ ] SCORE: Not considered yet, but should be used alongside BANDWIDTH to
-        select a variant. It does not seem hard to implement...
+  - [x] SCORE: Considered both to select a variant and to determine if a quality
+        is better when "fast-switching".
   - [ ] STABLE-VARIANT-ID: Not really needed for now (only for content steering?)
         used.
   - [ ] AVERAGE-BANDWIDTH: Not used yet. I don't know if it's useful yet.
