@@ -251,7 +251,7 @@ body {
   transition: all 0.2s ease;
   z-index: 9999;
   width: 100%;
-  margin-bottom: 7px;
+  margin-bottom: 5px;
   position: absolute;
   bottom: 40px;
 }
