@@ -501,10 +501,15 @@ impl Dispatcher {
     fn process_request_metrics(&mut self, resource_size: u32, duration_ms: f64) {
         self.adaptive_selector
             .add_metric(duration_ms, resource_size);
+        self.check_variant_bandwidth();
+    }
+
+    pub(super) fn check_variant_bandwidth(&mut self) {
         if let Some(pl_store) = self.playlist_store.as_mut() {
             if let Some(bandwidth) = self.adaptive_selector.get_estimate() {
                 Logger::debug(&format!("New bandwidth estimate: {}", bandwidth));
-                let update = pl_store.update_curr_bandwidth(bandwidth);
+                let actually_used_bandwidth = bandwidth / self.media_element_ref.wanted_speed();
+                let update = pl_store.update_curr_bandwidth(actually_used_bandwidth);
                 self.handle_variant_update(update, false);
             }
         }

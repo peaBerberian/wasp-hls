@@ -73,6 +73,7 @@ impl Dispatcher {
 
     pub fn set_wanted_speed(&mut self, speed: f64) {
         self.media_element_ref.update_wanted_speed(speed);
+        self.check_variant_bandwidth();
     }
 
     pub fn set_buffer_goal(&mut self, buffer_goal: f64) {

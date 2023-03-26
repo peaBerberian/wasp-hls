@@ -739,7 +739,6 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
           onFlushMessage(data, this.__contentMetadata__, this.videoElement);
           break;
         case WorkerMessageType.UpdatePlaybackRate:
-          console.warn("UPDATE PBR", data.value.playbackRate);
           onUpdatePlaybackRateMessage(
             data,
             this.__contentMetadata__,
