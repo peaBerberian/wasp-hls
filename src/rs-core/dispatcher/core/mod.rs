@@ -453,7 +453,7 @@ impl Dispatcher {
         time_info: Option<SegmentTimeInfo>,
         context: SegmentQualityContext,
     ) {
-        let segment_end = time_info.as_ref().map(|t| t.end());
+        let segment_time = time_info.as_ref().map(|t| (t.start(), t.end()));
         let md = PushMetadata::new(data, time_info);
         match self.media_element_ref.push_segment(media_type, md, context) {
             Err(x) => {
@@ -465,11 +465,11 @@ impl Dispatcher {
                 self.internal_stop();
             }
             Ok(()) => {
-                if let Some(segment_end) = segment_end {
+                if let Some((segment_start, segment_end)) = segment_time {
                     self.segment_selectors
                         .get_mut(media_type)
                         .validate_media_until(segment_end);
-                    if was_last_segment(self.playlist_store.as_ref(), media_type, segment_end) {
+                    if was_last_segment(self.playlist_store.as_ref(), media_type, segment_start) {
                         Logger::info(&format!(
                             "Last {} segment request finished, declaring its buffer's end",
                             media_type

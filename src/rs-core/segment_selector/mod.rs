@@ -98,9 +98,8 @@ pub(crate) struct NextSegmentSelector {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum InitializationSegmentSelectorStatus {
-    Unreturned,
     None,
-    Returned,
+    Unvalidated,
     Validated,
 }
 
@@ -112,7 +111,7 @@ impl NextSegmentSelector {
             base_pos: real_base_pos,
             buffer_goal,
             last_media_id: None,
-            init_status: InitializationSegmentSelectorStatus::Unreturned,
+            init_status: InitializationSegmentSelectorStatus::Unvalidated,
             skipped_segments: vec![],
         }
     }
@@ -121,7 +120,7 @@ impl NextSegmentSelector {
     /// returned by it, and start back from the given position.
     pub(crate) fn reset(&mut self, base_pos: f64) {
         self.base_pos = f64::max(0., base_pos);
-        self.init_status = InitializationSegmentSelectorStatus::Unreturned;
+        self.init_status = InitializationSegmentSelectorStatus::Unvalidated;
         self.last_media_id = None;
         self.segment_queue = SegmentQueue::new(base_pos);
         self.skipped_segments.clear();
@@ -167,16 +166,15 @@ impl NextSegmentSelector {
 
         if has_quality_changed {
             Logger::debug("Selector: Quality changed, recomputing segment queue start");
-            self.init_status = InitializationSegmentSelectorStatus::Unreturned;
+            self.init_status = InitializationSegmentSelectorStatus::Unvalidated;
             self.segment_queue.reset(self.base_pos);
             self.skipped_segments.clear();
             let queue_start = self.recompute_queue_start(context, inventory);
             self.segment_queue.validate_until(queue_start);
         }
 
-        if self.init_status == InitializationSegmentSelectorStatus::Unreturned {
+        if self.init_status == InitializationSegmentSelectorStatus::Unvalidated {
             if let Some(i) = init_segment {
-                self.init_status = InitializationSegmentSelectorStatus::Returned;
                 return NextSegmentInfo::InitSegment(i);
             } else {
                 self.init_status = InitializationSegmentSelectorStatus::None;
@@ -282,8 +280,8 @@ impl NextSegmentSelector {
                 // already an equal or even better quality in the buffer.
                 if self.can_be_skipped(si.start, segment_end, context, inventory) {
                     Logger::debug(&format!(
-                        "Selector: Segment can be skipped (s:{})",
-                        si.start
+                        "Selector: Segment can be skipped (s:{}, d: {})",
+                        si.start, si.duration
                     ));
                     let skipped = SegmentTimeInfo::new(si.start, segment_end);
                     match self
@@ -316,9 +314,11 @@ impl NextSegmentSelector {
     ) -> bool {
         let first_seg_pos = inventory.iter().position(|s| s.playlist_end() > start);
         if let Some(mut curr_idx) = first_seg_pos {
+            let mut prev_seg_end = start;
             while let Some(mut curr_seg) = inventory.get(curr_idx) {
                 if curr_seg.appears_garbage_collected(self.base_pos)
                     || curr_seg.is_worse_than(context)
+                    || curr_seg.playlist_start() > (prev_seg_end + 0.05)
                 {
                     return false;
                 }
@@ -331,6 +331,8 @@ impl NextSegmentSelector {
                 if curr_idx >= inventory.len() {
                     return false;
                 }
+
+                prev_seg_end = curr_seg.playlist_end();
                 curr_seg = inventory.get(curr_idx).unwrap();
                 if curr_seg.playlist_start() >= end {
                     return true;

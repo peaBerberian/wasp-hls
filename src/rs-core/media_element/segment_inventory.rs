@@ -178,7 +178,7 @@ const FLOAT_TOLERANCE: f64 = 0.01;
 /// The main point of this struct is to know which segments are already pushed to
 /// the corresponding media buffer, of which variant, and which have been
 /// garbage-collected since by the browser (and thus may need to be re-loaded).
-pub struct SegmentInventory {
+pub(super) struct SegmentInventory {
     /// All the media segments which should be currently in the browser's
     /// memory, in chronological order
     /// This `Vec` contains objects, each being related to a single downloaded
@@ -198,7 +198,7 @@ impl SegmentInventory {
     /// `SourceBuffer`, `validate_segment` should then be called after that push operation
     /// succeeds, to ensure that the `SegmentInventory` knows where that segment is initially
     /// buffered.
-    pub fn new(media_type: MediaType) -> Self {
+    pub(super) fn new(media_type: MediaType) -> Self {
         Self {
             inventory: vec![],
             media_type,
@@ -206,7 +206,7 @@ impl SegmentInventory {
     }
 
     /// Reset the whole inventory.
-    pub fn reset(&mut self) {
+    pub(super) fn reset(&mut self) {
         self.inventory = vec![];
     }
 
@@ -218,7 +218,7 @@ impl SegmentInventory {
     /// We talk here about a "correction" because the expected start and end of the segment can be
     /// a little different from what the lower-level buffer advertise, this is what we're computing
     /// here.
-    pub fn validate_segment(&mut self, seg_id: u64, buffered: &JsTimeRanges) {
+    pub(super) fn validate_segment(&mut self, seg_id: u64, buffered: &JsTimeRanges) {
         self.synchronize(buffered);
         let seg_idx = self
             .inventory
@@ -644,11 +644,11 @@ impl SegmentInventory {
     ///
     /// To get a list synchronized with what a media buffer actually has buffered
     /// you might want to call `synchronize_buffered` before calling this method.
-    pub(crate) fn inventory(&self) -> &[BufferedChunk] {
+    pub(super) fn inventory(&self) -> &[BufferedChunk] {
         self.inventory.as_slice()
     }
 
-    pub fn synchronize(&mut self, buffered: &JsTimeRanges) {
+    pub(super) fn synchronize(&mut self, buffered: &JsTimeRanges) {
         let mut segment_idx = 0;
         if segment_idx >= self.inventory.len() {
             return;
@@ -781,6 +781,23 @@ impl SegmentInventory {
             self.inventory.truncate(segment_idx);
         }
         self.process_pending_updates(updates);
+
+        // TODO The following log produces too much output, but is VERY useful while debugging,
+        // find a better solution
+        // Logger::lazy_debug(&|| {
+        //     let timeline_str = self
+        //         .inventory
+        //         .iter()
+        //         .map(|x| {
+        //             format!(
+        //                 "{}-{} (v:{}, m:{})",
+        //                 x.last_buffered_start, x.last_buffered_end, x.variant_score, x.media_id
+        //             )
+        //         })
+        //         .collect::<Vec<String>>()
+        //         .join(" / ");
+        //     format!("SI: synchronized timeline: {}", timeline_str)
+        // });
     }
 
     fn process_pending_updates(&mut self, mut updates: Vec<PendingBufferedChunkModificationTask>) {
@@ -995,9 +1012,3 @@ fn overlap_size(seg: &BufferedChunk, range: (f64, f64)) -> f64 {
     let overlap_end = f64::min(seg.end, range.1);
     overlap_end - overlap_start
 }
-
-// Note: to log
-// let str = self.inventory.iter().map(|x| {
-//     format!("{} - {}", x.last_buffered_start, x.last_buffered_end)
-// }).collect::<Vec<String>>().join(" / ");
-// Logger::error(&format!("SI: {}", str));
