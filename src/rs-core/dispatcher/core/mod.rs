@@ -160,8 +160,20 @@ impl Dispatcher {
             }
             Ok(pl) => {
                 Logger::info("MultiVariant Playlist parsed successfully");
-                self.playlist_store = Some(PlaylistStore::new(pl));
-                self.check_ready_to_load_media_playlists();
+                match PlaylistStore::try_new(pl) {
+                    Ok(pl_store) => {
+                        self.playlist_store = Some(pl_store);
+                        self.check_ready_to_load_media_playlists();
+                    },
+                    Err(err) => {
+                        jsSendOtherError(
+                            true,
+                            crate::bindings::OtherErrorCode::Unknown,
+                            Some(&err.to_string()),
+                        );
+                        self.internal_stop();
+                    },
+                }
             }
         }
     }
@@ -174,9 +186,21 @@ impl Dispatcher {
             return;
         };
 
-        if !playlist_store.check_codecs() {
-            // Awaiting query about codecs support.
-            return;
+        match playlist_store.check_codecs() {
+            Ok(false) => {
+                // Awaiting query about codecs support.
+                return;
+            },
+            Err(err) => {
+                jsSendOtherError(
+                    true,
+                    crate::bindings::OtherErrorCode::Unknown,
+                    Some(&err.to_string()),
+                );
+                self.internal_stop();
+                return;
+            },
+            _ => {},
         }
 
         if playlist_store.supported_variants().is_empty() {
@@ -232,8 +256,22 @@ impl Dispatcher {
 
     pub(super) fn on_codecs_support_update_core(&mut self) {
         if let Some(ref mut playlist_store) = self.playlist_store {
-            if self.ready_state <= PlayerReadyState::Loading && playlist_store.check_codecs() {
-                self.check_ready_to_load_media_playlists()
+
+            match playlist_store.check_codecs() {
+                Ok(false) => {
+                    // Awaiting query about codecs support.
+                    return;
+                },
+                Err(err) => {
+                    jsSendOtherError(
+                        true,
+                        crate::bindings::OtherErrorCode::Unknown,
+                        Some(&err.to_string()),
+                    );
+                    self.internal_stop();
+                    return;
+                },
+                _ => self.check_ready_to_load_media_playlists(),
             }
         }
     }
@@ -395,9 +433,6 @@ impl Dispatcher {
         };
         if !self.requester.has_segment_request_pending(media_type) {
             let inventory = self.media_element_ref.inventory(media_type);
-
-            // XXX TODO this is ugly and may result to future bug
-            // Find a better way to get context with each MediaPlaylist
             if let Some(seg_info) = pl_store.curr_media_playlist_segment_info(media_type) {
                 match self
                     .segment_selectors

@@ -56,17 +56,16 @@ impl PlaylistStore {
     ///
     /// Automatically select the variant with the lowest quality (and score) and
     /// linked tracks.
-    pub(crate) fn new(playlist: MultiVariantPlaylist) -> Self {
+    pub(crate) fn try_new(playlist: MultiVariantPlaylist) -> Result<Self, PlaylistStoreError> {
         let initial_variant = if let Some(v) = playlist.all_variants().get(0) {
             v
         } else {
-            // XXX TODO Error and result
-            panic!("No variant found");
+            return Err(PlaylistStoreError::NoSupportedVariant);
         };
         let curr_variant_id = initial_variant.id();
         let curr_video_id = playlist.video_media_playlist_id_for(initial_variant);
         let curr_audio_id = playlist.audio_media_playlist_id_for(initial_variant, None);
-        Self {
+        Ok(Self {
             playlist,
             curr_variant_id,
             curr_audio_id,
@@ -75,7 +74,7 @@ impl PlaylistStore {
             is_variant_locked: false,
             last_bandwidth: 0.,
             codecs_checked: false,
-        }
+        })
     }
 
     /// Returns a reference to the `Url` to the MultiVariant Playlist stored by this
@@ -96,9 +95,9 @@ impl PlaylistStore {
     ///
     /// Once that even listener has been called, `check_codecs` can be called again, until it
     /// returns `true`.
-    pub(crate) fn check_codecs(&mut self) -> bool {
+    pub(crate) fn check_codecs(&mut self) -> Result<bool, PlaylistStoreError> {
         if self.codecs_checked {
-            return true;
+            return Ok(true);
         }
 
         let mut are_all_codecs_checked = true;
@@ -134,14 +133,13 @@ impl PlaylistStore {
                 if let Some(variant_id) = new_variant_id {
                     self.set_curr_variant_and_media_id(variant_id);
                 } else {
-                    // XXX TODO Error and result
-                    panic!("No supported variant found");
+                    return Err(PlaylistStoreError::NoSupportedVariant);
                 }
             }
         } else {
             Logger::info("PS: Some Playlist codecs need to be asynchronously checked");
         }
-        are_all_codecs_checked
+        Ok(are_all_codecs_checked)
     }
 
     /// Returns the list of tuples listing loaded media playlists.
@@ -643,4 +641,13 @@ pub(crate) enum LockVariantResponse {
         updates: VariantUpdateResult,
         audio_track_change: Option<u32>,
     },
+}
+
+use thiserror::Error;
+
+/// Error encountered when creating/updating a PlaylistStore
+#[derive(Error, Debug)]
+pub(crate) enum PlaylistStoreError {
+    #[error("No supported variant was found in the MultiVariantPlaylist")]
+    NoSupportedVariant,
 }
