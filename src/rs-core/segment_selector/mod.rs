@@ -176,7 +176,9 @@ impl NextSegmentSelector {
                 self.init_status = InitializationSegmentSelectorStatus::None;
             }
         }
-        self.check_skipped_segments(context, inventory);
+        if let Some(val) = self.check_skipped_segments(context, inventory) {
+            self.segment_queue.validate_until(val);
+        }
         self.recursively_check_most_needed_media_segment(segment_list.media(), context, inventory)
     }
 
@@ -283,7 +285,7 @@ impl NextSegmentSelector {
                         si.start(),
                         si.duration()
                     ));
-                    let skipped = SegmentTimeInfo::new(si.start(), segment_end);
+                    let skipped = SegmentTimeInfo::new(si.start(), si.duration());
                     match self
                         .skipped_segments
                         .iter()

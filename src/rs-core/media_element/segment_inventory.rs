@@ -784,20 +784,20 @@ impl SegmentInventory {
 
         // TODO The following log produces too much output, but is VERY useful while debugging,
         // find a better solution
-        // Logger::lazy_debug(&|| {
-        //     let timeline_str = self
-        //         .inventory
-        //         .iter()
-        //         .map(|x| {
-        //             format!(
-        //                 "{}-{} (v:{}, m:{})",
-        //                 x.last_buffered_start, x.last_buffered_end, x.variant_score, x.media_id
-        //             )
-        //         })
-        //         .collect::<Vec<String>>()
-        //         .join(" / ");
-        //     format!("SI: synchronized timeline: {}", timeline_str)
-        // });
+        Logger::lazy_debug(&|| {
+            let timeline_str = self
+                .inventory
+                .iter()
+                .map(|x| {
+                    format!(
+                        "{}-{} (v:{}, m:{})",
+                        x.last_buffered_start, x.last_buffered_end, x.variant_score, x.media_id
+                    )
+                })
+                .collect::<Vec<String>>()
+                .join(" / ");
+            format!("SI: synchronized timeline: {}", timeline_str)
+        });
     }
 
     fn process_pending_updates(&mut self, mut updates: Vec<PendingBufferedChunkModificationTask>) {
