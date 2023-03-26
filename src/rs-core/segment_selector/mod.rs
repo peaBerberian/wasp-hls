@@ -214,10 +214,12 @@ impl NextSegmentSelector {
                 if seg_i.is_worse_than(context) {
                     // We found a segment of worse quality, we can replace it, unless it is
                     // ending soon, to avoid rebuffering.
-                    //
-                    // TODO based on segment target duration instead of `5.`?
-                    // Or maybe the duration of the next segment in the SegmentInfo slice
-                    if seg_i.last_buffered_end() - self.base_pos > 5. {
+                    let next_seg_duration = inventory
+                        .iter()
+                        .find(|s| s.playlist_end() > seg_i.playlist_end())
+                        .map(|s| s.playlist_end() - s.playlist_start())
+                        .unwrap_or(5.);
+                    if seg_i.last_buffered_end() - self.base_pos > next_seg_duration {
                         Logger::debug(&format!("Selector: Fast switching from {prev_end}"));
                         return prev_end;
                     }

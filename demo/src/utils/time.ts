@@ -1,7 +1,6 @@
 export function toSeconds(timeInSeconds: number): string {
   const toInt = Math.floor(timeInSeconds);
   if (!toInt) {
-    // TODO differentiate NaN from 0?
     return "00";
   }
 
@@ -11,7 +10,6 @@ export function toSeconds(timeInSeconds: number): string {
 export function toMinutes(timeInSeconds: number): string {
   const toInt = Math.floor(timeInSeconds);
   if (!toInt) {
-    // TODO differentiate NaN from 0?
     return "00:00";
   }
 
@@ -32,7 +30,6 @@ export function toMinutes(timeInSeconds: number): string {
 export function toHours(timeInSeconds: number) {
   const toInt = Math.floor(timeInSeconds);
   if (!toInt) {
-    // TODO differentiate NaN from 0?
     return "00:00";
   }
 

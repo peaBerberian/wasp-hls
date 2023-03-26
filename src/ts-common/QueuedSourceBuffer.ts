@@ -49,7 +49,7 @@ type QSBQueueItem = PushQueueItem | RemoveQueueItem;
  * doing so can lead to browser Errors) as well as being Promise-based, instead
  * of event-based.
  *
- * TODO is this complexity really needed here? Event-based actually seems more
+ * NOTE: is this complexity really needed here? Event-based actually seems more
  * logical, as main-worker messages are also event-based as of now.
  * Time will tell...
  *

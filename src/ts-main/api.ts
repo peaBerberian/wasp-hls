@@ -317,7 +317,7 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
    * content has been loaded in the meantime. You can also listen for new
    * `"loading"` events to also catch this scenario.
    *
-   * TODO return promise?
+   * NOTE: should we return a promise here?
    * @param {string} url
    */
   public load(url: string): void {
@@ -888,7 +888,6 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
       }
     };
 
-    // TODO check on which case this is triggered
     worker.onerror = (ev: ErrorEvent) => {
       const error = ev.error instanceof Error ? ev.error : "Unknown Error";
       logger.error("API: Worker Error encountered", error);

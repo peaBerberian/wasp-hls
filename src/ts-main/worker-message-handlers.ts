@@ -397,7 +397,7 @@ export function onAppendBufferMessage(
       );
       postMessageToWorker(worker, {
         type: MainMessageType.SourceBufferOperationError,
-        value: { sourceBufferId, message, name },
+        value: { mediaSourceId, sourceBufferId, message, name },
       });
     }
   }
@@ -453,7 +453,7 @@ export function onRemoveBufferMessage(
       );
       postMessageToWorker(worker, {
         type: MainMessageType.SourceBufferOperationError,
-        value: { sourceBufferId, message, name },
+        value: { mediaSourceId, sourceBufferId, message, name },
       });
     }
   }

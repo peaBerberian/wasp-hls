@@ -427,7 +427,7 @@ impl MediaElementReference {
     }
 
     /// Update the current `readyState` of the `MediaSource`.
-    /// TODO trigger MediaObservation when MediaSourceReadyState' changes?
+    /// NOTE: should we trigger MediaObservation when MediaSourceReadyState' changes?
     pub(crate) fn update_media_source_ready_state(&mut self, ready_state: MediaSourceReadyState) {
         self.media_source_ready_state = Some(ready_state);
         self.check_end_of_stream();

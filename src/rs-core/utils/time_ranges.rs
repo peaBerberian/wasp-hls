@@ -54,7 +54,7 @@ impl TimeRanges {
                 }
             }
 
-            // TODO simplify this mess
+            // TODO simplify this mess pls
 
             if has_updated_end {
                 let mut to_remove_after = 0;

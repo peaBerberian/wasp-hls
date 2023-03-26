@@ -38,7 +38,7 @@ impl Dispatcher {
         resource_id: ResourceId,
         resource_size: u32,
         final_url: String,
-        duration_ms: f64, // TODO Rust-side?
+        duration_ms: f64,
     ) {
         let resource_handle = JsMemoryBlob::from_resource_id(resource_id);
         self.on_request_succeeded(
@@ -64,7 +64,6 @@ impl Dispatcher {
     ///
     /// * `has_timeouted` - If set, the issue was due to a non-satisfying HTTP
     ///   status being received.
-    ///   TODO actually categorize that in Rust?
     pub fn on_request_failed(
         &mut self,
         request_id: RequestId,

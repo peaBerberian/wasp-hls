@@ -14,8 +14,6 @@ export default React.memo(function ContentInput({
   player: WaspHlsPlayer;
 }): JSX.Element {
   const nameEltId = React.useId();
-
-  // TODO better input management
   const inputElRef = React.useRef<HTMLInputElement>(null);
   const loadContent = React.useCallback(() => {
     if (inputElRef.current === null) {

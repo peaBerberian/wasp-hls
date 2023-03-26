@@ -287,7 +287,6 @@ impl MediaTag {
         self.media_playlist.as_ref()
     }
 
-    /// TODO real update
     pub(crate) fn update(
         &mut self,
         playlist: impl BufRead,

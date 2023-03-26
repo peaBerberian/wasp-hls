@@ -1064,6 +1064,11 @@ export interface SourceBufferOperationSuccessMainMessage {
 export interface SourceBufferOperationErrorMainMessage {
   type: MainMessageType.SourceBufferOperationError;
   value: {
+    /**
+     * Identify the MediaSource which contains the SourceBuffer concerned by
+     * this update.
+     */
+    mediaSourceId: string;
     /** Identify the SourceBuffer in question. */
     sourceBufferId: SourceBufferId;
     /** The error's message. */

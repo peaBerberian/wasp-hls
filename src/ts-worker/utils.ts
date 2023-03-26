@@ -1,3 +1,5 @@
+import { cachedCodecsSupport } from "./globals";
+
 export function formatErrMessage(err: unknown, defaultMsg: string) {
   return err instanceof Error ? err.name + ": " + err.message : defaultMsg;
 }
@@ -12,8 +14,7 @@ export function shouldTransmux(typ: string) {
     return false;
   }
   if (typeof MediaSource === "undefined") {
-    // TODO truly test support?
-    return true;
+    return cachedCodecsSupport.get(typ) !== true;
   }
   return !MediaSource.isTypeSupported(typ);
 }

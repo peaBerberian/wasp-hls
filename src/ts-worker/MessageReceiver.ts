@@ -306,25 +306,39 @@ export default function MessageReceiver() {
       }
 
       case MainMessageType.CodecsSupportUpdate:
-        const { mimeTypes } = data.value;
-        const keys = Object.keys(mimeTypes);
-        if (cachedCodecsSupport.size + keys.length > 50) {
-          cachedCodecsSupport.clear();
-        }
-        for (const key of keys) {
-          const value = mimeTypes[key];
-          if (value !== undefined) {
-            cachedCodecsSupport.set(key, value);
+        {
+          const { mimeTypes } = data.value;
+          const keys = Object.keys(mimeTypes);
+          if (cachedCodecsSupport.size + keys.length > 50) {
+            cachedCodecsSupport.clear();
           }
-        }
-        const dispatcher = playerInstance.getDispatcher();
-        if (dispatcher !== null) {
-          dispatcher.on_codecs_support_update();
+          for (const key of keys) {
+            const value = mimeTypes[key];
+            if (value !== undefined) {
+              cachedCodecsSupport.set(key, value);
+            }
+          }
+          const dispatcher = playerInstance.getDispatcher();
+          if (dispatcher !== null) {
+            dispatcher.on_codecs_support_update();
+          }
         }
         break;
 
       case MainMessageType.SourceBufferOperationError:
-        // TODO
+        {
+          const dispatcher = playerInstance.getDispatcher();
+          const contentInfo = playerInstance.getContentInfo();
+          if (
+            dispatcher === null ||
+            contentInfo === null ||
+            contentInfo.mediaSourceObj?.mediaSourceId !==
+              data.value.mediaSourceId
+          ) {
+            return;
+          }
+          dispatcher.on_source_buffer_error(data.value.sourceBufferId);
+        }
         break;
 
       case MainMessageType.EndOfStreamError:

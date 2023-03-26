@@ -1,4 +1,5 @@
 import { numberIdGenerator } from "../ts-common/idGenerator";
+import logger from "../ts-common/logger";
 import QueuedSourceBuffer from "../ts-common/QueuedSourceBuffer";
 import { SourceBufferId, WaspHlsPlayerConfig } from "../ts-common/types";
 import { Dispatcher, InitOutput, MediaType } from "../wasm/wasp_hls";
@@ -46,7 +47,9 @@ class PlayerInstance {
 
   public changeContent(content: ContentInfo) {
     if (this._instanceInfo === null) {
-      // TODO log error
+      logger.error(
+        "Worker: Cannot call `changeContent`: `PlayerInstance` not started."
+      );
       return;
     }
     jsMemoryResources.freeEverything();

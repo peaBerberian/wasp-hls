@@ -196,18 +196,6 @@ extern "C" {
 
     pub fn jsFlush();
 
-    //    // Get the content of what has been buffered by the SourceBuffer, in terms of contiguous
-    //    // time ranges, in seconds.
-    //    // The returned vectors should always have an even length as it is organized by couples
-    //    // of f64: the first of which is the start of the contiguous range in seconds and the
-    //    // second the end.
-    //    //
-    //    // TODO this API might error depending on the underlying media element or MediaSource's
-    //    // state.
-    //    pub fn jsGetSourceBufferBuffered(
-    //        source_buffer_id: SourceBufferId
-    //    ) -> Vec<f64>;
-
     // Method called to indicate the offset to convert playlist time, as anounced in the
     // MediaPlaylist (and which should be preferred for a user interface) into media time,
     // which is the time actually present on the HTMLMediaElement.

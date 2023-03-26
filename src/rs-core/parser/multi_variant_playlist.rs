@@ -451,14 +451,15 @@ impl MediaPlaylistContext {
     }
 }
 
-// TODO information on the line at which the error was encountered?
+// NOTE: should we add information on the line at which the error was encountered?
+// It may not be always trivial relatively to the cost of development though.
 #[derive(Debug)]
 pub enum MultiVariantPlaylistParsingError {
     MissingUriLineAfterVariant,
     UnableToReadVariantUri,
     VariantMissingBandwidth,
 
-    // TODO information about attribute?
+    // TODO information about which attribute we're talking about?
     InvalidDecimalInteger,
 
     MediaTagMissingType,

@@ -315,7 +315,6 @@ impl VariantStream {
         self.media_playlist.as_ref()
     }
 
-    /// TODO real update
     pub(super) fn update_media_playlist(
         &mut self,
         playlist: impl BufRead,
@@ -578,7 +577,6 @@ impl VariantStream {
 fn guess_media_type_from_codec(codec: &str) -> Option<MediaType> {
     let (base, _) = split_codec(codec);
 
-    // TODO more codecs
     match base {
         "mp4a" => Some(MediaType::Audio),
         "ec-3" | "ac-3" => Some(MediaType::Audio),

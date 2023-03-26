@@ -374,8 +374,6 @@ export default React.memo(function ControlBar({
             />
             <FullScreenButton
               disabled={areControlsDisabled}
-              // TODO it works by luck for now, we should probably listen to an
-              // enter/exit fullscreen event and add it to the state
               isFullScreen={isInFullScreenMode}
               onClick={toggleFullScreen}
             />
