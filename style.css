@@ -246,14 +246,14 @@ body {
   height: 5px;
   cursor: pointer;
   display: flex;
-  background-color: #5d5c5caa;
+  background-color: #5d5c5cff;
   margin: auto;
   transition: all 0.2s ease;
   z-index: 9999;
   width: 100%;
-  margin-bottom: 5px;
+  margin-bottom: 0px;
   position: absolute;
-  bottom: 40px;
+  bottom: 44px;
 }
 
 .progress-bar-wrapper:hover {
