@@ -251,10 +251,12 @@ impl SegmentInventory {
             });
 
         if range.is_none() {
+            let seg = self.inventory.get_mut(seg_idx).unwrap();
             Logger::warn(&format!(
                 "SI: Buffered range of pushed segment not found (s:{}, e:{})",
                 seg.start, seg.end
             ));
+            seg.validated = true;
             return;
         }
         let (range_start, range_end) = range.unwrap();
