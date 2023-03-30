@@ -177,6 +177,10 @@ impl PlaylistStore {
         ret
     }
 
+    pub(crate) fn is_curr_media_playlist(&self, id: &MediaPlaylistPermanentId) -> bool {
+        Some(id) == self.curr_audio_id.as_ref() || Some(id) == self.curr_video_id.as_ref()
+    }
+
     /// Returns `true` if the current playlist linked to the given `MediaType` has been loaded.
     ///
     /// Returns `false` either if it has not been loaded yet or if there's no media playlist for

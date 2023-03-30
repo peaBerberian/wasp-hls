@@ -14,7 +14,7 @@ use crate::{
         jsAnnounceVariantUpdate, jsSendOtherError, jsSendPlaylistParsingError,
         jsSendSegmentRequestError, jsSendSourceBufferCreationError, jsSetMediaSourceDuration,
         jsStartObservingPlayback, jsStopObservingPlayback, jsTimer, jsUpdateContentInfo, MediaType,
-        PlaylistType, RequestId, SourceBufferId, TimerId, TimerReason,
+        PlaylistType, RequestId, SourceBufferId, TimerId, TimerReason, jsClearTimer,
     },
     media_element::{SegmentPushData, SegmentQualityContext, SourceBufferCreationError},
     parser::{MultiVariantPlaylist, SegmentTimeInfo},
@@ -442,7 +442,7 @@ impl Dispatcher {
         self.segment_selectors.reset(0.);
         self.playlist_store = None;
         self.last_position = 0.;
-        self.playlist_refresh_timers.clear();
+        self.clean_up_playlist_refresh_timers();
         self.ready_state = PlayerReadyState::Stopped;
     }
 
@@ -606,6 +606,9 @@ impl Dispatcher {
                     }
                 }
             });
+            if !changed_media_types.is_empty() {
+                self.clean_up_playlist_refresh_timers();
+            }
             self.check_segments_to_request();
         }
     }
@@ -682,6 +685,26 @@ impl Dispatcher {
                     }
                 }
                 _ => {}
+            }
+        }
+    }
+
+    /// Removes from `self.playlist_refresh_timers` timers for playlist that are not current
+    /// anymore and abort their corresponding timers
+    pub(self) fn clean_up_playlist_refresh_timers(&mut self) {
+        if let Some(ref pl_store) = self.playlist_store {
+            self.playlist_refresh_timers.retain(|x| {
+                if let PlaylistFileType::MediaPlaylist { id } = &x.1 {
+                    if !pl_store.is_curr_media_playlist(&id) {
+                        jsClearTimer(x.0);
+                        return false;
+                    }
+                }
+                true
+            });
+        } else {
+            while let Some(timer_info) = self.playlist_refresh_timers.pop() {
+                jsClearTimer(timer_info.0);
             }
         }
     }
