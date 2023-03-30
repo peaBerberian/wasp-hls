@@ -54,24 +54,38 @@ pub(crate) struct BufferedChunk {
     /// case they will have the same `id`
     id: u64,
 
-    /// Media start of the segment, in seconds, according to its `MediaPlaylist`
+    /// Media start of the segment, as a playlist time in seconds, according to its `MediaPlaylist`
     playlist_start: f64,
 
-    /// Media end of the segment, in seconds, according to its `MediaPlaylist`
+    /// Media end of the segment, as a playlist time in seconds, according to its `MediaPlaylist`
     playlist_end: f64,
 
-    /// Supposed start, in seconds, the chunk is thought to have started at initially in the buffer.
+    /// Supposed start, as a playlist time in seconds, the chunk is thought to have started at
+    /// initially in the buffer.
+    ///
+    /// Note that as the buffer is in media time but this value is in playlist time, conversions
+    /// between the two are performed behind the hood by the `SegmentInventory`.
     start: f64,
 
-    /// Supposed end, in seconds, the chunk is thought to have started at initially in the buffer.
+    /// Supposed end, as a playlist time in seconds, the chunk is thought to have ended at initially
+    /// in the buffer.
+    ///
+    /// Note that as the buffer is in media time but this value is in playlist time, conversions
+    /// between the two are performed behind the hood by the `SegmentInventory`.
     end: f64,
 
-    /// Last seen media start of the segment in the buffer, in seconds.
+    /// Last seen media start of the segment in the buffer, as a playlist time in seconds.
     /// It can be different than `start` due to buffer garbage collection.
+    ///
+    /// Note that as the buffer is in media time but this value is in playlist time, conversions
+    /// between the two are performed behind the hood by the `SegmentInventory`.
     last_buffered_start: f64,
 
-    /// Last seen media end of the segment in the buffer, in seconds.
+    /// Last seen media end of the segment in the buffer, as a playlist time in seconds.
     /// It can be different than `end` due to buffer garbage collection.
+    ///
+    /// Note that as the buffer is in media time but this value is in playlist time, conversions
+    /// between the two are performed behind the hood by the `SegmentInventory`.
     last_buffered_end: f64,
 
     /// If `false`, the segment's boundaries in the buffer has not been initially verified.
@@ -101,7 +115,6 @@ impl BufferedChunk {
             media_id: metadata.context.media_id,
             playlist_start: metadata.playlist_start,
             playlist_end: metadata.playlist_end,
-
             last_buffered_end: metadata.end,
             last_buffered_start: metadata.start,
             validated: false,
@@ -118,12 +131,14 @@ impl BufferedChunk {
         self.playlist_end
     }
 
-    /// Returns media start of the segment, in seconds, in the buffer the last time it was checked.
+    /// Returns estimated current playlist start of the segment, in seconds, after we last
+    /// synchronized it with the actual content of the buffer.
     pub(crate) fn last_buffered_start(&self) -> f64 {
         self.last_buffered_start
     }
 
-    /// Returns media end of the segment, in seconds, in the buffer the last time it was checked.
+    /// Returns estimated current playlist end of the segment, in seconds, after we last
+    /// synchronized it with the actual content of the buffer.
     pub(crate) fn last_buffered_end(&self) -> f64 {
         self.last_buffered_end
     }
@@ -131,8 +146,9 @@ impl BufferedChunk {
     /// Returns true if the given segment appears to be garbage collected, at least since the
     /// position given by `min_wanted_pos`, in seconds
     pub(crate) fn appears_garbage_collected(&self, min_wanted_pos: f64) -> bool {
-        if self.last_buffered_start - self.start > 0.5 {
-            self.last_buffered_start > min_wanted_pos
+        if self.last_buffered_start - self.start > 0.5 && self.last_buffered_start > min_wanted_pos
+        {
+            true
         } else {
             self.end - self.last_buffered_end > 0.5
         }
@@ -218,8 +234,13 @@ impl SegmentInventory {
     /// We talk here about a "correction" because the expected start and end of the segment can be
     /// a little different from what the lower-level buffer advertise, this is what we're computing
     /// here.
-    pub(super) fn validate_segment(&mut self, seg_id: u64, buffered: &JsTimeRanges) {
-        self.synchronize(buffered);
+    pub(super) fn validate_segment(
+        &mut self,
+        seg_id: u64,
+        buffered: &JsTimeRanges,
+        media_offset: f64,
+    ) {
+        self.synchronize(buffered, media_offset);
         let seg_idx = self
             .inventory
             .iter()
@@ -231,26 +252,29 @@ impl SegmentInventory {
         let seg_idx = seg_idx.unwrap();
         let seg = self.inventory.get(seg_idx).unwrap();
 
-        let range = buffered
-            .into_iter()
-            .fold(None, |acc: Option<(f64, f64)>, range| {
-                let curr_overlap_size = overlap_size(seg, range);
-                if curr_overlap_size > 0. {
-                    if let Some(previous) = acc {
-                        if overlap_size(seg, previous) > curr_overlap_size {
-                            acc
+        let media_range =
+            buffered
+                .into_iter()
+                .fold(None, |acc: Option<(f64, f64)>, media_range| {
+                    let curr_overlap_size = buffered_overlap_size(seg, media_range, media_offset);
+                    if curr_overlap_size > 0. {
+                        if let Some(previous) = acc {
+                            if buffered_overlap_size(seg, previous, media_offset)
+                                > curr_overlap_size
+                            {
+                                acc
+                            } else {
+                                Some(media_range)
+                            }
                         } else {
-                            Some(range)
+                            Some(media_range)
                         }
                     } else {
-                        Some(range)
+                        acc
                     }
-                } else {
-                    acc
-                }
-            });
+                });
 
-        if range.is_none() {
+        if media_range.is_none() {
             let seg = self.inventory.get_mut(seg_idx).unwrap();
             Logger::warn(&format!(
                 "SI: Buffered range of pushed segment not found (s:{}, e:{})",
@@ -259,7 +283,9 @@ impl SegmentInventory {
             seg.validated = true;
             return;
         }
-        let (range_start, range_end) = range.unwrap();
+        let (media_range_start, media_range_end) = media_range.unwrap();
+        let range_start = media_range_start - media_offset;
+        let range_end = media_range_end - media_offset;
         let prev_seg = if seg_idx == 0 {
             None
         } else {
@@ -651,16 +677,16 @@ impl SegmentInventory {
         self.inventory.as_slice()
     }
 
-    pub(super) fn synchronize(&mut self, buffered: &JsTimeRanges) {
+    pub(super) fn synchronize(&mut self, buffered: &JsTimeRanges, media_offset: f64) {
         let mut segment_idx = 0;
         if segment_idx >= self.inventory.len() {
             return;
         }
         let mut updates: Vec<PendingBufferedChunkModificationTask> = vec![];
-        buffered
-            .into_iter()
-            .enumerate()
-            .for_each(|(range_index, (range_start, range_end))| {
+        buffered.into_iter().enumerate().for_each(
+            |(range_index, (media_range_start, media_range_end))| {
+                let range_start = media_range_start - media_offset;
+                let range_end = media_range_end - media_offset;
                 let mut curr_seg = if let Some(seg) = self.inventory.get(segment_idx) {
                     seg
                 } else {
@@ -713,6 +739,7 @@ impl SegmentInventory {
                         // current segment
                         let next_range_start = buffered.start(range_index + 1);
                         if let Some(next_range_start) = next_range_start {
+                            let next_range_start = next_range_start - media_offset;
                             if range_end - f64::max(curr_seg.start, range_start)
                                 < next_range_start - curr_seg.end
                             {
@@ -752,6 +779,7 @@ impl SegmentInventory {
                     // current segment
                     let next_range_start = buffered.start(range_index + 1);
                     if let Some(next_range_start) = next_range_start {
+                        let next_range_start = next_range_start - media_offset;
                         if range_end - f64::max(curr_seg.start, range_start)
                             < next_range_start - curr_seg.end
                         {
@@ -772,7 +800,8 @@ impl SegmentInventory {
                     }
                     segment_idx += 1;
                 }
-            });
+            },
+        );
 
         if segment_idx < self.inventory.len() {
             Logger::info(&format!(
@@ -794,13 +823,17 @@ impl SegmentInventory {
         //         .iter()
         //         .map(|x| {
         //             format!(
-        //                 "{}-{} (v:{}, m:{})",
-        //                 x.last_buffered_start, x.last_buffered_end, x.variant_score, x.media_id
+        //                 "{}-{} (v:{}, m:{}, isVal:{})",
+        //                 x.last_buffered_start,
+        //                 x.last_buffered_end,
+        //                 x.variant_score,
+        //                 x.media_id,
+        //                 x.validated
         //             )
         //         })
         //         .collect::<Vec<String>>()
         //         .join(" / ");
-        //     format!("SI: synchronized timeline: {}", timeline_str)
+        //     format!("SI: synchronized {} timeline: {}", self.media_type, timeline_str)
         // });
     }
 
@@ -1027,8 +1060,8 @@ pub(super) struct BufferedSegmentMetadata {
     pub(super) context: SegmentQualityContext,
 }
 
-fn overlap_size(seg: &BufferedChunk, range: (f64, f64)) -> f64 {
-    let overlap_start = f64::max(seg.start, range.0);
-    let overlap_end = f64::min(seg.end, range.1);
+fn buffered_overlap_size(seg: &BufferedChunk, range: (f64, f64), media_offset: f64) -> f64 {
+    let overlap_start = f64::max(seg.start, range.0 - media_offset);
+    let overlap_end = f64::min(seg.end, range.1 - media_offset);
     overlap_end - overlap_start
 }
