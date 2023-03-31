@@ -33,10 +33,11 @@ import {
   VariantLockStatusChangeWorkerMessage,
   SourceBufferId,
 } from "../ts-common/types";
-import { MediaType } from "../wasm/wasp_hls";
+import { MediaType, OtherErrorCode } from "../wasm/wasp_hls";
 import {
+  WaspError,
+  WaspMultiVariantPlaylistParsingError,
   WaspOtherError,
-  WaspPlaylistParsingError,
   WaspSegmentRequestError,
   WaspSourceBufferCreationError,
 } from "./errors";
@@ -681,7 +682,7 @@ export function onRebufferingEndedMessage(
 export function onErrorMessage(
   msg: ErrorWorkerMessage,
   contentMetadata: ContentMetadata | null
-): Error | null {
+): WaspError | null {
   if (contentMetadata?.contentId !== msg.value.contentId) {
     logger.info("API: Ignoring error due to wrong `contentId`");
     return null;
@@ -701,7 +702,9 @@ export function onErrorMessage(
   return error;
 }
 
-function formatError(msg: ErrorWorkerMessage | WarningWorkerMessage): Error {
+function formatError(
+  msg: ErrorWorkerMessage | WarningWorkerMessage
+): WaspError {
   switch (msg.value.errorInfo.type) {
     case "segment-request":
       return new WaspSegmentRequestError(
@@ -718,14 +721,16 @@ function formatError(msg: ErrorWorkerMessage | WarningWorkerMessage): Error {
         msg.value.errorInfo.value.code,
         msg.value.message
       );
-    case "playlist-parse":
-      return new WaspPlaylistParsingError(
-        msg.value.errorInfo.value.type,
-        msg.value.errorInfo.value.mediaType,
+    case "multi-var-playlist-parse":
+      return new WaspMultiVariantPlaylistParsingError(
+        msg.value.errorInfo.value.code,
         msg.value.message
       );
     default:
-      return new Error(msg.value.message ?? "An error arised");
+      return new WaspOtherError(
+        OtherErrorCode.Unknown,
+        msg.value.message ?? "An error arised"
+      );
   }
 }
 

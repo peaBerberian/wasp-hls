@@ -555,8 +555,7 @@ impl MediaElementReference {
     ///
     /// Returns `true` if a seek has been performed
     fn check_queued_seek(&mut self) -> bool {
-        if self.queued_seek.is_some()
-            && self.last_observation.as_ref().unwrap().ready_state() >= 1
+        if self.queued_seek.is_some() && self.last_observation.as_ref().unwrap().ready_state() >= 1
         {
             let queued_seek = self.queued_seek.unwrap();
             if let Some(media_pos) = self.playlist_pos_to_media_pos(queued_seek) {

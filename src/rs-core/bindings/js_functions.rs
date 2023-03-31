@@ -1,4 +1,4 @@
-use crate::wasm_bindgen;
+use crate::{parser::MultiVariantPlaylistParsingError, wasm_bindgen};
 use std::fmt;
 
 /// # js_functions
@@ -237,9 +237,14 @@ extern "C" {
         message: Option<&str>,
     );
 
-    pub fn jsSendPlaylistParsingError(
+    pub fn jsSendMultiVariantPlaylistParsingError(
         fatal: bool,
-        playlist_type: PlaylistType,
+        code: MultiVariantPlaylistParsingErrorCode,
+        message: Option<&str>,
+    );
+
+    pub fn jsSendMediaPlaylistParsingError(
+        fatal: bool,
         media_type: Option<MediaType>,
         message: Option<&str>,
     );
@@ -253,6 +258,8 @@ pub enum PlaylistType {
 
 #[wasm_bindgen]
 pub enum OtherErrorCode {
+    NoSupportedVariant,
+    UnfoundLockedVariant,
     MediaSourceAttachmentError,
     Unknown,
 }
@@ -505,6 +512,81 @@ impl JsResult<(), EndOfStreamErrorCode> for EndOfStreamResult {
             Err(err)
         } else {
             Ok(())
+        }
+    }
+}
+
+/// Error that might arise when parsing the MultiVariant Playlist.
+#[wasm_bindgen]
+pub enum MultiVariantPlaylistParsingErrorCode {
+    /// The first line of the MultiVariantPlaylist is not #EXTM3U.
+    ///
+    /// Are you sure this is a MultiVariant Playlist?
+    MissingExtM3uHeader,
+    /// The MultiVariant Playlist has no variant.
+    ///
+    /// Are you sure this is a MultiVariant Playlist and not a Media Playlist?
+    MultiVariantPlaylistWithoutVariant,
+    /// An `EXT-X-STREAM-INF` tag announced in the MultiVariant Playlist,
+    /// describing an HLS variant, had no URI associated to it. It should be
+    /// mandatory.
+    MissingUriLineAfterVariant,
+    /// An `EXT-X-STREAM-INF` tag announced in the MultiVariant Playlist,
+    /// describing an HLS variant, had an unreadable URI associated to it.
+    UnableToReadVariantUri,
+    /// An `EXT-X-STREAM-INF` tag announced in the MultiVariant Playlist,
+    /// describing an HLS variant, had no `BANDWIDTH` attribute associated to it.
+    /// It should be mandatory.
+    VariantMissingBandwidth,
+    /// A value in the MultiVariant Playlist was in an invalid format.
+    InvalidValue,
+    /// An `EXT-X-MEDIA` tag announced in the MultiVariant Playlist, describing
+    /// an HLS variant, had no `TYPE` attribute associated to it. It should be
+    /// mandatory.
+    MediaTagMissingType,
+    /// An `EXT-X-MEDIA` tag announced in the MultiVariant Playlist, describing
+    /// an HLS variant, had no `NAME` attribute associated to it. It should be
+    /// mandatory.
+    MediaTagMissingName,
+    /// An `EXT-X-MEDIA` tag announced in the MultiVariant Playlist, describing
+    /// an HLS variant, had no `GROUP-ID` attribute associated to it. It should be
+    /// mandatory.
+    MediaTagMissingGroupId,
+    /// A line could not be read.
+    UnableToReadLine,
+    /// Another, uncategorized, error arised.
+    Unknown,
+}
+
+impl From<MultiVariantPlaylistParsingError> for MultiVariantPlaylistParsingErrorCode {
+    fn from(value: MultiVariantPlaylistParsingError) -> Self {
+        match value {
+            MultiVariantPlaylistParsingError::MissingExtM3uHeader => {
+                MultiVariantPlaylistParsingErrorCode::MissingExtM3uHeader
+            }
+            MultiVariantPlaylistParsingError::InvalidDecimalInteger => {
+                MultiVariantPlaylistParsingErrorCode::InvalidValue
+            }
+            MultiVariantPlaylistParsingError::MediaTagMissingType => {
+                MultiVariantPlaylistParsingErrorCode::MediaTagMissingType
+            }
+            MultiVariantPlaylistParsingError::MediaTagMissingName => {
+                MultiVariantPlaylistParsingErrorCode::MediaTagMissingName
+            }
+            MultiVariantPlaylistParsingError::MediaTagMissingGroupId => {
+                MultiVariantPlaylistParsingErrorCode::MediaTagMissingGroupId
+            }
+            MultiVariantPlaylistParsingError::VariantMissingBandwidth => {
+                MultiVariantPlaylistParsingErrorCode::VariantMissingBandwidth
+            }
+            MultiVariantPlaylistParsingError::MissingUriLineAfterVariant => {
+                MultiVariantPlaylistParsingErrorCode::MissingUriLineAfterVariant
+            }
+            MultiVariantPlaylistParsingError::UnableToReadVariantUri
+            | MultiVariantPlaylistParsingError::UnableToReadLine
+            | MultiVariantPlaylistParsingError::Unknown => {
+                MultiVariantPlaylistParsingErrorCode::Unknown
+            }
         }
     }
 }

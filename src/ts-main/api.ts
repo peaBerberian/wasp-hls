@@ -12,7 +12,7 @@ import {
   WorkerMessageType,
 } from "../ts-common/types";
 import { MediaType } from "../wasm/wasp_hls";
-import { WaspInitializationError } from "./errors";
+import { WaspError, WaspInitializationError } from "./errors";
 import postMessageToWorker from "./postMessageToWorker";
 import { ContentMetadata, PlayerState } from "./types";
 import { canDemuxMpeg2Ts, requestStopForContent, waitForLoad } from "./utils";
@@ -573,7 +573,7 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
     return this.__contentMetadata__?.maximumPosition;
   }
 
-  public getError(): Error | null {
+  public getError(): WaspError | null {
     return this.__contentMetadata__?.error ?? null;
   }
 

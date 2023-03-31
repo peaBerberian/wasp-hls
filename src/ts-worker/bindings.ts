@@ -29,7 +29,7 @@ import {
   EndOfStreamErrorCode,
   RequestErrorReason,
   OtherErrorCode,
-  PlaylistType,
+  MultiVariantPlaylistParsingErrorCode,
   JsTimeRanges,
 } from "../wasm/wasp_hls.js";
 import {
@@ -129,9 +129,8 @@ export function sendOtherError(
   });
 }
 
-export function sendPlaylistParsingError(
+export function sendMediaPlaylistParsingError(
   fatal: boolean,
-  playlistType: PlaylistType,
   mediaType: MediaType | undefined,
   message: string | undefined
 ): void {
@@ -148,10 +147,36 @@ export function sendPlaylistParsingError(
       contentId,
       message,
       errorInfo: {
-        type: "playlist-parse" as const,
+        type: "media-playlist-parse" as const,
         value: {
-          type: playlistType,
           mediaType,
+        },
+      },
+    },
+  });
+}
+
+export function sendMultiVariantPlaylistParsingError(
+  fatal: boolean,
+  code: MultiVariantPlaylistParsingErrorCode,
+  message: string | undefined
+): void {
+  const contentId = playerInstance.getContentInfo()?.contentId;
+  if (contentId === undefined) {
+    logger.error("Cannot send error, no contentId");
+    return;
+  }
+  postMessageToMain({
+    type: fatal
+      ? (WorkerMessageType.Error as const)
+      : (WorkerMessageType.Warning as const),
+    value: {
+      contentId,
+      message,
+      errorInfo: {
+        type: "multi-var-playlist-parse" as const,
+        value: {
+          code,
         },
       },
     },

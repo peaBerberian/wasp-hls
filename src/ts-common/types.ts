@@ -1,9 +1,9 @@
 import {
   MediaSourceReadyState,
   MediaType,
+  MultiVariantPlaylistParsingErrorCode,
   OtherErrorCode,
   PlaybackTickReason,
-  PlaylistType,
   RequestErrorReason,
   SourceBufferCreationErrorCode as WasmSourceBufferCreationErrorCode,
 } from "../wasm/wasp_hls";
@@ -152,16 +152,6 @@ export const enum InitializationErrorCode {
    * the WaspHlsPlayer due to the impossibility of requesting it.
    */
   WasmRequestError,
-  // /**
-  //  * The corresponding worker did not succeed to load the WebAssembly part of
-  //  * the WaspHlsPlayer due to an HTTP response not in the 200s.
-  //  */
-  // WasmRequestBadStatus,
-  /**
-   * The corresponding worker did not succeed to load the WebAssembly part of
-   * the WaspHlsPlayer due to a timeout during its HTTP request.
-   */
-  WasmRequestTimeout,
   /** Any other, uncategorized, error. */
   UnknownError,
 }
@@ -214,8 +204,9 @@ export interface ErrorWorkerMessage {
 
     errorInfo:
       | UnitializedErrorWorkerInfo
-      | PlaylistParsingErrorWorkerInfo
-      | PlaylistRequestErrorWorkerInfo
+      | MultiVariantPlaylistParsingErrorWorkerInfo
+      | MediaPlaylistParsingErrorWorkerInfo
+      | MediaPlaylistRequestErrorWorkerInfo
       | SegmentRequestErrorWorkerInfo
       | SourceBufferCreationErrorWorkerInfo
       | OtherErrorWorkerInfo;
@@ -247,8 +238,9 @@ export interface WarningWorkerMessage {
 
     errorInfo:
       | UnitializedErrorWorkerInfo
-      | PlaylistParsingErrorWorkerInfo
-      | PlaylistRequestErrorWorkerInfo
+      | MultiVariantPlaylistParsingErrorWorkerInfo
+      | MediaPlaylistParsingErrorWorkerInfo
+      | MediaPlaylistRequestErrorWorkerInfo
       | SegmentRequestErrorWorkerInfo
       | SourceBufferCreationErrorWorkerInfo
       | OtherErrorWorkerInfo;
@@ -271,26 +263,26 @@ export interface UnitializedErrorWorkerInfo {
   };
 }
 
-/**
- * Error linked to an error while parsing a MultiVariant playlist or media
- * playlist.
- */
-export interface PlaylistParsingErrorWorkerInfo {
-  type: "playlist-parse";
+/** Error linked to an error while parsing a MultiVariant Playlist. */
+export interface MultiVariantPlaylistParsingErrorWorkerInfo {
+  type: "multi-var-playlist-parse";
   value: {
-    type: PlaylistType;
+    code: MultiVariantPlaylistParsingErrorCode;
+  };
+}
+
+/** Error linked to an error while parsing a media playlist. */
+export interface MediaPlaylistParsingErrorWorkerInfo {
+  type: "media-playlist-parse";
+  value: {
     mediaType?: MediaType | undefined;
   };
 }
 
-/**
- * Error linked to a MultiVariant playlist or media playlist HTTP(S) request's
- * failure.
- */
-export interface PlaylistRequestErrorWorkerInfo {
-  type: "playlist-request";
+/** Error linked to a Media playlist request's failure. */
+export interface MediaPlaylistRequestErrorWorkerInfo {
+  type: "media-playlist-request";
   value: {
-    type: PlaylistType;
     url: string;
     mediaType?: MediaType;
     reason: RequestErrorReason;

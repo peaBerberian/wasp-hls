@@ -1,5 +1,20 @@
 import logger, { LoggerLevel } from "./ts-common/logger";
-import WaspHlsPlayer, { PlayerState } from "./ts-main";
+import WaspHlsPlayer from "./ts-main";
+export {
+  PlayerState,
+  WaspError,
+  WaspErrorCode,
+  WaspInitializationError,
+  WaspMediaPlaylistParsingError,
+  WaspMediaPlaylistRequestError,
+  WaspMultiVariantPlaylistParsingError,
+  WaspMultiVariantPlaylistRequestError,
+  WaspOtherError,
+  WaspSegmentParsingError,
+  WaspSegmentRequestError,
+  WaspSourceBufferCreationError,
+  WaspSourceBufferError,
+} from "./ts-main";
 
 // TODO only debug mode?
 /* eslint-disable */
@@ -7,7 +22,7 @@ import WaspHlsPlayer, { PlayerState } from "./ts-main";
 /* eslint-enable */
 
 // Re-definition for easier usage by JavaScript and TypeScript applications
-const LoggerLevels = {
+export const LoggerLevels = {
   Debug: LoggerLevel.Debug,
   Error: LoggerLevel.Error,
   Warning: LoggerLevel.Warning,
@@ -15,5 +30,6 @@ const LoggerLevels = {
   None: LoggerLevel.None,
 } as const;
 
-export { PlayerState, logger, LoggerLevels };
+export { logger };
+
 export default WaspHlsPlayer;

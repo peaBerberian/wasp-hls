@@ -11,17 +11,18 @@ use crate::{
             format_variants_info_for_js,
         },
         jsAnnounceFetchedContent, jsAnnounceTrackUpdate, jsAnnounceVariantLockStatusChange,
-        jsAnnounceVariantUpdate, jsClearTimer, jsSendOtherError,
-        jsSendPlaylistParsingError, jsSendSegmentRequestError, jsSendSourceBufferCreationError,
-        jsSetMediaSourceDuration, jsStartObservingPlayback, jsStopObservingPlayback, jsTimer,
-        jsUpdateContentInfo, MediaType, PlaylistType, RequestId, SourceBufferId, TimerId,
+        jsAnnounceVariantUpdate, jsClearTimer, jsSendMediaPlaylistParsingError,
+        jsSendMultiVariantPlaylistParsingError, jsSendOtherError, jsSendSegmentRequestError,
+        jsSendSourceBufferCreationError, jsSetMediaSourceDuration, jsStartObservingPlayback,
+        jsStopObservingPlayback, jsTimer, jsUpdateContentInfo, MediaType,
+        MultiVariantPlaylistParsingErrorCode, OtherErrorCode, RequestId, SourceBufferId, TimerId,
         TimerReason,
     },
     media_element::{SegmentPushData, SegmentQualityContext, SourceBufferCreationError},
     parser::{MultiVariantPlaylist, SegmentTimeInfo},
     playlist_store::{
-        LockVariantResponse, MediaPlaylistPermanentId, PlaylistStore, SetAudioTrackResponse,
-        VariantUpdateResult,
+        LockVariantResponse, MediaPlaylistPermanentId, PlaylistStore, PlaylistStoreError,
+        SetAudioTrackResponse, VariantUpdateResult,
     },
     requester::{
         FinishedRequestType, PlaylistFileType, PlaylistRequestInfo, RetryResult, SegmentRequestInfo,
@@ -70,8 +71,8 @@ impl Dispatcher {
                     Logger::warn("Core: Locked variant not found");
                     jsSendOtherError(
                         false,
-                        crate::bindings::OtherErrorCode::Unknown,
-                        Some("Wanted locked variant not found"),
+                        crate::bindings::OtherErrorCode::UnfoundLockedVariant,
+                        Some(&format!("Wanted locked variant \"{variant_id}\" not found")),
                     );
                 }
                 LockVariantResponse::VariantLocked {
@@ -362,12 +363,8 @@ impl Dispatcher {
     fn on_multivariant_playlist_loaded(&mut self, data: Vec<u8>, playlist_url: Url) {
         match MultiVariantPlaylist::parse(data.as_ref(), playlist_url) {
             Err(e) => {
-                jsSendPlaylistParsingError(
-                    true,
-                    PlaylistType::MultiVariantPlaylist,
-                    None, // TODO URL?
-                    Some(&e.to_string()),
-                );
+                let message = e.to_string();
+                jsSendMultiVariantPlaylistParsingError(true, e.into(), Some(&message));
                 self.stop_current_content();
             }
             Ok(pl) => {
@@ -379,11 +376,18 @@ impl Dispatcher {
                         self.check_ready_to_load_media_playlists();
                     }
                     Err(err) => {
-                        jsSendOtherError(
-                            true,
-                            crate::bindings::OtherErrorCode::Unknown,
-                            Some(&err.to_string()),
-                        );
+                        match err {
+                            PlaylistStoreError::NoSupportedVariant => jsSendOtherError(
+                                true,
+                                OtherErrorCode::NoSupportedVariant,
+                                Some(&err.to_string()),
+                            ),
+                            PlaylistStoreError::NoInitialVariant => jsSendMultiVariantPlaylistParsingError(
+                                true,
+                                MultiVariantPlaylistParsingErrorCode::MultiVariantPlaylistWithoutVariant,
+                                Some(&err.to_string()),
+                            ),
+                        };
                         self.stop_current_content();
                     }
                 }
@@ -406,9 +410,8 @@ impl Dispatcher {
         if let Some(ref mut playlist_store) = self.playlist_store.as_mut() {
             match playlist_store.update_media_playlist(&playlist_id, data.as_ref(), playlist_url) {
                 Err(e) => {
-                    jsSendPlaylistParsingError(
+                    jsSendMediaPlaylistParsingError(
                         true,
-                        PlaylistType::MediaPlaylist,
                         None, // TODO? Or maybe at least the URL
                         Some(&e.to_string()),
                     );
@@ -459,11 +462,18 @@ impl Dispatcher {
                 return;
             }
             Err(err) => {
-                jsSendOtherError(
-                    true,
-                    crate::bindings::OtherErrorCode::Unknown,
-                    Some(&err.to_string()),
-                );
+                match err {
+                    PlaylistStoreError::NoSupportedVariant => jsSendOtherError(
+                        true,
+                        OtherErrorCode::NoSupportedVariant,
+                        Some(&err.to_string()),
+                    ),
+                    PlaylistStoreError::NoInitialVariant => jsSendMultiVariantPlaylistParsingError(
+                        true,
+                        MultiVariantPlaylistParsingErrorCode::MultiVariantPlaylistWithoutVariant,
+                        Some(&err.to_string()),
+                    ),
+                };
                 self.stop_current_content();
                 return;
             }
@@ -471,10 +481,9 @@ impl Dispatcher {
         }
 
         if playlist_store.supported_variants().is_empty() {
-            jsSendPlaylistParsingError(
+            jsSendOtherError(
                 true,
-                PlaylistType::MultiVariantPlaylist,
-                None,
+                crate::bindings::OtherErrorCode::NoSupportedVariant,
                 Some("Error while parsing MultiVariantPlaylist: no compatible variant found."),
             );
             self.stop_current_content();
@@ -647,6 +656,7 @@ impl Dispatcher {
         let md = SegmentPushData::new(data, time_info);
         match self.media_element_ref.push_segment(media_type, md, context) {
             Err(x) => {
+                // TODO real push segment error
                 jsSendOtherError(
                     true,
                     crate::bindings::OtherErrorCode::Unknown,

@@ -1,5 +1,5 @@
 import * as React from "react";
-import WaspHlsPlayer, { PlayerState } from "../../../src";
+import WaspHlsPlayer, { PlayerState, WaspError } from "../../../src";
 import {
   exitFullscreen,
   isFullscreen,
@@ -21,7 +21,7 @@ export default React.memo(function VideoPlayer({
   const [shouldShowSpinner, setShouldShowSpinner] = React.useState(
     player.getPlayerState() === PlayerState.Loading || player.isRebuffering()
   );
-  const [error, setError] = React.useState<Error | null>(null);
+  const [error, setError] = React.useState<WaspError | null>(null);
   const [wrapperStyle, setWrapperStyle] = React.useState({});
 
   // Inserting already-existing DOM into React looks a little weird
@@ -158,6 +158,9 @@ export default React.memo(function VideoPlayer({
       {error !== null ? (
         <div className="video-element-error">
           <div className="video-element-error-name">{error.name}</div>
+          <div className="video-element-error-code">
+            {"Code: " + error.code}
+          </div>
           <div className="video-element-error-message">{error.message}</div>
         </div>
       ) : null}

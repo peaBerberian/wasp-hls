@@ -47,6 +47,14 @@ impl MultiVariantPlaylist {
         let mut other_media: Vec<MediaTag> = vec![];
 
         let mut lines = playlist.lines();
+        match lines.next() {
+            Some(Ok(x)) if x == "#EXTM3U" => {
+                // Fine
+            }
+            _ => {
+                return Err(MultiVariantPlaylistParsingError::MissingExtM3uHeader);
+            }
+        }
         while let Some(line) = lines.next() {
             let str_line = if let Ok(s) = line {
                 s
@@ -455,6 +463,7 @@ impl MediaPlaylistContext {
 // It may not be always trivial relatively to the cost of development though.
 #[derive(Debug)]
 pub enum MultiVariantPlaylistParsingError {
+    MissingExtM3uHeader,
     MissingUriLineAfterVariant,
     UnableToReadVariantUri,
     VariantMissingBandwidth,
@@ -501,7 +510,11 @@ impl fmt::Display for MultiVariantPlaylistParsingError {
                 f,
                 "A line of the MultiVariantPlaylist was impossible to parse"
             ),
-            _ => write!(
+            MultiVariantPlaylistParsingError::MissingExtM3uHeader => write!(
+                f,
+                "The first line of the MultiVariant Playlist isn't `#EXTM3U`. Are you sure this is a MultiVariant Playlist?"
+            ),
+            MultiVariantPlaylistParsingError::Unknown => write!(
                 f,
                 "An unknown error was encountered while parsing the MultiVariantPlaylist"
             ),

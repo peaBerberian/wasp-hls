@@ -78,7 +78,7 @@ impl PlaylistStore {
                 playlist.variant(variant_id).unwrap()
             } else {
                 Logger::error("PS: Found no variant in the given MultiVariantPlaylist");
-                return Err(PlaylistStoreError::NoSupportedVariant);
+                return Err(PlaylistStoreError::NoInitialVariant);
             };
         let curr_variant_id = initial_variant.id();
         let curr_video_id = playlist.video_media_playlist_id_for(initial_variant);
@@ -698,4 +698,6 @@ use thiserror::Error;
 pub(crate) enum PlaylistStoreError {
     #[error("No supported variant was found in the MultiVariantPlaylist")]
     NoSupportedVariant,
+    #[error("No variant was found in the MultiVariantPlaylist. Are you sure that this isn't a Media Playlist?")]
+    NoInitialVariant,
 }

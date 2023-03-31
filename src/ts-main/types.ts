@@ -1,5 +1,6 @@
 import QueuedSourceBuffer from "../ts-common/QueuedSourceBuffer";
 import { AudioTrackInfo, VariantInfo } from "../ts-common/types";
+import { WaspError } from "./errors";
 
 /**
  * Structure storing metadata associated to a content being played by a
@@ -115,7 +116,7 @@ export interface ContentMetadata {
 
   loadingAborter: AbortController | undefined;
 
-  error: Error | null;
+  error: WaspError | null;
 }
 
 /** Enumerates the various "states" the WaspHlsPlayer can be in. */
