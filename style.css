@@ -329,11 +329,16 @@ body {
   color: #fff;
   z-index: 500;
   position: absolute;
-  width: 100%;
-  padding-top: 20px;
+  width: calc(100% - 40px);
+  padding: 20px;
 }
 .video-element-error-name {
   color: #bad200;
+}
+.video-element-error-code {
+  margin-top: 5px;
+  font-style: italic;
+  color: #bbb;
 }
 .video-element-error-message {
   margin-top: 5px;
