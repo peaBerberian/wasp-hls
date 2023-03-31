@@ -11,7 +11,7 @@ use crate::{
             format_variants_info_for_js,
         },
         jsAnnounceFetchedContent, jsAnnounceTrackUpdate, jsAnnounceVariantLockStatusChange,
-        jsAnnounceVariantUpdate, jsClearTimer, jsSeek, jsSendOtherError,
+        jsAnnounceVariantUpdate, jsClearTimer, jsSendOtherError,
         jsSendPlaylistParsingError, jsSendSegmentRequestError, jsSendSourceBufferCreationError,
         jsSetMediaSourceDuration, jsStartObservingPlayback, jsStopObservingPlayback, jsTimer,
         jsUpdateContentInfo, MediaType, PlaylistType, RequestId, SourceBufferId, TimerId,
@@ -562,7 +562,7 @@ impl Dispatcher {
                             "Core: Found a skippable discontinuity (p:{}, bg:{}, n:{})",
                             wanted_pos, buffer_gap, val
                         ));
-                        jsSeek(val + 0.01);
+                        self.media_element_ref.seek(val + 0.01);
                     }
                 }
             };
