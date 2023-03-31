@@ -81,11 +81,11 @@ Adaptive BitRate:
       for segments of the previous quality to be immediately interrupted, others
       await them before actually switching).
 - [x] Fast-switching (Push on top of already-loaded segments if they prove to be
-      of higher quality - and are sufficiently far from playback to lead to
+      of higher quality - and are sufficiently far from playback to prevent
       rebuffering).
 - [x] Smart-switching (I just made-up the name here :D, but basically it's for
       the opposite situation than the one in which fast-switching is active:
-      don't re-load segments who're already loaded / being pushed with a higher
+      don't re-load segments who're already loaded or being pushed with a higher
       quality).
 - [ ] Also choose variant based on buffer-based estimates.
       _Priority: average_
@@ -95,7 +95,7 @@ Adaptive BitRate:
 
 Request Scheduling:
 
-- [x] Lazy Media Playlist downloading (only fetch and refresh them once they ar
+- [x] Lazy Media Playlist downloading (only fetch and refresh them once they are
       needed)
 - [x] Media Playlist refreshing for live contents
 - [x] Buffer goal implementation (as in: stop loading segments once enough to
@@ -110,7 +110,7 @@ Request Scheduling:
 
 Media demuxing/decoding, MSE API and buffer handling:
 
-- [x] Transmux mpeg-ts (thanks to mux.js on the worker for now)
+- [x] Transmux mpeg2-ts (thanks to mux.js on the worker for now)
 - [x] End of stream support (as in: actually end when playback reaches the end!)
 - [x] Multiple simultaneous type of buffers support (for now only audio and
       video, through MSE `SourceBuffer`s)
@@ -119,10 +119,10 @@ Media demuxing/decoding, MSE API and buffer handling:
       progressively as it also simplifies the logic (e.g. browser GC detection
       might become unneeded) but I like the idea of keeping it to e.g. allow
       seek-back without rebuffering if the current device allows it.
-- [x] Detect browser Garbage Collection of segments and re-load GCed segment if
-      they are needed again.
-- [x] Discontinuity handling: Automatically skipping "holes" in the buffer where
-      it is known that no segment will be pushed.
+- [x] Detect browser Garbage Collection of buffered media and re-load GCed
+      segments if they are needed again.
+- [x] Discontinuity handling: Automatically skip "holes" in the buffer where
+      it is known that no segment will be pushed to fill them.
 - [ ] Freezing handling: Detect when the browser is not making progress in the
       content despite having media data to play and try to unstuck it.
       _Priority: average_
@@ -132,7 +132,7 @@ Media demuxing/decoding, MSE API and buffer handling:
       garbage collection but some platforms still may have issues when memory is
       constrained.
       _Priority: low_
-- [ ] WebAssembly-based mpeg-ts transcoder.
+- [ ] WebAssembly-based mpeg2-ts transcoder.
       _Priority: low_
 
 Tracks:
@@ -157,7 +157,7 @@ Miscellaneous:
       _Priority: very low_
 
 Playlist tags specifically considered (unchecked ones are mainly just ignored,
-most do not prevent playback):
+most of them are not needed for playback):
 
 - [x] EXT-X-ENDLIST: Parsed to know if a playlist needs to be refreshed or
       not, but also to detect if we're playing an unfinished live content to
@@ -168,8 +168,8 @@ most do not prevent playback):
 - [x] EXT-X-PROGRAM-DATE-TIME: Used to determine the starting position of
       segments as stored by the player - which may be different than the actual
       media time once the corresponding segment is pushed.
-      The units/scale indicated by this tag will be preferred over the real media
-      time in the player APIs.
+      The units/scale indicated by this tag will be preferred over the real
+      media time in the player APIs.
 - [x] EXT-X-BYTERANGE: Used for range requests
 - [x] EXT-X-PLAYLIST-TYPE: Used To know if a Playlist may be refreshed
 - [x] EXT-X-TARGETDURATION: Useful for heuristics for playlist refresh
@@ -184,14 +184,12 @@ most do not prevent playback):
   - [x] GROUP-ID
   - [x] DEFAULT
   - [x] AUTOSELECT
-        URI is relied on if it does not exists) if one is linked to it, but also
-        may be re-used for defining a unique track identifier in some API.
   - [x] LANGUAGE: In audio track selection API
   - [x] ASSOC-LANGUAGE: In audio track selection API
   - [x] NAME: In audio track selection API
   - [ ] CHANNELS: Not so hard to implement, but I've been too lazy to parse that
         specific format from the MultiVariant Playlist for now
-  - [ ] CHARACTERISTICS: Soon....
+  - [ ] CHARACTERISTICS: Soon...
   - [ ] FORCED: As the SUBTITLES TYPE is not handled yet, we don't have to use
         this one
   - [ ] INSTREAM-ID: As the CLOSED-CAPTIONS TYPE is not handled yet, we don't
@@ -203,7 +201,6 @@ most do not prevent playback):
   - [x] CODECS: Used for checking support (and filtering out if that's not the
         case, and for initializing buffers with the right info).
   - [x] AUDIO
-        audio media playlist is then considered
   - [x] VIDEO: As no video track selection API exist yet, only the most
         prioritized video media playlist is considered
   - [x] RESOLUTION: Used to describe variant in variant selection API
@@ -211,8 +208,7 @@ most do not prevent playback):
   - [x] SCORE: Considered both to select a variant and to determine if a quality
         is better when "fast-switching".
   - [ ] STABLE-VARIANT-ID: Not really needed for now (only for content steering?)
-        used.
-  - [ ] AVERAGE-BANDWIDTH: Not used yet. I don't know if it's useful yet.
+  - [ ] AVERAGE-BANDWIDTH: Not used yet. I don't know if it's useful yet for us.
   - [ ] SUPPLEMENTAL-CODECS: In our web use case, I'm not sure if this is only
         useful for track selection API or if filtering also needs to be done based
         on this.
@@ -277,7 +273,7 @@ The architecture of the project is as follow:
   V  (once compiled)    |                       |                  |
                         V                       V                  |
 +-------------------------------------------------+      +-------------------+
-|                   Dispatcher                    |      |    Rs Bindings    |
+|                   Dispatcher                    | ---> |    Rs Bindings    |
 +-------------------------------------------------+      +-------------------+
     |            |         |                   | |                ^
     |            |         |                   | |                |
