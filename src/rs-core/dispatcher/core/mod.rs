@@ -557,7 +557,7 @@ impl Dispatcher {
                 None => {}
                 Some(val) => {
                     let buffer_gap = self.media_element_ref.last_buffer_gap();
-                    if wanted_pos + buffer_gap < (val + 0.01) {
+                    if wanted_pos + buffer_gap < val {
                         Logger::warn(&format!(
                             "Core: Found a skippable discontinuity (p:{}, bg:{}, n:{})",
                             wanted_pos, buffer_gap, val

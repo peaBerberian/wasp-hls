@@ -123,6 +123,9 @@ Media demuxing/decoding, MSE API and buffer handling:
       they are needed again.
 - [x] Discontinuity handling: Automatically skipping "holes" in the buffer where
       it is known that no segment will be pushed.
+- [ ] Freezing handling: Detect when the browser is not making progress in the
+      content despite having media data to play and try to unstuck it.
+      _Priority: average_
 - [ ] Proper handling of `QuotaExceededError` after pushing segments (when low
       on memory).
       This is generally not needed as the browser should already handle some kind of
