@@ -12,14 +12,14 @@ use crate::{
         },
         jsAnnounceFetchedContent, jsAnnounceTrackUpdate, jsAnnounceVariantLockStatusChange,
         jsAnnounceVariantUpdate, jsClearTimer, jsSendMediaPlaylistParsingError,
-        jsSendMultiVariantPlaylistParsingError, jsSendOtherError, jsSendSegmentRequestError,
+        jsSendMultivariantPlaylistParsingError, jsSendOtherError, jsSendSegmentRequestError,
         jsSendSourceBufferCreationError, jsSetMediaSourceDuration, jsStartObservingPlayback,
         jsStopObservingPlayback, jsTimer, jsUpdateContentInfo, MediaType,
-        MultiVariantPlaylistParsingErrorCode, OtherErrorCode, RequestId, SourceBufferId, TimerId,
+        MultivariantPlaylistParsingErrorCode, OtherErrorCode, RequestId, SourceBufferId, TimerId,
         TimerReason,
     },
     media_element::{SegmentPushData, SegmentQualityContext, SourceBufferCreationError},
-    parser::{MultiVariantPlaylist, SegmentTimeInfo},
+    parser::{MultivariantPlaylist, SegmentTimeInfo},
     playlist_store::{
         LockVariantResponse, MediaPlaylistPermanentId, PlaylistStore, PlaylistStoreError,
         SetAudioTrackResponse, VariantUpdateResult,
@@ -109,7 +109,7 @@ impl Dispatcher {
             let (_, playlist_type) = self.playlist_refresh_timers.remove(idx);
             if let Some(playlist_store) = &self.playlist_store {
                 match playlist_type {
-                    PlaylistFileType::MultiVariantPlaylist => self
+                    PlaylistFileType::MultivariantPlaylist => self
                         .requester
                         .fetch_playlist(playlist_store.url().clone(), playlist_type),
                     PlaylistFileType::MediaPlaylist { ref id } => {
@@ -358,17 +358,17 @@ impl Dispatcher {
         }
     }
 
-    /// Method called once a MultiVariant Playlist was loaded with success, with its response data
+    /// Method called once a Multivariant Playlist was loaded with success, with its response data
     /// and url as argument.
     fn on_multivariant_playlist_loaded(&mut self, data: Vec<u8>, playlist_url: Url) {
-        match MultiVariantPlaylist::parse(data.as_ref(), playlist_url) {
+        match MultivariantPlaylist::parse(data.as_ref(), playlist_url) {
             Err(e) => {
                 let message = e.to_string();
-                jsSendMultiVariantPlaylistParsingError(true, e.into(), Some(&message));
+                jsSendMultivariantPlaylistParsingError(true, e.into(), Some(&message));
                 self.stop_current_content();
             }
             Ok(pl) => {
-                Logger::info("Core: MultiVariant Playlist parsed successfully");
+                Logger::info("Core: Multivariant Playlist parsed successfully");
                 // TODO lowest/latest bandwidth first? Option?
                 match PlaylistStore::try_new(pl, 500_000.) {
                     Ok(pl_store) => {
@@ -382,9 +382,9 @@ impl Dispatcher {
                                 OtherErrorCode::NoSupportedVariant,
                                 Some(&err.to_string()),
                             ),
-                            PlaylistStoreError::NoInitialVariant => jsSendMultiVariantPlaylistParsingError(
+                            PlaylistStoreError::NoInitialVariant => jsSendMultivariantPlaylistParsingError(
                                 true,
-                                MultiVariantPlaylistParsingErrorCode::MultiVariantPlaylistWithoutVariant,
+                                MultivariantPlaylistParsingErrorCode::MultivariantPlaylistWithoutVariant,
                                 Some(&err.to_string()),
                             ),
                         };
@@ -442,7 +442,7 @@ impl Dispatcher {
             jsSendOtherError(
                 true,
                 crate::bindings::OtherErrorCode::Unknown,
-                Some("Media playlist loaded but no MultiVariantPlaylist"),
+                Some("Media playlist loaded but no MultivariantPlaylist"),
             );
             self.stop_current_content();
         }
@@ -452,7 +452,7 @@ impl Dispatcher {
         let playlist_store = if let Some(playlist_store) = self.playlist_store.as_mut() {
             playlist_store
         } else {
-            // No PlaylistStore == no loaded MultiVariant Playlist yet
+            // No PlaylistStore == no loaded Multivariant Playlist yet
             return;
         };
 
@@ -468,9 +468,9 @@ impl Dispatcher {
                         OtherErrorCode::NoSupportedVariant,
                         Some(&err.to_string()),
                     ),
-                    PlaylistStoreError::NoInitialVariant => jsSendMultiVariantPlaylistParsingError(
+                    PlaylistStoreError::NoInitialVariant => jsSendMultivariantPlaylistParsingError(
                         true,
-                        MultiVariantPlaylistParsingErrorCode::MultiVariantPlaylistWithoutVariant,
+                        MultivariantPlaylistParsingErrorCode::MultivariantPlaylistWithoutVariant,
                         Some(&err.to_string()),
                     ),
                 };
@@ -484,7 +484,7 @@ impl Dispatcher {
             jsSendOtherError(
                 true,
                 crate::bindings::OtherErrorCode::NoSupportedVariant,
-                Some("Error while parsing MultiVariantPlaylist: no compatible variant found."),
+                Some("Error while parsing MultivariantPlaylist: no compatible variant found."),
             );
             self.stop_current_content();
             return;

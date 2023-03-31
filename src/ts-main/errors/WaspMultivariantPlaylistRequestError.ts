@@ -2,25 +2,25 @@ import { RequestErrorReason } from "../../wasm/wasp_hls";
 import { WaspErrorCode } from "./common";
 
 /**
- * Error used to describe a problem with the MultiVariant Playlist request.
- * @class WaspMultiVariantPlaylistRequestError
+ * Error used to describe a problem with the Multivariant Playlist request.
+ * @class WaspMultivariantPlaylistRequestError
  */
-export default class WaspMultiVariantPlaylistRequestError extends Error {
-  /** Identifies a `WaspMultiVariantPlaylistRequestError` */
-  public readonly name: "WaspMultiVariantPlaylistRequestError";
+export default class WaspMultivariantPlaylistRequestError extends Error {
+  /** Identifies a `WaspMultivariantPlaylistRequestError` */
+  public readonly name: "WaspMultivariantPlaylistRequestError";
 
   /** Human-readable message describing the error. */
   public readonly message: string;
 
-  /** Optionally set to the URL of the MultiVariant Playlist requested. */
+  /** Optionally set to the URL of the Multivariant Playlist requested. */
   public readonly url: string | undefined;
 
   /** Specifies the exact error encountered. */
   public readonly code:
-    | "MultiVariantPlaylistBadHttpStatus"
-    | "MultiVariantPlaylistRequestTimeout"
-    | "MultiVariantPlaylistRequestError"
-    | "MultiVariantPlaylistRequestOtherError";
+    | "MultivariantPlaylistBadHttpStatus"
+    | "MultivariantPlaylistRequestTimeout"
+    | "MultivariantPlaylistRequestError"
+    | "MultivariantPlaylistRequestOtherError";
 
   /**
    * Specifies the exact error encountered.
@@ -46,9 +46,9 @@ export default class WaspMultiVariantPlaylistRequestError extends Error {
   ) {
     super();
     // @see https://stackoverflow.com/questions/41102060/typescript-extending-error-class
-    Object.setPrototypeOf(this, WaspMultiVariantPlaylistRequestError.prototype);
+    Object.setPrototypeOf(this, WaspMultivariantPlaylistRequestError.prototype);
 
-    this.name = "WaspMultiVariantPlaylistRequestError";
+    this.name = "WaspMultivariantPlaylistRequestError";
     this.url = url;
     let formattedMsg = message;
     switch (reason) {
@@ -56,36 +56,36 @@ export default class WaspMultiVariantPlaylistRequestError extends Error {
         formattedMsg =
           formattedMsg ??
           (status === undefined
-            ? "A MultiVariant Playlist HTTP(S) request(s) " +
+            ? "A Multivariant Playlist HTTP(S) request(s) " +
               "responded with an invalid status"
-            : `A MultiVariant Playlist HTTP(S) request(s) " +
+            : `A Multivariant Playlist HTTP(S) request(s) " +
             "responded with a ${status} status`);
-        this.code = WaspErrorCode.MultiVariantPlaylistBadHttpStatus;
+        this.code = WaspErrorCode.MultivariantPlaylistBadHttpStatus;
         break;
 
       case RequestErrorReason.Timeout:
         formattedMsg =
           formattedMsg ??
-          "A MultiVariant Playlist HTTP(S) request(s) did not respond";
-        this.code = WaspErrorCode.MultiVariantPlaylistRequestTimeout;
+          "A Multivariant Playlist HTTP(S) request(s) did not respond";
+        this.code = WaspErrorCode.MultivariantPlaylistRequestTimeout;
         break;
 
       case RequestErrorReason.Error:
         formattedMsg =
           formattedMsg ??
-          "A MultiVariant Playlist HTTP(S) request(s) failed due to an error.";
-        this.code = WaspErrorCode.MultiVariantPlaylistRequestError;
+          "A Multivariant Playlist HTTP(S) request(s) failed due to an error.";
+        this.code = WaspErrorCode.MultivariantPlaylistRequestError;
         break;
 
       case RequestErrorReason.Other:
         formattedMsg =
           formattedMsg ??
-          "A MultiVariant Playlist HTTP(S) request(s) failed for an unknown reason.";
-        this.code = WaspErrorCode.MultiVariantPlaylistRequestOtherError;
+          "A Multivariant Playlist HTTP(S) request(s) failed for an unknown reason.";
+        this.code = WaspErrorCode.MultivariantPlaylistRequestOtherError;
         break;
 
       default:
-        this.code = WaspErrorCode.MultiVariantPlaylistRequestOtherError;
+        this.code = WaspErrorCode.MultivariantPlaylistRequestOtherError;
         break;
     }
     this.globalCode = this.code;

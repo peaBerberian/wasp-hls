@@ -188,7 +188,7 @@ most of them are not needed for playback):
   - [x] ASSOC-LANGUAGE: In audio track selection API
   - [x] NAME: In audio track selection API
   - [ ] CHANNELS: Not so hard to implement, but I've been too lazy to parse that
-        specific format from the MultiVariant Playlist for now
+        specific format from the Multivariant Playlist for now
   - [ ] CHARACTERISTICS: Soon...
   - [ ] FORCED: As the SUBTITLES TYPE is not handled yet, we don't have to use
         this one

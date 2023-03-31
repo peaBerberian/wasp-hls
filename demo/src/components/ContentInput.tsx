@@ -32,7 +32,7 @@ export default React.memo(function ContentInput({
   return (
     <div className="inputs-container">
       <label htmlFor={`url${nameEltId}`}>
-        {"URL to HLS MultiVariant (a.k.a. Master) Playlist:"}
+        {"URL to HLS Multivariant (a.k.a. Master) Playlist:"}
       </label>
       <br />
       <input

@@ -36,7 +36,7 @@ pub(crate) struct MediaElementReference {
 
     /// Offset used to convert the media position on the HTMLMediaElement (ultimately linked to
     /// pushed segments and the browser's internal logic) to the playlist position as found in a
-    /// MultiVariant Playlist, that the WaspHlsPlayer actually uses.
+    /// Multivariant Playlist, that the WaspHlsPlayer actually uses.
     ///
     /// This offset is only known once a segment is being pushed.
     media_offset: Option<f64>,

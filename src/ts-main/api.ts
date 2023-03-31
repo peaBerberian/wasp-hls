@@ -36,7 +36,7 @@ import {
   onUpdateMediaSourceDurationMessage,
   onUpdatePlaybackRateMessage,
   onWarningMessage,
-  onMultiVariantPlaylistParsedMessage,
+  onMultivariantPlaylistParsedMessage,
   onVariantUpdateMessage,
   onTrackUpdateMessage,
   onFlushMessage,
@@ -304,7 +304,7 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
   }
 
   /**
-   * Loads a new HLS content whose MultiVariantPlaylist's URL is given in
+   * Loads a new HLS content whose MultivariantPlaylist's URL is given in
    * argument.
    *
    * This method can only be called if the `WaspHlsPlayer` is initialized.
@@ -802,9 +802,9 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
         case WorkerMessageType.MediaOffsetUpdate:
           onMediaOffsetUpdateMessage(data, this.__contentMetadata__);
           break;
-        case WorkerMessageType.MultiVariantPlaylistParsed:
+        case WorkerMessageType.MultivariantPlaylistParsed:
           if (
-            onMultiVariantPlaylistParsedMessage(data, this.__contentMetadata__)
+            onMultivariantPlaylistParsedMessage(data, this.__contentMetadata__)
           ) {
             this.trigger("variantListUpdate", this.getVariantList());
             this.trigger("audioTrackListUpdate", this.getAudioTrackList());

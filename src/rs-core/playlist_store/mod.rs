@@ -2,7 +2,7 @@ use crate::{
     bindings::{jsIsTypeSupported, MediaType},
     media_element::SegmentQualityContext,
     parser::{
-        AudioTrack, MediaPlaylist, MediaPlaylistUpdateError, MultiVariantPlaylist, SegmentList,
+        AudioTrack, MediaPlaylist, MediaPlaylistUpdateError, MultivariantPlaylist, SegmentList,
         VariantStream,
     },
     utils::url::Url,
@@ -12,14 +12,14 @@ use std::{cmp::Ordering, io::BufRead};
 
 pub(crate) use crate::parser::MediaPlaylistPermanentId;
 
-/// Stores information about the current loaded MultiVariant Playlist and its sub-playlists:
-///   - Information on the MultiVariant Playlist itself.
+/// Stores information about the current loaded Multivariant Playlist and its sub-playlists:
+///   - Information on the Multivariant Playlist itself.
 ///   - On the current variant selected.
 ///   - Information on the different audio and video Media Playlists selected.
 pub(crate) struct PlaylistStore {
-    /// A struct representing the "MultiVariant Playlist", a.k.a. "Master Playlist" of
+    /// A struct representing the "Multivariant Playlist", a.k.a. "Master Playlist" of
     /// the currently loaded HLS content.
-    playlist: MultiVariantPlaylist,
+    playlist: MultivariantPlaylist,
 
     /// `id` of the currently chosen variant.
     curr_variant_id: u32,
@@ -53,17 +53,17 @@ pub(crate) struct PlaylistStore {
     /// to avoid mistakenly choosing an unsupported codec.
     ///
     /// This bool is set to `true` only once ALL codecs in the
-    /// `MultiVariantPlaylist` have been properly checked.
+    /// `MultivariantPlaylist` have been properly checked.
     codecs_checked: bool,
 }
 
 impl PlaylistStore {
-    /// Create a new `PlaylistStore` based on the given parsed `MultiVariantPlaylist`.
+    /// Create a new `PlaylistStore` based on the given parsed `MultivariantPlaylist`.
     ///
     /// Automatically selects the variant with the highest quality (or score if defined) on call.
     /// Please call `update_curr_bandwidth` to select a variant based on an actual criteria.
     pub(crate) fn try_new(
-        playlist: MultiVariantPlaylist,
+        playlist: MultivariantPlaylist,
         initial_bandwidth: f64,
     ) -> Result<Self, PlaylistStoreError> {
         Logger::debug(&format!(
@@ -77,7 +77,7 @@ impl PlaylistStore {
                 Logger::info("PS: Found no bandwidth-compatible variant amongst all variants");
                 playlist.variant(variant_id).unwrap()
             } else {
-                Logger::error("PS: Found no variant in the given MultiVariantPlaylist");
+                Logger::error("PS: Found no variant in the given MultivariantPlaylist");
                 return Err(PlaylistStoreError::NoInitialVariant);
             };
         let curr_variant_id = initial_variant.id();
@@ -96,19 +96,19 @@ impl PlaylistStore {
         })
     }
 
-    /// Returns a reference to the `Url` to the MultiVariant Playlist stored by this
+    /// Returns a reference to the `Url` to the Multivariant Playlist stored by this
     /// `PlaylistStore`.
     pub(crate) fn url(&self) -> &Url {
         self.playlist.url()
     }
 
-    /// Check which codecs present in the `MultiVariantPlaylist` are supported.
+    /// Check which codecs present in the `MultivariantPlaylist` are supported.
     ///
     /// This allows the playlist store to know which variant can actually be relied on.
     /// As such you should be extra careful when using the `PlaylistStore` before that check has
     /// been completely done.
     ///
-    /// Returns `true` if all codecs in the `MultiVariantPlaylist` could have been checked or
+    /// Returns `true` if all codecs in the `MultivariantPlaylist` could have been checked or
     /// `false` if it still await a response from JavaScript. As that response can be asynchronous
     /// it is given back to the corresponding Dispatcher's event listener function.
     ///
@@ -151,7 +151,7 @@ impl PlaylistStore {
                 if let Some(variant_id) = new_variant_id {
                     self.set_curr_variant_and_media_id(variant_id);
                 } else {
-                    Logger::error("PS: No supported variant in the given MultiVariantPlaylist");
+                    Logger::error("PS: No supported variant in the given MultivariantPlaylist");
                     return Err(PlaylistStoreError::NoSupportedVariant);
                 }
             }
@@ -218,12 +218,12 @@ impl PlaylistStore {
             .update_media_playlist(id, media_playlist_data, url)
     }
 
-    /// Returns vec describing all available variant streams in the current MultiVariantPlaylist.
+    /// Returns vec describing all available variant streams in the current MultivariantPlaylist.
     pub(crate) fn supported_variants(&self) -> Vec<&VariantStream> {
         self.playlist.supported_variants()
     }
 
-    /// Returns vec describing all available variant streams in the current MultiVariantPlaylist.
+    /// Returns vec describing all available variant streams in the current MultivariantPlaylist.
     pub(crate) fn variants_for_curr_track(&self) -> Vec<&VariantStream> {
         if let Some(track_id) = self.curr_audio_track {
             self.playlist.supported_variants_for_audio(track_id)
@@ -696,8 +696,8 @@ use thiserror::Error;
 /// Error encountered when creating/updating a PlaylistStore
 #[derive(Error, Debug)]
 pub(crate) enum PlaylistStoreError {
-    #[error("No supported variant was found in the MultiVariantPlaylist")]
+    #[error("No supported variant was found in the MultivariantPlaylist")]
     NoSupportedVariant,
-    #[error("No variant was found in the MultiVariantPlaylist. Are you sure that this isn't a Media Playlist?")]
+    #[error("No variant was found in the MultivariantPlaylist. Are you sure that this isn't a Media Playlist?")]
     NoInitialVariant,
 }

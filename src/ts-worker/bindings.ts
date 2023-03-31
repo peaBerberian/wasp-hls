@@ -29,7 +29,7 @@ import {
   EndOfStreamErrorCode,
   RequestErrorReason,
   OtherErrorCode,
-  MultiVariantPlaylistParsingErrorCode,
+  MultivariantPlaylistParsingErrorCode,
   JsTimeRanges,
 } from "../wasm/wasp_hls.js";
 import {
@@ -156,9 +156,9 @@ export function sendMediaPlaylistParsingError(
   });
 }
 
-export function sendMultiVariantPlaylistParsingError(
+export function sendMultivariantPlaylistParsingError(
   fatal: boolean,
-  code: MultiVariantPlaylistParsingErrorCode,
+  code: MultivariantPlaylistParsingErrorCode,
   message: string | undefined
 ): void {
   const contentId = playerInstance.getContentInfo()?.contentId;
@@ -1110,7 +1110,7 @@ export function announceFetchedContent(
     }
   }
   postMessageToMain({
-    type: WorkerMessageType.MultiVariantPlaylistParsed,
+    type: WorkerMessageType.MultivariantPlaylistParsed,
     value: {
       contentId: contentInfo.contentId,
       variants: variantInfoObj,

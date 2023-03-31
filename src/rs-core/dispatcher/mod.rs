@@ -31,11 +31,11 @@ pub struct Dispatcher {
     /// mostly based on network metrics.
     adaptive_selector: AdaptiveQualitySelector,
 
-    /// Store the "MultiVariant Playlist" (structure which describes the currently
+    /// Store the "Multivariant Playlist" (structure which describes the currently
     /// loaded content) alongside some state to keep track of the chosen... tracks.
     /// (More technically of variants and media streams).
     ///
-    /// `None` if no "MultiVariant Playlist" has been loaded yet.
+    /// `None` if no "Multivariant Playlist" has been loaded yet.
     playlist_store: Option<PlaylistStore>,
 
     /// Abstraction allowing to perform playlist and segment requests, while

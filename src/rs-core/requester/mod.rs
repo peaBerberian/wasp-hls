@@ -138,7 +138,7 @@ pub(crate) struct Requester {
     /// for a retried segment request should be.
     segment_backoff_max: f64,
 
-    /// Timeout, in milliseconds, used for MultiVariant playlist requests.
+    /// Timeout, in milliseconds, used for Multivariant playlist requests.
     ///
     /// If that timeout is exceeded, the corresponding request will fail.
     ///
@@ -151,7 +151,7 @@ pub(crate) struct Requester {
     /// retried (in the case it fails multiple time consecutively).
     ///
     /// This is roughly the initial delay, in milliseconds, the initial backoff
-    /// for a retried MultiVariant Playlist request should be.
+    /// for a retried Multivariant Playlist request should be.
     multi_variant_playlist_backoff_base: f64,
 
     /// When a request is retried, a timeout is awaited to avoid overloading the
@@ -160,7 +160,7 @@ pub(crate) struct Requester {
     /// retried (in the case it fails multiple time consecutively).
     ///
     /// This is roughly the maximum delay, in milliseconds, the backoff delay
-    /// for a retried MultiVariant Playlist request should be.
+    /// for a retried Multivariant Playlist request should be.
     multi_variant_playlist_backoff_max: f64,
 
     /// Timeout, in milliseconds, used for Media playlist requests.
@@ -191,12 +191,12 @@ pub(crate) struct Requester {
 
 #[derive(PartialEq)]
 pub(crate) enum PlaylistFileType {
-    MultiVariantPlaylist,
+    MultivariantPlaylist,
     MediaPlaylist { id: MediaPlaylistPermanentId },
     Unknown,
 }
 
-/// Metadata associated with a pending Playlist (either a MultiVariant Playlist or a Media
+/// Metadata associated with a pending Playlist (either a Multivariant Playlist or a Media
 /// Playlist request.
 pub(crate) struct PlaylistRequestInfo {
     /// ID identifying the request on the JavaScript-side.
@@ -524,13 +524,13 @@ impl Requester {
         self.media_playlist_backoff_max = max;
     }
 
-    /// Fetch either the MultiVariantPlaylist or a MediaPlaylist reachable
+    /// Fetch either the MultivariantPlaylist or a MediaPlaylist reachable
     /// through the given `url` and add its `request_id` to `pending_playlist_requests`.
     ///
     /// Once it succeeds, the `on_request_finished` function will be called.
     pub(crate) fn fetch_playlist(&mut self, url: Url, playlist_type: PlaylistFileType) {
         let timeout = match playlist_type {
-            PlaylistFileType::MultiVariantPlaylist => self.multi_variant_playlist_request_timeout,
+            PlaylistFileType::MultivariantPlaylist => self.multi_variant_playlist_request_timeout,
             PlaylistFileType::MediaPlaylist { .. } => self.media_playlist_request_timeout,
             _ => None,
         };
@@ -697,7 +697,7 @@ impl Requester {
                     if let Some(pla) = pla {
                         pla.is_waiting_for_retry = false;
                         let timeout = match pla.playlist_type {
-                            PlaylistFileType::MultiVariantPlaylist => {
+                            PlaylistFileType::MultivariantPlaylist => {
                                 self.multi_variant_playlist_request_timeout
                             }
                             PlaylistFileType::MediaPlaylist { .. } => {
@@ -871,7 +871,7 @@ impl Requester {
             req.attempts_failed += 1;
             req.is_waiting_for_retry = true;
             let (base, max) = match req.playlist_type {
-                PlaylistFileType::MultiVariantPlaylist => (
+                PlaylistFileType::MultivariantPlaylist => (
                     self.multi_variant_playlist_backoff_base,
                     self.multi_variant_playlist_backoff_max,
                 ),

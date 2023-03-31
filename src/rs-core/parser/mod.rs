@@ -11,7 +11,7 @@ pub(crate) use media_playlist::{
 };
 pub(crate) use media_tag::{MediaTag, MediaTagType};
 pub(crate) use multi_variant_playlist::{
-    MediaPlaylistPermanentId, MediaPlaylistUpdateError, MultiVariantPlaylist,
-    MultiVariantPlaylistParsingError,
+    MediaPlaylistPermanentId, MediaPlaylistUpdateError, MultivariantPlaylist,
+    MultivariantPlaylistParsingError,
 };
 pub(crate) use variant_stream::{VariantStream, VideoResolution};

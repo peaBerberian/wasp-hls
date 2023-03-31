@@ -6,21 +6,21 @@ use super::{AudioTrack, MediaTagType};
 use crate::utils::url::Url;
 use std::{error, fmt, io};
 
-/// Represents a parsed HLS MultiVariant Playlist (a.k.a. Master Playlist).
+/// Represents a parsed HLS Multivariant Playlist (a.k.a. Master Playlist).
 ///
 /// It is already pre-parsed to build useful concepts, such as audio tracks, on top of it.
-pub struct MultiVariantPlaylist {
+pub struct MultivariantPlaylist {
     /// Describes and contains the default MediaPlaylist of all the variants announced in the
-    /// MultiVariant Playlist.
+    /// Multivariant Playlist.
     variants: Vec<VariantStream>,
 
     /// Abstraction to simplify the management of tracks.
     ///
-    /// It actually corresponds to pre-parsed Media tags in the MultiVariant Playlist with their
+    /// It actually corresponds to pre-parsed Media tags in the Multivariant Playlist with their
     /// `TYPE` set to `"audio"`.
     audio_tracks: AudioTrackList,
 
-    /// Parsed Media tags in the MultiVariant Playlist which are not of `TYPE` `"audio"`
+    /// Parsed Media tags in the Multivariant Playlist which are not of `TYPE` `"audio"`
     other_media: Vec<MediaTag>,
 
     /// Supplementary information that will need to be communicated to other Media Playlists
@@ -29,17 +29,17 @@ pub struct MultiVariantPlaylist {
 
     last_id: u32,
 
-    /// Url of the MultiVariant Playlist once it is fetched (post a potential HTTP redirect).
+    /// Url of the Multivariant Playlist once it is fetched (post a potential HTTP redirect).
     url: Url,
 }
 
-impl MultiVariantPlaylist {
-    /// Creates a new `MultiVariantPlaylist` object by giving its entire content through a
+impl MultivariantPlaylist {
+    /// Creates a new `MultivariantPlaylist` object by giving its entire content through a
     /// `BufRead` Abstraction.
     pub fn parse(
         playlist: impl io::BufRead,
         url: Url,
-    ) -> Result<Self, MultiVariantPlaylistParsingError> {
+    ) -> Result<Self, MultivariantPlaylistParsingError> {
         let mut last_id = 0u32;
         let playlist_base_url = url.pathname();
         let mut variants: Vec<VariantStream> = vec![];
@@ -52,14 +52,14 @@ impl MultiVariantPlaylist {
                 // Fine
             }
             _ => {
-                return Err(MultiVariantPlaylistParsingError::MissingExtM3uHeader);
+                return Err(MultivariantPlaylistParsingError::MissingExtM3uHeader);
             }
         }
         while let Some(line) = lines.next() {
             let str_line = if let Ok(s) = line {
                 s
             } else {
-                return Err(MultiVariantPlaylistParsingError::UnableToReadLine);
+                return Err(MultivariantPlaylistParsingError::UnableToReadLine);
             };
             if str_line.is_empty() {
                 continue;
@@ -73,11 +73,11 @@ impl MultiVariantPlaylist {
                         let variant_url =
                             match lines.next() {
                                 None => return Err(
-                                    MultiVariantPlaylistParsingError::MissingUriLineAfterVariant,
+                                    MultivariantPlaylistParsingError::MissingUriLineAfterVariant,
                                 ),
                                 Some(Err(_)) => {
                                     return Err(
-                                        MultiVariantPlaylistParsingError::UnableToReadVariantUri,
+                                        MultivariantPlaylistParsingError::UnableToReadVariantUri,
                                     )
                                 }
                                 Some(Ok(l)) => Url::new(l),
@@ -124,7 +124,7 @@ impl MultiVariantPlaylist {
             }
         });
 
-        Ok(MultiVariantPlaylist {
+        Ok(MultivariantPlaylist {
             last_id,
             url,
             variants,
@@ -134,7 +134,7 @@ impl MultiVariantPlaylist {
         })
     }
 
-    /// Returns a reference to the last known URL of the MultiVariant Playlist.
+    /// Returns a reference to the last known URL of the Multivariant Playlist.
     pub(crate) fn url(&self) -> &Url {
         &self.url
     }
@@ -143,7 +143,7 @@ impl MultiVariantPlaylist {
         self.variants.as_slice()
     }
 
-    /// Returns information on all known variants linked to this `MultiVariantPlaylist`, ordered by
+    /// Returns information on all known variants linked to this `MultivariantPlaylist`, ordered by
     /// `bandwidth` ascending, for which all codecs are known to be supported.
     pub(crate) fn supported_variants(&self) -> Vec<&VariantStream> {
         self.variants
@@ -152,7 +152,7 @@ impl MultiVariantPlaylist {
             .collect()
     }
 
-    /// Returns information on all known variants linked to this `MultiVariantPlaylist`, ordered by
+    /// Returns information on all known variants linked to this `MultivariantPlaylist`, ordered by
     /// `bandwidth` ascending, for which all codecs are known to be supported and which are linked
     /// to the given track_id
     pub(crate) fn supported_variants_for_audio(&self, track_id: u32) -> Vec<&VariantStream> {
@@ -170,18 +170,18 @@ impl MultiVariantPlaylist {
     }
 
     /// Returns mutable reference to information on all known variants linked to this
-    /// `MultiVariantPlaylist`, ordered by `bandwidth` ascending.
+    /// `MultivariantPlaylist`, ordered by `bandwidth` ascending.
     pub(crate) fn variants(&mut self) -> &[VariantStream] {
         self.variants.as_slice()
     }
 
     /// Returns mutable reference to information on all known variants linked to this
-    /// `MultiVariantPlaylist`, ordered by `bandwidth` ascending.
+    /// `MultivariantPlaylist`, ordered by `bandwidth` ascending.
     pub(crate) fn variants_mut(&mut self) -> &mut [VariantStream] {
         self.variants.as_mut_slice()
     }
 
-    /// Returns information on a specific variant linked to this `MultiVariantPlaylist` based on
+    /// Returns information on a specific variant linked to this `MultivariantPlaylist` based on
     /// its `id`.
     ///
     /// Returns `None` if no variant with that `id` are found.
@@ -442,7 +442,7 @@ impl MultiVariantPlaylist {
     }
 }
 
-/// Values parsed from a MultiVariantPlaylist that may have an influence on
+/// Values parsed from a MultivariantPlaylist that may have an influence on
 /// parsed MediaPlaylists.
 #[derive(Debug, Default)]
 pub(crate) struct MediaPlaylistContext {
@@ -462,7 +462,7 @@ impl MediaPlaylistContext {
 // NOTE: should we add information on the line at which the error was encountered?
 // It may not be always trivial relatively to the cost of development though.
 #[derive(Debug)]
-pub enum MultiVariantPlaylistParsingError {
+pub enum MultivariantPlaylistParsingError {
     MissingExtM3uHeader,
     MissingUriLineAfterVariant,
     UnableToReadVariantUri,
@@ -480,56 +480,56 @@ pub enum MultiVariantPlaylistParsingError {
     Unknown,
 }
 
-impl error::Error for MultiVariantPlaylistParsingError {}
+impl error::Error for MultivariantPlaylistParsingError {}
 
-impl fmt::Display for MultiVariantPlaylistParsingError {
+impl fmt::Display for MultivariantPlaylistParsingError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            MultiVariantPlaylistParsingError::MissingUriLineAfterVariant => {
+            MultivariantPlaylistParsingError::MissingUriLineAfterVariant => {
                 write!(f, "A variant is missing its URI")
             }
-            MultiVariantPlaylistParsingError::UnableToReadVariantUri => {
+            MultivariantPlaylistParsingError::UnableToReadVariantUri => {
                 write!(f, "Unable to read URI of one of the variants")
             }
-            MultiVariantPlaylistParsingError::VariantMissingBandwidth => {
+            MultivariantPlaylistParsingError::VariantMissingBandwidth => {
                 write!(f, "A variant is missing its mandatory BANDWIDTH attribute")
             }
-            MultiVariantPlaylistParsingError::InvalidDecimalInteger => {
+            MultivariantPlaylistParsingError::InvalidDecimalInteger => {
                 write!(f, "A decimal attribute was in the wrong format.")
             }
-            MultiVariantPlaylistParsingError::MediaTagMissingType => {
+            MultivariantPlaylistParsingError::MediaTagMissingType => {
                 write!(f, "A media tag is missing a TYPE attribute")
             }
-            MultiVariantPlaylistParsingError::MediaTagMissingName => {
+            MultivariantPlaylistParsingError::MediaTagMissingName => {
                 write!(f, "A media tag is missing a NAME attribute")
             }
-            MultiVariantPlaylistParsingError::MediaTagMissingGroupId => {
+            MultivariantPlaylistParsingError::MediaTagMissingGroupId => {
                 write!(f, "A media tag is missing a GROUP-ID attribute")
             }
-            MultiVariantPlaylistParsingError::UnableToReadLine => write!(
+            MultivariantPlaylistParsingError::UnableToReadLine => write!(
                 f,
-                "A line of the MultiVariantPlaylist was impossible to parse"
+                "A line of the MultivariantPlaylist was impossible to parse"
             ),
-            MultiVariantPlaylistParsingError::MissingExtM3uHeader => write!(
+            MultivariantPlaylistParsingError::MissingExtM3uHeader => write!(
                 f,
-                "The first line of the MultiVariant Playlist isn't `#EXTM3U`. Are you sure this is a MultiVariant Playlist?"
+                "The first line of the Multivariant Playlist isn't `#EXTM3U`. Are you sure this is a Multivariant Playlist?"
             ),
-            MultiVariantPlaylistParsingError::Unknown => write!(
+            MultivariantPlaylistParsingError::Unknown => write!(
                 f,
-                "An unknown error was encountered while parsing the MultiVariantPlaylist"
+                "An unknown error was encountered while parsing the MultivariantPlaylist"
             ),
         }
     }
 }
 
-impl From<VariantParsingError> for MultiVariantPlaylistParsingError {
-    fn from(err: VariantParsingError) -> MultiVariantPlaylistParsingError {
+impl From<VariantParsingError> for MultivariantPlaylistParsingError {
+    fn from(err: VariantParsingError) -> MultivariantPlaylistParsingError {
         match err {
             VariantParsingError::InvalidDecimalInteger => {
-                MultiVariantPlaylistParsingError::InvalidDecimalInteger
+                MultivariantPlaylistParsingError::InvalidDecimalInteger
             }
             VariantParsingError::MissingBandwidth => {
-                MultiVariantPlaylistParsingError::VariantMissingBandwidth
+                MultivariantPlaylistParsingError::VariantMissingBandwidth
             }
         }
     }
@@ -537,19 +537,19 @@ impl From<VariantParsingError> for MultiVariantPlaylistParsingError {
 
 impl error::Error for MediaPlaylistUpdateError {}
 
-impl From<MediaTagParsingError> for MultiVariantPlaylistParsingError {
-    fn from(err: MediaTagParsingError) -> MultiVariantPlaylistParsingError {
+impl From<MediaTagParsingError> for MultivariantPlaylistParsingError {
+    fn from(err: MediaTagParsingError) -> MultivariantPlaylistParsingError {
         match err {
             MediaTagParsingError::MissingType => {
-                MultiVariantPlaylistParsingError::MediaTagMissingType
+                MultivariantPlaylistParsingError::MediaTagMissingType
             }
             MediaTagParsingError::MissingGroupId => {
-                MultiVariantPlaylistParsingError::MediaTagMissingGroupId
+                MultivariantPlaylistParsingError::MediaTagMissingGroupId
             }
             MediaTagParsingError::MissingName => {
-                MultiVariantPlaylistParsingError::MediaTagMissingName
+                MultivariantPlaylistParsingError::MediaTagMissingName
             }
-            _ => MultiVariantPlaylistParsingError::Unknown,
+            _ => MultivariantPlaylistParsingError::Unknown,
         }
     }
 }
@@ -565,7 +565,7 @@ impl fmt::Display for MediaPlaylistUpdateError {
         match self {
             MediaPlaylistUpdateError::NotFound => write!(
                 f,
-                "The media playlist to update was not found in the MultiVariant Playlist."
+                "The media playlist to update was not found in the Multivariant Playlist."
             ),
             MediaPlaylistUpdateError::ParsingError(og_error) => {
                 write!(f, "Could not update MediaPlaylist: {}", og_error)
@@ -607,10 +607,10 @@ impl MediaPlaylistPermanentId {
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum MediaPlaylistUrlLocation {
-    /// This Media Playlist's URL is defined by a variant in the `MultiVariantPlaylist` object.
+    /// This Media Playlist's URL is defined by a variant in the `MultivariantPlaylist` object.
     Variant,
-    /// This Media Playlist's URL is an audio-specific track in the `MultiVariantPlaylist` object.
+    /// This Media Playlist's URL is an audio-specific track in the `MultivariantPlaylist` object.
     AudioTrack,
-    /// This Media Playlist's URL is defined as another media in the `MultiVariantPlaylist` object.
+    /// This Media Playlist's URL is defined as another media in the `MultivariantPlaylist` object.
     OtherMedia,
 }

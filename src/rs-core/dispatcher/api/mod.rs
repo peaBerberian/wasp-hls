@@ -34,7 +34,7 @@ impl Dispatcher {
         }
     }
 
-    /// Start loading a new content by communicating its MultiVariantPlaylist's URL
+    /// Start loading a new content by communicating its MultivariantPlaylist's URL
     pub fn load_content(&mut self, content_url: String) {
         Logger::info("load_content called");
         self.stop();

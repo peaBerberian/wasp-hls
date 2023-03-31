@@ -1,7 +1,7 @@
 import {
   MediaSourceReadyState,
   MediaType,
-  MultiVariantPlaylistParsingErrorCode,
+  MultivariantPlaylistParsingErrorCode,
   OtherErrorCode,
   PlaybackTickReason,
   RequestErrorReason,
@@ -70,7 +70,7 @@ export type WorkerMessage =
   | InitializationErrorWorkerMessage
 
   // Related to content information
-  | MultiVariantPlaylistParsedWorkerMessage
+  | MultivariantPlaylistParsedWorkerMessage
   | ContentTimeBoundsUpdateWorkerMessage
   | MediaOffsetUpdateWorkerMessage
   | VariantUpdateWorkerMessage
@@ -114,7 +114,7 @@ export const enum WorkerMessageType {
   Error = "err",
   Warning = "warn",
   ContentTimeBoundsUpdate = "time-upd",
-  MultiVariantPlaylistParsed = "m-playlist",
+  MultivariantPlaylistParsed = "m-playlist",
   TrackUpdate = "track-upd",
   ContentStopped = "ctnt-stop",
   Seek = "seek",
@@ -204,7 +204,7 @@ export interface ErrorWorkerMessage {
 
     errorInfo:
       | UnitializedErrorWorkerInfo
-      | MultiVariantPlaylistParsingErrorWorkerInfo
+      | MultivariantPlaylistParsingErrorWorkerInfo
       | MediaPlaylistParsingErrorWorkerInfo
       | MediaPlaylistRequestErrorWorkerInfo
       | SegmentRequestErrorWorkerInfo
@@ -238,7 +238,7 @@ export interface WarningWorkerMessage {
 
     errorInfo:
       | UnitializedErrorWorkerInfo
-      | MultiVariantPlaylistParsingErrorWorkerInfo
+      | MultivariantPlaylistParsingErrorWorkerInfo
       | MediaPlaylistParsingErrorWorkerInfo
       | MediaPlaylistRequestErrorWorkerInfo
       | SegmentRequestErrorWorkerInfo
@@ -263,11 +263,11 @@ export interface UnitializedErrorWorkerInfo {
   };
 }
 
-/** Error linked to an error while parsing a MultiVariant Playlist. */
-export interface MultiVariantPlaylistParsingErrorWorkerInfo {
+/** Error linked to an error while parsing a Multivariant Playlist. */
+export interface MultivariantPlaylistParsingErrorWorkerInfo {
   type: "multi-var-playlist-parse";
   value: {
-    code: MultiVariantPlaylistParsingErrorCode;
+    code: MultivariantPlaylistParsingErrorCode;
   };
 }
 
@@ -347,8 +347,8 @@ export interface ContentTimeBoundsUpdateWorkerMessage {
   };
 }
 
-export interface MultiVariantPlaylistParsedWorkerMessage {
-  type: WorkerMessageType.MultiVariantPlaylistParsed;
+export interface MultivariantPlaylistParsedWorkerMessage {
+  type: WorkerMessageType.MultivariantPlaylistParsed;
   value: {
     /**
      * The identifier for the content on which an error was received.
@@ -857,7 +857,7 @@ export interface LoadContentMainMessage {
      * present on the various events concerning that content.
      */
     contentId: string;
-    /** URL to the HLS MultiVariant Playlist. */
+    /** URL to the HLS Multivariant Playlist. */
     url: string;
   };
 }

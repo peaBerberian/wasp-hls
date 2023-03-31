@@ -1,8 +1,8 @@
 import WaspInitializationError from "./WaspInitializationError";
 import WaspMediaPlaylistParsingError from "./WaspMediaPlaylistParsingError";
 import WaspMediaPlaylistRequestError from "./WaspMediaPlaylistRequestError";
-import WaspMultiVariantPlaylistParsingError from "./WaspMultiVariantPlaylistParsingError";
-import WaspMultiVariantPlaylistRequestError from "./WaspMultiVariantPlaylistRequestError";
+import WaspMultivariantPlaylistParsingError from "./WaspMultivariantPlaylistParsingError";
+import WaspMultivariantPlaylistRequestError from "./WaspMultivariantPlaylistRequestError";
 import WaspOtherError from "./WaspOtherError";
 import WaspSegmentParsingError from "./WaspSegmentParsingError";
 import WaspSegmentRequestError from "./WaspSegmentRequestError";
@@ -16,8 +16,8 @@ export type WaspError =
   | WaspInitializationError
   | WaspMediaPlaylistParsingError
   | WaspMediaPlaylistRequestError
-  | WaspMultiVariantPlaylistParsingError
-  | WaspMultiVariantPlaylistRequestError
+  | WaspMultivariantPlaylistParsingError
+  | WaspMultivariantPlaylistRequestError
   | WaspOtherError
   | WaspSegmentParsingError
   | WaspSegmentRequestError
@@ -30,8 +30,8 @@ export {
   WaspInitializationError,
   WaspMediaPlaylistParsingError,
   WaspMediaPlaylistRequestError,
-  WaspMultiVariantPlaylistParsingError,
-  WaspMultiVariantPlaylistRequestError,
+  WaspMultivariantPlaylistParsingError,
+  WaspMultivariantPlaylistRequestError,
   WaspOtherError,
   WaspSegmentParsingError,
   WaspSegmentRequestError,

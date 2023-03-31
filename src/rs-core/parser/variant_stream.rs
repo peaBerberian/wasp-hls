@@ -14,12 +14,12 @@ use crate::{bindings::MediaType, utils::url::Url, Logger};
 #[derive(Debug)]
 pub struct VariantStream {
     /// Identifier for the VariantStream unique for the current
-    /// `MultiVariantPlaylist` object it is a part of.
+    /// `MultivariantPlaylist` object it is a part of.
     id: u32,
 
-    /// Stable identifier for the URI within the parent MultiVariant Playlist
-    /// even in the case a different MultiVariant fetched in the meantime,
-    /// whereas `id` may change if the MultiVariant Playlist is refreshed.
+    /// Stable identifier for the URI within the parent Multivariant Playlist
+    /// even in the case a different Multivariant fetched in the meantime,
+    /// whereas `id` may change if the Multivariant Playlist is refreshed.
     ///
     /// This identifier allows the URI of the Variant Stream to
     /// change between two distinct downloads of the Multivariant

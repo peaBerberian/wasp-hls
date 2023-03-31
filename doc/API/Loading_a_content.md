@@ -6,7 +6,7 @@ Loading a content through the `WaspHlsPlayer` can only be done once it has been
 [instantiated](./Instantiation.md) and once [initialization](./Initialization.md)
 finished with success.
 
-This is the step where the URL of the MultiVariant Playlist (before known as the
+This is the step where the URL of the Multivariant Playlist (before known as the
 "Master Playlist") is provided to the `WaspHlsPlayer`, that takes care of media
 playback.
 
@@ -14,9 +14,9 @@ That step is done through the `load` method, through a very straightforward
 call:
 
 ```js
-// Here `MultiVariantPlaylistUrl` is the HTTP(S) URL to the MultiVariant
+// Here `MultivariantPlaylistUrl` is the HTTP(S) URL to the Multivariant
 // Playlist
-player.load(MultiVariantPlaylistUrl);
+player.load(MultivariantPlaylistUrl);
 ```
 
 You can then be notified of where the load operation is at (whether it is still
@@ -66,5 +66,5 @@ player.load(url);
 
 - **arguments**:
 
-  1. _url_ `string`: Url to the MultiVariant Playlist of the content you want to
+  1. _url_ `string`: Url to the Multivariant Playlist of the content you want to
      play.

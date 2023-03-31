@@ -56,7 +56,7 @@ Where:
 - `WORKER_URL` is the URL to the `WaspHlsPlayer`'s WebWorker file,
 - `WASM_URL` is the URL of the `WaspHlsPlayer`'s WebAssembly file and
 - `HLS_MULTIVARIANT_PLAYLIST_URL` is the URL to the main playlist (called
-  either the MultiVariant Playlist or the Master Playlist) of your HLS content.
+  either the Multivariant Playlist or the Master Playlist) of your HLS content.
 
 Of course, once `initialize` has succeeded, you can play any HLS content you
 want on that `WaspHlsPlayer` instance.

@@ -24,7 +24,7 @@ import {
   ContentTimeBoundsUpdateWorkerMessage,
   ContentStoppedWorkerMessage,
   WarningWorkerMessage,
-  MultiVariantPlaylistParsedWorkerMessage,
+  MultivariantPlaylistParsedWorkerMessage,
   VariantUpdateWorkerMessage,
   TrackUpdateWorkerMessage,
   MainMessageType,
@@ -36,7 +36,7 @@ import {
 import { MediaType, OtherErrorCode } from "../wasm/wasp_hls";
 import {
   WaspError,
-  WaspMultiVariantPlaylistParsingError,
+  WaspMultivariantPlaylistParsingError,
   WaspOtherError,
   WaspSegmentRequestError,
   WaspSourceBufferCreationError,
@@ -722,7 +722,7 @@ function formatError(
         msg.value.message
       );
     case "multi-var-playlist-parse":
-      return new WaspMultiVariantPlaylistParsingError(
+      return new WaspMultivariantPlaylistParsingError(
         msg.value.errorInfo.value.code,
         msg.value.message
       );
@@ -776,15 +776,15 @@ export function onContentTimeBoundsUpdateMessage(
 }
 
 /**
- * Handles `MultiVariantPlaylistParsedWorkerMessage` messages.
+ * Handles `MultivariantPlaylistParsedWorkerMessage` messages.
  * @param {Object} msg - The worker's message received.
  * @param {Object|null} contentMetadata - Metadata of the content currently
  * playing. `null` if no content is currently playing.
  * This object may be mutated.
  * @returns {boolean} - `true` if the message concerned the current content.
  */
-export function onMultiVariantPlaylistParsedMessage(
-  msg: MultiVariantPlaylistParsedWorkerMessage,
+export function onMultivariantPlaylistParsedMessage(
+  msg: MultivariantPlaylistParsedWorkerMessage,
   contentMetadata: ContentMetadata | null
 ): boolean {
   if (contentMetadata?.contentId !== msg.value.contentId) {

@@ -34,27 +34,27 @@ export const WaspErrorCode = {
   SegmentRequestOtherError: "SegmentRequestOtherError",
 
   /**
-   * The HTTP(s) status on the response indicated that the MultiVariant Playlist
+   * The HTTP(s) status on the response indicated that the Multivariant Playlist
    * could not be fetched.
    */
-  MultiVariantPlaylistBadHttpStatus: "MultiVariantPlaylistBadHttpStatus",
+  MultivariantPlaylistBadHttpStatus: "MultivariantPlaylistBadHttpStatus",
   /**
-   * The HTTP(s) request for the MultiVariant Playlist timeouted according to
+   * The HTTP(s) request for the Multivariant Playlist timeouted according to
    * the current configuration.
    */
-  MultiVariantPlaylistRequestTimeout: "MultiVariantPlaylistRequestTimeout",
+  MultivariantPlaylistRequestTimeout: "MultivariantPlaylistRequestTimeout",
   /**
    * The HTTP(s) request itself failed to be performed (might be because we're
-   * offline, might be because of security policies etc.) for the MultiVariant
+   * offline, might be because of security policies etc.) for the Multivariant
    * Playlist.
    */
-  MultiVariantPlaylistRequestError: "MultiVariantPlaylistRequestError",
+  MultivariantPlaylistRequestError: "MultivariantPlaylistRequestError",
   /**
    * The HTTP(s) request itself failed to be performed for another, unknown,
-   * reason for the MultiVariant Playlist.
+   * reason for the Multivariant Playlist.
    */
-  MultiVariantPlaylistRequestOtherError:
-    "MultiVariantPlaylistRequestOtherError",
+  MultivariantPlaylistRequestOtherError:
+    "MultivariantPlaylistRequestOtherError",
 
   /**
    * The HTTP(s) status on the response indicated that the Media Playlist
@@ -84,7 +84,7 @@ export const WaspErrorCode = {
    */
   MediaSourceAttachmentError: "MediaSourceAttachmentError",
   /**
-   * No supported variant was found in the MultiVariant Playlist.
+   * No supported variant was found in the Multivariant Playlist.
    */
   NoSupportedVariant: "NoSupportedVariant",
   /**
@@ -100,56 +100,56 @@ export const WaspErrorCode = {
   SourceBufferCreationOtherError: "SourceBufferCreationOtherError",
 
   /**
-   * The first line of the MultiVariant Playlist is not #EXTM3U.
+   * The first line of the Multivariant Playlist is not #EXTM3U.
    *
-   * Are you sure this is a MultiVariant Playlist?
+   * Are you sure this is a Multivariant Playlist?
    */
-  MultiVariantPlaylistMissingExtM3uHeader:
-    "MultiVariantPlaylistMissingExtM3uHeader",
+  MultivariantPlaylistMissingExtM3uHeader:
+    "MultivariantPlaylistMissingExtM3uHeader",
   /**
-   * The MultiVariant Playlist has no variant.
+   * The Multivariant Playlist has no variant.
    *
-   * Are you sure this is a MultiVariant Playlist and not a Media Playlist?
+   * Are you sure this is a Multivariant Playlist and not a Media Playlist?
    */
-  MultiVariantPlaylistWithoutVariant: "MultiVariantPlaylistWithoutVariant",
+  MultivariantPlaylistWithoutVariant: "MultivariantPlaylistWithoutVariant",
   /**
-   * An `EXT-X-STREAM-INF` tag announced in the MultiVariant Playlist,
+   * An `EXT-X-STREAM-INF` tag announced in the Multivariant Playlist,
    * describing an HLS variant, had no URI associated to it. It should be
    * mandatory.
    */
-  MultiVariantPlaylistMissingUriLineAfterVariant:
-    "MultiVariantPlaylistMissingUriLineAfterVariant",
+  MultivariantPlaylistMissingUriLineAfterVariant:
+    "MultivariantPlaylistMissingUriLineAfterVariant",
   /**
-   * An `EXT-X-STREAM-INF` tag announced in the MultiVariant Playlist,
+   * An `EXT-X-STREAM-INF` tag announced in the Multivariant Playlist,
    * describing an HLS variant, had no `BANDWIDTH` attribute associated to it.
    * It should be mandatory.
    */
-  MultiVariantPlaylistVariantMissingBandwidth:
-    "MultiVariantPlaylistVariantMissingBandwidth",
-  /** A value in the MultiVariant Playlist was in an invalid format. */
-  MultiVariantPlaylistInvalidValue: "MultiVariantPlaylistInvalidValue",
+  MultivariantPlaylistVariantMissingBandwidth:
+    "MultivariantPlaylistVariantMissingBandwidth",
+  /** A value in the Multivariant Playlist was in an invalid format. */
+  MultivariantPlaylistInvalidValue: "MultivariantPlaylistInvalidValue",
   /**
-   * An `EXT-X-MEDIA` tag announced in the MultiVariant Playlist, describing
+   * An `EXT-X-MEDIA` tag announced in the Multivariant Playlist, describing
    * an HLS variant, had no `TYPE` attribute associated to it. It should be
    * mandatory.
    */
-  MultiVariantPlaylistMediaTagMissingType:
-    "MultiVariantPlaylistMediaTagMissingType",
+  MultivariantPlaylistMediaTagMissingType:
+    "MultivariantPlaylistMediaTagMissingType",
   /**
-   * An `EXT-X-MEDIA` tag announced in the MultiVariant Playlist, describing
+   * An `EXT-X-MEDIA` tag announced in the Multivariant Playlist, describing
    * an HLS variant, had no `NAME` attribute associated to it. It should be
    * mandatory.
    */
-  MultiVariantPlaylistMediaTagMissingName:
-    "MultiVariantPlaylistMediaTagMissingName",
+  MultivariantPlaylistMediaTagMissingName:
+    "MultivariantPlaylistMediaTagMissingName",
   /**
-   * An `EXT-X-MEDIA` tag announced in the MultiVariant Playlist, describing
+   * An `EXT-X-MEDIA` tag announced in the Multivariant Playlist, describing
    * an HLS variant, had no `GROUP-ID` attribute associated to it. It should be
    * mandatory.
    */
-  MultiVariantPlaylistMediaTagMissingGroupId:
-    "MultiVariantPlaylistMediaTagMissingGroupId",
-  MultiVariantPlaylistOtherError: "MultiVariantPlaylistOtherError",
+  MultivariantPlaylistMediaTagMissingGroupId:
+    "MultivariantPlaylistMediaTagMissingGroupId",
+  MultivariantPlaylistOtherError: "MultivariantPlaylistOtherError",
 
   /** An error arised when trying to transmux a segment, */
   SegmentTransmuxingError: "SegmentTransmuxingError",
