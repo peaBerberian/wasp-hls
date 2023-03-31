@@ -715,13 +715,23 @@ impl Requester {
         }
     }
 
+    pub(crate) fn earliest_media_segment_pending(&self) -> Option<f64> {
+        if let Some(min) = min_media_segment_time(self.pending_segment_requests.as_slice()) {
+            if let Some(min2) = min_media_segment_time(self.segment_waiting_queue.as_slice()) {
+                Some(f64::min(min, min2))
+            } else {
+                Some(min)
+            }
+        } else {
+            min_media_segment_time(self.segment_waiting_queue.as_slice())
+        }
+    }
+
     pub(crate) fn abort_all(&mut self) {
         for elt in self.pending_playlist_requests.drain(..) {
             jsAbortRequest(elt.request_id);
         }
-        for elt in self.pending_segment_requests.drain(..) {
-            jsAbortRequest(elt.request_id);
-        }
+        self.abort_all_segments();
         self.check_segment_queue();
     }
 
@@ -1048,6 +1058,20 @@ fn log_segment_abort(seg: &impl RequesterSegmentInfo) {
             format!("Req: Aborting {media_type} init segment")
         }
     });
+}
+
+fn min_media_segment_time(segs: &[impl RequesterSegmentInfo]) -> Option<f64> {
+    segs.iter().fold(None, |acc, r| {
+        if let Some(init) = acc {
+            if let Some(start) = r.start_time() {
+                Some(f64::min(start, init))
+            } else {
+                Some(init)
+            }
+        } else {
+            Some(r.start_time()?)
+        }
+    })
 }
 
 fn get_waiting_delay(retry_attempt: u32, base: f64, max: f64) -> f64 {

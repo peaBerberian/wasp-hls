@@ -833,7 +833,10 @@ impl SegmentInventory {
         //         })
         //         .collect::<Vec<String>>()
         //         .join(" / ");
-        //     format!("SI: synchronized {} timeline: {}", self.media_type, timeline_str)
+        //     format!(
+        //         "SI: synchronized {} timeline: {}",
+        //         self.media_type, timeline_str
+        //     )
         // });
     }
 

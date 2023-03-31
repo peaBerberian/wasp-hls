@@ -107,6 +107,12 @@ impl MediaElementReference {
         self.video_inventory.reset();
     }
 
+    /// Returns `true` if we're currently rebuffering due to not enough media data
+    /// being buffered in front of the wanted position.
+    pub(crate) fn is_rebuffering(&self) -> bool {
+        self.is_rebuffering
+    }
+
     /// Returns the wanted playback rate
     pub(crate) fn wanted_speed(&self) -> f64 {
         self.wanted_speed

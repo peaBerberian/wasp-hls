@@ -121,8 +121,8 @@ Media demuxing/decoding, MSE API and buffer handling:
       seek-back without rebuffering if the current device allows it.
 - [x] Detect browser Garbage Collection of segments and re-load GCed segment if
       they are needed again.
-- [ ] Discontinuity handling.
-      _Priority: average_
+- [x] Discontinuity handling: Automatically skipping "holes" in the buffer where
+      it is known that no segment will be pushed.
 - [ ] Proper handling of `QuotaExceededError` after pushing segments (when low
       on memory).
       This is generally not needed as the browser should already handle some kind of

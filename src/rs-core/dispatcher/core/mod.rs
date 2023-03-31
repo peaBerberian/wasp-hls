@@ -11,10 +11,11 @@ use crate::{
             format_variants_info_for_js,
         },
         jsAnnounceFetchedContent, jsAnnounceTrackUpdate, jsAnnounceVariantLockStatusChange,
-        jsAnnounceVariantUpdate, jsClearTimer, jsSendOtherError, jsSendPlaylistParsingError,
-        jsSendSegmentRequestError, jsSendSourceBufferCreationError, jsSetMediaSourceDuration,
-        jsStartObservingPlayback, jsStopObservingPlayback, jsTimer, jsUpdateContentInfo, MediaType,
-        PlaylistType, RequestId, SourceBufferId, TimerId, TimerReason,
+        jsAnnounceVariantUpdate, jsClearTimer, jsSeek, jsSendOtherError,
+        jsSendPlaylistParsingError, jsSendSegmentRequestError, jsSendSourceBufferCreationError,
+        jsSetMediaSourceDuration, jsStartObservingPlayback, jsStopObservingPlayback, jsTimer,
+        jsUpdateContentInfo, MediaType, PlaylistType, RequestId, SourceBufferId, TimerId,
+        TimerReason,
     },
     media_element::{SegmentPushData, SegmentQualityContext, SourceBufferCreationError},
     parser::{MultiVariantPlaylist, SegmentTimeInfo},
@@ -46,7 +47,7 @@ impl Dispatcher {
             Some(FinishedRequestType::Playlist(pl_info)) => {
                 self.on_playlist_fetch_success(pl_info, data.obtain(), final_url)
             }
-            None => Logger::warn("Unknown request finished"),
+            None => Logger::warn("Core: Unknown request finished"),
         }
     }
 
@@ -126,7 +127,7 @@ impl Dispatcher {
             if let Some(duration) = playlist_store.curr_duration() {
                 jsSetMediaSourceDuration(duration);
             } else {
-                Logger::warn("Unknown content duration");
+                Logger::warn("Core: Unknown content duration");
             }
 
             if let Some(Err(e)) = self.init_source_buffer(MediaType::Audio) {
@@ -158,7 +159,7 @@ impl Dispatcher {
                 self.internal_stop();
             }
             Ok(pl) => {
-                Logger::info("MultiVariant Playlist parsed successfully");
+                Logger::info("Core: MultiVariant Playlist parsed successfully");
                 // TODO lowest/latest bandwidth first? Option?
                 match PlaylistStore::try_new(pl, 500_000.) {
                     Ok(pl_store) => {
@@ -327,7 +328,7 @@ impl Dispatcher {
     }
 
     pub(super) fn on_media_source_state_change_core(&mut self, state: MediaSourceReadyState) {
-        Logger::info(&format!("MediaSource state changed: {:?}", state));
+        Logger::info(&format!("Core: MediaSource state changed: {:?}", state));
         self.media_element_ref
             .update_media_source_ready_state(state);
         if state == MediaSourceReadyState::Open {
@@ -379,9 +380,53 @@ impl Dispatcher {
         self.requester.update_base_position(Some(wanted_pos));
         self.segment_selectors
             .update_base_position(wanted_pos - 0.2);
+
         self.check_segments_to_request();
         if !was_already_locked {
             self.requester.unlock_segment_requests();
+        }
+
+        if self.media_element_ref.is_rebuffering() {
+            match self.next_scheduled_segment_start() {
+                None => {}
+                Some(val) => {
+                    let buffer_gap = self.media_element_ref.last_buffer_gap();
+                    if wanted_pos + buffer_gap < (val + 0.01) {
+                        Logger::warn(&format!(
+                            "Core: Found a skippable discontinuity (p:{}, bg:{}, n:{})",
+                            wanted_pos, buffer_gap, val
+                        ));
+                        jsSeek(val + 0.01);
+                    }
+                }
+            };
+        }
+    }
+
+    fn next_scheduled_segment_start(&self) -> Option<f64> {
+        let wanted_pos = self.media_element_ref.wanted_position();
+        let req_min = self.requester.earliest_media_segment_pending();
+        let mut seg_min = None;
+        [MediaType::Video, MediaType::Audio]
+            .into_iter()
+            .for_each(|mt| {
+                let inventory = self.media_element_ref.inventory(mt);
+                let next_segment = inventory
+                    .into_iter()
+                    .find(|s| s.last_buffered_end() > wanted_pos);
+                if let Some(seg) = next_segment {
+                    seg_min = Some(
+                        seg_min
+                            .map(|m| f64::max(m, seg.last_buffered_start()))
+                            .unwrap_or(seg.last_buffered_start()),
+                    );
+                }
+            });
+        match (req_min, seg_min) {
+            (None, None) => None,
+            (Some(rm), None) => Some(rm),
+            (None, Some(sm)) => Some(sm),
+            (Some(rm), Some(sm)) => Some(f64::min(rm, sm)),
         }
     }
 
@@ -395,11 +440,20 @@ impl Dispatcher {
         self.check_segments_to_request()
     }
 
+    /// For each media type, check if segment need to be requested, and if that's the case, perform
+    /// the request.
+    ///
+    /// This method is intelligent enough to not do new requests if some are already pending for
+    /// the same type, meaning that you can call it any time you may want to check if segments can
+    /// be requested (when a request finished, when a media playlist has been updated, when the
+    /// playhead advances etc.).
     pub(super) fn check_segments_to_request(&mut self) {
         let was_already_locked = self.requester.lock_segment_requests();
-        [MediaType::Video, MediaType::Audio].iter().for_each(|mt| {
-            self.check_segment_to_request_for_type(*mt);
-        });
+        [MediaType::Video, MediaType::Audio]
+            .into_iter()
+            .for_each(|mt| {
+                self.check_segment_to_request_for_type(mt);
+            });
         if !was_already_locked {
             self.requester.unlock_segment_requests();
         }
@@ -435,7 +489,7 @@ impl Dispatcher {
     }
 
     pub(super) fn internal_stop(&mut self) {
-        Logger::info("Stopping current content (if one) and resetting player");
+        Logger::info("Core: Stopping current content (if one) and resetting player");
         self.requester.reset();
         jsStopObservingPlayback();
         self.media_element_ref.reset();
@@ -507,7 +561,7 @@ impl Dispatcher {
     pub(super) fn check_variant_bandwidth(&mut self) {
         if let Some(pl_store) = self.playlist_store.as_mut() {
             if let Some(bandwidth) = self.adaptive_selector.get_estimate() {
-                Logger::debug(&format!("New bandwidth estimate: {}", bandwidth));
+                Logger::debug(&format!("Core: New bandwidth estimate: {}", bandwidth));
                 let actually_used_bandwidth = bandwidth / self.media_element_ref.wanted_speed();
                 let update = pl_store.update_curr_bandwidth(actually_used_bandwidth);
                 self.handle_variant_update(update, false);
@@ -520,7 +574,7 @@ impl Dispatcher {
             let is_audio_track_selected = pl_store.curr_audio_track_id().is_some();
             match pl_store.lock_variant(variant_id) {
                 LockVariantResponse::NoVariantWithId => {
-                    Logger::warn("Locked variant not found");
+                    Logger::warn("Core: Locked variant not found");
                     jsSendOtherError(
                         false,
                         crate::bindings::OtherErrorCode::Unknown,
@@ -579,7 +633,7 @@ impl Dispatcher {
         if let Some(pl_store) = self.playlist_store.as_mut() {
             changed_media_types.iter().for_each(|mt| {
                 let mt = *mt;
-                Logger::info(&format!("{} MediaPlaylist changed", mt));
+                Logger::info(&format!("Core: {} MediaPlaylist changed", mt));
 
                 let selector = self.segment_selectors.get_mut(mt);
                 if abort_prev {
@@ -598,7 +652,7 @@ impl Dispatcher {
                     if let Some(id) = pl_store.curr_media_playlist_id(mt) {
                         if let Some(url) = pl_store.media_playlist_url(id) {
                             use PlaylistFileType::*;
-                            Logger::debug("Media changed, requesting its media playlist");
+                            Logger::debug("Core: Media changed, requesting its media playlist");
                             let id = id.clone();
                             let url = url.clone();
                             self.requester.fetch_playlist(url, MediaPlaylist { id });
@@ -654,11 +708,11 @@ impl Dispatcher {
                         if let Some(u) = playlist_store.media_playlist_url(id) {
                             self.requester.fetch_playlist(u.clone(), playlist_type)
                         } else {
-                            Logger::error("Cannot refresh Media Playlist: id not found");
+                            Logger::error("Core: Cannot refresh Media Playlist: id not found");
                         }
                     }
                     PlaylistFileType::Unknown => {
-                        Logger::error("Cannot refresh Media Playlist: type unknown")
+                        Logger::error("Core: Cannot refresh Media Playlist: type unknown")
                     }
                 }
             }
