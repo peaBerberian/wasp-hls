@@ -23,9 +23,9 @@ mod source_buffers;
 ///   - seeking
 ///   - etc.
 pub(crate) struct MediaElementReference {
-    /// Set when a seek operation awaits (e.g. when a seek has been asked but the HTMLMediaElement
-    /// is not yet ready to perform it).
-    awaiting_seek: Option<f64>,
+    /// Set when a seek operation will need to be performed once possible on the linked
+    /// HTMLMediaElement.
+    queued_seek: Option<f64>,
 
     /// Stores the last `MediaObservation` received.
     last_observation: Option<MediaObservation>,
@@ -78,7 +78,7 @@ impl MediaElementReference {
     /// a `MediaSource` already-attached to it.
     pub(crate) fn new() -> Self {
         Self {
-            awaiting_seek: None,
+            queued_seek: None,
             is_rebuffering: false,
             last_observation: None,
             media_source_ready_state: None,
@@ -97,7 +97,7 @@ impl MediaElementReference {
     /// To call once you want to stop the content.
     pub(crate) fn reset(&mut self) {
         jsRemoveMediaSource();
-        self.awaiting_seek = None;
+        self.queued_seek = None;
         self.last_observation = None;
         self.media_source_ready_state = Some(MediaSourceReadyState::Closed);
         self.media_offset = None;
@@ -143,8 +143,8 @@ impl MediaElementReference {
     ///   - Else if no seek is pending, the last known media playhead position
     ///     converted to a playlist position.
     pub(crate) fn wanted_position(&self) -> f64 {
-        match self.awaiting_seek {
-            Some(awaiting_seek) => awaiting_seek,
+        match self.queued_seek {
+            Some(queued_seek) => queued_seek,
             None => {
                 let last_media_pos = self
                     .last_observation
@@ -191,17 +191,17 @@ impl MediaElementReference {
         match &self.last_observation {
             Some(obs) if obs.ready_state() >= 1 => match self.playlist_pos_to_media_pos(position) {
                 Some(media_pos) => {
-                    self.awaiting_seek = None;
+                    self.queued_seek = None;
                     jsSeek(media_pos);
                     true
                 }
                 None => {
-                    self.awaiting_seek = Some(position);
+                    self.queued_seek = Some(position);
                     false
                 }
             },
             _ => {
-                self.awaiting_seek = Some(position);
+                self.queued_seek = Some(position);
                 false
             }
         }
@@ -318,7 +318,7 @@ impl MediaElementReference {
                     ));
                     self.media_offset = Some(media_offset);
                     jsSetMediaOffset(media_offset);
-                    self.check_awaiting_seek();
+                    self.check_queued_seek();
                 }
                 Ok(())
             }
@@ -381,7 +381,7 @@ impl MediaElementReference {
         }
         self.last_observation = Some(observation);
 
-        if !self.check_awaiting_seek() {
+        if !self.check_queued_seek() {
             let last_observation = self.last_observation.as_ref().unwrap();
             let buffer_gap = get_buffer_gap(last_observation);
             if !self.is_rebuffering {
@@ -548,24 +548,24 @@ impl MediaElementReference {
         }
     }
 
-    /// Check if a scheduled seek is awaiting and if all condition to perform it are reached.
+    /// Check if a scheduled seek is queued and if all condition to perform it are reached.
     /// If both are true, perform the seek.
     ///
     /// To call when any of its condition might have changed.
     ///
     /// Returns `true` if a seek has been performed
-    fn check_awaiting_seek(&mut self) -> bool {
-        if self.awaiting_seek.is_some()
+    fn check_queued_seek(&mut self) -> bool {
+        if self.queued_seek.is_some()
             && self.last_observation.as_ref().unwrap().ready_state() >= 1
         {
-            let awaiting_seek = self.awaiting_seek.unwrap();
-            if let Some(media_pos) = self.playlist_pos_to_media_pos(awaiting_seek) {
+            let queued_seek = self.queued_seek.unwrap();
+            if let Some(media_pos) = self.playlist_pos_to_media_pos(queued_seek) {
                 Logger::info(&format!(
                     "Perform awaited seek to {} ({})",
-                    awaiting_seek, media_pos
+                    queued_seek, media_pos
                 ));
                 jsSeek(media_pos);
-                self.awaiting_seek = None;
+                self.queued_seek = None;
                 return true;
             }
         }
