@@ -49,7 +49,7 @@ impl Dispatcher {
                 OtherErrorCode::MediaSourceAttachmentError,
                 Some(&x.to_string()),
             );
-            self.internal_stop();
+            self.stop_current_content();
         }
     }
 
@@ -73,7 +73,7 @@ impl Dispatcher {
 
     pub fn set_wanted_speed(&mut self, speed: f64) {
         self.media_element_ref.update_wanted_speed(speed);
-        self.check_variant_bandwidth();
+        self.check_best_variant();
     }
 
     pub fn set_buffer_goal(&mut self, buffer_goal: f64) {
@@ -84,7 +84,7 @@ impl Dispatcher {
 
     /// Stop the currently loaded content.
     pub fn stop(&mut self) {
-        self.internal_stop();
+        self.stop_current_content();
     }
 
     pub fn lock_variant(&mut self, variant_id: u32) {
