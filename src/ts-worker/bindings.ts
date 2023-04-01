@@ -31,6 +31,7 @@ import {
   OtherErrorCode,
   MultivariantPlaylistParsingErrorCode,
   JsTimeRanges,
+  MediaPlaylistParsingErrorCode,
 } from "../wasm/wasp_hls.js";
 import {
   cachedCodecsSupport,
@@ -191,7 +192,8 @@ export function sendOtherError(
 
 export function sendMediaPlaylistParsingError(
   fatal: boolean,
-  mediaType: MediaType | undefined,
+  code: MediaPlaylistParsingErrorCode,
+  mediaType: MediaType,
   message: string | undefined
 ): void {
   const contentId = playerInstance.getContentInfo()?.contentId;
@@ -209,6 +211,7 @@ export function sendMediaPlaylistParsingError(
       errorInfo: {
         type: "media-playlist-parse" as const,
         value: {
+          code,
           mediaType,
         },
       },

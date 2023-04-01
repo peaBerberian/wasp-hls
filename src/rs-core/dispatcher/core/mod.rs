@@ -463,11 +463,8 @@ impl Dispatcher {
         if let Some(ref mut playlist_store) = self.playlist_store.as_mut() {
             match playlist_store.update_media_playlist(&playlist_id, data.as_ref(), playlist_url) {
                 Err(e) => {
-                    jsSendMediaPlaylistParsingError(
-                        true,
-                        None, // TODO? Or maybe at least the URL
-                        Some(&e.to_string()),
-                    );
+                    let err_message = e.to_string();
+                    jsSendMediaPlaylistParsingError(true, e.into(), media_type, Some(&err_message));
                     self.stop_current_content();
                 }
                 Ok(p) => {

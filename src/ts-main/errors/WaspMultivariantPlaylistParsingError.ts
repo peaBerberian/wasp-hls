@@ -15,7 +15,7 @@ export default class WaspMultivariantPlaylistParsingError extends Error {
     | "MultivariantPlaylistMediaTagMissingName"
     | "MultivariantPlaylistMediaTagMissingGroupId"
     | "MultivariantPlaylistMissingExtM3uHeader"
-    | "MultivariantPlaylistOtherError";
+    | "MultivariantPlaylistOtherParsingError";
 
   /**
    * Specifies the exact error encountered.
@@ -65,10 +65,10 @@ export default class WaspMultivariantPlaylistParsingError extends Error {
         this.code = "MultivariantPlaylistMediaTagMissingGroupId";
         break;
       case MultivariantPlaylistParsingErrorCode.Unknown:
-        this.code = "MultivariantPlaylistOtherError";
+        this.code = "MultivariantPlaylistOtherParsingError";
         break;
       default:
-        this.code = "MultivariantPlaylistOtherError";
+        this.code = "MultivariantPlaylistOtherParsingError";
         break;
     }
 

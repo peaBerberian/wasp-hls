@@ -149,7 +149,38 @@ export const WaspErrorCode = {
    */
   MultivariantPlaylistMediaTagMissingGroupId:
     "MultivariantPlaylistMediaTagMissingGroupId",
-  MultivariantPlaylistOtherError: "MultivariantPlaylistOtherError",
+  /**
+   * An uncategorized error arised while parsing the Multivariant Playlist.
+   */
+  MultivariantPlaylistOtherParsingError:
+    "MultivariantPlaylistOtherParsingError",
+
+  /**
+   * An `#EXTINF` tag announced in the Media Playlist was not in the right
+   * format.
+   */
+  MediaPlaylistUnparsableExtInf: "MediaPlaylistUnparsableExtInf",
+  /**
+   * An `#EXT-X-MAP` tag in the Media Playlist didn't its mandatory `URI`
+   * attribute.
+   */
+  MediaPlaylistUriMissingInMap: "MediaPlaylistUriMissingInMap",
+  /**
+   * There was no `#EXT-X-TARGETDURATION` tag in the Media Playlist.
+   */
+  MediaPlaylistMissingTargetDuration: "MediaPlaylistMissingTargetDuration",
+  /**
+   * One of the URI found in the MediaPlaylist wasn't associated to any
+   * `#EXTINF` tag.
+   */
+  MediaPlaylistUriWithoutExtInf: "MediaPlaylistUriWithoutExtInf",
+  /**
+   * A `#EXT-X-BYTERANGE` tag or a `BYTERANGE` attribute in the Media Playlist
+   * was not in the right format.
+   */
+  MediaPlaylistUnparsableByteRange: "MediaPlaylistUnparsableByteRange",
+  /** Another uncategorized error happened while parsing the Media Playlist. */
+  MediaPlaylistOtherParsingError: "MediaPlaylistOtherParsingError",
 
   /** An error arised when trying to transmux a segment, */
   SegmentTransmuxingError: "SegmentTransmuxingError",

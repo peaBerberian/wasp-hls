@@ -1,4 +1,9 @@
-use crate::{parser::MultivariantPlaylistParsingError, wasm_bindgen};
+use crate::{
+    parser::{
+        MediaPlaylistParsingError, MediaPlaylistUpdateError, MultivariantPlaylistParsingError,
+    },
+    wasm_bindgen,
+};
 use std::fmt;
 
 /// # js_functions
@@ -271,7 +276,8 @@ extern "C" {
     /// Function to call to indicate that an error arised when parsing a Media Playlist.
     pub fn jsSendMediaPlaylistParsingError(
         fatal: bool,
-        media_type: Option<MediaType>,
+        code: MediaPlaylistParsingErrorCode,
+        media_type: MediaType,
         message: Option<&str>,
     );
 }
@@ -613,6 +619,50 @@ impl From<MultivariantPlaylistParsingError> for MultivariantPlaylistParsingError
             | MultivariantPlaylistParsingError::Unknown => {
                 MultivariantPlaylistParsingErrorCode::Unknown
             }
+        }
+    }
+}
+
+/// Error that might arise when parsing the Media Playlist.
+#[wasm_bindgen]
+pub enum MediaPlaylistParsingErrorCode {
+    /// An `#EXTINF` tag announced in the Media Playlist was not in the right
+    /// format.
+    UnparsableExtInf,
+    /// An `#EXT-X-MAP` tag in the Media Playlist didn't its mandatory `URI`
+    /// attribute.
+    UriMissingInMap,
+    /// There was no `#EXT-X-TARGETDURATION` tag in the Media Playlist.
+    MissingTargetDuration,
+    /// One of the URI found in the Media Playlist wasn't associated to any
+    /// `#EXTINF` tag.
+    UriWithoutExtInf,
+    /// A `#EXT-X-BYTERANGE` tag or a `BYTERANGE` attribute in the Media Playlist
+    /// was not in the right format.
+    UnparsableByteRange,
+    /// Another, uncategorized, error arised.
+    Unknown,
+}
+
+impl From<MediaPlaylistUpdateError> for MediaPlaylistParsingErrorCode {
+    fn from(value: MediaPlaylistUpdateError) -> Self {
+        match value {
+            MediaPlaylistUpdateError::ParsingError(MediaPlaylistParsingError::UnparsableExtInf) => {
+                MediaPlaylistParsingErrorCode::UnparsableExtInf
+            }
+            MediaPlaylistUpdateError::ParsingError(MediaPlaylistParsingError::UriMissingInMap) => {
+                MediaPlaylistParsingErrorCode::UriMissingInMap
+            }
+            MediaPlaylistUpdateError::ParsingError(
+                MediaPlaylistParsingError::MissingTargetDuration,
+            ) => MediaPlaylistParsingErrorCode::MissingTargetDuration,
+            MediaPlaylistUpdateError::ParsingError(
+                MediaPlaylistParsingError::UnparsableByteRange,
+            ) => MediaPlaylistParsingErrorCode::UnparsableByteRange,
+            MediaPlaylistUpdateError::ParsingError(MediaPlaylistParsingError::UriWithoutExtInf) => {
+                MediaPlaylistParsingErrorCode::UriWithoutExtInf
+            }
+            MediaPlaylistUpdateError::NotFound => MediaPlaylistParsingErrorCode::Unknown,
         }
     }
 }

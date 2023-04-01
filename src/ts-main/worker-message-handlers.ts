@@ -36,6 +36,7 @@ import {
 import { MediaType, OtherErrorCode } from "../wasm/wasp_hls";
 import {
   WaspError,
+  WaspMediaPlaylistParsingError,
   WaspMediaPlaylistRequestError,
   WaspMultivariantPlaylistParsingError,
   WaspMultivariantPlaylistRequestError,
@@ -742,6 +743,12 @@ function formatError(
       );
     case "multi-var-playlist-parse":
       return new WaspMultivariantPlaylistParsingError(
+        msg.value.errorInfo.value.code,
+        msg.value.message
+      );
+    case "media-playlist-parse":
+      return new WaspMediaPlaylistParsingError(
+        msg.value.errorInfo.value.mediaType,
         msg.value.errorInfo.value.code,
         msg.value.message
       );

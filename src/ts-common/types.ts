@@ -1,4 +1,5 @@
 import {
+  MediaPlaylistParsingErrorCode,
   MediaSourceReadyState,
   MediaType,
   MultivariantPlaylistParsingErrorCode,
@@ -280,6 +281,7 @@ export interface MultivariantPlaylistParsingErrorWorkerInfo {
 export interface MediaPlaylistParsingErrorWorkerInfo {
   type: "media-playlist-parse";
   value: {
+    code: MediaPlaylistParsingErrorCode;
     mediaType?: MediaType | undefined;
   };
 }
