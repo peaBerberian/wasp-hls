@@ -2,6 +2,7 @@ import * as React from "react";
 import WaspHlsPlayer, { PlayerState } from "../../../src";
 import BufferSizeChart from "./BufferSizeChart";
 import ContentInput from "./ContentInput";
+import BufferContentGraph from "./MediaBufferContentGraph";
 import RemovePlayerButton from "./RemovePlayerButton";
 import VideoPlayer from "./VideoPlayer";
 
@@ -10,9 +11,11 @@ export default React.memo(function PlayerContainer({
 }: {
   onClose: () => void;
 }) {
-  const checkBoxId = React.useId();
+  const checkBoxesId = React.useId();
   const [player, setPlayer] = React.useState<WaspHlsPlayer | null>(null);
   const [shouldShowBufferGaps, setShouldShowBufferGaps] = React.useState(false);
+  const [shouldShowBufferContent, setShouldShowBufferContent] =
+    React.useState(true);
   const [bufferGaps, setBufferGaps] = React.useState<
     Array<{
       date: number;
@@ -132,6 +135,13 @@ export default React.memo(function PlayerContainer({
     []
   );
 
+  const onBufferContentCheckBoxChange = React.useCallback(
+    (evt: React.ChangeEvent<HTMLInputElement>) => {
+      setShouldShowBufferContent(evt.target.checked);
+    },
+    []
+  );
+
   return (
     <div className="player-container">
       <div className="player-parent">
@@ -145,19 +155,41 @@ export default React.memo(function PlayerContainer({
             <RemovePlayerButton onClick={onClose} />
             <ContentInput player={player} />
             <VideoPlayer player={player} />
-            <input
-              type="checkbox"
-              className="buffer-size"
-              name={`buffer-size${checkBoxId}`}
-              id={`buffer-size${checkBoxId}`}
-              onChange={onBufferSizeCheckBoxChange}
-            />
-            <label htmlFor={`buffer-size${checkBoxId}`}>
-              Enable Buffer Size Chart (below when available)
-            </label>
-            {shouldShowBufferGaps && bufferGaps.length > 0 ? (
-              <BufferSizeChart data={bufferGaps} />
-            ) : null}
+            <div className="chart">
+              <input
+                type="checkbox"
+                className="buffer-content"
+                name={`buffer-content${checkBoxesId}`}
+                id={`buffer-content${checkBoxesId}`}
+                checked={shouldShowBufferContent}
+                onChange={onBufferContentCheckBoxChange}
+              />
+              <label htmlFor={`buffer-content${checkBoxesId}`}>
+                Enable Buffer Content Chart (below when available)
+              </label>
+              {shouldShowBufferContent && player !== null ? (
+                <BufferContentGraph
+                  videoElement={player.videoElement}
+                  player={player}
+                />
+              ) : null}
+            </div>
+            <div className="chart">
+              <input
+                type="checkbox"
+                className="buffer-size"
+                name={`buffer-size${checkBoxesId}`}
+                id={`buffer-size${checkBoxesId}`}
+                checked={shouldShowBufferGaps}
+                onChange={onBufferSizeCheckBoxChange}
+              />
+              <label htmlFor={`buffer-size${checkBoxesId}`}>
+                Enable Buffer Size Chart (below when available)
+              </label>
+              {shouldShowBufferGaps && bufferGaps.length > 0 ? (
+                <BufferSizeChart data={bufferGaps} />
+              ) : null}
+            </div>
             <br />
           </>
         )}
