@@ -205,8 +205,6 @@ impl Dispatcher {
                 reason,
                 status,
                 ..
-                // reason,
-                // status,
             } => {
                 match x.playlist_type {
                     PlaylistFileType::MediaPlaylist { media_type, .. } => {
@@ -217,7 +215,7 @@ impl Dispatcher {
                             media_type,
                             status,
                         );
-                    },
+                    }
                     PlaylistFileType::MultivariantPlaylist => {
                         jsSendMultivariantPlaylistRequestError(
                             true,
@@ -225,13 +223,52 @@ impl Dispatcher {
                             reason,
                             status,
                         );
-                    },
+                    }
                 }
                 self.stop_current_content();
             }
 
-            // TODO send non-fatal errors
-            _ => {}
+            RetryResult::RetriedSegment {
+                request_info,
+                reason,
+                status,
+            } => {
+                jsSendSegmentRequestError(
+                    false,
+                    request_info.url().get_ref(),
+                    request_info.time_info().is_none(),
+                    request_info.time_info().map(|t| vec![t.start(), t.end()]),
+                    request_info.media_type(),
+                    reason,
+                    status,
+                );
+            }
+
+            RetryResult::RetriedPlaylist {
+                request_info,
+                reason,
+                status,
+            } => match request_info.playlist_type {
+                PlaylistFileType::MultivariantPlaylist => jsSendMultivariantPlaylistRequestError(
+                    false,
+                    request_info.url.get_ref(),
+                    reason,
+                    status,
+                ),
+                PlaylistFileType::MediaPlaylist { media_type, .. } => {
+                    jsSendMediaPlaylistRequestError(
+                        false,
+                        request_info.url.get_ref(),
+                        reason,
+                        media_type,
+                        status,
+                    )
+                }
+            },
+
+            RetryResult::NotFound => {
+                Logger::warn("Core: Request failed not found on the current Requester")
+            }
         }
     }
 

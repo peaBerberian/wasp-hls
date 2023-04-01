@@ -961,6 +961,7 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
         case WorkerMessageType.Warning: {
           const error = onWarningMessage(data, this.__contentMetadata__);
           if (error !== null) {
+            logger.warn("API: Triggering warning", error);
             this.trigger("warning", error);
           }
           break;
