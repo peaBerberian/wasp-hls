@@ -143,6 +143,23 @@ impl MultivariantPlaylist {
         self.variants.as_slice()
     }
 
+    // pub(crate) fn media_type_for(&self, id: &MediaPlaylistPermanentId) -> Option<MediaType> {
+    //     match id.location() {
+    //         MediaPlaylistUrlLocation::Variant => {
+    //             let variant = self.variant(id.id())?;
+    //             if variant.has_type(MediaType::Video) {
+    //                 Some(MediaType::Video)
+    //             } else if variant.has_type(MediaType::Audio) {
+    //                 Some(MediaType::Audio)
+    //             } else {
+    //                 None
+    //             }
+    //         }
+    //         MediaPlaylistUrlLocation::AudioTrack => Some(MediaType::Audio),
+    //         MediaPlaylistUrlLocation::OtherMedia => None,
+    //     }
+    // }
+
     /// Returns information on all known variants linked to this `MultivariantPlaylist`, ordered by
     /// `bandwidth` ascending, for which all codecs are known to be supported.
     pub(crate) fn supported_variants(&self) -> Vec<&VariantStream> {

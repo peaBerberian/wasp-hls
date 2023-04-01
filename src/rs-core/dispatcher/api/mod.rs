@@ -41,7 +41,7 @@ impl Dispatcher {
         self.ready_state = PlayerReadyState::Loading;
         let content_url = Url::new(content_url);
         self.requester
-            .fetch_playlist(content_url, PlaylistFileType::Unknown);
+            .fetch_playlist(content_url, PlaylistFileType::MultivariantPlaylist);
         Logger::info("Attaching MediaSource");
         if let Err(x) = self.media_element_ref.attach_media_source() {
             jsSendOtherError(

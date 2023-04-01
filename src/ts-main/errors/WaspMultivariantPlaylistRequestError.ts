@@ -58,8 +58,8 @@ export default class WaspMultivariantPlaylistRequestError extends Error {
           (status === undefined
             ? "A Multivariant Playlist HTTP(S) request(s) " +
               "responded with an invalid status"
-            : `A Multivariant Playlist HTTP(S) request(s) " +
-            "responded with a ${status} status`);
+            : "A Multivariant Playlist HTTP(S) request(s) " +
+              `responded with a ${status} status`);
         this.code = WaspErrorCode.MultivariantPlaylistBadHttpStatus;
         break;
 

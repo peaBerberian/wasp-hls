@@ -12,7 +12,8 @@ use crate::{
         },
         jsAnnounceFetchedContent, jsAnnounceTrackUpdate, jsAnnounceVariantLockStatusChange,
         jsAnnounceVariantUpdate, jsClearTimer, jsSendMediaPlaylistParsingError,
-        jsSendMultivariantPlaylistParsingError, jsSendOtherError, jsSendSegmentRequestError,
+        jsSendMediaPlaylistRequestError, jsSendMultivariantPlaylistParsingError,
+        jsSendMultivariantPlaylistRequestError, jsSendOtherError, jsSendSegmentRequestError,
         jsSendSourceBufferCreationError, jsSetMediaSourceDuration, jsStartObservingPlayback,
         jsStopObservingPlayback, jsTimer, jsUpdateContentInfo, MediaType,
         MultivariantPlaylistParsingErrorCode, OtherErrorCode, RequestId, SourceBufferId, TimerId,
@@ -112,15 +113,12 @@ impl Dispatcher {
                     PlaylistFileType::MultivariantPlaylist => self
                         .requester
                         .fetch_playlist(playlist_store.url().clone(), playlist_type),
-                    PlaylistFileType::MediaPlaylist { ref id } => {
+                    PlaylistFileType::MediaPlaylist { ref id, .. } => {
                         if let Some(u) = playlist_store.media_playlist_url(id) {
                             self.requester.fetch_playlist(u.clone(), playlist_type)
                         } else {
                             Logger::error("Core: Cannot refresh Media Playlist: id not found");
                         }
-                    }
-                    PlaylistFileType::Unknown => {
-                        Logger::error("Core: Cannot refresh Media Playlist: type unknown")
                     }
                 }
             }
@@ -203,19 +201,36 @@ impl Dispatcher {
                 self.stop_current_content();
             }
             RetryResult::Failed {
-                request_type: FinishedRequestType::Playlist(_),
+                request_type: FinishedRequestType::Playlist(x),
+                reason,
+                status,
                 ..
                 // reason,
                 // status,
             } => {
-                // TODO real playlist request error
-                jsSendOtherError(
-                    true,
-                    crate::bindings::OtherErrorCode::Unknown,
-                    Some("Failed to fetch Playlist"),
-                );
+                match x.playlist_type {
+                    PlaylistFileType::MediaPlaylist { media_type, .. } => {
+                        jsSendMediaPlaylistRequestError(
+                            true,
+                            x.url.get_ref(),
+                            reason,
+                            media_type,
+                            status,
+                        );
+                    },
+                    PlaylistFileType::MultivariantPlaylist => {
+                        jsSendMultivariantPlaylistRequestError(
+                            true,
+                            x.url.get_ref(),
+                            reason,
+                            status,
+                        );
+                    },
+                }
                 self.stop_current_content();
             }
+
+            // TODO send non-fatal errors
             _ => {}
         }
     }
@@ -329,13 +344,13 @@ impl Dispatcher {
 
             if let Some(Err(e)) = self.init_source_buffer(MediaType::Audio) {
                 let (code, msg) = format_source_buffer_creation_err_for_js(e);
-                jsSendSourceBufferCreationError(code, Some(&msg));
+                jsSendSourceBufferCreationError(true, code, Some(&msg));
                 self.stop_current_content();
                 return;
             }
             if let Some(Err(e)) = self.init_source_buffer(MediaType::Video) {
                 let (code, msg) = format_source_buffer_creation_err_for_js(e);
-                jsSendSourceBufferCreationError(code, Some(&msg));
+                jsSendSourceBufferCreationError(true, code, Some(&msg));
                 self.stop_current_content();
                 return;
             }
@@ -351,8 +366,8 @@ impl Dispatcher {
         final_url: Url,
     ) {
         let PlaylistRequestInfo { playlist_type, .. } = pl_info;
-        if let PlaylistFileType::MediaPlaylist { id, .. } = playlist_type {
-            self.on_media_playlist_loaded(id, result, final_url);
+        if let PlaylistFileType::MediaPlaylist { id, media_type } = playlist_type {
+            self.on_media_playlist_loaded(id, result, media_type, final_url);
         } else {
             self.on_multivariant_playlist_loaded(result, final_url);
         }
@@ -401,6 +416,7 @@ impl Dispatcher {
         &mut self,
         playlist_id: MediaPlaylistPermanentId,
         data: Vec<u8>,
+        media_type: MediaType,
         playlist_url: Url,
     ) {
         Logger::info(&format!(
@@ -422,7 +438,10 @@ impl Dispatcher {
                         let timer_id = jsTimer(refresh_interval, TimerReason::MediaPlaylistRefresh);
                         self.playlist_refresh_timers.push((
                             timer_id,
-                            PlaylistFileType::MediaPlaylist { id: playlist_id },
+                            PlaylistFileType::MediaPlaylist {
+                                id: playlist_id,
+                                media_type,
+                            },
                         ));
                     }
                     match self.ready_state.cmp(&PlayerReadyState::Loading) {
@@ -498,7 +517,8 @@ impl Dispatcher {
                     if let Some(url) = playlist_store.media_playlist_url(id) {
                         let id = id.clone();
                         let url = url.clone();
-                        self.requester.fetch_playlist(url, MediaPlaylist { id });
+                        self.requester
+                            .fetch_playlist(url, MediaPlaylist { id, media_type: mt });
                     }
                 }
             });
@@ -732,7 +752,8 @@ impl Dispatcher {
                             Logger::debug("Core: Media changed, requesting its media playlist");
                             let id = id.clone();
                             let url = url.clone();
-                            self.requester.fetch_playlist(url, MediaPlaylist { id });
+                            self.requester
+                                .fetch_playlist(url, MediaPlaylist { id, media_type: mt });
                         }
                     }
                 }
@@ -779,7 +800,7 @@ impl Dispatcher {
     fn clean_up_playlist_refresh_timers(&mut self) {
         if let Some(ref pl_store) = self.playlist_store {
             self.playlist_refresh_timers.retain(|x| {
-                if let PlaylistFileType::MediaPlaylist { id } = &x.1 {
+                if let PlaylistFileType::MediaPlaylist { id, .. } = &x.1 {
                     if !pl_store.is_curr_media_playlist(id) {
                         jsClearTimer(x.0);
                         return false;

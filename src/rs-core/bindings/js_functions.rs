@@ -220,6 +220,10 @@ extern "C" {
 
     pub fn jsGetRandom() -> f64;
 
+    // Errors
+
+    /// Function to call to indicate that a segment HTTP request failure
+    /// happened.
     pub fn jsSendSegmentRequestError(
         fatal: bool,
         url: &str,
@@ -230,19 +234,41 @@ extern "C" {
         status: Option<u32>,
     );
 
+    /// Function to call to indicate that a Multivariant Playlist HTTP request failure happened.
+    pub fn jsSendMultivariantPlaylistRequestError(
+        fatal: bool,
+        url: &str,
+        reason: RequestErrorReason,
+        status: Option<u32>,
+    );
+
+    /// Function to call to indicate that a Media Playlist HTTP request failure happened.
+    pub fn jsSendMediaPlaylistRequestError(
+        fatal: bool,
+        url: &str,
+        reason: RequestErrorReason,
+        mediaType: MediaType,
+        status: Option<u32>,
+    );
+
+    /// Function to call to indicate that an uncategorized error happened.
     pub fn jsSendOtherError(fatal: bool, code: OtherErrorCode, message: Option<&str>);
 
+    /// Function to call to indicate that an error arised on `SourceBuffer` creation.
     pub fn jsSendSourceBufferCreationError(
+        fatal: bool,
         code: SourceBufferCreationErrorCode,
         message: Option<&str>,
     );
 
+    /// Function to call to indicate that an error arised when parsing the Multivariant Playlist.
     pub fn jsSendMultivariantPlaylistParsingError(
         fatal: bool,
         code: MultivariantPlaylistParsingErrorCode,
         message: Option<&str>,
     );
 
+    /// Function to call to indicate that an error arised when parsing a Media Playlist.
     pub fn jsSendMediaPlaylistParsingError(
         fatal: bool,
         media_type: Option<MediaType>,

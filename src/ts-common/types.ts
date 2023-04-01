@@ -209,6 +209,8 @@ export interface ErrorWorkerMessage {
       | MediaPlaylistParsingErrorWorkerInfo
       | MediaPlaylistRequestErrorWorkerInfo
       | SegmentRequestErrorWorkerInfo
+      | MultivariantPlaylistRequestErrorWorkerInfo
+      | MediaPlaylistRequestErrorWorkerInfo
       | SourceBufferCreationErrorWorkerInfo
       | OtherErrorWorkerInfo;
 
@@ -243,6 +245,8 @@ export interface WarningWorkerMessage {
       | MediaPlaylistParsingErrorWorkerInfo
       | MediaPlaylistRequestErrorWorkerInfo
       | SegmentRequestErrorWorkerInfo
+      | MultivariantPlaylistRequestErrorWorkerInfo
+      | MediaPlaylistRequestErrorWorkerInfo
       | SourceBufferCreationErrorWorkerInfo
       | OtherErrorWorkerInfo;
 
@@ -280,17 +284,6 @@ export interface MediaPlaylistParsingErrorWorkerInfo {
   };
 }
 
-/** Error linked to a Media playlist request's failure. */
-export interface MediaPlaylistRequestErrorWorkerInfo {
-  type: "media-playlist-request";
-  value: {
-    url: string;
-    mediaType?: MediaType;
-    reason: RequestErrorReason;
-    status?: number;
-  };
-}
-
 /**
  * Error linked to a segment HTTP(S) request's failure.
  */
@@ -304,6 +297,31 @@ export interface SegmentRequestErrorWorkerInfo {
     mediaType: MediaType;
     byteRange?: [number, number] | undefined;
     reason: RequestErrorReason;
+    status?: number | undefined;
+  };
+}
+
+/**
+ * Error linked to a Multivariant Playlist HTTP(S) request's failure.
+ */
+export interface MultivariantPlaylistRequestErrorWorkerInfo {
+  type: "multi-var-playlist-request";
+  value: {
+    url: string;
+    reason: RequestErrorReason;
+    status?: number | undefined;
+  };
+}
+
+/**
+ * Error linked to a Media Playlist HTTP(S) request's failure.
+ */
+export interface MediaPlaylistRequestErrorWorkerInfo {
+  type: "media-playlist-request";
+  value: {
+    url: string;
+    reason: RequestErrorReason;
+    mediaType: MediaType | undefined;
     status?: number | undefined;
   };
 }

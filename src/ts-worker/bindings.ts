@@ -102,6 +102,66 @@ export function sendSegmentRequestError(
   });
 }
 
+export function sendMultivariantPlaylistRequestError(
+  fatal: boolean,
+  url: string,
+  reason: RequestErrorReason,
+  status: number | undefined
+): void {
+  const contentId = playerInstance.getContentInfo()?.contentId;
+  if (contentId === undefined) {
+    logger.error("Cannot send error, no contentId");
+    return;
+  }
+  postMessageToMain({
+    type: fatal
+      ? (WorkerMessageType.Error as const)
+      : (WorkerMessageType.Warning as const),
+    value: {
+      contentId,
+      errorInfo: {
+        type: "multi-var-playlist-request",
+        value: {
+          url,
+          reason,
+          status,
+        },
+      },
+    },
+  });
+}
+
+export function sendMediaPlaylistRequestError(
+  fatal: boolean,
+  url: string,
+  reason: RequestErrorReason,
+  mediaType: MediaType | undefined,
+  status: number | undefined
+): void {
+  const contentId = playerInstance.getContentInfo()?.contentId;
+  if (contentId === undefined) {
+    logger.error("Cannot send error, no contentId");
+    return;
+  }
+  postMessageToMain({
+    type: fatal
+      ? (WorkerMessageType.Error as const)
+      : (WorkerMessageType.Warning as const),
+    value: {
+      contentId,
+      errorInfo: {
+        type: "media-playlist-request",
+        value: {
+          url,
+          reason,
+          mediaType,
+          status,
+        },
+      },
+    },
+  });
+}
+
 export function sendOtherError(
   fatal: boolean,
   code: OtherErrorCode,

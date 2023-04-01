@@ -1,4 +1,4 @@
-import { RequestErrorReason } from "../../wasm/wasp_hls";
+import { MediaType, RequestErrorReason } from "../../wasm/wasp_hls";
 import { WaspErrorCode } from "./common";
 
 /**
@@ -23,6 +23,12 @@ export default class WaspMediaPlaylistRequestError extends Error {
     | "MediaPlaylistRequestOtherError";
 
   /**
+   * The MediaType of the corresponding Media Playlist.
+   * `undefined` if unknown.
+   */
+  public readonly mediaType: MediaType | undefined;
+
+  /**
    * Specifies the exact error encountered.
    *
    * This is actually the same value as `code` but with a type common to all
@@ -36,12 +42,14 @@ export default class WaspMediaPlaylistRequestError extends Error {
    * @param {string|undefined} url
    * @param {number} reason
    * @param {number|undefined} status
+   * @param {number|undefined} mediaType
    * @param {string|undefined} [message]
    */
   constructor(
     url: string | undefined,
     reason: RequestErrorReason,
     status: number | undefined,
+    mediaType: MediaType | undefined,
     message?: string | undefined
   ) {
     super();
@@ -49,6 +57,7 @@ export default class WaspMediaPlaylistRequestError extends Error {
     Object.setPrototypeOf(this, WaspMediaPlaylistRequestError.prototype);
 
     this.name = "WaspMediaPlaylistRequestError";
+    this.mediaType = mediaType;
     this.url = url;
     let formattedMsg = message;
     switch (reason) {
@@ -58,8 +67,8 @@ export default class WaspMediaPlaylistRequestError extends Error {
           (status === undefined
             ? "A Media Playlist HTTP(S) request(s) " +
               "responded with an invalid status"
-            : `A Media Playlist HTTP(S) request(s) " +
-            "responded with a ${status} status`);
+            : "A Media Playlist HTTP(S) request(s) " +
+              `responded with a ${status} status`);
         this.code = WaspErrorCode.MediaPlaylistBadHttpStatus;
         break;
 

@@ -36,7 +36,9 @@ import {
 import { MediaType, OtherErrorCode } from "../wasm/wasp_hls";
 import {
   WaspError,
+  WaspMediaPlaylistRequestError,
   WaspMultivariantPlaylistParsingError,
+  WaspMultivariantPlaylistRequestError,
   WaspOtherError,
   WaspSegmentRequestError,
   WaspSourceBufferCreationError,
@@ -711,6 +713,21 @@ function formatError(
     case "segment-request":
       return new WaspSegmentRequestError(
         msg.value.errorInfo.value,
+        msg.value.message
+      );
+    case "multi-var-playlist-request":
+      return new WaspMultivariantPlaylistRequestError(
+        msg.value.errorInfo.value.url,
+        msg.value.errorInfo.value.reason,
+        msg.value.errorInfo.value.status,
+        msg.value.message
+      );
+    case "media-playlist-request":
+      return new WaspMediaPlaylistRequestError(
+        msg.value.errorInfo.value.url,
+        msg.value.errorInfo.value.reason,
+        msg.value.errorInfo.value.status,
+        msg.value.errorInfo.value.mediaType,
         msg.value.message
       );
     case "other-error":

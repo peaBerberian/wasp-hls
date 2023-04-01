@@ -192,8 +192,10 @@ pub(crate) struct Requester {
 #[derive(PartialEq)]
 pub(crate) enum PlaylistFileType {
     MultivariantPlaylist,
-    MediaPlaylist { id: MediaPlaylistPermanentId },
-    Unknown,
+    MediaPlaylist {
+        id: MediaPlaylistPermanentId,
+        media_type: MediaType,
+    },
 }
 
 /// Metadata associated with a pending Playlist (either a Multivariant Playlist or a Media
@@ -380,7 +382,10 @@ pub(crate) enum FinishedRequestType {
 
 pub(crate) enum RetryResult {
     NotFound,
-    Retried,
+    Retried {
+        reason: RequestErrorReason,
+        status: Option<u32>,
+    },
     Failed {
         request_type: FinishedRequestType,
         reason: RequestErrorReason,
@@ -532,7 +537,6 @@ impl Requester {
         let timeout = match playlist_type {
             PlaylistFileType::MultivariantPlaylist => self.multi_variant_playlist_request_timeout,
             PlaylistFileType::MediaPlaylist { .. } => self.media_playlist_request_timeout,
-            _ => None,
         };
         let url_ref = url.get_ref();
         let request_id = jsFetch(url_ref, None, None, timeout);
@@ -703,7 +707,6 @@ impl Requester {
                             PlaylistFileType::MediaPlaylist { .. } => {
                                 self.media_playlist_request_timeout
                             }
-                            PlaylistFileType::Unknown => None,
                         };
                         let request_id = jsFetch(pla.url.get_ref(), None, None, timeout);
                         pla.request_id = request_id;
@@ -845,7 +848,7 @@ impl Requester {
             ));
             let timer_id = jsTimer(retry_delay, TimerReason::RetryRequest);
             self.retry_timers.push((timer_id, req.request_id));
-            RetryResult::Retried
+            RetryResult::Retried { reason, status }
         }
     }
 
@@ -879,7 +882,6 @@ impl Requester {
                     self.media_playlist_backoff_base,
                     self.media_playlist_backoff_max,
                 ),
-                PlaylistFileType::Unknown => (DEFAULT_BACKOFF_BASE, DEFAULT_BACKOFF_MAX),
             };
             let retry_delay = get_waiting_delay(req.attempts_failed, base, max);
             Logger::info(&format!(
@@ -888,7 +890,7 @@ impl Requester {
             ));
             let timer_id = jsTimer(retry_delay, TimerReason::RetryRequest);
             self.retry_timers.push((timer_id, req.request_id));
-            RetryResult::Retried
+            RetryResult::Retried { reason, status }
         }
     }
 
@@ -916,7 +918,7 @@ impl Requester {
                 let timer_id = jsTimer(1000., TimerReason::RetryRequest);
                 self.retry_timers
                     .push((timer_id, self.pending_playlist_requests[pos].request_id));
-                RetryResult::Retried
+                RetryResult::Retried { reason, status }
             }
         } else {
             RetryResult::NotFound
