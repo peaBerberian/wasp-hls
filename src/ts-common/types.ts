@@ -347,9 +347,10 @@ export interface MediaPlaylistRequestErrorWorkerInfo {
 }
 
 export interface SourceBufferCreationErrorWorkerInfo {
-  type: "source-buffer-creation-error";
+  type: "sb-creation";
   value: {
     code: WasmSourceBufferCreationErrorCode;
+    mediaType: MediaType;
   };
 }
 

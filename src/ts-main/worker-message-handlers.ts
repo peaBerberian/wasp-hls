@@ -754,9 +754,10 @@ function formatError(
         msg.value.errorInfo.value.code,
         msg.value.message
       );
-    case "source-buffer-creation-error":
+    case "sb-creation":
       return new WaspSourceBufferCreationError(
         msg.value.errorInfo.value.code,
+        msg.value.errorInfo.value.mediaType,
         msg.value.message
       );
     case "multi-var-playlist-parse":

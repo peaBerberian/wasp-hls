@@ -260,14 +260,15 @@ extern "C" {
     pub fn jsSendSourceBufferCreationError(
         fatal: bool,
         code: SourceBufferCreationErrorCode,
-        message: Option<&str>,
+        media_type: MediaType,
+        message: &str,
     );
 
     /// Function to call to indicate that an error arised when parsing the Multivariant Playlist.
     pub fn jsSendMultivariantPlaylistParsingError(
         fatal: bool,
         code: MultivariantPlaylistParsingErrorCode,
-        message: Option<&str>,
+        message: &str,
     );
 
     /// Function to call to indicate that an error arised when parsing a Media Playlist.
@@ -275,7 +276,7 @@ extern "C" {
         fatal: bool,
         code: MediaPlaylistParsingErrorCode,
         media_type: MediaType,
-        message: Option<&str>,
+        message: &str,
     );
 
     /// Function to call to indicate that an error arised when parsing a segment.
@@ -283,7 +284,7 @@ extern "C" {
         fatal: bool,
         code: SegmentParsingErrorCode,
         media_type: MediaType,
-        message: Option<&str>
+        message: &str
     );
 
     /// Function to call to indicate that an error arised after pushing a segment to a
@@ -292,7 +293,7 @@ extern "C" {
         fatal: bool,
         code: PushedSegmentErrorCode,
         media_type: MediaType,
-        message: Option<&str>
+        message: &str
     );
 
     /// Function to call to indicate that an error arised when removing data from a
@@ -300,11 +301,11 @@ extern "C" {
     pub fn jsSendRemovedBufferError(
         fatal: bool,
         media_type: MediaType,
-        message: Option<&str>
+        message: &str
     );
 
     /// Function to call to indicate that an uncategorized error happened.
-    pub fn jsSendOtherError(fatal: bool, code: OtherErrorCode, message: Option<&str>);
+    pub fn jsSendOtherError(fatal: bool, code: OtherErrorCode, message: &str);
 }
 
 #[wasm_bindgen]

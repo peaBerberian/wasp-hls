@@ -47,7 +47,7 @@ impl Dispatcher {
             jsSendOtherError(
                 true,
                 OtherErrorCode::MediaSourceAttachmentError,
-                Some(&x.to_string()),
+                &x.to_string(),
             );
             self.stop_current_content();
         }

@@ -73,7 +73,7 @@ impl Dispatcher {
                     jsSendOtherError(
                         false,
                         crate::bindings::OtherErrorCode::UnfoundLockedVariant,
-                        Some(&format!("Wanted locked variant \"{variant_id}\" not found")),
+                        &format!("Wanted locked variant \"{variant_id}\" not found"),
                     );
                 }
                 LockVariantResponse::VariantLocked {
@@ -301,10 +301,10 @@ impl Dispatcher {
                     PushedSegmentErrorCode::BufferFull => format!("The {mt} `SourceBuffer` was full and could not accept anymore segment"),
                     PushedSegmentErrorCode::UnknownError => format!("An error happened while calling `appendBuffer` on the {mt} `SourceBuffer`"),
                 };
-                jsSendPushedSegmentError(true, code, mt, Some(&message));
+                jsSendPushedSegmentError(true, code, mt, &message);
             },
             None =>
-                jsSendOtherError(true, OtherErrorCode::Unknown, Some("An unknown SourceBuffer failed during a push operation.")),
+                jsSendOtherError(true, OtherErrorCode::Unknown, "An unknown SourceBuffer failed during a push operation."),
         }
         self.stop_current_content();
     }
@@ -314,10 +314,10 @@ impl Dispatcher {
         match self.media_element_ref.media_type_for(source_buffer_id) {
             Some(mt) => {
                 let message =  &format!("An error happened while calling `remove` on the {mt} `SourceBuffer`");
-                jsSendRemovedBufferError(true, mt, Some(message));
+                jsSendRemovedBufferError(true, mt, message);
             },
             None =>
-                jsSendOtherError(true, OtherErrorCode::Unknown, Some("An unknown SourceBuffer failed during a remove operation.")),
+                jsSendOtherError(true, OtherErrorCode::Unknown, "An unknown SourceBuffer failed during a remove operation."),
         }
         self.stop_current_content();
     }
@@ -398,13 +398,13 @@ impl Dispatcher {
 
             if let Some(Err(e)) = self.init_source_buffer(MediaType::Audio) {
                 let (code, msg) = format_source_buffer_creation_err_for_js(e);
-                jsSendSourceBufferCreationError(true, code, Some(&msg));
+                jsSendSourceBufferCreationError(true, code, MediaType::Audio, &msg);
                 self.stop_current_content();
                 return;
             }
             if let Some(Err(e)) = self.init_source_buffer(MediaType::Video) {
                 let (code, msg) = format_source_buffer_creation_err_for_js(e);
-                jsSendSourceBufferCreationError(true, code, Some(&msg));
+                jsSendSourceBufferCreationError(true, code, MediaType::Video, &msg);
                 self.stop_current_content();
                 return;
             }
@@ -433,7 +433,7 @@ impl Dispatcher {
         match MultivariantPlaylist::parse(data.as_ref(), playlist_url) {
             Err(e) => {
                 let message = e.to_string();
-                jsSendMultivariantPlaylistParsingError(true, e.into(), Some(&message));
+                jsSendMultivariantPlaylistParsingError(true, e.into(), &message);
                 self.stop_current_content();
             }
             Ok(pl) => {
@@ -449,12 +449,12 @@ impl Dispatcher {
                             PlaylistStoreError::NoSupportedVariant => jsSendOtherError(
                                 true,
                                 OtherErrorCode::NoSupportedVariant,
-                                Some(&err.to_string()),
+                                &err.to_string(),
                             ),
                             PlaylistStoreError::NoInitialVariant => jsSendMultivariantPlaylistParsingError(
                                 true,
                                 MultivariantPlaylistParsingErrorCode::MultivariantPlaylistWithoutVariant,
-                                Some(&err.to_string()),
+                                &err.to_string(),
                             ),
                         };
                         self.stop_current_content();
@@ -481,7 +481,7 @@ impl Dispatcher {
             match playlist_store.update_media_playlist(&playlist_id, data.as_ref(), playlist_url) {
                 Err(e) => {
                     let err_message = e.to_string();
-                    jsSendMediaPlaylistParsingError(true, e.into(), media_type, Some(&err_message));
+                    jsSendMediaPlaylistParsingError(true, e.into(), media_type, &err_message);
                     self.stop_current_content();
                 }
                 Ok(p) => {
@@ -512,7 +512,7 @@ impl Dispatcher {
             jsSendOtherError(
                 true,
                 crate::bindings::OtherErrorCode::Unknown,
-                Some("Media playlist loaded but no MultivariantPlaylist"),
+                "Media playlist loaded but no MultivariantPlaylist",
             );
             self.stop_current_content();
         }
@@ -536,12 +536,12 @@ impl Dispatcher {
                     PlaylistStoreError::NoSupportedVariant => jsSendOtherError(
                         true,
                         OtherErrorCode::NoSupportedVariant,
-                        Some(&err.to_string()),
+                        &err.to_string(),
                     ),
                     PlaylistStoreError::NoInitialVariant => jsSendMultivariantPlaylistParsingError(
                         true,
                         MultivariantPlaylistParsingErrorCode::MultivariantPlaylistWithoutVariant,
-                        Some(&err.to_string()),
+                        &err.to_string(),
                     ),
                 };
                 self.stop_current_content();
@@ -554,7 +554,7 @@ impl Dispatcher {
             jsSendOtherError(
                 true,
                 crate::bindings::OtherErrorCode::NoSupportedVariant,
-                Some("Error while parsing MultivariantPlaylist: no compatible variant found."),
+                "Error while parsing MultivariantPlaylist: no compatible variant found.",
             );
             self.stop_current_content();
             return;
@@ -733,7 +733,7 @@ impl Dispatcher {
                     true,
                     x.into(),
                     media_type,
-                    Some(&message),
+                    &message,
                 );
                 self.stop_current_content();
             }

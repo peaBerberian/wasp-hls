@@ -9,30 +9,31 @@ import {
   WorkerMessageType,
 } from "../ts-common/types.js";
 import {
-  LogLevel,
-  MediaType,
-  MediaSourceReadyState,
-  TimerReason,
-  SegmentParsingErrorCode,
-  AppendBufferResult,
-  AttachMediaSourceResult,
-  AttachMediaSourceErrorCode,
-  RemoveMediaSourceResult,
-  RemoveMediaSourceErrorCode,
-  MediaSourceDurationUpdateResult,
-  MediaSourceDurationUpdateErrorCode,
-  AddSourceBufferResult,
   AddSourceBufferErrorCode,
-  RemoveBufferResult,
-  RemoveBufferErrorCode,
-  EndOfStreamResult,
+  AddSourceBufferResult,
+  AppendBufferResult,
+  AttachMediaSourceErrorCode,
+  AttachMediaSourceResult,
   EndOfStreamErrorCode,
-  RequestErrorReason,
-  OtherErrorCode,
-  MultivariantPlaylistParsingErrorCode,
+  EndOfStreamResult,
   JsTimeRanges,
+  LogLevel,
   MediaPlaylistParsingErrorCode,
+  MediaSourceDurationUpdateErrorCode,
+  MediaSourceDurationUpdateResult,
+  MediaSourceReadyState,
+  MediaType,
+  MultivariantPlaylistParsingErrorCode,
+  OtherErrorCode,
   PushedSegmentErrorCode,
+  RemoveBufferErrorCode,
+  RemoveBufferResult,
+  RemoveMediaSourceErrorCode,
+  RemoveMediaSourceResult,
+  RequestErrorReason,
+  SegmentParsingErrorCode,
+  SourceBufferCreationErrorCode,
+  TimerReason,
 } from "../wasm/wasp_hls.js";
 import {
   cachedCodecsSupport,
@@ -168,7 +169,7 @@ export function sendPushedSegmentError(
   fatal: boolean,
   code: PushedSegmentErrorCode,
   mediaType: MediaType,
-  message: string | undefined
+  message: string
 ): void {
   const contentId = playerInstance.getContentInfo()?.contentId;
   if (contentId === undefined) {
@@ -196,7 +197,7 @@ export function sendPushedSegmentError(
 export function sendRemoveBufferError(
   fatal: boolean,
   mediaType: MediaType,
-  message: string | undefined
+  message: string
 ): void {
   const contentId = playerInstance.getContentInfo()?.contentId;
   if (contentId === undefined) {
@@ -223,7 +224,7 @@ export function sendRemoveBufferError(
 export function sendOtherError(
   fatal: boolean,
   code: OtherErrorCode,
-  message: string | undefined
+  message: string
 ): void {
   const contentId = playerInstance.getContentInfo()?.contentId;
   if (contentId === undefined) {
@@ -250,7 +251,7 @@ export function sendOtherError(
 export function sendMultivariantPlaylistParsingError(
   fatal: boolean,
   code: MultivariantPlaylistParsingErrorCode,
-  message: string | undefined
+  message: string
 ): void {
   const contentId = playerInstance.getContentInfo()?.contentId;
   if (contentId === undefined) {
@@ -278,7 +279,7 @@ export function sendMediaPlaylistParsingError(
   fatal: boolean,
   code: MediaPlaylistParsingErrorCode,
   mediaType: MediaType,
-  message: string | undefined
+  message: string
 ): void {
   const contentId = playerInstance.getContentInfo()?.contentId;
   if (contentId === undefined) {
@@ -303,11 +304,40 @@ export function sendMediaPlaylistParsingError(
   });
 }
 
+export function sendSourceBufferCreationError(
+  fatal: boolean,
+  code: SourceBufferCreationErrorCode,
+  mediaType: MediaType,
+  message: string
+): void {
+  const contentId = playerInstance.getContentInfo()?.contentId;
+  if (contentId === undefined) {
+    logger.error("Cannot send error, no contentId");
+    return;
+  }
+  postMessageToMain({
+    type: fatal
+      ? (WorkerMessageType.Error as const)
+      : (WorkerMessageType.Warning as const),
+    value: {
+      contentId,
+      message,
+      errorInfo: {
+        type: "sb-creation" as const,
+        value: {
+          code,
+          mediaType,
+        },
+      },
+    },
+  });
+}
+
 export function sendSegmentParsingError(
   fatal: boolean,
   code: SegmentParsingErrorCode,
   mediaType: MediaType,
-  message: string | undefined
+  message: string
 ): void {
   const contentId = playerInstance.getContentInfo()?.contentId;
   if (contentId === undefined) {
@@ -716,14 +746,6 @@ export function setMediaSourceDuration(
     });
     return MediaSourceDurationUpdateResult.success();
   }
-}
-
-/**
- * @param {*} e
- * @returns {string|undefined}
- */
-export function getErrorMessage(e: unknown): string | undefined {
-  return e instanceof Error ? e.message : undefined;
 }
 
 /**
