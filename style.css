@@ -344,12 +344,26 @@ body {
   margin-top: 5px;
 }
 
+.chart {
+  margin: 10px 0px;
+}
+
 .canvas-buffer-size-container {
   margin: 8px;
 }
 .canvas-buffer-size {
   padding: 10px;
   border: 1px dashed black;
+}
+
+.canvas-buffer-graph-container {
+  margin: 0px 5px;
+}
+.canvas-buffer-graph {
+  cursor: pointer;
+  height: 14px;
+  width: 100%;
+  border: 1px solid black;
 }
 
 .settings.visible {
