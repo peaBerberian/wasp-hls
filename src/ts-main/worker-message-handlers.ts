@@ -41,6 +41,7 @@ import {
   WaspMultivariantPlaylistParsingError,
   WaspMultivariantPlaylistRequestError,
   WaspOtherError,
+  WaspSegmentParsingError,
   WaspSegmentRequestError,
   WaspSourceBufferCreationError,
 } from "./errors";
@@ -750,6 +751,12 @@ function formatError(
       return new WaspMediaPlaylistParsingError(
         msg.value.errorInfo.value.mediaType,
         msg.value.errorInfo.value.code,
+        msg.value.message
+      );
+    case "segment-parse":
+      return new WaspSegmentParsingError(
+        msg.value.errorInfo.value.code,
+        msg.value.errorInfo.value.mediaType,
         msg.value.message
       );
     default:

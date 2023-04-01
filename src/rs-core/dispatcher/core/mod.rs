@@ -17,7 +17,7 @@ use crate::{
         jsSendSourceBufferCreationError, jsSetMediaSourceDuration, jsStartObservingPlayback,
         jsStopObservingPlayback, jsTimer, jsUpdateContentInfo, MediaType,
         MultivariantPlaylistParsingErrorCode, OtherErrorCode, RequestId, SourceBufferId, TimerId,
-        TimerReason,
+        TimerReason, jsSendSegmentParsingError,
     },
     media_element::{SegmentPushData, SegmentQualityContext, SourceBufferCreationError},
     parser::{MultivariantPlaylist, SegmentTimeInfo},
@@ -710,11 +710,13 @@ impl Dispatcher {
         let md = SegmentPushData::new(data, time_info);
         match self.media_element_ref.push_segment(media_type, md, context) {
             Err(x) => {
-                // TODO real push segment error
-                jsSendOtherError(
+                let media_type = x.media_type();
+                let message = x.to_string();
+                jsSendSegmentParsingError(
                     true,
-                    crate::bindings::OtherErrorCode::Unknown,
-                    Some(&format!("Can't push {} segment: {:?}", media_type, x)),
+                    x.into(),
+                    media_type,
+                    Some(&message),
                 );
                 self.stop_current_content();
             }

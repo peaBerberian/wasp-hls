@@ -390,6 +390,15 @@ pub(crate) enum PushSegmentError {
 }
 
 impl PushSegmentError {
+    pub(crate) fn media_type(&self) -> MediaType {
+        match self {
+            PushSegmentError::NoResource(m) => *m,
+            PushSegmentError::NoSourceBuffer(m) => *m,
+            PushSegmentError::TransmuxerError(m, _) => *m,
+            PushSegmentError::UnknownError(m, _) => *m,
+        }
+    }
+
     /// Creates a new `PushSegmentError` based on a given `MediaType` and the original error as
     /// returned by the `jsAppendBuffer` binding.
     ///

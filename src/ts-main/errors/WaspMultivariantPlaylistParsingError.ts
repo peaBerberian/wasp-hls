@@ -1,8 +1,15 @@
 import { MultivariantPlaylistParsingErrorCode } from "../../wasm/wasp_hls.d";
 import { WaspErrorCode } from "./common";
 
+/**
+ * Error used to describe a problem when parsing a Multivariant Playlist.
+ * @class WaspMultivariantPlaylistParsingError
+ */
 export default class WaspMultivariantPlaylistParsingError extends Error {
+  /** Identifies a `WaspMultivariantPlaylistParsingError` */
   public readonly name: "WaspMultivariantPlaylistParsingError";
+
+  /** Human-readable message describing the error. */
   public readonly message: string;
 
   /** Specifies the exact error encountered. */

@@ -1,6 +1,10 @@
 import { MediaPlaylistParsingErrorCode, MediaType } from "../../wasm/wasp_hls";
 import { WaspErrorCode } from "./common";
 
+/**
+ * Error used to describe a problem when parsing a Media Playlist.
+ * @class WaspMediaPlaylistParsingError
+ */
 export default class WaspMediaPlaylistParsingError extends Error {
   /** Identifies a `WaspMediaPlaylistParsingError` */
   public readonly name: "WaspMediaPlaylistParsingError";
@@ -36,6 +40,7 @@ export default class WaspMediaPlaylistParsingError extends Error {
 
   /**
    * @param {number|undefined} mediaType
+   * @param {number} code
    * @param {string} message
    */
   constructor(

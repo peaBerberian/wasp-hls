@@ -2,7 +2,7 @@ use crate::{
     parser::{
         MediaPlaylistParsingError, MediaPlaylistUpdateError, MultivariantPlaylistParsingError,
     },
-    wasm_bindgen,
+    wasm_bindgen, media_element::PushSegmentError,
 };
 use std::fmt;
 
@@ -256,9 +256,6 @@ extern "C" {
         status: Option<u32>,
     );
 
-    /// Function to call to indicate that an uncategorized error happened.
-    pub fn jsSendOtherError(fatal: bool, code: OtherErrorCode, message: Option<&str>);
-
     /// Function to call to indicate that an error arised on `SourceBuffer` creation.
     pub fn jsSendSourceBufferCreationError(
         fatal: bool,
@@ -280,6 +277,17 @@ extern "C" {
         media_type: MediaType,
         message: Option<&str>,
     );
+
+    /// Function to call to indicate that an error arised when parsing a segment.
+    pub fn jsSendSegmentParsingError(
+        fatal: bool,
+        code: AppendBufferErrorCode,
+        media_type: MediaType,
+        message: Option<&str>
+    );
+
+    /// Function to call to indicate that an uncategorized error happened.
+    pub fn jsSendOtherError(fatal: bool, code: OtherErrorCode, message: Option<&str>);
 }
 
 #[wasm_bindgen]
@@ -850,6 +858,17 @@ pub enum AppendBufferErrorCode {
     TransmuxerError,
     /// The operation failed because of an unknown error.
     UnknownError,
+}
+
+impl From<PushSegmentError> for AppendBufferErrorCode {
+    fn from(value: PushSegmentError) -> Self {
+        match value {
+            PushSegmentError::NoResource(_) => AppendBufferErrorCode::NoResource,
+            PushSegmentError::NoSourceBuffer(_) => AppendBufferErrorCode::NoSourceBuffer,
+            PushSegmentError::TransmuxerError(_, _) => AppendBufferErrorCode::TransmuxerError,
+            PushSegmentError::UnknownError(_, _) => AppendBufferErrorCode::UnknownError,
+        }
+    }
 }
 
 /// Current playback information associated to the `HTMLMediaElement` displayed

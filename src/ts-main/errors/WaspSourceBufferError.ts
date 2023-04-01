@@ -27,7 +27,8 @@ export default class WaspSourceBufferError extends Error {
   public readonly globalCode: keyof typeof WaspErrorCode;
 
   /**
-   * @param {string} message
+   * XXX TODO
+   * @param {string|undefined} message
    */
   constructor(message?: string | undefined) {
     super();

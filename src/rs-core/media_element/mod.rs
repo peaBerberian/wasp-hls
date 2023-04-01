@@ -7,7 +7,7 @@ use crate::bindings::{
 };
 use crate::dispatcher::{JsTimeRanges, MediaObservation, MediaSourceReadyState};
 use crate::Logger;
-use source_buffers::{PushSegmentError, RemoveDataError};
+pub(crate) use source_buffers::{PushSegmentError, RemoveDataError};
 
 pub(crate) use self::segment_inventory::{BufferedChunk, SegmentQualityContext};
 pub(crate) use source_buffers::SegmentPushData;
@@ -410,6 +410,7 @@ impl MediaElementReference {
             } else {
                 let mut quit_rebuffering = false;
                 if let Some(buffer_gap) = buffer_gap {
+                    // TODO rely on TARGETDURATION instead here
                     if buffer_gap > 2. {
                         Logger::info(&format!("Quitting rebuffering period. bg: {}", buffer_gap));
                         quit_rebuffering = true;

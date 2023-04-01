@@ -1,8 +1,17 @@
-import { MediaType } from "../../wasm/wasp_hls";
+import { AppendBufferErrorCode, MediaType } from "../../wasm/wasp_hls";
 import { WaspErrorCode } from "./common";
 
+// TODO add `isInit` property?
+
+/**
+ * Error used to describe a problem when parsing a segment.
+ * @class WaspSegmentParsingError
+ */
 export default class WaspSegmentParsingError extends Error {
+  /** Identifies a `WaspSegmentParsingError` */
   public readonly name: "WaspSegmentParsingError";
+
+  /** Human-readable message describing the error. */
   public readonly message: string;
 
   /** Specifies the exact error encountered. */
@@ -26,16 +35,33 @@ export default class WaspSegmentParsingError extends Error {
   public readonly mediaType: MediaType | undefined;
 
   /**
+   * @param {number} reason
    * @param {number|undefined} mediaType
    * @param {string} message
    */
-  constructor(mediaType: MediaType | undefined, message?: string | undefined) {
+  constructor(
+    reason: AppendBufferErrorCode,
+    mediaType: MediaType | undefined,
+    message?: string | undefined
+  ) {
     super();
     // @see https://stackoverflow.com/questions/41102060/typescript-extending-error-class
     Object.setPrototypeOf(this, WaspSegmentParsingError.prototype);
 
     this.name = "WaspSegmentParsingError";
-    this.code = "SegmentParsingOtherError";
+    switch (reason) {
+      case AppendBufferErrorCode.TransmuxerError:
+        this.code = "SegmentTransmuxingError";
+        break;
+      case AppendBufferErrorCode.NoResource:
+      case AppendBufferErrorCode.NoSourceBuffer:
+      case AppendBufferErrorCode.UnknownError:
+        this.code = "SegmentParsingOtherError";
+        break;
+      default:
+        this.code = "SegmentParsingOtherError";
+        break;
+    }
     this.globalCode = this.code;
     this.mediaType = mediaType;
     this.message = message ?? "Unknown error when parsing a segment";

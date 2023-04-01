@@ -190,6 +190,33 @@ export function sendOtherError(
   });
 }
 
+export function sendMultivariantPlaylistParsingError(
+  fatal: boolean,
+  code: MultivariantPlaylistParsingErrorCode,
+  message: string | undefined
+): void {
+  const contentId = playerInstance.getContentInfo()?.contentId;
+  if (contentId === undefined) {
+    logger.error("Cannot send error, no contentId");
+    return;
+  }
+  postMessageToMain({
+    type: fatal
+      ? (WorkerMessageType.Error as const)
+      : (WorkerMessageType.Warning as const),
+    value: {
+      contentId,
+      message,
+      errorInfo: {
+        type: "multi-var-playlist-parse" as const,
+        value: {
+          code,
+        },
+      },
+    },
+  });
+}
+
 export function sendMediaPlaylistParsingError(
   fatal: boolean,
   code: MediaPlaylistParsingErrorCode,
@@ -219,9 +246,10 @@ export function sendMediaPlaylistParsingError(
   });
 }
 
-export function sendMultivariantPlaylistParsingError(
+export function sendSegmentParsingError(
   fatal: boolean,
-  code: MultivariantPlaylistParsingErrorCode,
+  code: AppendBufferErrorCode,
+  mediaType: MediaType,
   message: string | undefined
 ): void {
   const contentId = playerInstance.getContentInfo()?.contentId;
@@ -237,9 +265,10 @@ export function sendMultivariantPlaylistParsingError(
       contentId,
       message,
       errorInfo: {
-        type: "multi-var-playlist-parse" as const,
+        type: "segment-parse" as const,
         value: {
           code,
+          mediaType,
         },
       },
     },

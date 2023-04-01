@@ -1,4 +1,5 @@
 import {
+  AppendBufferErrorCode,
   MediaPlaylistParsingErrorCode,
   MediaSourceReadyState,
   MediaType,
@@ -208,6 +209,7 @@ export interface ErrorWorkerMessage {
       | UnitializedErrorWorkerInfo
       | MultivariantPlaylistParsingErrorWorkerInfo
       | MediaPlaylistParsingErrorWorkerInfo
+      | SegmentParsingErrorWorkerInfo
       | MediaPlaylistRequestErrorWorkerInfo
       | SegmentRequestErrorWorkerInfo
       | MultivariantPlaylistRequestErrorWorkerInfo
@@ -244,6 +246,7 @@ export interface WarningWorkerMessage {
       | UnitializedErrorWorkerInfo
       | MultivariantPlaylistParsingErrorWorkerInfo
       | MediaPlaylistParsingErrorWorkerInfo
+      | SegmentParsingErrorWorkerInfo
       | MediaPlaylistRequestErrorWorkerInfo
       | SegmentRequestErrorWorkerInfo
       | MultivariantPlaylistRequestErrorWorkerInfo
@@ -282,6 +285,15 @@ export interface MediaPlaylistParsingErrorWorkerInfo {
   type: "media-playlist-parse";
   value: {
     code: MediaPlaylistParsingErrorCode;
+    mediaType?: MediaType | undefined;
+  };
+}
+
+/** Error linked to an error while parsing a segment. */
+export interface SegmentParsingErrorWorkerInfo {
+  type: "segment-parse";
+  value: {
+    code: AppendBufferErrorCode;
     mediaType?: MediaType | undefined;
   };
 }
