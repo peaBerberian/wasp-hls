@@ -6,7 +6,8 @@ const { useEffect, useMemo, useRef, useState } = React;
 const TIME_CHECK_INTERVAL = 200;
 const CANVAS_WIDTH = 1000;
 const CANVAS_HEIGHT = 1;
-const COLOR_CURRENT_POSITION = "#ccc700";
+const COLOR_CURRENT_POSITION = "#008bd3";
+const COLOR_BUFFER_FILLING = "#eee800";
 
 /**
  * Clear the whole canvas.
@@ -125,7 +126,7 @@ export default function BufferContentGraph({
     ): void => {
       const startX = scaledRange.scaledStart * CANVAS_WIDTH;
       const endX = scaledRange.scaledEnd * CANVAS_WIDTH;
-      canvasCtx.fillStyle = "#008bd3";
+      canvasCtx.fillStyle = COLOR_BUFFER_FILLING;
       canvasCtx.fillRect(
         Math.ceil(startX),
         0,
