@@ -11,6 +11,7 @@ import { LoggerLevel } from "./logger";
 
 export { MediaSourceReadyState, PlaybackTickReason };
 
+/** An identifier to a particular `SourceBuffer`. */
 export type SourceBufferId = number;
 
 /** Message sent from the main thread to the worker. */

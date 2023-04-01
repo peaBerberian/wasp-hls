@@ -1,41 +1,47 @@
 import logger from "./logger";
 
-export interface IEventEmitter<T> {
+/**
+ * Generic type for a non-emitting event emitter (can only be relied on for
+ * listening).
+ */
+export interface EventEmitterListenOnly<T> {
   addEventListener<TEventName extends keyof T>(
     evt: TEventName,
-    fn: IListener<T, TEventName>
+    fn: EventListener<T, TEventName>
   ): void;
   removeEventListener<TEventName extends keyof T>(
     evt: TEventName,
-    fn: IListener<T, TEventName>
+    fn: EventListener<T, TEventName>
   ): void;
 }
 
-// Type of the argument in the listener's callback
-export type IEventPayload<
+/** Type of the argument in the listener's callback */
+export type EventPayload<
   TEventRecord,
   TEventName extends keyof TEventRecord
 > = TEventRecord[TEventName];
 
-// Type of the listener function
-export type IListener<TEventRecord, TEventName extends keyof TEventRecord> = (
-  args: IEventPayload<TEventRecord, TEventName>
-) => void;
+/** Type of the listener function. */
+export type EventListener<
+  TEventRecord,
+  TEventName extends keyof TEventRecord
+> = (args: EventPayload<TEventRecord, TEventName>) => void;
 
-type IListeners<TEventRecord> = {
-  [P in keyof TEventRecord]?: Array<IListener<TEventRecord, P>>;
+/** Type for the object storing all current listener functions. */
+type ListenersObject<TEventRecord> = {
+  [P in keyof TEventRecord]?: Array<EventListener<TEventRecord, P>>;
 };
 
 /**
  * Simple but fully type-safe EventEmitter implementation.
  * @class EventEmitter
  */
-export default class EventEmitter<T> implements IEventEmitter<T> {
+export default class EventEmitter<T> implements EventEmitterListenOnly<T> {
   /**
    * @type {Object}
    * @private
    */
-  private _listeners: IListeners<T>;
+  private _listeners: ListenersObject<T>;
 
   constructor() {
     this._listeners = {};
@@ -51,7 +57,7 @@ export default class EventEmitter<T> implements IEventEmitter<T> {
    */
   public addEventListener<TEventName extends keyof T>(
     evt: TEventName,
-    fn: IListener<T, TEventName>
+    fn: EventListener<T, TEventName>
   ): void {
     const listeners = this._listeners[evt];
     if (!Array.isArray(listeners)) {
@@ -72,7 +78,7 @@ export default class EventEmitter<T> implements IEventEmitter<T> {
    */
   public removeEventListener<TEventName extends keyof T>(
     evt?: TEventName | undefined,
-    fn?: IListener<T, TEventName> | undefined
+    fn?: EventListener<T, TEventName> | undefined
   ): void {
     if (evt === undefined) {
       this._listeners = {};
@@ -106,7 +112,7 @@ export default class EventEmitter<T> implements IEventEmitter<T> {
    */
   protected trigger<TEventName extends keyof T>(
     evt: TEventName,
-    arg: IEventPayload<T, TEventName>
+    arg: EventPayload<T, TEventName>
   ): void {
     const listeners = this._listeners[evt];
     if (!Array.isArray(listeners)) {

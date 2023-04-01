@@ -1,6 +1,10 @@
 import EventEmitter from "./EventEmitter";
 import noop from "./noop";
 
+/**
+ * Possible verbosity level for the `WaspHlsPlayer`'s Logger.
+ * A lower numberical value means less verbose.
+ */
 export const enum LoggerLevel {
   None = 0,
   Error = 1,
@@ -9,12 +13,22 @@ export const enum LoggerLevel {
   Debug = 4,
 }
 
+/**
+ * Define the `Logger`'s console functions.
+ * We're here restricting the types that can be logged to limit memory usage
+ * when an inspector is displayed on a tested page.
+ */
 type ConsoleFunction = (
   ...args: Array<boolean | string | number | Error | null | undefined>
 ) => void;
 
+/** Logger level initially set on `Logger`. */
 const DEFAULT_LOG_LEVEL = LoggerLevel.None;
 
+/**
+ * Events sent by `Logger` where the keys are the events' name and the values
+ * are the corresponding payloads.
+ */
 interface LoggerEvents {
   onLogLevelChange: LoggerLevel;
 }
@@ -30,6 +44,9 @@ export class Logger extends EventEmitter<LoggerEvents> {
   public debug: ConsoleFunction;
   private _currentLevel: LoggerLevel;
 
+  /**
+   * Create a whole new `Logger`, independent of other `Logger`.
+   */
   constructor() {
     super();
     this.error = noop;
@@ -40,6 +57,7 @@ export class Logger extends EventEmitter<LoggerEvents> {
   }
 
   /**
+   * Update the `Logger`'s verbosity level to the given one.
    * @param {number} level
    */
   public setLevel(level: LoggerLevel): void {
@@ -64,6 +82,7 @@ export class Logger extends EventEmitter<LoggerEvents> {
   }
 
   /**
+   * Returns the `Logger`'s current verbosity level.
    * @returns {number}
    */
   public getLevel(): LoggerLevel {

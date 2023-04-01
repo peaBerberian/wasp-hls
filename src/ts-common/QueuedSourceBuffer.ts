@@ -1,7 +1,11 @@
+import assertNever from "./assertNever";
 import logger from "./logger";
 
+/** List the "operations" a `QueuedSourceBuffer` might perform. */
 enum SourceBufferOperation {
+  /** Pushing new data to the `SourceBuffer`. */
   Push,
+  /** Removing data from the `SourceBuffer`. */
   Remove,
 }
 
@@ -10,7 +14,9 @@ enum SourceBufferOperation {
  * Will be converted into an `PushQueueItem` once in the queue
  */
 interface PushAction {
+  /** Identifies a `PushAction`. */
   type: SourceBufferOperation.Push;
+  /** The pushed data. */
   value: BufferSource;
 }
 
@@ -19,9 +25,12 @@ interface PushAction {
  * Will be converted into an `RemoveQueueItem` once in the queue
  */
 interface RemoveAction {
+  /** Identifies a `RemoveAction`. */
   type: SourceBufferOperation.Remove;
   value: {
+    /** The starting range of the removed data, in seconds. */
     start: number;
+    /** The ending range of the removed data, in seconds. */
     end: number;
   };
 }
@@ -31,13 +40,17 @@ type QSBAction = PushAction | RemoveAction;
 
 /** Item waiting in the queue to push a new chunk to the SourceBuffer. */
 interface PushQueueItem extends PushAction {
+  /** Resolve the corresponding operation's promise. */
   resolve: () => void;
+  /** Reject the corresponding operation's promise. */
   reject: (err: Error) => void;
 }
 
 /** Item waiting in the queue to remove segment(s) from the SourceBuffer. */
 interface RemoveQueueItem extends RemoveAction {
+  /** Resolve the corresponding operation's promise. */
   resolve: () => void;
+  /** Reject the corresponding operation's promise. */
   reject: (err: Error) => void;
 }
 
@@ -76,9 +89,18 @@ export default class QueuedSourceBuffer {
    */
   private _pendingTask: QSBQueueItem | null;
 
+  /**
+   * Callbacks to call when disposing the `QueuedSourceBuffer` to free
+   * resources.
+   */
   private _dispose: Array<() => void>;
 
   /**
+   * Create a new `QueuedSourceBuffer` associated to the given `SourceBuffer`.
+   *
+   * Only one `QueuedSourceBuffer` should be created per `SourceBuffer` to avoid
+   * issues.
+   *
    * @constructor
    * @param {SourceBuffer} sourceBuffer
    */
@@ -270,38 +292,10 @@ export default class QueuedSourceBuffer {
           break;
 
         default:
-          assertUnreachable(this._pendingTask);
+          assertNever(this._pendingTask);
       }
     } catch (e) {
       this._onPendingTaskError(e);
     }
   }
-}
-
-/**
- * TypeScript hack to make sure a code path is never taken.
- *
- * This can for example be used to ensure that a switch statement handle all
- * possible cases by adding a default clause calling assertUnreachable with
- * an argument (it doesn't matter which one).
- *
- * @example
- * function parseBinary(str : "0" | "1") : number {
- *   switch (str) {
- *     case "0:
- *       return 0;
- *     case "1":
- *       return 1;
- *     default:
- *       // branch never taken. If it can be, TypeScript will yell at us because
- *       // its argument (here, `str`) is not of the right type.
- *       assertUnreachable(str);
- *   }
- * }
- * @param {*} _
- * @throws AssertionError - Throw an AssertionError when called. If we're
- * sufficiently strict with how we use TypeScript, this should never happen.
- */
-function assertUnreachable(_: never): never {
-  throw new Error("Unreachable path taken");
 }

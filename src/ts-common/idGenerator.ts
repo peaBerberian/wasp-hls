@@ -20,6 +20,10 @@ export default function idGenerator(): () => string {
 
 const MAX_U32_VAL = 4294967295;
 
+/**
+ * Number-based version of `numberIdGenerator`.
+ * @returns {Function}
+ */
 export function numberIdGenerator(): () => number {
   let currId = -1;
   return function generateNewNumberId(): number {
