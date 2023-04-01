@@ -489,7 +489,6 @@ export function onStartPlaybackObservationMessage(
   }
   contentMetadata.stopPlaybackObservations = observePlayback(
     mediaElement,
-    msg.value.mediaSourceId,
     (value) => {
       const sourceBuffersBuffered: Partial<
         Record<SourceBufferId, Float64Array>
@@ -502,7 +501,10 @@ export function onStartPlaybackObservationMessage(
       }
       postMessageToWorker(worker, {
         type: MainMessageType.MediaObservation,
-        value: Object.assign(value, { sourceBuffersBuffered }),
+        value: Object.assign(value, {
+          sourceBuffersBuffered,
+          mediaSourceId: msg.value.mediaSourceId,
+        }),
       });
     }
   );
@@ -747,7 +749,7 @@ function formatError(
 export function onWarningMessage(
   msg: WarningWorkerMessage,
   contentMetadata: ContentMetadata | null
-): Error | null {
+): WaspError | null {
   if (contentMetadata?.contentId !== msg.value.contentId) {
     logger.info("API: Ignoring warning due to wrong `contentId`");
     return null;

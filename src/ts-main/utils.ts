@@ -3,8 +3,14 @@ import { MainMessageType } from "../ts-common/types";
 import postMessageToWorker from "./postMessageToWorker";
 import { ContentMetadata } from "./types";
 
+/**
+ * Default mime-type used for checking support of mpeg2-ts media.
+ */
 const DEFAULT_MPEG2_TS_TYPE = 'video/mp2t;codecs="avc1.4D401F"';
 
+/**
+ * If `true`, we're on the Firefox web browser.
+ */
 const isFirefox = navigator.userAgent.toLowerCase().indexOf("firefox") !== -1;
 
 /**
@@ -28,6 +34,15 @@ export function canDemuxMpeg2Ts(): boolean {
   );
 }
 
+/**
+ * Transforms received Error, in an unknown format, into an object with an
+ * optional `name` string (if found on the Error) and a `message` string who is
+ * either set to the Error's message or to `defaultMsg` if no such message was
+ * found.
+ * @param {*} err
+ * @param {string} defaultMsg
+ * @returns {Object}
+ */
 export function getErrorInformation(
   err: unknown,
   defaultMsg: string
@@ -42,6 +57,13 @@ export function getErrorInformation(
   }
 }
 
+/**
+ * Stop content playback thanks to the given `ContentMetadata` object and
+ * indicate to the WebWorker that it should also stop playing the content
+ * on its side.
+ * @param {Object} metadata
+ * @param {Worker|null} worker
+ */
 export function requestStopForContent(
   metadata: ContentMetadata,
   worker: Worker | null
@@ -58,6 +80,15 @@ export function requestStopForContent(
   }
 }
 
+/**
+ * Observe the given `HTMLMediaElement` and returns a Promise which:
+ *   - resolves when the `HTMLMediaElement`'s `"canplay"` event is sent.
+ *   - reject if the given `AbortSignal` emits before the `"canplay"` event
+ *     has been received.
+ * @param {HTMLMediaElement} videoElement
+ * @param {AbortSignal} abortSignal
+ * @returns {Promise}
+ */
 export function waitForLoad(
   videoElement: HTMLMediaElement,
   abortSignal: AbortSignal

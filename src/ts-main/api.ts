@@ -6,12 +6,14 @@ import noop from "../ts-common/noop";
 import {
   AudioTrackInfo,
   MainMessageType,
+  InitializationErrorCode,
   VariantInfo,
   WaspHlsPlayerConfig,
   WorkerMessage,
   WorkerMessageType,
 } from "../ts-common/types";
 import { MediaType } from "../wasm/wasp_hls";
+import DEFAULT_CONFIG from "./default_config";
 import { WaspError, WaspInitializationError } from "./errors";
 import postMessageToWorker from "./postMessageToWorker";
 import { ContentMetadata, PlayerState } from "./types";
@@ -63,7 +65,7 @@ interface WaspHlsPlayerEvents {
    */
   paused: null;
   /**
-   * Playback is now playing as long as there's data in the buffer.
+   * Playback should now be playing as long as there's data in the buffer.
    *
    * The `isPlaying` method should now return `true`.
    */
@@ -80,8 +82,12 @@ interface WaspHlsPlayerEvents {
    *
    * The `getPlayerState` method should now return `Error`.
    */
-  error: Error;
-  warning: Error;
+  error: WaspError;
+  /**
+   * Sent when a minor error arised, which does not prevent from playing the
+   * current content.
+   */
+  warning: WaspError;
   /**
    * Sent when we're starting to rebuffer to build back buffer.
    * Playback is usually not advancing while rebuffering.
@@ -95,7 +101,6 @@ interface WaspHlsPlayerEvents {
    *   - the content errored
    */
   rebufferingStarted: null;
-
   /**
    * Sent when we're ending a rebuffering period previously announced through
    * the `rebufferingStarted` event.
@@ -104,15 +109,27 @@ interface WaspHlsPlayerEvents {
    * `rebufferingStarted` event is sent.
    */
   rebufferingEnded: null;
-
+  /**
+   * Sent when the current HLS variant loaded by the `WaspHlsPlayer` changed.
+   */
   variantUpdate: VariantInfo | undefined;
-
+  /**
+   * Sent when the current audio track loaded by the `WaspHlsPlayer` changed.
+   */
   audioTrackUpdate: AudioTrackInfo | undefined;
-
+  /**
+   * Sent when the list of available audio tracks changed.
+   */
   audioTrackListUpdate: AudioTrackInfo[];
-
+  /**
+   * Sent when the list of available HLS variants changed.
+   */
   variantListUpdate: VariantInfo[];
-
+  /**
+   * Sent when a variant becomes locked (in which case the payload corresponds
+   * to the information on the locked variant) or unlocked (in which case the
+   * payload is set to `null`).
+   */
   variantLockUpdate: VariantInfo | null;
 }
 
@@ -137,20 +154,6 @@ export interface InitializationOptions {
   /** Url to the WebAssembly file. */
   wasmUrl: string;
 }
-
-const DEFAULT_CONFIG: WaspHlsPlayerConfig = {
-  bufferGoal: 15,
-
-  segmentRequestTimeout: 20000,
-  segmentBackoffBase: 300,
-  segmentBackoffMax: 2000,
-  multiVariantPlaylistRequestTimeout: 15000,
-  multiVariantPlaylistBackoffBase: 300,
-  multiVariantPlaylistBackoffMax: 2000,
-  mediaPlaylistRequestTimeout: 15000,
-  mediaPlaylistBackoffBase: 300,
-  mediaPlaylistBackoffMax: 2000,
-};
 
 /**
  * `WaspHlsPlayer` class allowing to play HLS contents by relying on a WebWorker
@@ -288,10 +291,24 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
     }
   }
 
+  /**
+   * Returns active `WaspHlsPlayerConfig`.
+   *
+   * You can update its properties by communicating those you want to update to
+   * `updateConfig`.
+   * @returns {Object}
+   */
   public getConfig(): WaspHlsPlayerConfig {
     return this.__config__;
   }
 
+  /**
+   * Update active `WaspHlsPlayerConfig`.
+   *
+   * You can just give to this method a subset of the configuration's
+   * properties, in which case only those keys will be updated.
+   * @param {Object} overwrite
+   */
   public updateConfig(overwrite: Partial<WaspHlsPlayerConfig>): void {
     if (this.__worker__ === null) {
       throw new Error("The Player is not initialized or disposed.");
@@ -381,6 +398,8 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
    *
    * This value should only be considered if a content is currently loaded.
    * That is, the current `PlayerState` is equal to `Loaded`.
+   *
+   * @returns {number}
    */
   public getPosition(): number {
     if (this.__contentMetadata__ === null) {
@@ -408,20 +427,6 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
 
   public getMediaOffset(): number | undefined {
     return this.__contentMetadata__?.mediaOffset ?? undefined;
-  }
-
-  /**
-   * Updates the audio volume.
-   *
-   * `0` indicates the minimum volume, `1` the maximum volume. Values in between
-   * are not necessarily linear and may depend on the platform.
-   *
-   * TODO Remove? Might be simpler to just say to user to update it directly on
-   * the media element.
-   * @param {number} volume
-   */
-  public setVolume(volume: number): void {
-    this.videoElement.volume = volume;
   }
 
   /**
@@ -517,6 +522,12 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
     }
   }
 
+  /**
+   * Update the wanted playback speed, `1` meaning "regular" playback, `2`
+   * meaning two times faster `0.5` meaning playing at half the speed etc.
+   *
+   * @param {number} speed
+   */
   public setSpeed(speed: number): void {
     // There's two ways in which we could do this:
     //
@@ -526,21 +537,20 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
     //     The core logic then knows about it through the usual
     //     `MediaObservation`.
     //
-    //     This has the advantage of being simpler, allowing direct feedback,
-    //     being persisted between contents and being able to update it even
-    //     when no content is playing. We also don't need to introduce a
-    //     supplementary option to update the speed at loading time.
+    //     This has the advantage of being simpler, allowing direct feedback to
+    //     the application, being persisted between contents and being able to
+    //     update it even when no content is playing. We also don't need to
+    //     introduce a supplementary option to update the speed at loading time.
     //
     //   - We could send the order to update the playback rate to the worker
-    //     which then sends back the order to update the playback rate.
+    //     which then sends back the order to update the playback rate on the
+    //     `HTMLMediaElement` on the main thread.
     //     The advantages here is that the worker knows about the playback rate
     //     change before it actually happens and the core logic totally controls
     //     the playback rate, which may lead to more predictable behavior in the
     //     core logic, which is inherently more complex.
     //
-    // For now I went with the second solution even though I think the first is
-    // the better one, because why making it simple when you can make it
-    // complex?
+    // For now I went with the second solution
     if (this.__worker__ === null) {
       throw new Error("The Player is not initialized or disposed.");
     }
@@ -561,34 +571,83 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
     });
   }
 
+  /**
+   * Returns the wanted playback speed, `1` meaning "regular" playback, `2`
+   * meaning two times faster `0.5` meaning playing at half the speed etc.
+   * @returns {number}
+   */
   public getSpeed(): number {
     return this.__contentMetadata__?.wantedSpeed ?? 1;
   }
 
+  /**
+   * Returns the minimum position with a reachable segment currently in the
+   * content.
+   *
+   * Returns `undefined` if unknown or if no content is loaded.
+   * @returns {number|undefined} s
+   */
   public getMinimumPosition(): number | undefined {
     return this.__contentMetadata__?.minimumPosition;
   }
 
+  /**
+   * Returns the maximum position with a reachable segment currently in the
+   * content.
+   *
+   * Returns `undefined` if unknown or if no content is loaded.
+   * @returns {number|undefined} s
+   */
   public getMaximumPosition(): number | undefined {
     return this.__contentMetadata__?.maximumPosition;
   }
 
+  /**
+   * Returns the Error that interrupted the playback of the current content or
+   * `null` either if no Error arised or if no content is loaded.
+   * @returns {Error|null}
+   */
   public getError(): WaspError | null {
     return this.__contentMetadata__?.error ?? null;
   }
 
+  /**
+   * Returns the information on the currently loaded HLS variant.
+   * Returns `undefined` if unknown or if no content is loaded.
+   *
+   * @returns {Object|undefined}
+   */
   public getCurrentVariant(): VariantInfo | undefined {
     return this.__contentMetadata__?.currVariant ?? undefined;
   }
 
+  /**
+   * Returns a list of all available on HLS variants.
+   * Returns an empty array if unknown or if no content is loaded.
+   *
+   * @returns {Array.<Object>}
+   */
   public getVariantList(): VariantInfo[] {
     return this.__contentMetadata__?.variants ?? [];
   }
 
+  /**
+   * Returns a list of all available on audio tracks.
+   * Returns an empty array if unknown or if no content is loaded.
+   *
+   * @returns {Array.<Object>}
+   */
   public getAudioTrackList(): AudioTrackInfo[] {
     return this.__contentMetadata__?.audioTracks ?? [];
   }
 
+  /**
+   * Returns the information on the currently loaded audio track.
+   * Returns `undefined` if unknown, if no content is loaded or if the content
+   * has no audio track.
+   *
+   * @returns {Object|undefined}
+   */
   public getAudioTrack(): AudioTrackInfo | undefined {
     const id = this.__contentMetadata__?.currentAudioTrack?.id;
     if (id === undefined) {
@@ -597,6 +656,20 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
     return this.getAudioTrackList()?.find((a) => a.id === id);
   }
 
+  /**
+   * Set the wanted audio track through its `id` property or indicate that you
+   * don't want to force an audio track (you want to rely on the content
+   * default's ones) by communicating `null` instead.
+   *
+   * Note that if relying on `lockVariant`, updating the audio track might lead
+   * to the automatic unlocking of the variant if and only if the wanted track
+   * has no equivalent in the locked variant. In that case, you will receive a
+   * `variantLockUpdate` event indicating that the lock is no more in place.
+   *
+   * @param {number|null} trackId - The value of the `id` property of the
+   * track you want to set or `null` if you want to rely on the
+   * content's default instead.
+   */
   public setAudioTrack(trackId: number | null): void {
     if (this.__worker__ === null) {
       throw new Error("The Player is not initialized or disposed.");
@@ -613,7 +686,21 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
     });
   }
 
-  public lockVariant(variantId: number) {
+  /**
+   * Lock in place the wanted HLS variant through its `id` property.
+   *
+   * The `WaspHlsPlayer` will then only load media data linked to this variant
+   * until either a new content is loaded, a track change has necessitated the
+   * selection of another variant, or if `unlockVariant` was called.
+   *
+   * You will receive `variantLockUpdate` events both when the lock is
+   * effectively put in place (unless it was already put in place for that same
+   * variant initially), and when/if it is unlocked.
+   *
+   * @param {number} variantId - The value of the `id` property of the
+   * variant you want to force.
+   */
+  public lockVariant(variantId: number): void {
     if (this.__worker__ === null) {
       throw new Error("The Player is not initialized or disposed.");
     }
@@ -629,7 +716,13 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
     });
   }
 
-  public unlockVariant() {
+  /**
+   * Remove a variant lock previously set through the `lockVariant` method.
+   *
+   * You will receive `variantLockUpdate` events when the lock is effectively
+   * removed, unless it was already removed.
+   */
+  public unlockVariant(): void {
     if (this.__worker__ === null) {
       throw new Error("The Player is not initialized or disposed.");
     }
@@ -645,11 +738,27 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
     });
   }
 
+  /**
+   * Get variant actively locked through the `lockVariant` method, or `null` if
+   * no variant is locked.
+   *
+   * Note that this method might not be up-to-data immediately after the methods
+   * `lockVariant` and `unlockVariant` are called as it returns the currenly
+   * known situation on the worker-side. This is because communication of those
+   * new settings are done asynchronously (they have to be communicated from the
+   * main thread where this API lives to the Worker where the core logic
+   * actually runs).
+   *
+   * @returns {Object|null}
+   */
   public getLockedVariant(): VariantInfo | null {
     return this.__contentMetadata__?.lockedVariant ?? null;
   }
 
-  public dispose() {
+  /**
+   * Free all resources taken by the `WaspHlsPlayer`.
+   */
+  public dispose(): void {
     this.__destroyAbortController__.abort();
     if (this.__worker__ === null) {
       return;
@@ -657,7 +766,7 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
     if (this.__contentMetadata__ !== null) {
       requestStopForContent(this.__contentMetadata__, this.__worker__);
     }
-    // TODO needed? What about GC once it is set to `null`?
+    // NOTE: is this still needed? What about GC once it is set to `null`?
     postMessageToWorker(this.__worker__, {
       type: MainMessageType.DisposePlayer,
       value: null,
@@ -672,12 +781,21 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
     this.videoElement.src = "";
   }
 
+  /**
+   * Initialize Worker logic and bind its events.
+   * @param {string} workerUrl - URL to the WebWorker JavaScript file.
+   * @param {string} wasmUrl - URL to the WebAssembly file.
+   * @param {Function} resolveProm - Callback to call once the initialization
+   * succeeded.
+   * @param {Function} resolveProm - Callback to call if the initialization
+   * failed, with the corresponding error in argument.
+   */
   private __startWorker__(
     workerUrl: string,
     wasmUrl: string,
     resolveProm: () => void,
-    rejectProm: (err: unknown) => void
-  ) {
+    rejectProm: (err: WaspInitializationError) => void
+  ): void {
     let mayStillReject = true;
     const worker = new Worker(workerUrl);
     this.__worker__ = worker;
@@ -892,10 +1010,25 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
       const error = ev.error instanceof Error ? ev.error : "Unknown Error";
       logger.error("API: Worker Error encountered", error);
       if (mayStillReject) {
-        rejectProm(ev.error);
+        rejectProm(
+          new WaspInitializationError(
+            InitializationErrorCode.UnknownError,
+            undefined,
+            /* eslint-disable @typescript-eslint/no-unsafe-member-access*/
+            /* eslint-disable @typescript-eslint/no-unsafe-argument */
+            ev.error?.message ?? undefined
+            /* eslint-enable @typescript-eslint/no-unsafe-member-access*/
+            /* eslint-enable @typescript-eslint/no-unsafe-argument */
+          )
+        );
       }
       this.dispose();
     };
+
+    /**
+     * Update the logger level on the Worker side.
+     * @param {number} level
+     */
     function onLogLevelChange(level: LoggerLevel): void {
       postMessageToWorker(worker, {
         type: MainMessageType.UpdateLoggerLevel,
@@ -904,7 +1037,14 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
     }
   }
 
-  private __startListeningToLoadedEvent__() {
+  /**
+   * Start listening to HTMLMediaElement's events to know when the content can
+   * be considered as loaded or aborted.
+   *
+   * TODO it might be better to have the `WaspHlsPlayer` send its own "loaded"
+   * event to better control playback.
+   */
+  private __startListeningToLoadedEvent__(): void {
     const contentMetadata = this.__contentMetadata__;
     if (contentMetadata === null) {
       return;

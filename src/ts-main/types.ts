@@ -95,16 +95,42 @@ export interface ContentMetadata {
    */
   wantedSpeed: number;
 
+  /**
+   * Minimum position in seconds with a reachable segment currently in the
+   * content.
+   * `undefined` if unknown.
+   */
   minimumPosition: number | undefined;
 
+  /**
+   * Maximum position in seconds with a reachable segment currently in the
+   * content.
+   * `undefined` if unknown.
+   */
   maximumPosition: number | undefined;
 
+  /**
+   * Information on the currently loaded HLS variant.
+   * `undefined` if unknown.
+   */
   currVariant: VariantInfo | undefined;
 
+  /**
+   * List of all available on HLS variants.
+   * Empty array if unknown.
+   */
   variants: VariantInfo[];
 
+  /**
+   * List of all available audio tracks.
+   * Empty array if unknown.
+   */
   audioTracks: AudioTrackInfo[];
 
+  /**
+   * Information on the currently loaded audio track.
+   * `undefined` if unknown or if it has no audio track.
+   */
   currentAudioTrack:
     | {
         id: number;
@@ -112,10 +138,24 @@ export interface ContentMetadata {
       }
     | undefined;
 
+  /**
+   * Variant actively locked if one, or `null` if no variant is actively locked
+   * on the worker-side.
+   */
   lockedVariant: VariantInfo | null;
 
+  /**
+   * `AbortController` allowing to cancel the content's loading operation.
+   * Set to `undefined` immediately after the content is loaded.
+   */
   loadingAborter: AbortController | undefined;
 
+  /**
+   * Error encountered in the content which led to the playback being completely
+   * interrupted.
+   *
+   * `null` if no such error was encountered yet.
+   */
   error: WaspError | null;
 }
 

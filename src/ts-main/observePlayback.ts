@@ -1,9 +1,10 @@
 import timeRangesToFloat64Array from "../ts-common/timeRangesToFloat64Array";
 import { MediaObservation, PlaybackTickReason } from "../ts-common/types";
 
+/** Items emitted by `observePlayback`. */
 export type PlaybackObserverObservation = Omit<
   MediaObservation,
-  "sourceBuffersBuffered"
+  "sourceBuffersBuffered" | "mediaSourceId"
 >;
 
 /**
@@ -14,6 +15,8 @@ export type PlaybackObserverObservation = Omit<
  *     HTMLMediaElement.
  *   - The second value being the corresponding `PlaybackTickReason` sent to the
  *     worker.
+ *
+ * @see PlaybackTickReason
  */
 const OBSERVATION_EVENTS = [
   ["seeking", PlaybackTickReason.Seeking],
@@ -30,9 +33,20 @@ const OBSERVATION_EVENTS = [
   // "durationchange",
 ] as const;
 
+/**
+ * Function emitting "playback observations" at regular intervals, so that the
+ * `WaspHlsPlayer` can react on various playback-related events and can
+ * re-synchronize regularly with the current playback conditions.
+ *
+ * @param {HTMLMediaElement} videoElement - The `HTMLMediaElement` to observe.
+ * @param {Function} onNewObservation - Callback through which playback
+ * observations will be sent. The first observation is sent through a microtask
+ * directly after this call.
+ * @returns {Function} - Callback allowing to stop producing observations and
+ * to free all resources this function was reserving.
+ */
 export default function observePlayback(
   videoElement: HTMLMediaElement,
-  mediaSourceId: string,
   onNewObservation: (observation: PlaybackObserverObservation) => void
 ): () => void {
   /**
@@ -47,13 +61,13 @@ export default function observePlayback(
   const listenerRemovers = OBSERVATION_EVENTS.map(([evtName, reason]) => {
     videoElement.addEventListener(evtName, onEvent);
     function onEvent() {
-      onNextTick(reason);
+      generateObservation(reason);
     }
     return () => videoElement.removeEventListener(evtName, onEvent);
   });
 
   /* eslint-disable @typescript-eslint/no-floating-promises */
-  Promise.resolve().then(() => onNextTick(PlaybackTickReason.Init));
+  Promise.resolve().then(() => generateObservation(PlaybackTickReason.Init));
 
   return () => {
     if (isStopped) {
@@ -68,7 +82,7 @@ export default function observePlayback(
     }
   };
 
-  function onNextTick(reason: PlaybackTickReason) {
+  function generateObservation(reason: PlaybackTickReason) {
     if (isStopped) {
       return;
     }
@@ -81,7 +95,6 @@ export default function observePlayback(
     const { currentTime, readyState, paused, seeking, ended, duration } =
       videoElement;
     onNewObservation({
-      mediaSourceId,
       reason,
       currentTime,
       readyState,
@@ -97,7 +110,7 @@ export default function observePlayback(
         timeoutId = undefined;
         return;
       }
-      onNextTick(PlaybackTickReason.RegularInterval);
+      generateObservation(PlaybackTickReason.RegularInterval);
     }, 1000);
   }
 }
