@@ -1,5 +1,5 @@
 import {
-  AppendBufferErrorCode,
+  SegmentParsingErrorCode,
   MediaPlaylistParsingErrorCode,
   MediaSourceReadyState,
   MediaType,
@@ -8,8 +8,10 @@ import {
   PlaybackTickReason,
   RequestErrorReason,
   SourceBufferCreationErrorCode as WasmSourceBufferCreationErrorCode,
+  PushedSegmentErrorCode,
 } from "../wasm/wasp_hls";
 import { LoggerLevel } from "./logger";
+import {SourceBufferOperation} from "./QueuedSourceBuffer";
 
 export { MediaSourceReadyState, PlaybackTickReason };
 
@@ -215,6 +217,8 @@ export interface ErrorWorkerMessage {
       | MultivariantPlaylistRequestErrorWorkerInfo
       | MediaPlaylistRequestErrorWorkerInfo
       | SourceBufferCreationErrorWorkerInfo
+      | PushedSegmentErrorWorkerInfo
+      | RemoveBufferErrorWorkerInfo
       | OtherErrorWorkerInfo;
 
     /**
@@ -252,6 +256,8 @@ export interface WarningWorkerMessage {
       | MultivariantPlaylistRequestErrorWorkerInfo
       | MediaPlaylistRequestErrorWorkerInfo
       | SourceBufferCreationErrorWorkerInfo
+      | PushedSegmentErrorWorkerInfo
+      | RemoveBufferErrorWorkerInfo
       | OtherErrorWorkerInfo;
 
     /**
@@ -293,7 +299,7 @@ export interface MediaPlaylistParsingErrorWorkerInfo {
 export interface SegmentParsingErrorWorkerInfo {
   type: "segment-parse";
   value: {
-    code: AppendBufferErrorCode;
+    code: SegmentParsingErrorCode;
     mediaType?: MediaType | undefined;
   };
 }
@@ -344,6 +350,23 @@ export interface SourceBufferCreationErrorWorkerInfo {
   type: "source-buffer-creation-error";
   value: {
     code: WasmSourceBufferCreationErrorCode;
+  };
+}
+
+/** Errors after pushing a segment to a `SourceBuffer`. */
+export interface PushedSegmentErrorWorkerInfo {
+  type: "push-segment-error";
+  value: {
+    code: PushedSegmentErrorCode;
+    mediaType: MediaType;
+  };
+}
+
+/** Errors after removing data from a `SourceBuffer`. */
+export interface RemoveBufferErrorWorkerInfo {
+  type: "remove-buffer-error";
+  value: {
+    mediaType: MediaType;
   };
 }
 
@@ -1098,8 +1121,10 @@ export interface SourceBufferOperationErrorMainMessage {
     sourceBufferId: SourceBufferId;
     /** The error's message. */
     message: string;
-    /** The error's name. */
-    name?: string | undefined;
+    /** The operation performed when the error was received. */
+    operation: SourceBufferOperation;
+    /** If `true` the error is due to the fact that the buffer is full. */
+    isBufferFull: boolean;
   };
 }
 

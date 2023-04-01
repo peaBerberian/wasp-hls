@@ -281,7 +281,24 @@ extern "C" {
     /// Function to call to indicate that an error arised when parsing a segment.
     pub fn jsSendSegmentParsingError(
         fatal: bool,
-        code: AppendBufferErrorCode,
+        code: SegmentParsingErrorCode,
+        media_type: MediaType,
+        message: Option<&str>
+    );
+
+    /// Function to call to indicate that an error arised after pushing a segment to a
+    /// `SourceBuffer`.
+    pub fn jsSendPushedSegmentError(
+        fatal: bool,
+        code: PushedSegmentErrorCode,
+        media_type: MediaType,
+        message: Option<&str>
+    );
+
+    /// Function to call to indicate that an error arised when removing data from a
+    /// `SourceBuffer`.
+    pub fn jsSendRemovedBufferError(
+        fatal: bool,
         media_type: MediaType,
         message: Option<&str>
     );
@@ -798,7 +815,7 @@ impl JsResult<(), AttachMediaSourceErrorCode> for AttachMediaSourceResult {
 #[wasm_bindgen]
 pub struct AppendBufferResult {
     success: Option<ParsedSegmentInfo>,
-    error: Option<(AppendBufferErrorCode, Option<String>)>,
+    error: Option<(SegmentParsingErrorCode, Option<String>)>,
 }
 
 pub struct ParsedSegmentInfo {
@@ -823,7 +840,7 @@ impl AppendBufferResult {
     /// error.
     ///
     /// This function should only be called by the JavaScript-side.
-    pub fn error(err: AppendBufferErrorCode, desc: Option<String>) -> Self {
+    pub fn error(err: SegmentParsingErrorCode, desc: Option<String>) -> Self {
         Self {
             success: None,
             error: Some((err, desc)),
@@ -831,10 +848,10 @@ impl AppendBufferResult {
     }
 }
 
-impl JsResult<Option<ParsedSegmentInfo>, AppendBufferErrorCode> for AppendBufferResult {
+impl JsResult<Option<ParsedSegmentInfo>, SegmentParsingErrorCode> for AppendBufferResult {
     /// Basically unwrap and consume the `AppendBufferResult`, converting it into a
     /// Result enum.
-    fn result(self) -> Result<Option<ParsedSegmentInfo>, (AppendBufferErrorCode, Option<String>)> {
+    fn result(self) -> Result<Option<ParsedSegmentInfo>, (SegmentParsingErrorCode, Option<String>)> {
         if let Some(err) = self.error {
             Err(err)
         } else {
@@ -845,7 +862,7 @@ impl JsResult<Option<ParsedSegmentInfo>, AppendBufferErrorCode> for AppendBuffer
 
 /// Errors that can arise when calling the `jsAppendBuffer` JavaScript function.
 #[wasm_bindgen]
-pub enum AppendBufferErrorCode {
+pub enum SegmentParsingErrorCode {
     /// The operation failed because the resource to append was not found.
     ///
     /// This error is only returned for cases where the data to push resides in JavaScript's
@@ -860,15 +877,24 @@ pub enum AppendBufferErrorCode {
     UnknownError,
 }
 
-impl From<PushSegmentError> for AppendBufferErrorCode {
+impl From<PushSegmentError> for SegmentParsingErrorCode {
     fn from(value: PushSegmentError) -> Self {
         match value {
-            PushSegmentError::NoResource(_) => AppendBufferErrorCode::NoResource,
-            PushSegmentError::NoSourceBuffer(_) => AppendBufferErrorCode::NoSourceBuffer,
-            PushSegmentError::TransmuxerError(_, _) => AppendBufferErrorCode::TransmuxerError,
-            PushSegmentError::UnknownError(_, _) => AppendBufferErrorCode::UnknownError,
+            PushSegmentError::NoResource(_) => SegmentParsingErrorCode::NoResource,
+            PushSegmentError::NoSourceBuffer(_) => SegmentParsingErrorCode::NoSourceBuffer,
+            PushSegmentError::TransmuxerError(_, _) => SegmentParsingErrorCode::TransmuxerError,
+            PushSegmentError::UnknownError(_, _) => SegmentParsingErrorCode::UnknownError,
         }
     }
+}
+
+/// Errors that can arise after a SourceBuffer's `appendBuffer` call.
+#[wasm_bindgen]
+pub enum PushedSegmentErrorCode {
+    /// We could not push the segment because the `SourceBuffer`'s buffer seems full.
+    BufferFull,
+    /// We could not push the segment because of another, unknown error.
+    UnknownError,
 }
 
 /// Current playback information associated to the `HTMLMediaElement` displayed

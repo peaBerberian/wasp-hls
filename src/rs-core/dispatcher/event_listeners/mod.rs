@@ -3,7 +3,7 @@ use std::{iter::Map, ops::Index, slice::Chunks};
 use crate::{
     bindings::{
         jsFreeResource, jsGetResourceData, RequestId, ResourceId, SourceBufferId, TimerId,
-        TimerReason,
+        TimerReason, PushedSegmentErrorCode,
     },
     dispatcher::{Dispatcher, MediaSourceReadyState},
     utils::url::Url,
@@ -99,15 +99,29 @@ impl Dispatcher {
     }
 
     /// The JS code should call this method when a SourceBuffer emits an `error`
-    /// event.
+    /// event while processing an `appendBuffer` call
     ///
     /// # Arguments
     ///
     /// * `source_buffer_id` - The identifier given generated when the
     ///   SourceBuffer was created. This allows the `Dispatcher` to identify
     ///   which SourceBuffer actually emitted this event.
-    pub fn on_source_buffer_error(&mut self, source_buffer_id: SourceBufferId) {
-        self.on_source_buffer_error_core(source_buffer_id);
+    ///
+    /// * `code` - A coe identifying the type of problem encountered.
+    pub fn on_append_buffer_error(&mut self, source_buffer_id: SourceBufferId, code: PushedSegmentErrorCode) {
+        self.on_append_buffer_error_core(source_buffer_id, code);
+    }
+
+    /// The JS code should call this method when a SourceBuffer emits an `error`
+    /// event while processing a `remove` call
+    ///
+    /// # Arguments
+    ///
+    /// * `source_buffer_id` - The identifier given generated when the
+    ///   SourceBuffer was created. This allows the `Dispatcher` to identify
+    ///   which SourceBuffer actually emitted this event.
+    pub fn on_remove_buffer_error(&mut self, source_buffer_id: SourceBufferId) {
+        self.on_remove_buffer_error_core(source_buffer_id);
     }
 
     /// The JS code should call this method once regular playback "tick" are enabled

@@ -2,7 +2,7 @@ import assertNever from "./assertNever";
 import logger from "./logger";
 
 /** List the "operations" a `QueuedSourceBuffer` might perform. */
-enum SourceBufferOperation {
+export enum SourceBufferOperation {
   /** Pushing new data to the `SourceBuffer`. */
   Push,
   /** Removing data from the `SourceBuffer`. */

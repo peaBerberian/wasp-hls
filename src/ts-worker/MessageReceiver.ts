@@ -1,5 +1,6 @@
 import assertNever from "../ts-common/assertNever";
 import logger from "../ts-common/logger";
+import { SourceBufferOperation } from "../ts-common/QueuedSourceBuffer";
 import timeRangesToFloat64Array from "../ts-common/timeRangesToFloat64Array";
 import {
   MainMessage,
@@ -12,6 +13,7 @@ import initializeWasm, {
   JsTimeRanges,
   MediaObservation,
   MediaType,
+  PushedSegmentErrorCode,
 } from "../wasm/wasp_hls";
 import { stopObservingPlayback } from "./bindings";
 import {
@@ -337,7 +339,19 @@ export default function MessageReceiver() {
           ) {
             return;
           }
-          dispatcher.on_source_buffer_error(data.value.sourceBufferId);
+          if (data.value.operation === SourceBufferOperation.Remove) {
+            dispatcher.on_remove_buffer_error(data.value.sourceBufferId);
+          } else if (data.value.isBufferFull) {
+            dispatcher.on_append_buffer_error(
+              data.value.sourceBufferId,
+              PushedSegmentErrorCode.BufferFull
+            );
+          } else {
+            dispatcher.on_append_buffer_error(
+              data.value.sourceBufferId,
+              PushedSegmentErrorCode.UnknownError
+            );
+          }
         }
         break;
 

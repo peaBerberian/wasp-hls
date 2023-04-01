@@ -188,13 +188,20 @@ export const WaspErrorCode = {
   SegmentParsingOtherError: "SegmentParsingOtherError",
 
   /**
-   * A `QuotaExceededError` happens on a SourceBuffer.
-   * This generally happens when the SourceBuffer is full.
+   * We could not add more data to the `SourceBuffer` because it is full.
    */
-  SourceBufferQuotaExceededError: "SourceBufferQuotaExceededError",
+  SourceBufferFullError: "SourceBufferFullError",
+  /**
+   * An error arised when pushing a segment to the `SourceBuffer`.
+   * Generally, this happens when the pushed segment is malformed.
+   */
+  SourceBufferAppendError: "SourceBufferAppendError",
+  /**
+   * An error arised when removing data from the SourceBuffer.
+   */
+  SourceBufferRemoveError: "SourceBufferRemoveError",
   /**
    * An uncategorized error arised when doing an operation on a `SourceBuffer`.
-   * Generally, this happens when pushed segments are malformed.
    */
   SourceBufferOtherError: "SourceBufferOtherError",
 } as const;

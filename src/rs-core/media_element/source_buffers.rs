@@ -2,7 +2,7 @@ use std::collections::VecDeque;
 
 use crate::bindings::{
     jsAddSourceBuffer, jsAppendBuffer, jsFlush, jsRemoveBuffer, AddSourceBufferErrorCode,
-    AppendBufferErrorCode, JsResult, MediaType, ParsedSegmentInfo, SourceBufferId,
+    SegmentParsingErrorCode, JsResult, MediaType, ParsedSegmentInfo, SourceBufferId,
 };
 use crate::dispatcher::JsMemoryBlob;
 use crate::parser::SegmentTimeInfo;
@@ -330,7 +330,7 @@ pub(super) enum AddSourceBufferError {
 }
 
 impl AddSourceBufferError {
-    /// Translate `AppendBufferErrorCode` and its optional accompanying message, as returned by the
+    /// Translate `SegmentParsingErrorCode` and its optional accompanying message, as returned by the
     /// `jsAppendBuffer` JavaScript function, into the corresponding `AddSourceBufferError`.
     ///
     /// # Arguments
@@ -409,17 +409,17 @@ impl PushSegmentError {
     /// * `err` - The error received from the `jsAppendBuffer` JavaScript function.
     fn from_js_append_buffer_error(
         media_type: MediaType,
-        err: (AppendBufferErrorCode, Option<String>),
+        err: (SegmentParsingErrorCode, Option<String>),
     ) -> Self {
         match err.0 {
-            AppendBufferErrorCode::NoSourceBuffer => PushSegmentError::NoSourceBuffer(media_type),
-            AppendBufferErrorCode::NoResource => PushSegmentError::NoResource(media_type),
-            AppendBufferErrorCode::TransmuxerError => PushSegmentError::TransmuxerError(
+            SegmentParsingErrorCode::NoSourceBuffer => PushSegmentError::NoSourceBuffer(media_type),
+            SegmentParsingErrorCode::NoResource => PushSegmentError::NoResource(media_type),
+            SegmentParsingErrorCode::TransmuxerError => PushSegmentError::TransmuxerError(
                 media_type,
                 err.1
                     .unwrap_or_else(|| "Unknown transmuxing error.".to_owned()),
             ),
-            AppendBufferErrorCode::UnknownError => PushSegmentError::UnknownError(
+            SegmentParsingErrorCode::UnknownError => PushSegmentError::UnknownError(
                 media_type,
                 err.1.unwrap_or_else(|| "Unknown error.".to_owned()),
             ),

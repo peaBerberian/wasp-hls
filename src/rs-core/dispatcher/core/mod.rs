@@ -17,7 +17,7 @@ use crate::{
         jsSendSourceBufferCreationError, jsSetMediaSourceDuration, jsStartObservingPlayback,
         jsStopObservingPlayback, jsTimer, jsUpdateContentInfo, MediaType,
         MultivariantPlaylistParsingErrorCode, OtherErrorCode, RequestId, SourceBufferId, TimerId,
-        TimerReason, jsSendSegmentParsingError,
+        TimerReason, jsSendSegmentParsingError, PushedSegmentErrorCode, jsSendPushedSegmentError, jsSendRemovedBufferError,
     },
     media_element::{SegmentPushData, SegmentQualityContext, SourceBufferCreationError},
     parser::{MultivariantPlaylist, SegmentTimeInfo},
@@ -293,15 +293,32 @@ impl Dispatcher {
             .on_source_buffer_update(source_buffer_id, buffered);
     }
 
-    /// Method to call when a SourceBuffer triggered an `error` event.
-    pub(super) fn on_source_buffer_error_core(&mut self, _source_buffer_id: SourceBufferId) {
-        // TODO check QuotaExceededError and so on...
-        // TODO better error
-        jsSendOtherError(
-            true,
-            crate::bindings::OtherErrorCode::Unknown,
-            Some("A SourceBuffer emitted an error"),
-        );
+    /// Method to call when a `SourceBuffer`'s `appendBuffer` call led to an `error` event.
+    pub(super) fn on_append_buffer_error_core(&mut self, source_buffer_id: SourceBufferId, code: PushedSegmentErrorCode) {
+        match self.media_element_ref.media_type_for(source_buffer_id) {
+            Some(mt) => {
+                let message = match code {
+                    PushedSegmentErrorCode::BufferFull => format!("The {mt} `SourceBuffer` was full and could not accept anymore segment"),
+                    PushedSegmentErrorCode::UnknownError => format!("An error happened while calling `appendBuffer` on the {mt} `SourceBuffer`"),
+                };
+                jsSendPushedSegmentError(true, code, mt, Some(&message));
+            },
+            None =>
+                jsSendOtherError(true, OtherErrorCode::Unknown, Some("An unknown SourceBuffer failed during a push operation.")),
+        }
+        self.stop_current_content();
+    }
+
+    /// Method to call when a `SourceBuffer`'s `remove` call led to an `error` event.
+    pub(super) fn on_remove_buffer_error_core(&mut self, source_buffer_id: SourceBufferId) {
+        match self.media_element_ref.media_type_for(source_buffer_id) {
+            Some(mt) => {
+                let message =  &format!("An error happened while calling `remove` on the {mt} `SourceBuffer`");
+                jsSendRemovedBufferError(true, mt, Some(message));
+            },
+            None =>
+                jsSendOtherError(true, OtherErrorCode::Unknown, Some("An unknown SourceBuffer failed during a remove operation.")),
+        }
         self.stop_current_content();
     }
 

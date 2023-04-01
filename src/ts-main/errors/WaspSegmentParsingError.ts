@@ -1,4 +1,4 @@
-import { AppendBufferErrorCode, MediaType } from "../../wasm/wasp_hls";
+import { SegmentParsingErrorCode, MediaType } from "../../wasm/wasp_hls";
 import { WaspErrorCode } from "./common";
 
 // TODO add `isInit` property?
@@ -40,7 +40,7 @@ export default class WaspSegmentParsingError extends Error {
    * @param {string} message
    */
   constructor(
-    reason: AppendBufferErrorCode,
+    reason: SegmentParsingErrorCode,
     mediaType: MediaType | undefined,
     message?: string | undefined
   ) {
@@ -50,12 +50,12 @@ export default class WaspSegmentParsingError extends Error {
 
     this.name = "WaspSegmentParsingError";
     switch (reason) {
-      case AppendBufferErrorCode.TransmuxerError:
+      case SegmentParsingErrorCode.TransmuxerError:
         this.code = "SegmentTransmuxingError";
         break;
-      case AppendBufferErrorCode.NoResource:
-      case AppendBufferErrorCode.NoSourceBuffer:
-      case AppendBufferErrorCode.UnknownError:
+      case SegmentParsingErrorCode.NoResource:
+      case SegmentParsingErrorCode.NoSourceBuffer:
+      case SegmentParsingErrorCode.UnknownError:
         this.code = "SegmentParsingOtherError";
         break;
       default:

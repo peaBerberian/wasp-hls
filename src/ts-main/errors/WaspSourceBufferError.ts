@@ -1,3 +1,5 @@
+import { SourceBufferOperation } from "../../ts-common/QueuedSourceBuffer";
+import { MediaType, PushedSegmentErrorCode } from "../../wasm/wasp_hls";
 import { WaspErrorCode } from "./common";
 
 /**
@@ -13,7 +15,9 @@ export default class WaspSourceBufferError extends Error {
 
   /** Specifies the exact error encountered. */
   public readonly code:
-    | "SourceBufferQuotaExceededError"
+    | "SourceBufferFullError"
+    | "SourceBufferAppendError"
+    | "SourceBufferRemoveError"
     | "SourceBufferOtherError";
 
   /**
@@ -27,16 +31,56 @@ export default class WaspSourceBufferError extends Error {
   public readonly globalCode: keyof typeof WaspErrorCode;
 
   /**
-   * XXX TODO
+   * The media type associated to the `SourceBuffer` associated to this error.
+   *
+   * `undefined` if unknown or if the concept cannot be applied here.
+   */
+  public readonly mediaType: MediaType | undefined;
+
+  /**
+   * @param {number} operation
+   * @param {number} reason
+   * @param {number} mediaType
    * @param {string|undefined} message
    */
-  constructor(message?: string | undefined) {
+  constructor(
+    operation: SourceBufferOperation.Push,
+    reason: PushedSegmentErrorCode,
+    mediaType: MediaType,
+    message?: string | undefined
+  );
+  constructor(
+    operation: SourceBufferOperation.Remove,
+    reason: null,
+    mediaType: MediaType,
+    message?: string | undefined
+  );
+  constructor(
+    _operation: SourceBufferOperation,
+    reason: PushedSegmentErrorCode | null,
+    mediaType: MediaType,
+    message?: string | undefined
+  ) {
     super();
     // @see https://stackoverflow.com/questions/41102060/typescript-extending-error-class
     Object.setPrototypeOf(this, WaspSourceBufferError.prototype);
-
     this.name = "WaspSourceBufferError";
-    this.code = "SourceBufferOtherError";
+    this.mediaType = mediaType;
+
+    switch (reason) {
+      case null:
+        this.code = "SourceBufferRemoveError";
+        break;
+      case PushedSegmentErrorCode.BufferFull:
+        this.code = "SourceBufferFullError";
+        break;
+      case PushedSegmentErrorCode.UnknownError:
+        this.code = "SourceBufferAppendError";
+        break;
+      default:
+        this.code = "SourceBufferOtherError";
+        break;
+    }
     this.globalCode = this.code;
     this.message = message ?? "Unknown error";
   }

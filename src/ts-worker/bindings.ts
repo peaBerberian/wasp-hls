@@ -13,7 +13,7 @@ import {
   MediaType,
   MediaSourceReadyState,
   TimerReason,
-  AppendBufferErrorCode,
+  SegmentParsingErrorCode,
   AppendBufferResult,
   AttachMediaSourceResult,
   AttachMediaSourceErrorCode,
@@ -32,6 +32,7 @@ import {
   MultivariantPlaylistParsingErrorCode,
   JsTimeRanges,
   MediaPlaylistParsingErrorCode,
+  PushedSegmentErrorCode,
 } from "../wasm/wasp_hls.js";
 import {
   cachedCodecsSupport,
@@ -163,6 +164,62 @@ export function sendMediaPlaylistRequestError(
   });
 }
 
+export function sendPushedSegmentError(
+  fatal: boolean,
+  code: PushedSegmentErrorCode,
+  mediaType: MediaType,
+  message: string | undefined
+): void {
+  const contentId = playerInstance.getContentInfo()?.contentId;
+  if (contentId === undefined) {
+    logger.error("Cannot send error, no contentId");
+    return;
+  }
+  postMessageToMain({
+    type: fatal
+      ? (WorkerMessageType.Error as const)
+      : (WorkerMessageType.Warning as const),
+    value: {
+      contentId,
+      message,
+      errorInfo: {
+        type: "push-segment-error",
+        value: {
+          code,
+          mediaType
+        },
+      },
+    },
+  });
+}
+
+export function sendRemoveBufferError(
+  fatal: boolean,
+  mediaType: MediaType,
+  message: string | undefined
+): void {
+  const contentId = playerInstance.getContentInfo()?.contentId;
+  if (contentId === undefined) {
+    logger.error("Cannot send error, no contentId");
+    return;
+  }
+  postMessageToMain({
+    type: fatal
+      ? (WorkerMessageType.Error as const)
+      : (WorkerMessageType.Warning as const),
+    value: {
+      contentId,
+      message,
+      errorInfo: {
+        type: "remove-buffer-error",
+        value: {
+          mediaType
+        },
+      },
+    },
+  });
+}
+
 export function sendOtherError(
   fatal: boolean,
   code: OtherErrorCode,
@@ -248,7 +305,7 @@ export function sendMediaPlaylistParsingError(
 
 export function sendSegmentParsingError(
   fatal: boolean,
-  code: AppendBufferErrorCode,
+  code: SegmentParsingErrorCode,
   mediaType: MediaType,
   message: string | undefined
 ): void {
@@ -800,13 +857,13 @@ export function appendBuffer(
   const mediaSourceObj = getMediaSourceObj();
   if (segment === undefined) {
     return AppendBufferResult.error(
-      AppendBufferErrorCode.NoResource,
+      SegmentParsingErrorCode.NoResource,
       "Segment preparation error: No resource with the given `resourceId`"
     );
   }
   if (mediaSourceObj === undefined) {
     return AppendBufferResult.error(
-      AppendBufferErrorCode.NoSourceBuffer,
+      SegmentParsingErrorCode.NoSourceBuffer,
       "Segment preparation error: No MediaSource attached"
     );
   }
@@ -818,7 +875,7 @@ export function appendBuffer(
   );
   if (sourceBufferObjIdx < -1) {
     return AppendBufferResult.error(
-      AppendBufferErrorCode.NoSourceBuffer,
+      SegmentParsingErrorCode.NoSourceBuffer,
       "Segment preparation error: No SourceBuffer with the given `SourceBufferId`"
     );
   }
@@ -831,7 +888,7 @@ export function appendBuffer(
         segment = transmuxedData;
       } else {
         return AppendBufferResult.error(
-          AppendBufferErrorCode.TransmuxerError,
+          SegmentParsingErrorCode.TransmuxerError,
           "Segment preparation error: the transmuxer couldn't process the segment"
         );
       }
@@ -841,7 +898,7 @@ export function appendBuffer(
         "Unknown error while transmuxing segment"
       );
       return AppendBufferResult.error(
-        AppendBufferErrorCode.TransmuxerError,
+        SegmentParsingErrorCode.TransmuxerError,
         msg
       );
     }
@@ -878,14 +935,26 @@ export function appendBuffer(
             logger.error("Error when calling `on_source_buffer_update`", error);
           }
         })
-        .catch(() => {
+        .catch((err) => {
           try {
-            playerInstance
-              .getDispatcher()
-              ?.on_source_buffer_error(sourceBufferId);
-          } catch (err) {
-            const error = err instanceof Error ? err : "Unknown Error";
-            logger.error("Error when calling `on_source_buffer_error`", error);
+            if (err instanceof Error && err.name === "QuotaExceededError") {
+              playerInstance
+                .getDispatcher()
+                ?.on_append_buffer_error(
+                  sourceBufferId,
+                  PushedSegmentErrorCode.BufferFull
+                );
+            } else {
+              playerInstance
+                .getDispatcher()
+                ?.on_append_buffer_error(
+                  sourceBufferId,
+                  PushedSegmentErrorCode.UnknownError
+                );
+            }
+          } catch (err2) {
+            const error = err2 instanceof Error ? err2 : "Unknown Error";
+            logger.error("Error when calling `on_append_buffer_error`", error);
           }
         });
     } else {
@@ -903,7 +972,7 @@ export function appendBuffer(
       );
     }
   } catch (err) {
-    return AppendBufferResult.error(AppendBufferErrorCode.UnknownError);
+    return AppendBufferResult.error(SegmentParsingErrorCode.UnknownError);
   }
   return AppendBufferResult.success(timeInfo?.time, timeInfo?.duration);
 }
@@ -958,10 +1027,10 @@ export function removeBuffer(
           try {
             playerInstance
               .getDispatcher()
-              ?.on_source_buffer_error(sourceBufferId);
+              ?.on_remove_buffer_error(sourceBufferId);
           } catch (err) {
             const error = err instanceof Error ? err : "Unknown Error";
-            logger.error("Error when calling `on_source_buffer_error`", error);
+            logger.error("Error when calling `on_remove_buffer_error`", error);
           }
         });
     } else {

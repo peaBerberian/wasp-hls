@@ -1,5 +1,8 @@
+import assertNever from "../ts-common/assertNever";
 import logger from "../ts-common/logger";
-import QueuedSourceBuffer from "../ts-common/QueuedSourceBuffer";
+import QueuedSourceBuffer, {
+  SourceBufferOperation,
+} from "../ts-common/QueuedSourceBuffer";
 import timeRangesToFloat64Array from "../ts-common/timeRangesToFloat64Array";
 import {
   AppendBufferWorkerMessage,
@@ -44,6 +47,7 @@ import {
   WaspSegmentParsingError,
   WaspSegmentRequestError,
   WaspSourceBufferCreationError,
+  WaspSourceBufferError,
 } from "./errors";
 import observePlayback from "./observePlayback";
 import postMessageToWorker from "./postMessageToWorker";
@@ -396,13 +400,20 @@ export function onAppendBufferMessage(
       handleAppendBufferError(err);
     }
     function handleAppendBufferError(err: unknown): void {
-      const { name, message } = getErrorInformation(
+      const { message } = getErrorInformation(
         err,
         "Unknown error when appending data to the SourceBuffer"
       );
       postMessageToWorker(worker, {
         type: MainMessageType.SourceBufferOperationError,
-        value: { mediaSourceId, sourceBufferId, message, name },
+        value: {
+          mediaSourceId,
+          sourceBufferId,
+          message,
+          operation: SourceBufferOperation.Push,
+          isBufferFull:
+            err instanceof Error && err.name === "QuotaExceededError",
+        },
       });
     }
   }
@@ -452,13 +463,19 @@ export function onRemoveBufferMessage(
       handleRemoveBufferError(err);
     }
     function handleRemoveBufferError(err: unknown): void {
-      const { name, message } = getErrorInformation(
+      const { message } = getErrorInformation(
         err,
         "Unknown error when removing data to the SourceBuffer"
       );
       postMessageToWorker(worker, {
         type: MainMessageType.SourceBufferOperationError,
-        value: { mediaSourceId, sourceBufferId, message, name },
+        value: {
+          mediaSourceId,
+          sourceBufferId,
+          message,
+          operation: SourceBufferOperation.Remove,
+          isBufferFull: false,
+        },
       });
     }
   }
@@ -759,11 +776,24 @@ function formatError(
         msg.value.errorInfo.value.mediaType,
         msg.value.message
       );
-    default:
-      return new WaspOtherError(
-        OtherErrorCode.Unknown,
-        msg.value.message ?? "An error arised"
+    case "push-segment-error":
+      return new WaspSourceBufferError(
+        SourceBufferOperation.Push,
+        msg.value.errorInfo.value.code,
+        msg.value.errorInfo.value.mediaType,
+        msg.value.message
       );
+    case "remove-buffer-error":
+      return new WaspSourceBufferError(
+        SourceBufferOperation.Remove,
+        null,
+        msg.value.errorInfo.value.mediaType,
+        msg.value.message
+      );
+    case "unitialized":
+      return new WaspOtherError(OtherErrorCode.Unknown, msg.value.message);
+    default:
+      assertNever(msg.value.errorInfo);
   }
 }
 

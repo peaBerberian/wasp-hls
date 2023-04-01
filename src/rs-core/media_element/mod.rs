@@ -477,6 +477,22 @@ impl MediaElementReference {
         }
     }
 
+    /// Returns the MediaType associated to the `SourceBuffer` which has the given `SourceBufferId`.
+    /// Returns `None` if no such `SourceBuffer` was found.
+    pub(crate) fn media_type_for(&self, id: SourceBufferId) -> Option<MediaType> {
+        if let Some(ref buf) = self.audio_buffer {
+            if buf.id() == id {
+                return Some(MediaType::Audio);
+            }
+        }
+        if let Some(ref buf) = self.video_buffer {
+            if buf.id() == id {
+                return Some(MediaType::Video);
+            }
+        }
+        None
+    }
+
     /// Announce that the last chronological segment has been pushed to the buffer of a
     /// given `media_type`.
     ///
