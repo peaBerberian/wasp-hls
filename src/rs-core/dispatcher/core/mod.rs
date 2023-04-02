@@ -16,7 +16,7 @@ use crate::{
         jsSendMultivariantPlaylistRequestError, jsSendOtherError, jsSendPushedSegmentError,
         jsSendRemovedBufferError, jsSendSegmentParsingError, jsSendSegmentRequestError,
         jsSendSourceBufferCreationError, jsSetMediaSourceDuration, jsStartObservingPlayback,
-        jsStopObservingPlayback, jsTimer, jsUpdateContentInfo, MediaType,
+        jsStopObservingPlayback, jsTimer, jsUpdateContentInfo, AddSourceBufferErrorCode, MediaType,
         MultivariantPlaylistParsingErrorCode, OtherErrorCode, PushedSegmentErrorCode, RequestId,
         SourceBufferId, TimerId, TimerReason,
     },
@@ -280,6 +280,22 @@ impl Dispatcher {
             .update_media_source_ready_state(state);
         if state == MediaSourceReadyState::Open {
             self.check_ready_to_load_segments();
+        }
+    }
+
+    /// Method to call when a `SourceBuffer`'s creation failed.
+    pub(super) fn on_source_buffer_creation_error_core(
+        &mut self,
+        source_buffer_id: SourceBufferId,
+        original_error: (AddSourceBufferErrorCode, Option<String>),
+    ) {
+        if let Some((media_type, e)) = self
+            .media_element_ref
+            .on_source_buffer_creation_error(source_buffer_id, original_error)
+        {
+            let (code, msg) = format_source_buffer_creation_err_for_js(e);
+            jsSendSourceBufferCreationError(true, code, media_type, &msg);
+            self.stop_current_content();
         }
     }
 

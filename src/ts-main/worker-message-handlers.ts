@@ -11,7 +11,6 @@ import {
   CreateMediaSourceWorkerMessage,
   CreateSourceBufferWorkerMessage,
   EndOfStreamWorkerMessage,
-  EndOfStreamErrorCode,
   MediaSourceReadyState,
   RebufferingEndedWorkerMessage,
   RebufferingStartedWorkerMessage,
@@ -584,28 +583,15 @@ export function onStopPlaybackObservationMessage(
  * @param {Object|null} contentMetadata - Metadata of the content currently
  * playing. `null` if no content is currently playing.
  * This object may be mutated.
- * @param {Worker} worker - The WebWorker concerned, messages may be sent back
- * to it.
  */
 export function onEndOfStreamMessage(
   msg: EndOfStreamWorkerMessage,
-  contentMetadata: ContentMetadata | null,
-  worker: Worker
+  contentMetadata: ContentMetadata | null
 ): void {
   if (contentMetadata?.mediaSourceId !== msg.value.mediaSourceId) {
     logger.info("API: Ignoring `end-of-stream` due to wrong `mediaSourceId`");
   } else {
-    const { mediaSourceId } = msg.value;
     if (contentMetadata.mediaSource === null) {
-      postMessageToWorker(worker, {
-        type: MainMessageType.EndOfStreamError,
-        value: {
-          mediaSourceId,
-          code: EndOfStreamErrorCode.NoMediaSource,
-          message: "No MediaSource created on the main thread.",
-          name: undefined,
-        },
-      });
       return;
     }
     if (contentMetadata.mediaSource.readyState === "ended") {
@@ -617,19 +603,7 @@ export function onEndOfStreamMessage(
       // call `endOfStream` at the right time.
       contentMetadata.mediaSource.endOfStream();
     } catch (err) {
-      const { name, message } = getErrorInformation(
-        err,
-        "Unknown error when calling MediaSource.endOfStream()"
-      );
-      postMessageToWorker(worker, {
-        type: MainMessageType.EndOfStreamError,
-        value: {
-          mediaSourceId,
-          code: EndOfStreamErrorCode.EndOfStreamError,
-          message,
-          name,
-        },
-      });
+      logger.error("Unknown error when calling MediaSource.endOfStream()");
     }
   }
 }

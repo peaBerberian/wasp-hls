@@ -2,8 +2,8 @@ use std::{iter::Map, ops::Index, slice::Chunks};
 
 use crate::{
     bindings::{
-        jsFreeResource, jsGetResourceData, PushedSegmentErrorCode, RequestId, ResourceId,
-        SourceBufferId, TimerId, TimerReason,
+        jsFreeResource, jsGetResourceData, AddSourceBufferErrorCode, PushedSegmentErrorCode,
+        RequestId, ResourceId, SourceBufferId, TimerId, TimerReason,
     },
     dispatcher::{Dispatcher, MediaSourceReadyState},
     utils::url::Url,
@@ -96,6 +96,28 @@ impl Dispatcher {
         buffered: JsTimeRanges,
     ) {
         self.on_source_buffer_update_core(source_buffer_id, buffered);
+    }
+
+    /// The JS code should call this method when a `SourceBuffer`'s creation
+    /// asynchronously fails
+    ///
+    /// # Arguments
+    ///
+    /// * `source_buffer_id` - The identifier generated when the
+    ///   SourceBuffer was created through the `jsAddSourceBuffer` call.
+    ///   This allows the `Dispatcher` to identify which `SourceBuffer`
+    ///   we're talking about.
+    ///
+    /// * `code` - The `AddSourceBufferErrorCode` linked to the error.
+    ///
+    /// * `message` - An human-readable message describing the error.
+    pub fn on_source_buffer_creation_error(
+        &mut self,
+        source_buffer_id: SourceBufferId,
+        code: AddSourceBufferErrorCode,
+        msg: String,
+    ) {
+        self.on_source_buffer_creation_error_core(source_buffer_id, (code, Some(msg)));
     }
 
     /// The JS code should call this method when a SourceBuffer emits an `error`

@@ -80,10 +80,20 @@ impl SourceBuffer {
         }
     }
 
-    /// Returns the `SourceBufferId`, needed to refer to that SourceBuffer when interacting with
+    /// Returns the `SourceBufferId` needed to refer to that SourceBuffer when interacting with
     /// JavaScript.
     pub(super) fn id(&self) -> SourceBufferId {
         self.id
+    }
+
+    /// Returns the `MediaType` linked to that SourceBuffer.
+    pub(super) fn media_type(&self) -> MediaType {
+        self.media_type
+    }
+
+    /// Returns the mime-type linked to that SourceBuffer.
+    pub(super) fn mime_type(&self) -> &str {
+        &self.typ
     }
 
     /// Returns `true` if there is at least one pending buffer operation that
@@ -360,7 +370,7 @@ impl AddSourceBufferError {
     /// * `err` - The error received from the `jsAppendBuffer` JavaScript function.
     ///
     /// * `mime_type` - Mime-type linked to this SourceBuffer.
-    fn from_js_add_source_buffer_error(
+    pub(super) fn from_js_add_source_buffer_error(
         err: (AddSourceBufferErrorCode, Option<String>),
         mime_type: &str,
     ) -> Self {

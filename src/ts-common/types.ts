@@ -31,7 +31,6 @@ export type MainMessage =
   | MediaObservationMainMessage
   | SourceBufferOperationErrorMainMessage
   | SourceBufferOperationSuccessMainMessage
-  | EndOfStreamErrorMainMessage
   | CodecsSupportUpdateMainMessage
   | UpdateWantedSpeedMainMessage
   | UpdateLoggerLevelMainMessage
@@ -1132,39 +1131,6 @@ export interface SourceBufferOperationErrorMainMessage {
     operation: SourceBufferOperation;
     /** If `true` the error is due to the fact that the buffer is full. */
     isBufferFull: boolean;
-  };
-}
-
-/** Codes that should be sent alongside a `EndOfStreamErrorMainMessage`. */
-export enum EndOfStreamErrorCode {
-  /**
-   * The given `mediaSourceId` was right but there was no MediaSource on the
-   * main thread.
-   *
-   * This looks like the MediaSource has been created on the worker but the
-   * the worker wants to call `endOfStream` on the main thread, which is an
-   * error.
-   */
-  NoMediaSource,
-  /** An error arised when calling `endOfStream` on the MediaSource. */
-  EndOfStreamError,
-}
-
-/**
- * Sent by the main thread to a Worker when the creation of a SourceBuffer, due
- * to a previously-received `CreateSourceBufferWorkerMessage`, failed.
- */
-export interface EndOfStreamErrorMainMessage {
-  type: MainMessageType.EndOfStreamError;
-  value: {
-    /** Identify the MediaSource in question. */
-    mediaSourceId: string;
-    /** Error code to better specify the error encountered. */
-    code: EndOfStreamErrorCode;
-    /** The error's message. */
-    message: string;
-    /** The error's name. */
-    name?: string | undefined;
   };
 }
 

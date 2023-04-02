@@ -915,7 +915,7 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
           onStopPlaybackObservationMessage(data, this.__contentMetadata__);
           break;
         case WorkerMessageType.EndOfStream:
-          onEndOfStreamMessage(data, this.__contentMetadata__, worker);
+          onEndOfStreamMessage(data, this.__contentMetadata__);
           break;
         case WorkerMessageType.MediaOffsetUpdate:
           onMediaOffsetUpdateMessage(data, this.__contentMetadata__);

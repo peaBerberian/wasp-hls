@@ -13,6 +13,7 @@ import initializeWasm, {
   JsTimeRanges,
   MediaObservation,
   MediaType,
+  OtherErrorCode,
   PushedSegmentErrorCode,
 } from "../wasm/wasp_hls";
 import { stopObservingPlayback } from "./bindings";
@@ -212,7 +213,22 @@ export default function MessageReceiver() {
         }
         dispatcher.stop();
 
-        // TODO re-dispatch Error
+        // NOTE: should we go through the dispatcher here? I don't know but we
+        // do in other very similar cases.
+        postMessageToMain({
+          type: WorkerMessageType.Error,
+          value: {
+            contentId: contentInfo.contentId,
+            message:
+              "Error while creating the `MediaSource`: " + data.value.message,
+            errorInfo: {
+              type: "other-error",
+              value: {
+                code: OtherErrorCode.MediaSourceAttachmentError,
+              },
+            },
+          },
+        });
         break;
       }
 
@@ -240,9 +256,12 @@ export default function MessageReceiver() {
         ) {
           return;
         }
-        dispatcher.stop();
 
-        // TODO re-dispatch Error
+        dispatcher.on_source_buffer_creation_error(
+          data.value.sourceBufferId,
+          data.value.code,
+          data.value.message
+        );
         break;
       }
 
@@ -355,10 +374,6 @@ export default function MessageReceiver() {
             );
           }
         }
-        break;
-
-      case MainMessageType.EndOfStreamError:
-        // TODO
         break;
 
       default:

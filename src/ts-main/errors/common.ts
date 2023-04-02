@@ -79,8 +79,8 @@ export const WaspErrorCode = {
   MediaPlaylistRequestOtherError: "MediaPlaylistRequestOtherError",
 
   /**
-   * An error arised when trying to attach the `MediaSource` instance to the
-   * HTMLMediaElement.
+   * An error arised when trying to either create the `MediaSource` or attempt
+   * to attach it to the `MediaSource` HTMLMediaElement.
    */
   MediaSourceAttachmentError: "MediaSourceAttachmentError",
   /**

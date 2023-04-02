@@ -2,8 +2,8 @@ use self::segment_inventory::{BufferedSegmentMetadata, SegmentInventory};
 use self::source_buffers::SourceBufferQueueElement;
 use crate::bindings::{
     jsAttachMediaSource, jsEndOfStream, jsRemoveMediaSource, jsSeek, jsSetMediaOffset,
-    jsSetPlaybackRate, jsStartRebuffering, jsStopRebuffering, AttachMediaSourceErrorCode, JsResult,
-    MediaType, SourceBufferId,
+    jsSetPlaybackRate, jsStartRebuffering, jsStopRebuffering, AddSourceBufferErrorCode,
+    AttachMediaSourceErrorCode, JsResult, MediaType, SourceBufferId,
 };
 use crate::dispatcher::{JsMemoryBlob, JsTimeRanges, MediaObservation, MediaSourceReadyState};
 use crate::Logger;
@@ -284,7 +284,7 @@ impl MediaElementReference {
         media_type: MediaType,
         segment_data: JsMemoryBlob,
     ) -> Result<(), PushSegmentError> {
-        match self.get_buffer_mut(media_type) {
+        match self.buffer_mut_for(media_type) {
             None => Err(PushSegmentError::NoSourceBuffer(media_type)),
 
             Some(sb) => {
@@ -306,7 +306,7 @@ impl MediaElementReference {
         context: SegmentQualityContext,
     ) -> Result<(), PushSegmentError> {
         let has_media_offset = self.media_offset.is_some();
-        match self.get_buffer_mut(media_type) {
+        match self.buffer_mut_for(media_type) {
             None => Err(PushSegmentError::NoSourceBuffer(media_type)),
 
             Some(sb) => {
@@ -355,7 +355,7 @@ impl MediaElementReference {
         start: f64,
         end: f64,
     ) -> Result<(), RemoveDataError> {
-        match self.get_buffer_mut(media_type) {
+        match self.buffer_mut_for(media_type) {
             None => Err(RemoveDataError::NoSourceBuffer(media_type)),
             Some(sb) => {
                 sb.remove_buffer(start, end);
@@ -365,7 +365,7 @@ impl MediaElementReference {
     }
 
     pub(crate) fn flush(&mut self, media_type: MediaType) -> Result<(), RemoveDataError> {
-        match self.get_buffer_mut(media_type) {
+        match self.buffer_mut_for(media_type) {
             None => Err(RemoveDataError::NoSourceBuffer(media_type)),
             Some(sb) => {
                 sb.flush_buffer();
@@ -490,6 +490,22 @@ impl MediaElementReference {
         self.check_end_of_stream();
     }
 
+    /// Method to call if a `SourceBuffer`'s creation asynchronously failed.
+    ///
+    /// Will format and return back the error.
+    pub(crate) fn on_source_buffer_creation_error(
+        &mut self,
+        source_buffer_id: SourceBufferId,
+        error: (AddSourceBufferErrorCode, Option<String>),
+    ) -> Option<(MediaType, SourceBufferCreationError)> {
+        self.source_buffer(source_buffer_id).map(|sb| {
+            (
+                sb.media_type(),
+                AddSourceBufferError::from_js_add_source_buffer_error(error, sb.mime_type()).into(),
+            )
+        })
+    }
+
     /// Returns `true` if a `SourceBuffer` of the given `MediaType` is currently
     /// linked to this `MediaElementReference`.
     pub(crate) fn has_buffer(&self, media_type: MediaType) -> bool {
@@ -524,7 +540,7 @@ impl MediaElementReference {
     /// in which case, `end_buffer` should be re-called once, the new last chronological segment
     /// has been pushed.
     pub(crate) fn end_buffer(&mut self, media_type: MediaType) {
-        match self.get_buffer_mut(media_type) {
+        match self.buffer_mut_for(media_type) {
             None => Logger::warn(&format!(
                 "Asked to end a non existent {} buffer",
                 media_type
@@ -540,7 +556,7 @@ impl MediaElementReference {
     /// `media_type`.
     ///
     /// `None` if no SourceBuffer has been created for this `MediaType`
-    fn get_buffer(&self, media_type: MediaType) -> Option<&source_buffers::SourceBuffer> {
+    fn buffer_for(&self, media_type: MediaType) -> Option<&source_buffers::SourceBuffer> {
         match media_type {
             MediaType::Audio => self.audio_buffer.as_ref(),
             MediaType::Video => self.video_buffer.as_ref(),
@@ -551,7 +567,7 @@ impl MediaElementReference {
     /// `media_type`.
     ///
     /// `None` if no SourceBuffer has been created for this `MediaType`
-    fn get_buffer_mut(
+    fn buffer_mut_for(
         &mut self,
         media_type: MediaType,
     ) -> Option<&mut source_buffers::SourceBuffer> {
@@ -559,6 +575,27 @@ impl MediaElementReference {
             MediaType::Audio => self.audio_buffer.as_mut(),
             MediaType::Video => self.video_buffer.as_mut(),
         }
+    }
+
+    /// Get reference to SourceBuffer attached to this `MediaElementReference` for this
+    /// `SourceBufferId`.
+    ///
+    /// `None` if no SourceBuffer has this `SourceBufferId`
+    fn source_buffer(
+        &self,
+        source_buffer_id: SourceBufferId,
+    ) -> Option<&source_buffers::SourceBuffer> {
+        if let Some(ref sb) = self.audio_buffer {
+            if sb.id() == source_buffer_id {
+                return Some(sb);
+            }
+        }
+        if let Some(ref sb) = self.video_buffer {
+            if sb.id() == source_buffer_id {
+                return Some(sb);
+            }
+        }
+        None
     }
 
     /// Perform checks that all conditions for calling the `endOfStream` MSE API have been reached
@@ -581,7 +618,7 @@ impl MediaElementReference {
     ///   - its last chronological segment has been pushed.
     ///   - it has no operation left to perform.
     fn is_buffer_ended(&self, media_type: MediaType) -> bool {
-        match self.get_buffer(media_type) {
+        match self.buffer_for(media_type) {
             None => true,
             Some(sb) => sb.is_last_segment_pushed() && !sb.has_operations_pending(),
         }

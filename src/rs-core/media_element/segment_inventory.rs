@@ -815,8 +815,9 @@ impl SegmentInventory {
         self.process_pending_updates(updates);
         self.clean_up();
 
-        // TODO The following log produces too much output, but is VERY useful while debugging,
-        // find a better solution
+        // NOTE: The following log produces too much output, but is VERY useful while debugging,
+        // we should probably find a better solution.
+        //
         // Logger::lazy_debug(&|| {
         //     let timeline_str = self
         //         .inventory
