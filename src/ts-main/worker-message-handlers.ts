@@ -56,7 +56,7 @@ import { clearElementSrc, getErrorInformation } from "./utils";
 
 /**
  * Interval, in milliseconds, at which playback observations are sent to the
- * worker when we're currently rebuffering.
+ * worker when it is rebuffering.
  */
 const PLAYBACK_OBSERVATION_INTERVAL_REBUFFERING = 300;
 /**
@@ -212,9 +212,14 @@ export function onCreateMediaSourceMessage(
   } else {
     const { mediaSourceId } = msg.value;
     try {
-      contentMetadata.disposeMediaSource?.();
-      contentMetadata.playbackObserver?.stop();
-      contentMetadata.playbackObserver = null;
+      if (contentMetadata.disposeMediaSource !== null) {
+        contentMetadata.disposeMediaSource();
+        contentMetadata.disposeMediaSource = null;
+      }
+      if (contentMetadata.playbackObserver !== null) {
+        contentMetadata.playbackObserver.stop();
+        contentMetadata.playbackObserver = null;
+      }
 
       const mediaSource = new MediaSource();
 
@@ -299,7 +304,10 @@ export function onClearMediaSourceMessage(
     return;
   }
   try {
-    contentMetadata.disposeMediaSource?.();
+    if (contentMetadata.disposeMediaSource !== null) {
+      contentMetadata.disposeMediaSource();
+      contentMetadata.disposeMediaSource = null;
+    }
     clearElementSrc(mediaElement);
   } catch (err) {
     const error = err instanceof Error ? err : "Unknown Error";
@@ -739,8 +747,14 @@ export function onErrorMessage(
   }
 
   // Make sure resources are freed
-  contentMetadata.disposeMediaSource?.();
-  contentMetadata.playbackObserver?.stop();
+  if (contentMetadata.disposeMediaSource !== null) {
+    contentMetadata.disposeMediaSource();
+    contentMetadata.disposeMediaSource = null;
+  }
+  if (contentMetadata.playbackObserver !== null) {
+    contentMetadata.playbackObserver.stop();
+    contentMetadata.playbackObserver = null;
+  }
   contentMetadata.playbackObserver = null;
 
   const error = formatError(msg);
@@ -1000,8 +1014,14 @@ export function onContentStoppedMessage(
     return false;
   }
   // Make sure resources are freed
-  contentMetadata.disposeMediaSource?.();
-  contentMetadata.playbackObserver?.stop();
+  if (contentMetadata.disposeMediaSource !== null) {
+    contentMetadata.disposeMediaSource();
+    contentMetadata.disposeMediaSource = null;
+  }
+  if (contentMetadata.playbackObserver !== null) {
+    contentMetadata.playbackObserver.stop();
+    contentMetadata.playbackObserver = null;
+  }
   contentMetadata.playbackObserver = null;
   contentMetadata.loadingAborter?.abort(new Error("Content Stopped"));
   return true;
