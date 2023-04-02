@@ -869,7 +869,6 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
             this.__contentMetadata__,
             this.videoElement
           );
-          this.__startListeningToLoadedEvent__();
           break;
         case WorkerMessageType.CreateMediaSource:
           onCreateMediaSourceMessage(
@@ -878,7 +877,6 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
             this.videoElement,
             worker
           );
-          this.__startListeningToLoadedEvent__();
           break;
         case WorkerMessageType.UpdateMediaSourceDuration:
           onUpdateMediaSourceDurationMessage(
@@ -995,6 +993,28 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
             )
           ) {
             this.trigger("rebufferingEnded", null);
+
+            // If still loading, send loaded event as soon as the
+            // `HTMLMediaElement` say we can
+            if (this.__contentMetadata__?.loadingAborter !== undefined) {
+              waitForLoad(
+                this.videoElement,
+                this.__contentMetadata__.loadingAborter.signal
+              ).then(() => {
+                if (this.__contentMetadata__ !== null) {
+                  this.__contentMetadata__.loadingAborter = undefined;
+                }
+                this.trigger("playerStateChange", PlayerState.Loaded);
+              },
+                (reason) => {
+                  if (this.__contentMetadata__ !== null) {
+                    this.__contentMetadata__.loadingAborter = undefined;
+                  }
+                  const err = reason instanceof Error ? reason : "Unknown reason";
+                  logger.info("Could not load content:", err);
+                }
+              );
+            }
           }
           break;
 
@@ -1036,36 +1056,5 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
         value: level,
       });
     }
-  }
-
-  /**
-   * Start listening to HTMLMediaElement's events to know when the content can
-   * be considered as loaded or aborted.
-   *
-   * TODO it might be better to have the `WaspHlsPlayer` send its own "loaded"
-   * event to better control playback.
-   */
-  private __startListeningToLoadedEvent__(): void {
-    const contentMetadata = this.__contentMetadata__;
-    if (contentMetadata === null) {
-      return;
-    } else if (contentMetadata.loadingAborter === undefined) {
-      return;
-    }
-    waitForLoad(this.videoElement, contentMetadata.loadingAborter.signal).then(
-      () => {
-        if (this.__contentMetadata__ !== null) {
-          this.__contentMetadata__.loadingAborter = undefined;
-        }
-        this.trigger("playerStateChange", PlayerState.Loaded);
-      },
-      (reason) => {
-        if (this.__contentMetadata__ !== null) {
-          this.__contentMetadata__.loadingAborter = undefined;
-        }
-        const err = reason instanceof Error ? reason : "Unknown reason";
-        logger.info("Could not load content:", err);
-      }
-    );
   }
 }

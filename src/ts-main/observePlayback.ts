@@ -111,6 +111,6 @@ export default function observePlayback(
         return;
       }
       generateObservation(PlaybackTickReason.RegularInterval);
-    }, 1000);
+    }, 500);
   }
 }
