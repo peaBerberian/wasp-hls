@@ -49,10 +49,21 @@ import {
   WaspSourceBufferCreationError,
   WaspSourceBufferError,
 } from "./errors";
-import observePlayback from "./observePlayback";
+import PlaybackObserver from "./observePlayback";
 import postMessageToWorker from "./postMessageToWorker";
 import { ContentMetadata } from "./types";
 import { clearElementSrc, getErrorInformation } from "./utils";
+
+/**
+ * Interval, in milliseconds, at which playback observations are sent to the
+ * worker when we're currently rebuffering.
+ */
+const PLAYBACK_OBSERVATION_INTERVAL_REBUFFERING = 300;
+/**
+ * Interval, in milliseconds, at which playback observations are sent to the
+ * worker in good playback conditions.
+ */
+const PLAYBACK_OBSERVATION_INTERVAL_REGULAR = 1000;
 
 /**
  * Handles `AttachMediaSourceWorkerMessage` messages.
@@ -74,9 +85,10 @@ export function onAttachMediaSourceMessage(
     );
     return;
   }
-  if (contentMetadata.stopPlaybackObservations !== null) {
-    contentMetadata.stopPlaybackObservations();
-    contentMetadata.stopPlaybackObservations = null;
+
+  if (contentMetadata.playbackObserver !== null) {
+    contentMetadata.playbackObserver.stop();
+    contentMetadata.playbackObserver = null;
   }
 
   if (msg.value.handle !== undefined) {
@@ -94,7 +106,6 @@ export function onAttachMediaSourceMessage(
     }
   };
   contentMetadata.sourceBuffers = [];
-  contentMetadata.stopPlaybackObservations = null;
 }
 
 /**
@@ -202,7 +213,8 @@ export function onCreateMediaSourceMessage(
     const { mediaSourceId } = msg.value;
     try {
       contentMetadata.disposeMediaSource?.();
-      contentMetadata.stopPlaybackObservations?.();
+      contentMetadata.playbackObserver?.stop();
+      contentMetadata.playbackObserver = null;
 
       const mediaSource = new MediaSource();
 
@@ -216,7 +228,6 @@ export function onCreateMediaSourceMessage(
       contentMetadata.mediaSource = mediaSource;
       contentMetadata.disposeMediaSource = disposeMediaSource;
       contentMetadata.sourceBuffers = [];
-      contentMetadata.stopPlaybackObservations = null;
     } catch (err) {
       const { name, message } = getErrorInformation(
         err,
@@ -504,12 +515,16 @@ export function onStartPlaybackObservationMessage(
     );
     return;
   }
-  if (contentMetadata.stopPlaybackObservations !== null) {
-    contentMetadata.stopPlaybackObservations();
-    contentMetadata.stopPlaybackObservations = null;
+  if (contentMetadata.playbackObserver !== null) {
+    contentMetadata.playbackObserver.stop();
+    contentMetadata.playbackObserver = null;
   }
-  contentMetadata.stopPlaybackObservations = observePlayback(
+  contentMetadata.playbackObserver = new PlaybackObserver(
     mediaElement,
+    PLAYBACK_OBSERVATION_INTERVAL_REBUFFERING
+  );
+  contentMetadata.playbackObserver.addEventListener(
+    "newObservation",
     (value) => {
       const sourceBuffersBuffered: Partial<
         Record<SourceBufferId, Float64Array>
@@ -529,6 +544,7 @@ export function onStartPlaybackObservationMessage(
       });
     }
   );
+  contentMetadata.playbackObserver.start();
 }
 
 /**
@@ -548,9 +564,9 @@ export function onStopPlaybackObservationMessage(
     );
     return;
   }
-  if (contentMetadata.stopPlaybackObservations !== null) {
-    contentMetadata.stopPlaybackObservations();
-    contentMetadata.stopPlaybackObservations = null;
+  if (contentMetadata.playbackObserver !== null) {
+    contentMetadata.playbackObserver.stop();
+    contentMetadata.playbackObserver = null;
   }
 }
 
@@ -650,6 +666,9 @@ export function onRebufferingStartedMessage(
     logger.info("API: Ignoring rebuffering start due to wrong `mediaSourceId`");
     return false;
   }
+  contentMetadata.playbackObserver?.updateMinimumObservationInterval(
+    PLAYBACK_OBSERVATION_INTERVAL_REBUFFERING
+  );
   if (msg.value.updatePlaybackRate) {
     mediaElement.playbackRate = 0;
   }
@@ -682,6 +701,9 @@ export function onRebufferingEndedMessage(
     logger.info("API: Ignoring rebuffering end due to wrong `mediaSourceId`");
     return false;
   }
+  contentMetadata.playbackObserver?.updateMinimumObservationInterval(
+    PLAYBACK_OBSERVATION_INTERVAL_REGULAR
+  );
   if (mediaElement.playbackRate === 0 && contentMetadata.wantedSpeed !== 0) {
     mediaElement.playbackRate = contentMetadata.wantedSpeed;
   }
@@ -718,7 +740,8 @@ export function onErrorMessage(
 
   // Make sure resources are freed
   contentMetadata.disposeMediaSource?.();
-  contentMetadata.stopPlaybackObservations?.();
+  contentMetadata.playbackObserver?.stop();
+  contentMetadata.playbackObserver = null;
 
   const error = formatError(msg);
   contentMetadata.error = error;
@@ -978,7 +1001,8 @@ export function onContentStoppedMessage(
   }
   // Make sure resources are freed
   contentMetadata.disposeMediaSource?.();
-  contentMetadata.stopPlaybackObservations?.();
+  contentMetadata.playbackObserver?.stop();
+  contentMetadata.playbackObserver = null;
   contentMetadata.loadingAborter?.abort(new Error("Content Stopped"));
   return true;
 }

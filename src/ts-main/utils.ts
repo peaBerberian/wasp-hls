@@ -69,7 +69,8 @@ export function requestStopForContent(
   worker: Worker | null
 ): void {
   // Preventively free some resource that should not impact the Worker much.
-  metadata.stopPlaybackObservations?.();
+  metadata.playbackObserver?.stop();
+  metadata.playbackObserver = null;
   metadata.loadingAborter?.abort();
 
   if (worker !== null) {

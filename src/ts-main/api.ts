@@ -357,7 +357,7 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
       currentAudioTrack: undefined,
       currVariant: undefined,
       lockedVariant: null,
-      stopPlaybackObservations: null,
+      playbackObserver: null,
       isRebuffering: false,
       mediaOffset: undefined,
       wantedSpeed: 1,

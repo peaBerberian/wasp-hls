@@ -1,6 +1,7 @@
 import QueuedSourceBuffer from "../ts-common/QueuedSourceBuffer";
 import { AudioTrackInfo, VariantInfo } from "../ts-common/types";
 import { WaspError } from "./errors";
+import PlaybackObserver from "./observePlayback";
 
 /**
  * Structure storing metadata associated to a content being played by a
@@ -70,10 +71,10 @@ export interface ContentMetadata {
   }>;
 
   /**
-   * Callback allowing to stop playback observations currently pending.
-   * `null` if no "playback observation" is currently pending.
+   * Class allowing to produce playback observations.
+   * `null` if no "playback observation" is currently listened to.
    */
-  stopPlaybackObservations: null | (() => void);
+  playbackObserver: PlaybackObserver | null;
 
   /** If `true`, we are currently in a rebuffering period. */
   isRebuffering: boolean;
