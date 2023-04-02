@@ -13,9 +13,9 @@ const ADAPTIVE_FACTOR: f64 = 0.8;
 
 impl AdaptiveQualitySelector {
     /// Creates new `AdaptiveQualitySelector`.
-    pub(crate) fn new() -> Self {
+    pub(crate) fn new(initial_bandwidth: f64) -> Self {
         Self {
-            bandwidth_estimator: BandwithEstimator::new(),
+            bandwidth_estimator: BandwithEstimator::new(initial_bandwidth),
         }
     }
 
@@ -29,10 +29,8 @@ impl AdaptiveQualitySelector {
     /// Returns the current estimate produced by the `AdaptiveQualitySelector`.
     ///
     /// Returns `None` if it does not have enough data to produce an estimate yet.
-    pub(crate) fn get_estimate(&self) -> Option<f64> {
-        self.bandwidth_estimator
-            .get_estimate()
-            .map(|x| x * ADAPTIVE_FACTOR)
+    pub(crate) fn get_estimate(&self) -> f64 {
+        self.bandwidth_estimator.get_estimate() * ADAPTIVE_FACTOR
     }
 
     pub(crate) fn reset(&mut self) {

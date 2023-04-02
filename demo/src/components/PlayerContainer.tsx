@@ -35,6 +35,7 @@ export default React.memo(function PlayerContainer({
       .initialize({
         workerUrl: "./worker.js",
         wasmUrl: "./wasp_hls_bg.wasm",
+        initialBandwidth: 500000,
       })
       .then(
         () => {

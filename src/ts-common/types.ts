@@ -900,6 +900,12 @@ export interface InitializationMainMessage {
 
     /** Initial configuration for the player. */
     initialConfig: WaspHlsPlayerConfig;
+
+    /**
+     * An initial bandwidth estimate which will be relied on initially, in bits
+     * per second.
+     */
+    initialBandwidth: number;
   };
 }
 

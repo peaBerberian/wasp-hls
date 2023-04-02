@@ -7,7 +7,7 @@ to be "initialized".
 
 That initialization task is the step during which the two external parts of
 the `WaspHlsPlayer`, namely its worker file and WebAssembly file are
-communicated to it.
+setup.
 
 Both of those files can be retrieved in [in the release page](https://github.com/peaBerberian/wasp-hls/releases),
 note that you MUST chose the files linked to the `WaspHlsPlayer`'s version used
@@ -24,6 +24,13 @@ player
 
     // URL to the WebAssembly file
     wasmUrl: "https://www.example.com/wasp_hls_bg.wasm",
+
+    // Optional initial bandwidth estimate, in bits per seconds.
+    // Will be relied on before the `WaspHlsPlayer` is able to produce its own
+    // precize estimate.
+    // Can be unset or undefined to let the `WaspHlsPlayer` define its own,
+    // poor, initial value.
+    initialBandwidth: 200000,
   })
   .then(
     () => {
@@ -86,9 +93,18 @@ impact is relatively small.
 ## Syntax
 
 ```js
+// Without an initial bandwidth setup:
 const initializationPromise = player.initialize({
   workerUrl,
   wasmUrl,
+});
+
+// With an initial bandwidth, generally to start playing with an appropriate
+// quality directly:
+const initializationPromise = player.initialize({
+  workerUrl,
+  wasmUrl,
+  initialBandwidth,
 });
 ```
 
@@ -102,6 +118,14 @@ const initializationPromise = player.initialize({
 
      - _wasmUrl_ (`string`): URL to the WebAssembly file, that you have
        hosted.
+
+     It has one additional optional property:
+
+     - _initialBandwidth_ (`number|undefined`): An initial bandwidth estimate,
+       in bits per second, which will be relied on initially when starting to
+       load the first content. If `undefined` or not set, the `WaspHlsPlayer`
+       will define its own initial bandwidth, generally of a poor quality (but
+       will be able to provide a better estimate soon enough).
 
 - **return value**:
 

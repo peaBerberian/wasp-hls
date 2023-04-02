@@ -20,10 +20,10 @@ impl Dispatcher {
     /// Create a new `Dispatcher` allowing to load a content on the HTMLMediaElement that should be
     /// linked to it on the JavaScript-side.
     #[wasm_bindgen(constructor)]
-    pub fn new() -> Self {
+    pub fn new(initial_bandwidth: f64) -> Self {
         Dispatcher {
             ready_state: PlayerReadyState::Stopped,
-            adaptive_selector: AdaptiveQualitySelector::new(),
+            adaptive_selector: AdaptiveQualitySelector::new(initial_bandwidth),
             playlist_store: None,
             requester: Requester::new(),
             media_element_ref: MediaElementReference::new(),
@@ -137,11 +137,5 @@ impl Dispatcher {
 
     pub fn set_media_playlist_backoff_max(&mut self, max: f64) {
         self.requester.update_media_playlist_backoff_max(max);
-    }
-}
-
-impl Default for Dispatcher {
-    fn default() -> Self {
-        Self::new()
     }
 }

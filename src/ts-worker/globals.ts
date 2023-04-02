@@ -4,9 +4,14 @@ import QueuedSourceBuffer from "../ts-common/QueuedSourceBuffer";
 import { SourceBufferId, WaspHlsPlayerConfig } from "../ts-common/types";
 import { Dispatcher, InitOutput, MediaType } from "../wasm/wasp_hls";
 
-export interface WorkerContext {
+export interface WorkerInitializationOptions {
   hasMseInWorker: boolean;
   canDemuxMpeg2Ts: boolean;
+  /**
+   * An initial bandwidth estimate which will be relied on initially, in bits
+   * per second.
+   */
+  initialBandwidth: number;
 }
 
 class PlayerInstance {
@@ -26,16 +31,16 @@ class PlayerInstance {
   public start(
     wasm: InitOutput,
     config: WaspHlsPlayerConfig,
-    context: WorkerContext
+    opts: WorkerInitializationOptions
   ) {
-    const dispatcher = new Dispatcher();
+    const dispatcher = new Dispatcher(opts.initialBandwidth);
     updateDispatcherConfig(dispatcher, config);
     this._instanceInfo = {
       wasm,
       dispatcher,
       content: null,
-      hasMseInWorker: context.hasMseInWorker,
-      canDemuxMpeg2Ts: context.canDemuxMpeg2Ts,
+      hasMseInWorker: opts.hasMseInWorker,
+      canDemuxMpeg2Ts: opts.canDemuxMpeg2Ts,
     };
   }
 

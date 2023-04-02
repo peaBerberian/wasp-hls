@@ -54,12 +54,11 @@ impl Dispatcher {
     /// and pushing segments etc.).
     pub(super) fn check_best_variant(&mut self) {
         if let Some(pl_store) = self.playlist_store.as_mut() {
-            if let Some(bandwidth) = self.adaptive_selector.get_estimate() {
-                Logger::debug(&format!("Core: New bandwidth estimate: {}", bandwidth));
-                let actually_used_bandwidth = bandwidth / self.media_element_ref.wanted_speed();
-                let update = pl_store.update_curr_bandwidth(actually_used_bandwidth);
-                self.handle_variant_update(update, false);
-            }
+            let bandwidth = self.adaptive_selector.get_estimate();
+            Logger::debug(&format!("Core: New bandwidth estimate: {}", bandwidth));
+            let actually_used_bandwidth = bandwidth / self.media_element_ref.wanted_speed();
+            let update = pl_store.update_curr_bandwidth(actually_used_bandwidth);
+            self.handle_variant_update(update, false);
         }
     }
 
@@ -454,8 +453,8 @@ impl Dispatcher {
             }
             Ok(pl) => {
                 Logger::info("Core: Multivariant Playlist parsed successfully");
-                // TODO lowest/latest bandwidth first? Option?
-                match PlaylistStore::try_new(pl, 500_000.) {
+                let estimate = self.adaptive_selector.get_estimate();
+                match PlaylistStore::try_new(pl, estimate) {
                     Ok(pl_store) => {
                         self.playlist_store = Some(pl_store);
                         self.check_ready_to_load_media_playlists();

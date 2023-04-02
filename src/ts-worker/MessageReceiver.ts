@@ -21,7 +21,7 @@ import {
   ContentInfo,
   playerInstance,
   updateDispatcherConfig,
-  WorkerContext,
+  WorkerInitializationOptions,
 } from "./globals";
 import postMessageToMain from "./postMessage";
 import { resetTransmuxer } from "./transmux";
@@ -54,10 +54,12 @@ export default function MessageReceiver() {
         }
         logger.setLevel(data.value.logLevel);
         wasInitializedCalled = true;
-        const { wasmUrl, hasMseInWorker, canDemuxMpeg2Ts } = data.value;
+        const { wasmUrl, hasMseInWorker, canDemuxMpeg2Ts, initialBandwidth } =
+          data.value;
         initialize(wasmUrl, data.value.initialConfig, {
           hasMseInWorker,
           canDemuxMpeg2Ts,
+          initialBandwidth,
         });
         break;
 
@@ -401,11 +403,11 @@ function postUnitializedWorkerError(contentId: string): void {
 function initialize(
   wasmUrl: string,
   config: WaspHlsPlayerConfig,
-  context: WorkerContext
+  opts: WorkerInitializationOptions
 ) {
   initializeWasm(fetch(wasmUrl))
     .then((wasm) => {
-      playerInstance.start(wasm, config, context);
+      playerInstance.start(wasm, config, opts);
       postMessageToMain({ type: WorkerMessageType.Initialized, value: null });
     })
     .catch((err) => {

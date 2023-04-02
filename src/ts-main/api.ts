@@ -153,6 +153,11 @@ export interface InitializationOptions {
   workerUrl: string;
   /** Url to the WebAssembly file. */
   wasmUrl: string;
+  /**
+   * An initial bandwidth estimate which will be relied on initially, in bits
+   * per second.
+   */
+  initialBandwidth?: number | undefined;
 }
 
 /**
@@ -276,14 +281,13 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
         throw new Error("WaspHlsPlayer already initialized");
       }
       this.initializationStatus = InitializationStatus.Initializing;
-      const { wasmUrl, workerUrl } = opts;
       let resolveProm = noop;
       let rejectProm = noop;
       const ret = new Promise<void>((resolve, reject) => {
         resolveProm = resolve;
         rejectProm = reject;
       });
-      this.__startWorker__(workerUrl, wasmUrl, resolveProm, rejectProm);
+      this.__startWorker__(opts, resolveProm, rejectProm);
       return ret;
     } catch (err) {
       this.initializationStatus = InitializationStatus.Errored;
@@ -782,21 +786,19 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
 
   /**
    * Initialize Worker logic and bind its events.
-   * @param {string} workerUrl - URL to the WebWorker JavaScript file.
-   * @param {string} wasmUrl - URL to the WebAssembly file.
+   * @param {Object} opts - Options given in the `initialize` call.
    * @param {Function} resolveProm - Callback to call once the initialization
    * succeeded.
    * @param {Function} resolveProm - Callback to call if the initialization
    * failed, with the corresponding error in argument.
    */
   private __startWorker__(
-    workerUrl: string,
-    wasmUrl: string,
+    opts: InitializationOptions,
     resolveProm: () => void,
     rejectProm: (err: WaspInitializationError) => void
   ): void {
     let mayStillReject = true;
-    const worker = new Worker(workerUrl);
+    const worker = new Worker(opts.workerUrl);
     this.__worker__ = worker;
     postMessageToWorker(worker, {
       type: MainMessageType.Initialization,
@@ -806,7 +808,8 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
           /* eslint-disable-next-line */
           (MediaSource as any).canConstructInDedicatedWorker === true,
         canDemuxMpeg2Ts: canDemuxMpeg2Ts(),
-        wasmUrl,
+        wasmUrl: opts.wasmUrl,
+        initialBandwidth: opts.initialBandwidth ?? 0,
         logLevel: logger.getLevel(),
         initialConfig: this.__config__,
       },

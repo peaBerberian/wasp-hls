@@ -15,15 +15,17 @@ pub(crate) struct BandwithEstimator {
     fast_ewma: Ewma,
     slow_ewma: Ewma,
     bytes_sampled: u64,
+    initial_bandwidth: f64,
 }
 
 impl BandwithEstimator {
     /// Creates a new `BandwithEstimator`
-    pub(crate) fn new() -> Self {
+    pub(crate) fn new(initial_bandwidth: f64) -> Self {
         Self {
             fast_ewma: Ewma::new(FAST_EWMA_HALF_LIFE),
             slow_ewma: Ewma::new(SLOW_EWMA_HALF_LIFE),
             bytes_sampled: 0,
+            initial_bandwidth,
         }
     }
 
@@ -46,15 +48,13 @@ impl BandwithEstimator {
     /// Get the current estimate made by the `BandwithEstimator`.
     ///
     /// Returns `None` if it does not have enough data to produce a estimate yet.
-    pub(crate) fn get_estimate(&self) -> Option<f64> {
+    pub(crate) fn get_estimate(&self) -> f64 {
         if self.bytes_sampled < MINIMUM_TOTAL_BYTES {
-            None
+            self.initial_bandwidth
         } else {
-            Some(
-                self.fast_ewma
-                    .get_estimate()
-                    .min(self.slow_ewma.get_estimate()),
-            )
+            self.fast_ewma
+                .get_estimate()
+                .min(self.slow_ewma.get_estimate())
         }
     }
 

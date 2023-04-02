@@ -52,5 +52,8 @@ player
   );
 ```
 
+It's also possible to communicate an initial bandwidth estimate through the
+`initialize` method to improve the `WaspHlsPlayer`'s accuracy regarding its
+initially loaded quality.
 For more information on this "initialization" step, you can consult [the API
 documentation page dedicated to it, here](../API/Initialization.md).
