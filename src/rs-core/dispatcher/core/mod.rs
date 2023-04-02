@@ -720,10 +720,73 @@ impl Dispatcher {
         self.segment_selectors
             .restart_from_position(wanted_pos - 0.2);
 
-        // TODO better logic than aborting everything on seek
-        self.requester.abort_all_segments();
+        self.requester.lock_segment_requests();
         self.requester.update_base_position(Some(wanted_pos));
-        self.check_segments_to_request()
+        self.check_requested_segments_still_needed();
+        self.check_segments_to_request();
+        self.requester.unlock_segment_requests();
+    }
+
+    /// Check that all pending initialization and media requests still correspond to the most
+    /// needed segments.
+    ///
+    /// If not, abort the corresponding pending requests.
+    ///
+    /// This method is intended to be called on exceptional events which may have led to a
+    /// potential change of segment priorization, such as a seek.
+    fn check_requested_segments_still_needed(&mut self) {
+        [MediaType::Audio, MediaType::Video]
+            .into_iter()
+            .for_each(|mt| {
+                let pl_store = if let Some(playlist_store) = self.playlist_store.as_ref() {
+                    playlist_store
+                } else {
+                    self.requester.abort_segments_with_type(mt);
+                    return;
+                };
+
+                let inventory = self.media_element_ref.inventory(mt);
+                if let Some(seg_info) = pl_store.curr_media_playlist_segment_info(mt) {
+                    match self.segment_selectors.get_mut(mt).most_needed_segment(
+                        seg_info.0,
+                        &seg_info.1,
+                        inventory,
+                    ) {
+                        NextSegmentInfo::None => self.requester.abort_segments_with_type(mt),
+                        NextSegmentInfo::InitSegment(i) => {
+                            if !self
+                                .requester
+                                .is_requesting_segment(mt, i.uri(), i.byte_range())
+                            {
+                                Logger::debug(&format!(
+                                    "Core: {mt} init segment request not needed anymore, abort."
+                                ));
+                                self.requester.abort_segments_with_type(mt);
+                            } else {
+                                Logger::debug(&format!(
+                                    "Core: {mt} init segment request still needed."
+                                ));
+                            }
+                        }
+                        NextSegmentInfo::MediaSegment(seg) => {
+                            if !self.requester.is_requesting_segment(
+                                mt,
+                                seg.url(),
+                                seg.byte_range(),
+                            ) {
+                                Logger::debug(&format!(
+                                    "Core: {mt} media segment request not needed anymore, abort."
+                                ));
+                                self.requester.abort_segments_with_type(mt);
+                            } else {
+                                Logger::debug(&format!(
+                                    "Core: {mt} media segment request still needed."
+                                ));
+                            }
+                        }
+                    }
+                }
+            });
     }
 
     fn check_segment_to_request_for_type(&mut self, media_type: MediaType) {

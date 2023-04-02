@@ -268,7 +268,7 @@ pub fn parse_iso_8601_date(value: &str, base_offset: usize) -> Option<f64> {
     Some(result)
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ByteRange {
     pub first_byte: usize,
     pub last_byte: usize,

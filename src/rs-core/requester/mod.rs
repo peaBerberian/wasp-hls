@@ -572,6 +572,24 @@ impl Requester {
         self.request_segment_now(&url, byte_range, media_type, None, context);
     }
 
+    /// Returns `true` if a segment with the given identifying characteristics is currently either
+    /// loading or scheduled.
+    ///
+    /// Returns `false` if the segment's request is either already finished or if it has never been
+    /// communicated to the `Requester`.
+    pub(crate) fn is_requesting_segment(
+        &mut self,
+        media_type: MediaType,
+        url: &Url,
+        byte_range: Option<&ByteRange>,
+    ) -> bool {
+        self.pending_segment_requests.iter().any(|s| {
+            s.media_type == media_type && &s.url == url && s.byte_range.as_ref() == byte_range
+        }) || self.segment_waiting_queue.iter().any(|s| {
+            s.media_type == media_type && &s.url == url && s.byte_range.as_ref() == byte_range
+        })
+    }
+
     /// Fetch a segment in the right format through the given `url`.
     ///
     /// Depending on the estimated request priority (based on the `base_position`
