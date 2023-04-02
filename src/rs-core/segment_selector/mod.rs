@@ -5,12 +5,34 @@ use crate::{
     Logger,
 };
 
+/// Indicate the most prioritary segment to load according to the given situation.
+///
+/// Internally, the `NextSegmentSelectors` contains a `NextSegmentSelector` for each type of media,
+/// each keeping a state keeping track of which segment has already been loaded (or as written
+/// here, "validated"), which did not need to be loaded and other state helping it toward
+/// communicating which segment it thinks should be loaded next.
 pub(crate) struct NextSegmentSelectors {
+    /// Segment-selection logic for the audio media type
     audio: NextSegmentSelector,
+    /// Segment-selection logic for the video media type
     video: NextSegmentSelector,
 }
 
 impl NextSegmentSelectors {
+    /// Create a new `NextSegmentSelectors`, which will start loading segments from `base_pos` (as a
+    /// playlist time in seconds) and will stop loading segments if enough to fill the buffer until
+    /// `base_pos + buffer_goal` are already loaded.
+    ///
+    /// As the current playback position advances, it is then recommended to update the base
+    /// position (here indicated by `base_pos`) regularly by calling the `advance_position` method
+    /// on the returned instance.
+    ///
+    /// If the position completely changes due to a seek, or if the buffer is emptied due to an
+    /// exceptional event, the `restart_from_position` method should be called instead to prevent
+    /// the `NextSegmentSelector`s from just continuing to provide the following segments.
+    ///
+    /// Likewise, the buffer goal (here indicated by `buffer_goal`), can be updated by calling the
+    /// `update_buffer_goal` method.
     pub(crate) fn new(base_pos: f64, buffer_goal: f64) -> Self {
         Self {
             audio: NextSegmentSelector::new(base_pos, buffer_goal),
@@ -18,46 +40,90 @@ impl NextSegmentSelectors {
         }
     }
 
+    /// Re-sets to its initial state all underlying `NextSegmentSelector` instances, starting at the given "base position".
+    ///
+    /// Resetting the `NextSegmentSelector`s this way will lead them to lose much of their internal
+    /// state they keep to know which segment should be loaded next. As such, this method should
+    /// most likely only be called when stopping the current content or when switching to another
+    /// content.
+    pub(crate) fn reset_selectors(&mut self, pos: f64) {
+        let pos = f64::max(0., pos);
+        self.audio.reset(pos);
+        self.video.reset(pos);
+    }
+
+    /// Updates the "base position" - used by the `NextSegmentSelectors` and its inner
+    /// `NextSegmentSelector`s - after it advances due to regular content playback.
+    ///
+    /// The "base position" is the starting position, in playlist time in seconds, from which a
+    /// `NextSegmentSelector` might want to look for segments. It is generally intended to be set to
+    /// the current position.
+    /// As such, the "base position" has to be updated regularly, to improve the
+    /// `NextSegmentSelector`'s accuracy.
+    ///
+    /// /!\ This method should only be called when the position advances due to regular playback.
+    /// In case of a seek, or to reset the `NextSegmentSelector` after the buffer has been emptied,
+    /// `restart_from_position` should be called instead so the `NextSegmentSelector`s don't just
+    /// continue to provide you with the next chronological segment as they do normally (with some
+    /// exceptions).
+    pub(crate) fn advance_position(&mut self, pos: f64) {
+        self.audio.advance_position(pos);
+        self.video.advance_position(pos);
+    }
+
+    /// Force the `NextSegmentSelectors` and its inner `NextSegmentSelector`s to re-consider
+    /// segments from the new given "base position", generally due to a seek or to
+    /// exceptional situations like after emptying the buffer.
+    ///
+    /// The "base position" is the starting position, in playlist time in seconds, from which a
+    /// `NextSegmentSelector` might want to look for segments. It is generally intended to be set to
+    /// the current position.
+    ///
+    /// This method is NOT intended to be called when playback regularly advances, in which case you
+    /// should call `advance_position` instead.
+    ///
+    /// The big difference between the two is that `advance_position` allows the
+    /// `NextSegmentSelector`s to still rely on their respectively last returned segments to
+    /// generally return the consecutive ones.
+    /// When seeking or flushing buffers, you generally don't want to pick-up from the last returned
+    /// segment, as the position might have completely changed. You want to restart from scratch
+    /// instead.
+    pub(crate) fn restart_from_position(&mut self, pos: f64) {
+        let pos = f64::max(0., pos);
+        self.audio.restart_from_position(pos);
+        self.video.restart_from_position(pos);
+    }
+
+    /// Update the "buffer_goal" which is the amount of media data, in seconds of media, ahead of
+    /// the current "base position" that should be loaded.
+    ///
+    /// Once that amount is reached, no further segment will be returned by the
+    /// `NextSegmentSelectors` until either the buffer goal is raised again, or most probably until
+    /// the "base position" (which generally represents the current position), is updated.
     pub(crate) fn update_buffer_goal(&mut self, buffer_goal: f64) {
         self.audio.buffer_goal = buffer_goal;
         self.video.buffer_goal = buffer_goal;
     }
 
-    pub(crate) fn get(&self, media_type: MediaType) -> &NextSegmentSelector {
-        match media_type {
-            MediaType::Audio => &self.audio,
-            MediaType::Video => &self.video,
-        }
-    }
-
+    /// Get the unique `NextSegmentSelector` for the type of media communicated as a mutable
+    /// reference.
+    ///
+    /// Obtaining the type-specific `NextSegmentSelector` then allows to obtain which segment have
+    /// to be loaded next for that particular type.
+    ///
+    /// Because most of the `NextSegmentSelector`'s method might update its internal state, you
+    /// generally want to obtain a mutable reference of it.
     pub(crate) fn get_mut(&mut self, media_type: MediaType) -> &mut NextSegmentSelector {
         match media_type {
             MediaType::Audio => &mut self.audio,
             MediaType::Video => &mut self.video,
         }
     }
-
-    pub(crate) fn update_base_position(&mut self, pos: f64) {
-        self.audio.update_base_position(pos);
-        self.video.update_base_position(pos);
-    }
-
-    pub(crate) fn reset(&mut self, pos: f64) {
-        let pos = f64::max(0., pos);
-        self.audio.reset(pos);
-        self.video.reset(pos);
-    }
-
-    pub(crate) fn restart_from(&mut self, pos: f64) {
-        let pos = f64::max(0., pos);
-        self.audio.restart_from(pos);
-        self.video.restart_from(pos);
-    }
 }
 
 pub(crate) struct NextSegmentSelector {
     /// Interface allowing to keep track of which audio and video segments we need to load next.
-    segment_queue: SegmentQueue,
+    segment_cursor: SegmentCursor,
 
     /// Approximation of the current playback position, which will be used as a base position where
     /// segments should start to be loaded.
@@ -95,18 +161,25 @@ pub(crate) struct NextSegmentSelector {
     skipped_segments: Vec<SegmentTimeInfo>,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum InitializationSegmentSelectorStatus {
-    None,
-    Unvalidated,
-    Validated,
-}
-
 impl NextSegmentSelector {
+    /// Create a new `NextSegmentSelector`, which will start loading segments from `base_pos` (as a
+    /// playlist time in seconds) for a single type of media and will stop loading segments if
+    /// enough to fill the buffer until `base_pos + buffer_goal` are already loaded.
+    ///
+    /// As the current playback position advances, it is then recommended to update the base
+    /// position (here indicated by `base_pos`) regularly by calling the `advance_position` method
+    /// on the returned instance.
+    ///
+    /// If the position completely changes due to a seek, or if the buffer is emptied due to an
+    /// exceptional event, the `restart_from_position` method should be called instead to prevent
+    /// the `NextSegmentSelector`s from just continuing to provide the following segments.
+    ///
+    /// Likewise, the buffer goal (here indicated by `buffer_goal`), can be updated by calling the
+    /// `update_buffer_goal` method.
     fn new(base_pos: f64, buffer_goal: f64) -> Self {
         let real_base_pos = f64::max(0., base_pos);
         Self {
-            segment_queue: SegmentQueue::new(base_pos),
+            segment_cursor: SegmentCursor::new(base_pos),
             base_pos: real_base_pos,
             buffer_goal,
             last_media_id: None,
@@ -116,40 +189,48 @@ impl NextSegmentSelector {
     }
 
     /// Reset the `NextSegmentSelector` state, as if no media segment nor init segment was
-    /// returned by it, and start back from the given position.
+    /// returned by it, and start back from the given "base position".
     pub(crate) fn reset(&mut self, base_pos: f64) {
         self.base_pos = f64::max(0., base_pos);
         self.init_status = InitializationSegmentSelectorStatus::Unvalidated;
         self.last_media_id = None;
-        self.segment_queue = SegmentQueue::new(base_pos);
+        self.segment_cursor = SegmentCursor::new(base_pos);
         self.skipped_segments.clear();
     }
 
-    pub(crate) fn restart_from(&mut self, base_pos: f64) {
-        self.base_pos = f64::max(0., base_pos);
-        self.segment_queue = SegmentQueue::new(base_pos);
-        self.skipped_segments.clear();
-    }
-
-    pub(crate) fn update_base_position(&mut self, base_pos: f64) {
+    /// See `NextSegmentSelectors`'s `advance_position` method.
+    pub(crate) fn advance_position(&mut self, base_pos: f64) {
         self.base_pos = f64::max(0., base_pos);
         self.clean_skipped_segments();
     }
 
-    /// Indicate that the initialization segment was requested and as such, don't need to be
-    /// returned anymore by `most_needed_segment`.
+    /// See `NextSegmentSelectors`'s `restart_from_position` method.
+    pub(crate) fn restart_from_position(&mut self, base_pos: f64) {
+        self.base_pos = f64::max(0., base_pos);
+        self.segment_cursor = SegmentCursor::new(base_pos);
+        self.skipped_segments.clear();
+    }
+
+    /// Calling this method allows to indicate that the initialization segment was requested and as
+    /// such, don't need to be returned anymore by this `NextSegmentSelector`.
     pub(crate) fn validate_init(&mut self) {
         self.init_status = InitializationSegmentSelectorStatus::Validated;
     }
 
-    /// Indicate that the initialization segment ending at `pos` was requested and as such, don't
-    /// need to be returned anymore by `most_needed_segment`.
+    /// Calling this method allows to indicate that the media segment ending at `pos` was requested
+    /// and as such, don't need to be returned anymore by this `NextSegmentSelector`.
     pub(crate) fn validate_media_until(&mut self, pos: f64) {
-        self.segment_queue.validate_until(pos);
+        self.segment_cursor.move_cursor(pos);
     }
 
     /// Returns the current most needed segment according to the current situation and to the last
-    /// "validated" init and media segment (see the other methods).
+    /// "validated" init and media segment.
+    ///
+    /// Once returned, the segments object returned by this method have to be "validated" if they
+    /// do have been requested, to avoid just getting the same segment on the next
+    /// `most_needed_segment` call.
+    /// To "validate" a segment, you can call `validate_init` if we're talking about an
+    /// initialization segment, or `validate_media_until` if we're talking about a media segment.
     pub(crate) fn most_needed_segment<'a>(
         &mut self,
         segment_list: &'a SegmentList,
@@ -161,12 +242,12 @@ impl NextSegmentSelector {
         self.last_media_id = Some(new_media_id);
 
         if has_quality_changed {
-            Logger::debug("Selector: Quality changed, recomputing segment queue start");
+            Logger::debug("Selector: Quality changed, recomputing starting position");
             self.init_status = InitializationSegmentSelectorStatus::Unvalidated;
-            self.segment_queue.reset(self.base_pos);
+            self.segment_cursor.move_cursor(self.base_pos);
             self.skipped_segments.clear();
-            let queue_start = self.recompute_queue_start(context, inventory);
-            self.segment_queue.validate_until(queue_start);
+            let start_pos = self.recompute_starting_position(context, inventory);
+            self.segment_cursor.move_cursor(start_pos);
         }
 
         if self.init_status == InitializationSegmentSelectorStatus::Unvalidated {
@@ -177,7 +258,7 @@ impl NextSegmentSelector {
             }
         }
         if let Some(val) = self.check_skipped_segments(context, inventory) {
-            self.segment_queue.validate_until(val);
+            self.segment_cursor.move_cursor(val);
         }
         self.recursively_check_most_needed_media_segment(segment_list.media(), context, inventory)
     }
@@ -189,7 +270,7 @@ impl NextSegmentSelector {
     /// of replacing segments of a poor quality by segments of a higher quality. If segments of a
     /// poorer quality is detected in the currently buffered `inventory`, the returned f64 might
     /// thus be earlier than in the opposite case.
-    fn recompute_queue_start(
+    fn recompute_starting_position(
         &self,
         context: &SegmentQualityContext,
         inventory: &[BufferedChunk],
@@ -228,12 +309,12 @@ impl NextSegmentSelector {
                 curr_idx += 1;
             }
             Logger::debug(&format!(
-                "Selector: Queue start after inventory: {prev_end}"
+                "Selector: Starting position after inventory: {prev_end}"
             ));
             prev_end
         } else {
             Logger::debug(&format!(
-                "Selector: Queue start at beginning {}",
+                "Selector: Starting position at base position: {}",
                 self.base_pos
             ));
             self.base_pos
@@ -264,6 +345,10 @@ impl NextSegmentSelector {
         None
     }
 
+    /// Returns the most needed segment according to the current situation.
+    /// Internally, this method may be validating and re-calling itself (hence its name) if it sees
+    /// that segments of a higher or similar quality are already present in the buffer, through a
+    /// process we here call "smart-switching".
     fn recursively_check_most_needed_media_segment<'a>(
         &mut self,
         media_segments: &'a [SegmentInfo],
@@ -272,7 +357,7 @@ impl NextSegmentSelector {
     ) -> NextSegmentInfo<'a> {
         let maximum_position = self.buffer_goal + self.base_pos;
         match self
-            .segment_queue
+            .segment_cursor
             .get_next(media_segments, maximum_position)
         {
             None => NextSegmentInfo::None,
@@ -296,7 +381,7 @@ impl NextSegmentSelector {
                         Some(pos) => self.skipped_segments.insert(pos, skipped),
                         None => self.skipped_segments.push(skipped),
                     }
-                    self.segment_queue.validate_until(segment_end);
+                    self.segment_cursor.move_cursor(segment_end);
                     self.recursively_check_most_needed_media_segment(
                         media_segments,
                         context,
@@ -309,6 +394,15 @@ impl NextSegmentSelector {
         }
     }
 
+    /// Returns true if either a segment or a range of segments can be skipped, by communicating
+    /// its start and end, context about its quality, and the inventory of already buffered
+    /// segment.
+    /// If `true`, this generally means that the wanted segment or segment ranges is currently
+    /// unneeded.
+    ///
+    /// This method is part of what we call the "smart-switching" algorithm, which allows to avoid
+    /// downloading segments when some of a higher or similar quality are already present in the
+    /// buffer.
     fn can_be_skipped(
         &self,
         start: f64,
@@ -346,6 +440,8 @@ impl NextSegmentSelector {
         false
     }
 
+    /// To call regularly as `self.base_pos` changes to clear the `self.skipped_segments` the
+    /// elements behind that position, as they now become unneeded.
     fn clean_skipped_segments(&mut self) {
         // remove everything before first skipped segment still concerned by `base_pos`
         match self
@@ -362,41 +458,78 @@ impl NextSegmentSelector {
     }
 }
 
-pub(crate) enum NextSegmentInfo<'a> {
+/// "Validation status" regarding the initialization segment.
+///
+/// This enumeration allows to keep track of if the initialization segment for the last asked media
+/// was validated (or if it doesn't exist), or not, thus allowing the `NextSegmentSelector` to
+/// indicate whether it should be loaded or not.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum InitializationSegmentSelectorStatus {
+    /// No initialization segment exist for that media
     None,
+    /// The initialization segment was not "validated" it may thus need to be returned if it
+    /// exists.
+    Unvalidated,
+    /// An initialization segment exists and was "validated" it is not necessary to return it
+    /// anymore.
+    Validated,
+}
+
+/// Segment information for segments that may now be loaded as returned by the
+/// `NextSegmentSelector`.
+///
+/// Its lifetime is generally linked to the `MediaPlaylist` to which those information are
+/// initially linked to.
+pub(crate) enum NextSegmentInfo<'a> {
+    /// No segment is needed currently.
+    None,
+    /// A media segment should now be needed, corresponding to the inner information.
     MediaSegment(&'a SegmentInfo),
+    /// An initialization segment should now be needed, corresponding to the inner information.
     InitSegment(&'a InitSegmentInfo),
 }
 
+/// Inner `NextSegmentSelector` mechanism allowing to keep track of until which segment we have
+/// validation for now.
+///
+/// This allows to return the next consecutive segment, which is something you generally want to do
+/// under regular playback.
+///
+/// An alternative would be having to re-determine the next segment each time based on buffer
+/// inspection which would also have its own risks due to browsers being not perfect.
 #[derive(Clone, Debug)]
-pub(crate) struct SegmentQueue {
-    validated_pos: Option<f64>,
-    initial_pos: f64,
+pub(crate) struct SegmentCursor {
+    /// The `SegmentCursor` will return as next segment the segment ending after this position.
+    ///
+    /// Can be set to the initially wanted position initially.
+    /// Then, can be updated to the end playlist time of the last returned `SegmentInfo`'s.
+    current_cursor: f64,
 }
 
-impl SegmentQueue {
+impl SegmentCursor {
+    /// Create a new `SegmentCursor` which will start from the first segment ending after
+    /// `initial_pos`.
     pub(crate) fn new(initial_pos: f64) -> Self {
         Self {
-            validated_pos: None,
-            initial_pos,
+            current_cursor: initial_pos,
         }
     }
 
-    pub(crate) fn reset(&mut self, initial_pos: f64) {
-        self.validated_pos = None;
-        self.initial_pos = initial_pos;
+    /// move_cursor the cursor at `pos`, so its next segment is the one ending after it.
+    pub(crate) fn move_cursor(&mut self, pos: f64) {
+        self.current_cursor = pos;
     }
 
-    pub(crate) fn validate_until(&mut self, seg_start: f64) {
-        self.validated_pos = Some(seg_start);
-    }
-
+    /// Get the first chronological segment in `media_segments` that ends after the cursor's
+    /// position, unless it also starts at or after the given `maximum_position`.
+    ///
+    /// Returns `None` if no segment in `media_segments` respect those conditions.
     pub(crate) fn get_next<'a>(
         &mut self,
         media_segments: &'a [SegmentInfo],
         maximum_position: f64,
     ) -> Option<&'a SegmentInfo> {
-        let position = self.validated_pos.unwrap_or(self.initial_pos);
+        let position = self.current_cursor;
         let next_seg = media_segments.iter().find(|s| (s.end()) > position);
         match next_seg {
             Some(seg) if seg.start() <= maximum_position => next_seg,

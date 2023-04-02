@@ -42,7 +42,7 @@ impl Dispatcher {
         self.requester.reset();
         jsStopObservingPlayback();
         self.media_element_ref.reset();
-        self.segment_selectors.reset(0.);
+        self.segment_selectors.reset_selectors(0.);
         self.playlist_store = None;
         self.last_position = 0.;
         self.clean_up_playlist_refresh_timers();
@@ -647,8 +647,7 @@ impl Dispatcher {
         // wanted segments is scheduled - for better priorization
         let was_already_locked = self.requester.lock_segment_requests();
         self.requester.update_base_position(Some(wanted_pos));
-        self.segment_selectors
-            .update_base_position(wanted_pos - 0.2);
+        self.segment_selectors.advance_position(wanted_pos - 0.2);
 
         self.check_segments_to_request();
         if !was_already_locked {
@@ -702,7 +701,8 @@ impl Dispatcher {
     /// Actions to perform once a seek has been performed on the media element.
     fn on_seek(&mut self) {
         let wanted_pos = self.media_element_ref.wanted_position();
-        self.segment_selectors.restart_from(wanted_pos - 0.2);
+        self.segment_selectors
+            .restart_from_position(wanted_pos - 0.2);
 
         // TODO better logic than aborting everything on seek
         self.requester.abort_all_segments();
@@ -814,7 +814,7 @@ impl Dispatcher {
                             e
                         ));
                     }
-                    selector.restart_from(self.media_element_ref.wanted_position() - 0.2);
+                    selector.restart_from_position(self.media_element_ref.wanted_position() - 0.2);
                 }
                 if pl_store.curr_media_playlist(mt).is_none() {
                     if let Some(id) = pl_store.curr_media_playlist_id(mt) {
