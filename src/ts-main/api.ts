@@ -1000,17 +1000,19 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
               waitForLoad(
                 this.videoElement,
                 this.__contentMetadata__.loadingAborter.signal
-              ).then(() => {
-                if (this.__contentMetadata__ !== null) {
-                  this.__contentMetadata__.loadingAborter = undefined;
-                }
-                this.trigger("playerStateChange", PlayerState.Loaded);
-              },
+              ).then(
+                () => {
+                  if (this.__contentMetadata__ !== null) {
+                    this.__contentMetadata__.loadingAborter = undefined;
+                  }
+                  this.trigger("playerStateChange", PlayerState.Loaded);
+                },
                 (reason) => {
                   if (this.__contentMetadata__ !== null) {
                     this.__contentMetadata__.loadingAborter = undefined;
                   }
-                  const err = reason instanceof Error ? reason : "Unknown reason";
+                  const err =
+                    reason instanceof Error ? reason : "Unknown reason";
                   logger.info("Could not load content:", err);
                 }
               );

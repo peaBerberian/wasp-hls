@@ -515,8 +515,11 @@ impl Dispatcher {
                     if let Some(duration) = playlist_store.segment_target_duration() {
                         let mut min_buffer_time = f64::max(3., duration - 1.);
                         min_buffer_time = f64::min(8., min_buffer_time);
-                        Logger::debug(&format!("Core: Updating min_buffer_time: {min_buffer_time}"));
-                        self.media_element_ref.update_min_buffer_time(min_buffer_time);
+                        Logger::debug(&format!(
+                            "Core: Updating min_buffer_time: {min_buffer_time}"
+                        ));
+                        self.media_element_ref
+                            .update_min_buffer_time(min_buffer_time);
                     }
                     match self.ready_state.cmp(&PlayerReadyState::Loading) {
                         Ordering::Greater => self.check_segments_to_request(),

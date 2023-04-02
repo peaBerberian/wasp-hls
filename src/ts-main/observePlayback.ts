@@ -62,7 +62,10 @@ export default class PlaybackObserver extends EventEmitter<PlaybackObserverEvent
    * @param {HTMLMediaElement} mediaElement - The `HTMLMediaElement` to observe.
    * @param {number} minimumObservationInterval
    */
-  constructor(mediaElement: HTMLMediaElement, minimumObservationInterval: number) {
+  constructor(
+    mediaElement: HTMLMediaElement,
+    minimumObservationInterval: number
+  ) {
     super();
     this._mediaElement = mediaElement;
     this._stop = null;
@@ -115,7 +118,8 @@ export default class PlaybackObserver extends EventEmitter<PlaybackObserverEvent
     if (newInterval !== this._minimumObservationInterval) {
       this._minimumObservationInterval = newInterval;
       if (this._stop !== null) {
-        const timeSinceLast = performance.now() - this._lastObservationTimeStamp;
+        const timeSinceLast =
+          performance.now() - this._lastObservationTimeStamp;
         const nextTimeout = this._minimumObservationInterval - timeSinceLast;
         this._currentTimeoutId = window.setTimeout(() => {
           this._generateObservation(PlaybackTickReason.RegularInterval);
