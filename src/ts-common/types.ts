@@ -11,7 +11,7 @@ import {
   PushedSegmentErrorCode,
 } from "../wasm/wasp_hls";
 import { LoggerLevel } from "./logger";
-import {SourceBufferOperation} from "./QueuedSourceBuffer";
+import { SourceBufferOperation } from "./QueuedSourceBuffer";
 
 export { MediaSourceReadyState, PlaybackTickReason };
 

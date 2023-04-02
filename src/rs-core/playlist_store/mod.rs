@@ -254,6 +254,21 @@ impl PlaylistStore {
         }
     }
 
+    pub(crate) fn segment_target_duration(&self) -> Option<f64> {
+        let audio_td = self
+            .curr_media_playlist(MediaType::Audio)
+            .map(|a| a.target_duration());
+        let video_td = self
+            .curr_media_playlist(MediaType::Video)
+            .map(|v| v.target_duration());
+        match (audio_td, video_td) {
+            (None, None) => None,
+            (Some(a), Some(v)) => Some(f64::max(a, v)),
+            (Some(a), None) => Some(a),
+            (None, Some(v)) => Some(v),
+        }
+    }
+
     /// Returns the minimum reachable position seen in the last fetched media playlist.
     ///
     /// This function actually defines the minimum position as the maximum of the

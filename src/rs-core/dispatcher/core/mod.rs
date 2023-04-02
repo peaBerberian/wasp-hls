@@ -13,11 +13,12 @@ use crate::{
         jsAnnounceFetchedContent, jsAnnounceTrackUpdate, jsAnnounceVariantLockStatusChange,
         jsAnnounceVariantUpdate, jsClearTimer, jsSendMediaPlaylistParsingError,
         jsSendMediaPlaylistRequestError, jsSendMultivariantPlaylistParsingError,
-        jsSendMultivariantPlaylistRequestError, jsSendOtherError, jsSendSegmentRequestError,
+        jsSendMultivariantPlaylistRequestError, jsSendOtherError, jsSendPushedSegmentError,
+        jsSendRemovedBufferError, jsSendSegmentParsingError, jsSendSegmentRequestError,
         jsSendSourceBufferCreationError, jsSetMediaSourceDuration, jsStartObservingPlayback,
         jsStopObservingPlayback, jsTimer, jsUpdateContentInfo, MediaType,
-        MultivariantPlaylistParsingErrorCode, OtherErrorCode, RequestId, SourceBufferId, TimerId,
-        TimerReason, jsSendSegmentParsingError, PushedSegmentErrorCode, jsSendPushedSegmentError, jsSendRemovedBufferError,
+        MultivariantPlaylistParsingErrorCode, OtherErrorCode, PushedSegmentErrorCode, RequestId,
+        SourceBufferId, TimerId, TimerReason,
     },
     media_element::{SegmentPushData, SegmentQualityContext, SourceBufferCreationError},
     parser::{MultivariantPlaylist, SegmentTimeInfo},
@@ -294,17 +295,28 @@ impl Dispatcher {
     }
 
     /// Method to call when a `SourceBuffer`'s `appendBuffer` call led to an `error` event.
-    pub(super) fn on_append_buffer_error_core(&mut self, source_buffer_id: SourceBufferId, code: PushedSegmentErrorCode) {
+    pub(super) fn on_append_buffer_error_core(
+        &mut self,
+        source_buffer_id: SourceBufferId,
+        code: PushedSegmentErrorCode,
+    ) {
         match self.media_element_ref.media_type_for(source_buffer_id) {
             Some(mt) => {
                 let message = match code {
-                    PushedSegmentErrorCode::BufferFull => format!("The {mt} `SourceBuffer` was full and could not accept anymore segment"),
-                    PushedSegmentErrorCode::UnknownError => format!("An error happened while calling `appendBuffer` on the {mt} `SourceBuffer`"),
+                    PushedSegmentErrorCode::BufferFull => format!(
+                        "The {mt} `SourceBuffer` was full and could not accept anymore segment"
+                    ),
+                    PushedSegmentErrorCode::UnknownError => format!(
+                        "An error happened while calling `appendBuffer` on the {mt} `SourceBuffer`"
+                    ),
                 };
                 jsSendPushedSegmentError(true, code, mt, &message);
-            },
-            None =>
-                jsSendOtherError(true, OtherErrorCode::Unknown, "An unknown SourceBuffer failed during a push operation."),
+            }
+            None => jsSendOtherError(
+                true,
+                OtherErrorCode::Unknown,
+                "An unknown SourceBuffer failed during a push operation.",
+            ),
         }
         self.stop_current_content();
     }
@@ -313,11 +325,15 @@ impl Dispatcher {
     pub(super) fn on_remove_buffer_error_core(&mut self, source_buffer_id: SourceBufferId) {
         match self.media_element_ref.media_type_for(source_buffer_id) {
             Some(mt) => {
-                let message =  &format!("An error happened while calling `remove` on the {mt} `SourceBuffer`");
+                let message =
+                    &format!("An error happened while calling `remove` on the {mt} `SourceBuffer`");
                 jsSendRemovedBufferError(true, mt, message);
-            },
-            None =>
-                jsSendOtherError(true, OtherErrorCode::Unknown, "An unknown SourceBuffer failed during a remove operation."),
+            }
+            None => jsSendOtherError(
+                true,
+                OtherErrorCode::Unknown,
+                "An unknown SourceBuffer failed during a remove operation.",
+            ),
         }
         self.stop_current_content();
     }
@@ -495,6 +511,13 @@ impl Dispatcher {
                             },
                         ));
                     }
+
+                    if let Some(duration) = playlist_store.segment_target_duration() {
+                        let mut min_buffer_time = f64::max(3., duration - 1.);
+                        min_buffer_time = f64::min(8., min_buffer_time);
+                        Logger::debug(&format!("Core: Updating min_buffer_time: {min_buffer_time}"));
+                        self.media_element_ref.update_min_buffer_time(min_buffer_time);
+                    }
                     match self.ready_state.cmp(&PlayerReadyState::Loading) {
                         Ordering::Greater => self.check_segments_to_request(),
                         Ordering::Equal => self.check_ready_to_load_segments(),
@@ -533,11 +556,9 @@ impl Dispatcher {
             }
             Err(err) => {
                 match err {
-                    PlaylistStoreError::NoSupportedVariant => jsSendOtherError(
-                        true,
-                        OtherErrorCode::NoSupportedVariant,
-                        &err.to_string(),
-                    ),
+                    PlaylistStoreError::NoSupportedVariant => {
+                        jsSendOtherError(true, OtherErrorCode::NoSupportedVariant, &err.to_string())
+                    }
                     PlaylistStoreError::NoInitialVariant => jsSendMultivariantPlaylistParsingError(
                         true,
                         MultivariantPlaylistParsingErrorCode::MultivariantPlaylistWithoutVariant,
@@ -729,12 +750,7 @@ impl Dispatcher {
             Err(x) => {
                 let media_type = x.media_type();
                 let message = x.to_string();
-                jsSendSegmentParsingError(
-                    true,
-                    x.into(),
-                    media_type,
-                    &message,
-                );
+                jsSendSegmentParsingError(true, x.into(), media_type, &message);
                 self.stop_current_content();
             }
             Ok(()) => {

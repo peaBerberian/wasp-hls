@@ -1,8 +1,9 @@
 use crate::{
+    media_element::PushSegmentError,
     parser::{
         MediaPlaylistParsingError, MediaPlaylistUpdateError, MultivariantPlaylistParsingError,
     },
-    wasm_bindgen, media_element::PushSegmentError,
+    wasm_bindgen,
 };
 use std::fmt;
 
@@ -284,7 +285,7 @@ extern "C" {
         fatal: bool,
         code: SegmentParsingErrorCode,
         media_type: MediaType,
-        message: &str
+        message: &str,
     );
 
     /// Function to call to indicate that an error arised after pushing a segment to a
@@ -293,16 +294,12 @@ extern "C" {
         fatal: bool,
         code: PushedSegmentErrorCode,
         media_type: MediaType,
-        message: &str
+        message: &str,
     );
 
     /// Function to call to indicate that an error arised when removing data from a
     /// `SourceBuffer`.
-    pub fn jsSendRemovedBufferError(
-        fatal: bool,
-        media_type: MediaType,
-        message: &str
-    );
+    pub fn jsSendRemovedBufferError(fatal: bool, media_type: MediaType, message: &str);
 
     /// Function to call to indicate that an uncategorized error happened.
     pub fn jsSendOtherError(fatal: bool, code: OtherErrorCode, message: &str);
@@ -852,7 +849,9 @@ impl AppendBufferResult {
 impl JsResult<Option<ParsedSegmentInfo>, SegmentParsingErrorCode> for AppendBufferResult {
     /// Basically unwrap and consume the `AppendBufferResult`, converting it into a
     /// Result enum.
-    fn result(self) -> Result<Option<ParsedSegmentInfo>, (SegmentParsingErrorCode, Option<String>)> {
+    fn result(
+        self,
+    ) -> Result<Option<ParsedSegmentInfo>, (SegmentParsingErrorCode, Option<String>)> {
         if let Some(err) = self.error {
             Err(err)
         } else {

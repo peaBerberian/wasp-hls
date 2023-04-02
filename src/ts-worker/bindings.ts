@@ -187,7 +187,7 @@ export function sendPushedSegmentError(
         type: "push-segment-error",
         value: {
           code,
-          mediaType
+          mediaType,
         },
       },
     },
@@ -214,7 +214,7 @@ export function sendRemoveBufferError(
       errorInfo: {
         type: "remove-buffer-error",
         value: {
-          mediaType
+          mediaType,
         },
       },
     },

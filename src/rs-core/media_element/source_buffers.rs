@@ -1,8 +1,8 @@
 use std::collections::VecDeque;
 
 use crate::bindings::{
-    jsAddSourceBuffer, jsAppendBuffer, jsFlush, jsRemoveBuffer, AddSourceBufferErrorCode,
-    SegmentParsingErrorCode, JsResult, MediaType, ParsedSegmentInfo, SourceBufferId,
+    jsAddSourceBuffer, jsAppendBuffer, jsFlush, jsRemoveBuffer, AddSourceBufferErrorCode, JsResult,
+    MediaType, ParsedSegmentInfo, SegmentParsingErrorCode, SourceBufferId,
 };
 use crate::dispatcher::JsMemoryBlob;
 use crate::parser::SegmentTimeInfo;

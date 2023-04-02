@@ -68,6 +68,10 @@ pub(crate) struct MediaElementReference {
     /// Inventory of buffered segments present in the video buffer.
     /// Empty if no video buffer is present.
     video_inventory: SegmentInventory,
+
+    /// When rebuffering, this is the minimum ammount of time to have ahead
+    /// before playing the content
+    min_buffer_time: f64,
 }
 
 impl MediaElementReference {
@@ -88,6 +92,7 @@ impl MediaElementReference {
             wanted_speed: 1.,
             audio_inventory: SegmentInventory::new(MediaType::Audio),
             video_inventory: SegmentInventory::new(MediaType::Video),
+            min_buffer_time: 5.,
         }
     }
 
@@ -103,6 +108,7 @@ impl MediaElementReference {
         self.media_offset = None;
         self.video_buffer = None;
         self.audio_buffer = None;
+        self.min_buffer_time = 5.;
         self.audio_inventory.reset();
         self.video_inventory.reset();
     }
@@ -410,8 +416,7 @@ impl MediaElementReference {
             } else {
                 let mut quit_rebuffering = false;
                 if let Some(buffer_gap) = buffer_gap {
-                    // TODO rely on TARGETDURATION instead here
-                    if buffer_gap > 2. {
+                    if buffer_gap > self.min_buffer_time {
                         Logger::info(&format!("Quitting rebuffering period. bg: {}", buffer_gap));
                         quit_rebuffering = true;
                     } else {
@@ -429,6 +434,10 @@ impl MediaElementReference {
                 }
             }
         }
+    }
+
+    pub(crate) fn update_min_buffer_time(&mut self, val: f64) {
+        self.min_buffer_time = val;
     }
 
     /// Update the current `readyState` of the `MediaSource`.

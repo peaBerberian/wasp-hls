@@ -2,8 +2,8 @@ use std::{iter::Map, ops::Index, slice::Chunks};
 
 use crate::{
     bindings::{
-        jsFreeResource, jsGetResourceData, RequestId, ResourceId, SourceBufferId, TimerId,
-        TimerReason, PushedSegmentErrorCode,
+        jsFreeResource, jsGetResourceData, PushedSegmentErrorCode, RequestId, ResourceId,
+        SourceBufferId, TimerId, TimerReason,
     },
     dispatcher::{Dispatcher, MediaSourceReadyState},
     utils::url::Url,
@@ -108,7 +108,11 @@ impl Dispatcher {
     ///   which SourceBuffer actually emitted this event.
     ///
     /// * `code` - A coe identifying the type of problem encountered.
-    pub fn on_append_buffer_error(&mut self, source_buffer_id: SourceBufferId, code: PushedSegmentErrorCode) {
+    pub fn on_append_buffer_error(
+        &mut self,
+        source_buffer_id: SourceBufferId,
+        code: PushedSegmentErrorCode,
+    ) {
         self.on_append_buffer_error_core(source_buffer_id, code);
     }
 

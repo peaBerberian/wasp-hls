@@ -421,6 +421,10 @@ impl MediaPlaylist {
         &self.segment_list
     }
 
+    pub(crate) fn target_duration(&self) -> f64 {
+        self.target_duration as f64
+    }
+
     //     pub(crate) fn init_segment(&self) -> Option<&InitSegmentInfo> {
     //         self.map.as_ref()
     //     }
