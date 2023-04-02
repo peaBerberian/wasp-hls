@@ -4,22 +4,137 @@
 </p>
 
 Wasp-hls is an [HLS](https://en.wikipedia.org/wiki/HTTP_Live_Streaming) media
-player for the web which:
+player (the library, streaming engine part, and not the UI/application part for
+which I just developped a modest demo) for the web which:
 
-1. Relies the most possible on WebAssembly (Written initially in the
-   [Rust](https://www.rust-lang.org/) language)
+1. Relies the most possible on [WebAssembly](https://webassembly.org/) (Written
+   in the [Rust](https://www.rust-lang.org/) language before being compiled).
 
-2. Runs mostly in a Web Worker (even for media buffering when APIs are
-   available), to reduce the influence an heavy UI can have on playback (and
-   in some situations vice-versa).
+2. Runs mostly in a [Web Worker](https://en.wikipedia.org/wiki/Web_worker) (even
+   for media buffering when APIs are available), to reduce the influence an
+   heavy UI can have on playback (and in some situations vice-versa).
 
 Note that this is only a personal project as well as a proof of concept and it
 is still heavily in development.
 
+## What's this exactly? HLS?
+
+### Streaming protocols and HLS
+
+To provide media contents at large scale to their customers, most streaming
+actors (Netflix, Amazon Prime Video, YouTube, Twitch, Canal+, Disney+ etc. you
+got it), rely on the few same HTTP-based adaptive bitrate streaming protocols:
+majoritarily [MPEG-DASH](https://en.wikipedia.org/wiki/Dynamic_Adaptive_Streaming_over_HTTP)
+and Apple's [HLS](https://en.wikipedia.org/wiki/HTTP_Live_Streaming) (some rely
+on only one like Twitch with HLS, others may rely on both depending on the case).
+
+Those protocols all have similar concepts: all expose a central file listing the
+characteristics of the content (for example, the video qualities, audio tracks,
+the available subtitles etc.) and allow a client to request the media through
+small chunks, each containing only the wanted quality and track for a specific
+time period.
+
+![de18e941-81de-482f-843d-834a4dd3aa71](https://user-images.githubusercontent.com/8694124/229379027-443a68ee-b818-4fdf-b9fe-db64fd88b5d8.png)
+_Schema of how HLS basically works, found on Apple's Website which is the one
+behind HLS_
+
+
+This architecture allows to:
+
+- only load the wanted media data (thus not e.g. also loading all unwanted
+  audio tracks with it)
+- allows efficient seeking on the content, by allowing to load the content
+  non-sequentially (e.g. you can directly load the data corresponding to the end
+  of the content if you want to).
+- facilitate live streaming by continuously encoding those chunk and adding it
+  to the central file progressively
+- profit from all the goodies of relying on HTTP(S) for content distribution
+  (compatibility with the web, firewall traversal, lots of tools available etc.)
+
+For HLS specifically, this so-called central file is called the "Multivariant
+Playlist" (a.k.a. "Master Playlist") and is in the [`M3U8` file
+format](https://en.wikipedia.org/wiki/M3U).
+HLS also has the concept of secondary "Media Playlists", also as `M3U8` files,
+which describe specific tracks and qualities.
+
+### The Media Source Extensions™
+
+To allow the implementation of such adaptive streaming media players on the web
+(and thus with JavaScript), a W3C recommendation was written: the [Media Source
+Extensions™ recommendation](https://www.w3.org/TR/media-source/), generally just
+abbreviated to "MSE".
+
+[Basically](https://www.w3.org/TR/media-source/#introduction), it builds on top
+of the HTML5 `<video>` element, adding a new set of browser API accessible from
+JavaScript to create media buffers, called `SourceBuffer`s, and allowing to push
+aforementioned small chunks of media data to it for later decoding.
+
+### The media player library
+
+The role of an HLS media player library like this one is thus to load the
+Multivariant Playlist, detect which characteristics (bandwidth, quality,
+codecs, preferred language, accessibility etc.) are wanted and to load the right
+media data at the right time, then communicating it to the browser through the
+MSE APIs so it can be decoded.
+
+![twitch-wasp](https://user-images.githubusercontent.com/8694124/229379280-c9d7d810-eb32-415c-bdb2-6888a6accd4e.png)
+_The Wasp-hls player reading a Multivariant playlist from Twitch. You can see
+on the top right the requests performed - mostly of media segments, and some
+logs on the bottom right. You can also see a cog logo before the requests' url
+indicating that they are all performed in a WebWorker._
+
+This may look relatively simple at first, but there's a lot of potential
+optimizations to make and special cases to handle which make quasi-mandatory
+the need to develop separately the media streaming library (the part
+"understanding" the streaming protocol and pushing chunks) and the application
+(the part relying on the library and implementing an UI and the business logic
+on top).
+
+Most people generally mean the latter when they talk about a "player", here,
+I'm "only" implementing the former and the application has to be developped
+separately.
+
+The [demo page](https://peaberberian.github.io/wasp-hls/) do also implement a UI
+part, but this is just to showcase the library and is not actually what's
+exposed by this package, only the library is (though you can copy the demo's
+code if you want to).
+
+### What's WebWorker and WebAssembly doing with all that?
+
+Amongst the main characteristics of this player is that it relies on a
+WebWorker, to run concurrently with the application, and WebAssembly, to do so
+optimally.
+It thus allows to have a theoretically efficient media player, allowing to
+avoid stalling in the content if the UI do some heavy lifting and vice-versa.
+
+This is even more important when playing what is called "low-latency contents"
+(contents with a small-ish latency between the recording and the watch-ing, in
+the few seconds range) which have amongst its characteristics the fact that only
+very small data buffers are constructed - allowing to play closer to live but
+more exposed to rebuffering risk if the segment loading pipeline takes more
+time than expected).
+
+Playing low-latency contents is one of the main goal of this project. On that
+matter as an amusing note, playing low-latency contents through a media player
+with a WebWorker + WebAssembly combination is exactly what Twitch is doing,
+though their players isn't open-source. This one is (it's also able to play
+Twitch contents if you succeed to work-around their CORS policy, only not with
+low-latency for now)!
+
+### Generating an HLS content
+
+Because this is just the player part, the HLS content has to be prepared -
+through what we call the packaging step - separately by using what's called a
+"packager".
+
+For example the [shaka-packager](https://github.com/shaka-project/shaka-packager)
+is a relatively easy to use packager. With it and [FFmpeg](https://ffmpeg.org/),
+you should have all the tools you need to produce any HLS contents you want.
+
 ## Why starting this project?
 
 I'm currently working as the lead developper of another, featureful adaptive
-media player, the open-source [RxPlayer](https://github.com/canalplus/rx-player)
+media player library, the open-source [RxPlayer](https://github.com/canalplus/rx-player)
 so this is not something totally out of the blue.
 
 The reasons why I started this project are mainly:
@@ -49,9 +164,6 @@ The reasons why I started this project are mainly:
   etc.
 
 - to work on and improve my Rust skills
-
-- To try relying on [wasm_bindgen](https://github.com/rustwasm/wasm-bindgen)
-  on a sufficiently complex library.
 
 ## What's left to do?
 
