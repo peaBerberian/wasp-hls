@@ -454,13 +454,13 @@ impl MediaElementReference {
                     }
                 }
             }
-            if let Some(ref mut sb) = self.video_buffer {
-                if sb.id() == source_buffer_id {
-                    if let Some(SourceBufferQueueElement::Push((_, id))) = sb.on_operation_end() {
-                        if let Some(media_offset) = self.media_offset {
-                            self.video_inventory
-                                .validate_segment(id, &buffered, media_offset);
-                        }
+        }
+        if let Some(ref mut sb) = self.video_buffer {
+            if sb.id() == source_buffer_id {
+                if let Some(SourceBufferQueueElement::Push((_, id))) = sb.on_operation_end() {
+                    if let Some(media_offset) = self.media_offset {
+                        self.video_inventory
+                            .validate_segment(id, &buffered, media_offset);
                     }
                 }
             }
