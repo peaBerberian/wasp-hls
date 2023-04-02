@@ -31,6 +31,12 @@ body {
   padding-top: 3px;
 }
 
+.header-right svg:hover {
+  height: 40px;
+  fill: #fff900;;
+  padding-top: 3px;
+}
+
 .title {
   height: 60px;
 }
