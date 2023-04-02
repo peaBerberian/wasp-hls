@@ -65,13 +65,14 @@ interface ScaledBufferedRange {
 function scaleRanges(
   bufferedData: TimeRanges,
   minimumPosition: number,
-  maximumPosition: number
+  maximumPosition: number,
+  mediaOffset: number
 ): ScaledBufferedRange[] {
   const scaledRanges = [];
   const wholeDuration = maximumPosition - minimumPosition;
   for (let i = 0; i < bufferedData.length; i++) {
-    const start = bufferedData.start(i);
-    const end = bufferedData.end(i);
+    const start = bufferedData.start(i) - mediaOffset;
+    const end = bufferedData.end(i) - mediaOffset;
     if (end > minimumPosition && start < maximumPosition) {
       const startPoint = Math.max(start - minimumPosition, 0);
       const endPoint = Math.min(end - minimumPosition, maximumPosition);
@@ -141,7 +142,8 @@ export default function BufferContentGraph({
     if (bufferedData === undefined) {
       return null;
     }
-    return scaleRanges(bufferedData, usedMinimum, usedMaximum);
+    const mediaOffset = player.getMediaOffset() ?? 0;
+    return scaleRanges(bufferedData, usedMinimum, usedMaximum, mediaOffset);
   }, [bufferedData, usedMinimum, usedMaximum]);
 
   useEffect(() => {
