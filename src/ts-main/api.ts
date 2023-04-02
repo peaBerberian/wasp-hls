@@ -778,7 +778,6 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
         this.__logLevelChangeListener__
       );
     }
-    this.videoElement.src = "";
   }
 
   /**
