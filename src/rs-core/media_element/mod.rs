@@ -5,12 +5,12 @@ use crate::bindings::{
     jsSetPlaybackRate, jsStartRebuffering, jsStopRebuffering, AttachMediaSourceErrorCode, JsResult,
     MediaType, SourceBufferId,
 };
-use crate::dispatcher::{JsTimeRanges, MediaObservation, MediaSourceReadyState};
+use crate::dispatcher::{JsMemoryBlob, JsTimeRanges, MediaObservation, MediaSourceReadyState};
 use crate::Logger;
 pub(crate) use source_buffers::{PushSegmentError, RemoveDataError};
 
 pub(crate) use self::segment_inventory::{BufferedChunk, SegmentQualityContext};
-pub(crate) use source_buffers::SegmentPushData;
+pub(crate) use source_buffers::MediaSegmentPushData;
 
 mod segment_inventory;
 mod source_buffers;
@@ -274,15 +274,35 @@ impl MediaElementReference {
         }
     }
 
-    /// Push a segment to the SourceBuffer of the media type given.
+    /// Push an initialization segment to the SourceBuffer of the media type given.
     ///
     /// You should have created a SourceBuffer of the corresponding type with
     /// `create_source_buffer` before calling this method. If you did not this method will return a
     /// `NoSourceBuffer` error.
-    pub(crate) fn push_segment(
+    pub(crate) fn push_init_segment(
         &mut self,
         media_type: MediaType,
-        metadata: SegmentPushData,
+        segment_data: JsMemoryBlob,
+    ) -> Result<(), PushSegmentError> {
+        match self.get_buffer_mut(media_type) {
+            None => Err(PushSegmentError::NoSourceBuffer(media_type)),
+
+            Some(sb) => {
+                sb.push_init_segment(segment_data)?;
+                Ok(())
+            }
+        }
+    }
+
+    /// Push a media segment to the SourceBuffer of the media type given.
+    ///
+    /// You should have created a SourceBuffer of the corresponding type with
+    /// `create_source_buffer` before calling this method. If you did not this method will return a
+    /// `NoSourceBuffer` error.
+    pub(crate) fn push_media_segment(
+        &mut self,
+        media_type: MediaType,
+        metadata: MediaSegmentPushData,
         context: SegmentQualityContext,
     ) -> Result<(), PushSegmentError> {
         let has_media_offset = self.media_offset.is_some();
@@ -293,34 +313,27 @@ impl MediaElementReference {
                 let metadata_start = metadata.start();
                 let metadata_end = metadata.end();
                 let do_time_parsing = !has_media_offset
-                    && (media_type == MediaType::Audio || media_type == MediaType::Video)
-                    && metadata_start.is_some();
+                    && (media_type == MediaType::Audio || media_type == MediaType::Video);
 
-                let response = sb.append_buffer(metadata, do_time_parsing)?;
+                let response = sb.push_media_segment(metadata, do_time_parsing)?;
+                let inventory_metadata = BufferedSegmentMetadata {
+                    id: response.segment_id(),
+                    start: metadata_start,
+                    end: metadata_end,
+                    context,
+                    playlist_start: metadata_start,
+                    playlist_end: metadata_end,
+                };
+                match media_type {
+                    MediaType::Audio => self.audio_inventory.insert_segment(inventory_metadata),
+                    MediaType::Video => self.video_inventory.insert_segment(inventory_metadata),
+                };
 
-                // TODO method to push init and method to push media to be sure those
-                // are never None?
-                if let (Some(metadata_start), Some(metadata_end)) = (metadata_start, metadata_end) {
-                    let inventory_metadata = BufferedSegmentMetadata {
-                        id: response.segment_id(),
-                        start: metadata_start,
-                        end: metadata_end,
-                        context,
-                        playlist_start: metadata_start,
-                        playlist_end: metadata_end,
-                    };
-                    match media_type {
-                        MediaType::Audio => self.audio_inventory.insert_segment(inventory_metadata),
-                        MediaType::Video => self.video_inventory.insert_segment(inventory_metadata),
-                    };
-                }
-                if let (Some(segment_start), Some(media_start)) =
-                    (metadata_start, response.media_start())
-                {
-                    let media_offset = media_start - segment_start;
+                if let Some(media_start) = response.media_start() {
+                    let media_offset = media_start - metadata_start;
                     Logger::info(&format!(
                         "Setting media offset: {}",
-                        media_start - segment_start
+                        media_start - metadata_start
                     ));
                     self.media_offset = Some(media_offset);
                     jsSetMediaOffset(media_offset);
@@ -456,7 +469,7 @@ impl MediaElementReference {
     ) {
         if let Some(ref mut sb) = self.audio_buffer {
             if sb.id() == source_buffer_id {
-                if let Some(SourceBufferQueueElement::Push((_, id))) = sb.on_operation_end() {
+                if let Some(SourceBufferQueueElement::PushMedia((_, id))) = sb.on_operation_end() {
                     if let Some(media_offset) = self.media_offset {
                         self.audio_inventory
                             .validate_segment(id, &buffered, media_offset);
@@ -466,7 +479,7 @@ impl MediaElementReference {
         }
         if let Some(ref mut sb) = self.video_buffer {
             if sb.id() == source_buffer_id {
-                if let Some(SourceBufferQueueElement::Push((_, id))) = sb.on_operation_end() {
+                if let Some(SourceBufferQueueElement::PushMedia((_, id))) = sb.on_operation_end() {
                     if let Some(media_offset) = self.media_offset {
                         self.video_inventory
                             .validate_segment(id, &buffered, media_offset);

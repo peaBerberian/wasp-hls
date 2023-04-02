@@ -2,7 +2,7 @@ use std::collections::VecDeque;
 
 use crate::bindings::{
     jsAddSourceBuffer, jsAppendBuffer, jsFlush, jsRemoveBuffer, AddSourceBufferErrorCode, JsResult,
-    MediaType, ParsedSegmentInfo, SegmentParsingErrorCode, SourceBufferId,
+    MediaType, ParsedSegmentInfo, ResourceId, SegmentParsingErrorCode, SourceBufferId,
 };
 use crate::dispatcher::JsMemoryBlob;
 use crate::parser::SegmentTimeInfo;
@@ -92,7 +92,39 @@ impl SourceBuffer {
         !self.queue.is_empty()
     }
 
-    /// Pushes a new segment to the SourceBuffer.
+    /// Pushes a new initialization segment to the underlying `SourceBuffer.
+    ///
+    /// # Arguments
+    ///
+    /// * `segment_data` - Actual initialization segment's data.
+    pub(super) fn push_init_segment(
+        &mut self,
+        segment_data: JsMemoryBlob,
+    ) -> Result<AppendBufferResponse, PushSegmentError> {
+        self.was_used = true;
+        let segment_id = self.next_segment_id;
+        self.next_segment_id += 1;
+        self.queue.push_back(SourceBufferQueueElement::PushInit((
+            segment_data.id(),
+            segment_id,
+        )));
+        Logger::debug(&format!(
+            "Buffer {} ({}): Pushing initialization segment",
+            self.id, self.typ
+        ));
+        match jsAppendBuffer(self.id, segment_data.id(), false).result() {
+            Err(err) => Err(PushSegmentError::from_js_append_buffer_error(
+                self.media_type,
+                err,
+            )),
+            Ok(x) => Ok(AppendBufferResponse {
+                parsed: x,
+                id: segment_id,
+            }),
+        }
+    }
+
+    /// Pushes a new media segment to the SourceBuffer.
     ///
     /// If the `parse_time_info` bool in argument is set to `true`, the segment might be parsed to
     /// recuperate its time information which will be returned if found.
@@ -100,15 +132,15 @@ impl SourceBuffer {
     /// # Arguments
     ///
     /// * `data` - Actual data AND metadata on the segment you want to push. See
-    /// `SegmentPushData`
+    /// `MediaSegmentPushData`
     ///   documentation for more information.
     ///
     /// * `parse_time_info` - If set to `true`, the segment's data will be read before pushing it
     ///   to try recuperate its timing information. If it has been parsed with success, it will
     ///   be contained in the `AppendBufferResponse` returned by this method.
-    pub(super) fn append_buffer(
+    pub(super) fn push_media_segment(
         &mut self,
-        data: SegmentPushData,
+        data: MediaSegmentPushData,
         parse_time_info: bool,
     ) -> Result<AppendBufferResponse, PushSegmentError> {
         self.last_segment_pushed = false;
@@ -117,7 +149,7 @@ impl SourceBuffer {
         let segment_id = self.next_segment_id;
         self.next_segment_id += 1;
         self.queue
-            .push_back(SourceBufferQueueElement::Push((data, segment_id)));
+            .push_back(SourceBufferQueueElement::PushMedia((data, segment_id)));
         Logger::debug(&format!("Buffer {} ({}): Pushing", self.id, self.typ));
         match jsAppendBuffer(self.id, segment_data, parse_time_info).result() {
             Err(err) => Err(PushSegmentError::from_js_append_buffer_error(
@@ -181,7 +213,7 @@ impl SourceBuffer {
                 self.needs_reflush = true;
                 jsFlush();
             }
-            Some(SourceBufferQueueElement::Push { .. }) => {
+            Some(SourceBufferQueueElement::PushMedia { .. }) => {
                 if self.needs_reflush {
                     self.needs_reflush = false;
                     jsFlush();
@@ -193,32 +225,25 @@ impl SourceBuffer {
     }
 }
 
-/// Structure describing a segment that should be pushed to the SourceBuffer.
-pub(crate) struct SegmentPushData {
+/// Structure describing a media segment that should be pushed to the SourceBuffer.
+pub(crate) struct MediaSegmentPushData {
     /// Raw data of the segment to push.
     segment_data: JsMemoryBlob,
 
     /// Time information, as a tuple of its start time and end time in seconds as deduced from the
     /// media playlist.
-    ///
-    /// This should always be defined, unless the segment contains no media data (like for
-    /// initialization segments).
-    time_info: Option<SegmentTimeInfo>,
+    time_info: SegmentTimeInfo,
 }
 
-impl SegmentPushData {
+impl MediaSegmentPushData {
     /// Creates a new `SegmentPushData` object linked to the given data and time information.
-    ///
-    /// The `time_info` parameter should only be set to `None` for initialization segments without
-    /// any media data.
     ///
     /// # Arguments
     ///
     /// * `segment_data` - The segment's actual data.
     ///
-    /// * `time_info` - The playlist-originated time information on that segment. It SHOULD NOT be
-    /// set to none if the segment contains decodable media data.
-    pub(crate) fn new(segment_data: JsMemoryBlob, time_info: Option<SegmentTimeInfo>) -> Self {
+    /// * `time_info` - The playlist-originated time information on that segment.
+    pub(crate) fn new(segment_data: JsMemoryBlob, time_info: SegmentTimeInfo) -> Self {
         Self {
             segment_data,
             time_info,
@@ -226,24 +251,18 @@ impl SegmentPushData {
     }
 
     /// Get time information linked to this segment as a reference to its `SegmentTimeInfo` object.
-    ///
-    /// Returns `None` if the segment is an initialization segment without any media data.
-    pub(crate) fn time_info(&self) -> Option<&SegmentTimeInfo> {
-        self.time_info.as_ref()
+    pub(crate) fn time_info(&self) -> &SegmentTimeInfo {
+        &self.time_info
     }
 
     /// Returns start, in seconds, at which the segment starts.
-    ///
-    /// Returns `None` if the segment is an initialization segment without any media data.
-    pub(crate) fn start(&self) -> Option<f64> {
-        self.time_info.as_ref().map(|t| t.start())
+    pub(crate) fn start(&self) -> f64 {
+        self.time_info.start()
     }
 
     /// Returns end, in seconds, at which the segment ends.
-    ///
-    /// Returns `None` if the segment is an initialization segment without any media data.
-    pub(crate) fn end(&self) -> Option<f64> {
-        self.time_info.as_ref().map(|t| t.end())
+    pub(crate) fn end(&self) -> f64 {
+        self.time_info.end()
     }
 }
 
@@ -285,8 +304,11 @@ impl AppendBufferResponse {
 
 /// Enum listing possible operations awaiting to be performed on a `SourceBuffer`.
 pub(crate) enum SourceBufferQueueElement {
+    /// A new initialization segment needs to be pushed.
+    PushInit((ResourceId, u64)),
+
     /// A new chunk of media data needs to be pushed.
-    Push((SegmentPushData, u64)),
+    PushMedia((MediaSegmentPushData, u64)),
 
     /// Some already-buffered needs to be removed, `start` and `end` giving the
     /// time range of the data to remove, in seconds.

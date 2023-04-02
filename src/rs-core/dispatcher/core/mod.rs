@@ -20,7 +20,7 @@ use crate::{
         MultivariantPlaylistParsingErrorCode, OtherErrorCode, PushedSegmentErrorCode, RequestId,
         SourceBufferId, TimerId, TimerReason,
     },
-    media_element::{SegmentPushData, SegmentQualityContext, SourceBufferCreationError},
+    media_element::{MediaSegmentPushData, SegmentQualityContext, SourceBufferCreationError},
     parser::{MultivariantPlaylist, SegmentTimeInfo},
     playlist_store::{
         LockVariantResponse, MediaPlaylistPermanentId, PlaylistStore, PlaylistStoreError,
@@ -746,17 +746,22 @@ impl Dispatcher {
         time_info: Option<SegmentTimeInfo>,
         context: SegmentQualityContext,
     ) {
-        let segment_time = time_info.as_ref().map(|t| (t.start(), t.end()));
-        let md = SegmentPushData::new(data, time_info);
-        match self.media_element_ref.push_segment(media_type, md, context) {
-            Err(x) => {
-                let media_type = x.media_type();
-                let message = x.to_string();
-                jsSendSegmentParsingError(true, x.into(), media_type, &message);
-                self.stop_current_content();
-            }
-            Ok(()) => {
-                if let Some((segment_start, segment_end)) = segment_time {
+        if let Some(time_info) = time_info {
+            // Media segment
+            let segment_start = time_info.start();
+            let segment_end = time_info.end();
+            let md = MediaSegmentPushData::new(data, time_info);
+            match self
+                .media_element_ref
+                .push_media_segment(media_type, md, context)
+            {
+                Err(x) => {
+                    let media_type = x.media_type();
+                    let message = x.to_string();
+                    jsSendSegmentParsingError(true, x.into(), media_type, &message);
+                    self.stop_current_content();
+                }
+                Ok(()) => {
                     self.segment_selectors
                         .get_mut(media_type)
                         .validate_media_until(segment_end);
@@ -767,9 +772,18 @@ impl Dispatcher {
                         ));
                         self.media_element_ref.end_buffer(media_type);
                     }
-                } else {
-                    self.segment_selectors.get_mut(media_type).validate_init();
                 }
+            }
+        } else {
+            // Initialization segment
+            match self.media_element_ref.push_init_segment(media_type, data) {
+                Err(x) => {
+                    let media_type = x.media_type();
+                    let message = x.to_string();
+                    jsSendSegmentParsingError(true, x.into(), media_type, &message);
+                    self.stop_current_content();
+                }
+                Ok(()) => self.segment_selectors.get_mut(media_type).validate_init(),
             }
         }
     }
