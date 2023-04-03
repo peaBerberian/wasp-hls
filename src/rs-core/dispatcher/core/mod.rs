@@ -1,8 +1,6 @@
-use std::cmp::Ordering;
-
 use super::{
     event_listeners::JsTimeRanges, Dispatcher, JsMemoryBlob, MediaObservation,
-    MediaSourceReadyState, PlaybackTickReason, PlayerReadyState,
+    MediaSourceReadyState, PlaybackTickReason, PlayerReadyState, StartingPositionType,
 };
 use crate::{
     bindings::{
@@ -398,9 +396,12 @@ impl Dispatcher {
     /// `AwaitingSegments` `PlayerReadyState`, playback observations begin,
     /// and the potential initialization segments are requested.
     fn check_ready_to_load_segments(&mut self) {
-        if self.ready_state >= PlayerReadyState::AwaitingSegments {
-            return;
-        }
+        let starting_pos = match self.ready_state {
+            PlayerReadyState::Loading { ref starting_position } => starting_position,
+            _ => {
+                return;
+            },
+        };
 
         match self.media_element_ref.media_source_ready_state() {
             Some(MediaSourceReadyState::Closed) | None => {
@@ -416,11 +417,28 @@ impl Dispatcher {
         };
 
         if playlist_store.are_playlists_ready() {
-            self.ready_state = PlayerReadyState::AwaitingSegments;
-            let start_time = playlist_store.expected_start_time();
-            if start_time > 0. {
-                self.media_element_ref.seek(start_time);
+
+            if let Some(starting_pos) = starting_pos {
+                let actual_start = match starting_pos.start_type {
+                    StartingPositionType::Absolute => starting_pos.position,
+                    StartingPositionType::FromBeginning =>
+                        playlist_store.curr_min_position().unwrap_or(0.) + starting_pos.position,
+                    StartingPositionType::FromEnd =>
+                        playlist_store.curr_max_position().map(|max| {
+                            max - starting_pos.position
+                        }).unwrap_or(playlist_store.expected_start_time()),
+                };
+                if actual_start > 0. {
+                    self.media_element_ref.seek(actual_start);
+                }
+            } else {
+                let start_time = playlist_store.expected_start_time();
+                if start_time > 0. {
+                    self.media_element_ref.seek(start_time);
+                }
             }
+
+            self.ready_state = PlayerReadyState::AwaitingSegments;
             if let Some(duration) = playlist_store.curr_duration() {
                 jsSetMediaSourceDuration(duration);
             } else {
@@ -536,11 +554,11 @@ impl Dispatcher {
                         self.media_element_ref
                             .update_min_buffer_time(min_buffer_time);
                     }
-                    match self.ready_state.cmp(&PlayerReadyState::Loading) {
-                        Ordering::Greater => self.check_segments_to_request(),
-                        Ordering::Equal => self.check_ready_to_load_segments(),
-                        _ => {}
-                    };
+                    if self.ready_state.is_loading() {
+                        self.check_ready_to_load_segments();
+                    } else {
+                        self.check_segments_to_request();
+                    }
 
                     if let Some(playlist_store) = self.playlist_store.as_ref() {
                         let min_pos = playlist_store.curr_min_position();

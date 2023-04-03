@@ -12,7 +12,7 @@ import {
   WorkerMessage,
   WorkerMessageType,
 } from "../ts-common/types";
-import { MediaType } from "../wasm/wasp_hls";
+import { MediaType, StartingPositionType } from "../wasm/wasp_hls";
 import DEFAULT_CONFIG from "./default_config";
 import { WaspError, WaspInitializationError } from "./errors";
 import postMessageToWorker from "./postMessageToWorker";
@@ -345,8 +345,9 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
    *
    * NOTE: should we return a promise here?
    * @param {string} url
+   * @param {Object} opts
    */
-  public load(url: string): void {
+  public load(url: string, opts?: LoadOptions | undefined): void {
     if (this.__worker__ === null) {
       throw new Error("The Player is not initialized or disposed.");
     }
@@ -376,9 +377,34 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
       error: null,
     };
     this.trigger("playerStateChange", PlayerState.Loading);
+
+    let startingPosition;
+    if (opts?.startingPosition !== undefined) {
+      const position = opts.startingPosition.position;
+      switch (opts.startingPosition.startType) {
+        case "Absolute":
+          startingPosition = {
+            startingType: StartingPositionType.Absolute,
+            position,
+          };
+          break;
+        case "FromBeginning":
+          startingPosition = {
+            startingType: StartingPositionType.FromBeginning,
+            position,
+          };
+          break;
+        case "FromEnd":
+          startingPosition = {
+            startingType: StartingPositionType.FromEnd,
+            position,
+          };
+          break;
+      }
+    }
     postMessageToWorker(this.__worker__, {
       type: MainMessageType.LoadContent,
-      value: { contentId, url },
+      value: { contentId, url, startingPosition },
     });
   }
 
@@ -1066,4 +1092,28 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
       });
     }
   }
+}
+
+export interface LoadOptions {
+  startingPosition?: StartingPosition | undefined;
+}
+
+export type StartingPosition =
+  | AbsoluteStartingPosition
+  | FromBeginningStartingPosition
+  | FromEndStartingPosition;
+
+interface AbsoluteStartingPosition {
+  startType: "Absolute";
+  position: number;
+}
+
+interface FromBeginningStartingPosition {
+  startType: "FromBeginning";
+  position: number;
+}
+
+interface FromEndStartingPosition {
+  startType: "FromEnd";
+  position: number;
 }

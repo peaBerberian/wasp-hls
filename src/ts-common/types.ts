@@ -9,6 +9,7 @@ import {
   RequestErrorReason,
   SourceBufferCreationErrorCode as WasmSourceBufferCreationErrorCode,
   PushedSegmentErrorCode,
+  StartingPositionType,
 } from "../wasm/wasp_hls";
 import { LoggerLevel } from "./logger";
 import { SourceBufferOperation } from "./QueuedSourceBuffer";
@@ -919,6 +920,16 @@ export interface LoadContentMainMessage {
     contentId: string;
     /** URL to the HLS Multivariant Playlist. */
     url: string;
+    /** Optional starting position to start at. */
+    startingPosition?: {
+      /**
+       * Whether this is the absolute position or relative to the start or end
+       * of the content.
+       */
+      startingType: StartingPositionType;
+      /** The position, its semantic depends on `startingType`. */
+      position: number;
+    } | undefined;
   };
 }
 

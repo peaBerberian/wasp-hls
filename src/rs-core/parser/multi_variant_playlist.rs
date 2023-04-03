@@ -101,6 +101,9 @@ impl MultivariantPlaylist {
                             other_media.push(media);
                         }
                     }
+                    "-X-START" =>
+                        /* TODO */
+                        {}
                     _ => {}
                 }
             } else if str_line.starts_with('#') {

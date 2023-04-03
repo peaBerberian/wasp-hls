@@ -260,8 +260,7 @@ Miscellaneous:
 - [x] Error API
 - [x] Export embedded versions of the WebAssembly and Worker files to facilitate
       application's development code.
-- [ ] Initial position API
-      _Priority: average_
+- [X] Initial position API
 - [ ] Delta playlist handling.
       _Priority: low_
 - [ ] Content Steering handling.
@@ -286,7 +285,6 @@ most of them are not needed for playback):
 - [x] EXT-X-BYTERANGE: Used for range requests
 - [x] EXT-X-PLAYLIST-TYPE: Used To know if a Playlist may be refreshed
 - [x] EXT-X-TARGETDURATION: Useful for heuristics for playlist refresh
-- [x] EXT-X-START: Relied on for the default starting position.
 - EXT-X-MAP:
   - [x] URI: Used to fetch the initialization segment if one is present
   - [x] BYTERANGE: To perform a range request for the initialization segment
@@ -330,6 +328,9 @@ most of them are not needed for playback):
   - [ ] PATHWAY-ID: Content Steering not handled yet
   - [ ] HDCP-LEVEL: DRM are not handled for now
   - [ ] ALLOWED-CPC: DRM are not handled for now
+- [ ] EXT-X-START: This one is not too hard to implement, but its implementation
+      has enough annoyances and it is unimportant enough for me to have
+      postponed its support.
 - [ ] EXT-X-GAP
 - [ ] EXT-X-VERSION: Not specifically considered for now, most differences
       handled until now had compatible behaviors from version to version

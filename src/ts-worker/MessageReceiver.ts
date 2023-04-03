@@ -16,6 +16,7 @@ import initializeWasm, {
   MediaType,
   OtherErrorCode,
   PushedSegmentErrorCode,
+  StartingPosition,
 } from "../wasm/wasp_hls";
 import { stopObservingPlayback } from "./bindings";
 import {
@@ -53,13 +54,15 @@ export default function MessageReceiver() {
       data.type !== MainMessageType.DisposePlayer &&
       initializationProm !== undefined
     ) {
-      initializationProm.then(() => {
-        // TODO perhaps some intelligence could be put here to avoid
-        // loading contents that have finally been stopped. No hurry though,
-        // this should be rare enough and the only issue would be performance
-        // and immediately aborted requests.
-        onMainMessage(evt);
-      }).catch(noop);
+      initializationProm
+        .then(() => {
+          // TODO perhaps some intelligence could be put here to avoid
+          // loading contents that have finally been stopped. No hurry though,
+          // this should be rare enough and the only issue would be performance
+          // and immediately aborted requests.
+          onMainMessage(evt);
+        })
+        .catch(noop);
       return;
     }
 
@@ -79,15 +82,17 @@ export default function MessageReceiver() {
           hasMseInWorker,
           canDemuxMpeg2Ts,
           initialBandwidth,
-        }).then(() => {
-          initializationProm = undefined;
-        }).catch((err) => {
-          initializationProm = undefined;
-          handleInitializationError(
-            err,
-            InitializationErrorCode.WasmRequestError
-          );
-        });
+        })
+          .then(() => {
+            initializationProm = undefined;
+          })
+          .catch((err) => {
+            initializationProm = undefined;
+            handleInitializationError(
+              err,
+              InitializationErrorCode.WasmRequestError
+            );
+          });
         break;
 
       case MainMessageType.DisposePlayer:
@@ -106,7 +111,14 @@ export default function MessageReceiver() {
         };
         playerInstance.changeContent(contentInfo);
         resetTransmuxer();
-        dispatcher.load_content(data.value.url);
+        let startingPosition;
+        if (data.value.startingPosition !== undefined) {
+          startingPosition = new StartingPosition(
+            data.value.startingPosition.startingType,
+            data.value.startingPosition.position
+          );
+        }
+        dispatcher.load_content(data.value.url, startingPosition);
         break;
       }
 

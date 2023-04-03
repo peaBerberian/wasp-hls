@@ -71,20 +71,52 @@ pub enum MediaSourceReadyState {
 }
 
 /// Identify the playback-related state the `Dispatcher` is in.
-#[derive(Clone, Copy, Debug, PartialEq, PartialOrd, Eq, Ord)]
+#[derive(Clone, Debug)]
 enum PlayerReadyState {
     /// No content is currently loaded.
-    Stopped = 0,
+    Stopped,
 
     /// We're preparing a content's playlist, MediaSource and SourceBuffers
-    Loading = 1,
+    Loading { starting_position: Option<StartingPosition> },
 
     /// The SourceBuffers are all ready but currently awaiting segments before
     /// being aple to play.
-    AwaitingSegments = 2,
+    AwaitingSegments,
 
     /// The content has enough segments to play.
     /// Note that this does not mean the media element is currently playing content:
     /// it can still be paused or at a `0` playback rate.
-    Playing = 3,
+    Playing,
+}
+
+impl PlayerReadyState {
+    pub(crate) fn is_loading(&self) -> bool {
+        match self {
+            PlayerReadyState::Loading { .. } => true,
+            _ => false,
+        }
+    }
+}
+
+#[wasm_bindgen]
+#[derive(Clone, Debug)]
+pub struct StartingPosition {
+    start_type: StartingPositionType,
+    position: f64,
+}
+
+#[wasm_bindgen]
+impl StartingPosition {
+    #[wasm_bindgen(constructor)]
+    pub fn new(start_type: StartingPositionType, position: f64) -> Self {
+        Self { start_type, position }
+    }
+}
+
+#[wasm_bindgen]
+#[derive(Clone, Debug)]
+pub enum StartingPositionType {
+    Absolute,
+    FromBeginning,
+    FromEnd,
 }

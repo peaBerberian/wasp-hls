@@ -228,7 +228,7 @@ impl MediaPlaylist {
                     }
                     "-X-ENDLIST" => end_list = true,
                     "-X-INDEPENDENT-SEGMENTS" => independent_segments = true,
-                    "-X-START:" =>
+                    "-X-START" =>
                         /* TODO */
                         {}
                     "INF" => match parse_decimal_floating_point(&str_line, 4 + "INF:".len()).0 {

@@ -8,7 +8,7 @@ use crate::{
     wasm_bindgen, Logger,
 };
 
-use super::{Dispatcher, PlayerReadyState};
+use super::{Dispatcher, PlayerReadyState, StartingPosition};
 
 /// Methods exposed to the JavaScript-side.
 ///
@@ -35,10 +35,10 @@ impl Dispatcher {
     }
 
     /// Start loading a new content by communicating its MultivariantPlaylist's URL
-    pub fn load_content(&mut self, content_url: String) {
+    pub fn load_content(&mut self, content_url: String, starting_pos: Option<StartingPosition>) {
         Logger::info("load_content called");
         self.stop();
-        self.ready_state = PlayerReadyState::Loading;
+        self.ready_state = PlayerReadyState::Loading { starting_position: starting_pos };
         let content_url = Url::new(content_url);
         self.requester
             .fetch_playlist(content_url, PlaylistFileType::MultivariantPlaylist);
