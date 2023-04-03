@@ -380,26 +380,33 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
 
     let startingPosition;
     if (opts?.startingPosition !== undefined) {
-      const position = opts.startingPosition.position;
-      switch (opts.startingPosition.startType) {
-        case "Absolute":
-          startingPosition = {
-            startingType: StartingPositionType.Absolute,
-            position,
-          };
-          break;
-        case "FromBeginning":
-          startingPosition = {
-            startingType: StartingPositionType.FromBeginning,
-            position,
-          };
-          break;
-        case "FromEnd":
-          startingPosition = {
-            startingType: StartingPositionType.FromEnd,
-            position,
-          };
-          break;
+      if (typeof opts.startingPosition === "number") {
+        startingPosition = {
+          startingType: StartingPositionType.Absolute,
+          position: opts.startingPosition,
+        };
+      } else {
+        const position = opts.startingPosition.position;
+        switch (opts.startingPosition.startType) {
+          case "Absolute":
+            startingPosition = {
+              startingType: StartingPositionType.Absolute,
+              position,
+            };
+            break;
+          case "FromBeginning":
+            startingPosition = {
+              startingType: StartingPositionType.FromBeginning,
+              position,
+            };
+            break;
+          case "FromEnd":
+            startingPosition = {
+              startingType: StartingPositionType.FromEnd,
+              position,
+            };
+            break;
+        }
       }
     }
     postMessageToWorker(this.__worker__, {
@@ -1095,7 +1102,7 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
 }
 
 export interface LoadOptions {
-  startingPosition?: StartingPosition | undefined;
+  startingPosition?: StartingPosition | number | undefined;
 }
 
 export type StartingPosition =
