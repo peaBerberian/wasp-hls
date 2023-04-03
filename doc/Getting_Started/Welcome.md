@@ -42,21 +42,15 @@ import EmbeddedWasm from "wasp-hls/wasm";
 import EmbeddedWorker from "wasp-hls/worker";
 
 const player = new WaspHlsPlayer(videoElement);
-
 player
   .initialize({
     workerUrl: EmbeddedWorker,
     wasmUrl: EmbeddedWasm,
   })
-  .then(
-    () => {
-      // We can now load a content
-      player.load(HLS_MULTIVARIANT_PLAYLIST_URL);
-    },
-    (err) => {
-      console.error("Could not initialize WaspHlsPlayer:", err);
-    }
-  );
+  .catch((err) => {
+    console.error("Could not initialize WaspHlsPlayer:", err);
+  });
+player.load(HLS_MULTIVARIANT_PLAYLIST_URL);
 ```
 
 Where `HLS_MULTIVARIANT_PLAYLIST_URL` is the URL to the main playlist (called

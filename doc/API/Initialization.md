@@ -34,7 +34,7 @@ player
   })
   .then(
     () => {
-      // we can now use the player
+      console.log("WaspHlsPlayer initialized with success!");
     },
     (err) => {
       console.error("Could not initialize WaspHlsPlayer:", err);
@@ -77,8 +77,7 @@ those JavaScript files have to first be interpreted in the main thread).
 ### Be notified of when initialization succeeds (or fails)
 
 As you can see, the `initialize` method returns a promise, which is only
-resolved once the initialization process succeeded. You have to wait for
-that condition before using most of the `WaspHlsPlayer`'s methods.
+resolved once the initialization process succeeded.
 
 That promise might also reject in the following situations:
 
@@ -89,7 +88,12 @@ In those cases, the promise returned by `initialize` will reject.
 That promise might also reject if the player was disposed (through its `dispose`
 method) before initialization finished with success.
 
-Note that you can check the status of the initialization at any time by looking
+_Note that you don't have to wait for that condition before using most of the
+`WaspHlsPlayer`'s methods, if you for example load a content with the
+[`load`](./Loading_a_content.md) method before initialization succeeds, it
+will automatically be loaded once initialization is finished"._
+
+You can check the status of the initialization at any time by looking
 at the `WaspHlsPlayer`'s `initializationStatus` property:
 
 ```js
@@ -164,8 +168,7 @@ const initializationPromise = player.initialize({
 - **return value**:
 
 `Promise`: Promise resolving when and if the initialization step finished with
-success. It is at this point that you can begin loading a content through a
-`load` call.
+success.
 
 That Promise may also reject in case any of its step failed (such as the
 fetching of the required resources), in which case the `WaspHlsPlayer` won't be

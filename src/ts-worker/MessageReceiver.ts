@@ -1,5 +1,6 @@
 import assertNever from "../ts-common/assertNever";
 import logger from "../ts-common/logger";
+import noop from "../ts-common/noop";
 import { SourceBufferOperation } from "../ts-common/QueuedSourceBuffer";
 import timeRangesToFloat64Array from "../ts-common/timeRangesToFloat64Array";
 import {
@@ -30,7 +31,9 @@ import { resetTransmuxer } from "./transmux";
 let wasInitializedCalled = false;
 
 export default function MessageReceiver() {
-  onmessage = function (evt: MessageEvent<MainMessage>) {
+  let initializationProm: Promise<void> | undefined;
+  onmessage = onMainMessage;
+  function onMainMessage(evt: MessageEvent<MainMessage>) {
     if (evt.origin !== "") {
       logger.error("Unexpected trans-origin message");
       return;
@@ -42,6 +45,21 @@ export default function MessageReceiver() {
       typeof data.type === "undefined"
     ) {
       logger.error("unexpected main message");
+      return;
+    }
+
+    if (
+      data.type !== MainMessageType.Initialization &&
+      data.type !== MainMessageType.DisposePlayer &&
+      initializationProm !== undefined
+    ) {
+      initializationProm.then(() => {
+        // TODO perhaps some intelligence could be put here to avoid
+        // loading contents that have finally been stopped. No hurry though,
+        // this should be rare enough and the only issue would be performance
+        // and immediately aborted requests.
+        onMainMessage(evt);
+      }).catch(noop);
       return;
     }
 
@@ -57,10 +75,18 @@ export default function MessageReceiver() {
         wasInitializedCalled = true;
         const { wasmUrl, hasMseInWorker, canDemuxMpeg2Ts, initialBandwidth } =
           data.value;
-        initialize(wasmUrl, data.value.initialConfig, {
+        initializationProm = initialize(wasmUrl, data.value.initialConfig, {
           hasMseInWorker,
           canDemuxMpeg2Ts,
           initialBandwidth,
+        }).then(() => {
+          initializationProm = undefined;
+        }).catch((err) => {
+          initializationProm = undefined;
+          handleInitializationError(
+            err,
+            InitializationErrorCode.WasmRequestError
+          );
         });
         break;
 
@@ -379,7 +405,7 @@ export default function MessageReceiver() {
       default:
         assertNever(data);
     }
-  };
+  }
 }
 
 function handleInitializationError(
@@ -419,14 +445,14 @@ function initialize(
   wasmUrl: string,
   config: WaspHlsPlayerConfig,
   opts: WorkerInitializationOptions
-) {
-  initializeWasm(fetch(wasmUrl))
+): Promise<void> {
+  return initializeWasm(fetch(wasmUrl))
     .then((wasm) => {
       playerInstance.start(wasm, config, opts);
       postMessageToMain({ type: WorkerMessageType.Initialized, value: null });
     })
     .catch((err) => {
-      handleInitializationError(err, InitializationErrorCode.WasmRequestError);
+      throw err;
     });
 }
 

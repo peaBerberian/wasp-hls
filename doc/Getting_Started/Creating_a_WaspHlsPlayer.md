@@ -44,12 +44,14 @@ player
   })
   .then(
     () => {
-      // we can now use the player
+      console.log("WaspHlsPlayer initialized with success!");
     },
     (err) => {
       console.error("Could not initialize WaspHlsPlayer:", err);
     }
   );
+
+// we can now use the player (we don't need to await the Promise here)
 ```
 
 Alternatively, if you don't want the hassle of having to serve those files
@@ -68,12 +70,14 @@ player
   })
   .then(
     () => {
-      // we can now use the player
+      console.log("WaspHlsPlayer initialized with success!");
     },
     (err) => {
       console.error("Could not initialize WaspHlsPlayer:", err);
     }
   );
+
+// we can now use the player (we don't need to await the Promise here)
 ```
 
 Note however that this leads to a huge file size (though which is drastically

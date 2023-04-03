@@ -803,8 +803,8 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
     rejectProm: (err: WaspInitializationError) => void
   ): void {
     let mayStillReject = true;
-    const worker = new Worker(opts.workerUrl);
-    this.__worker__ = worker;
+    this.__worker__ = new Worker(opts.workerUrl);
+    const worker = this.__worker__;
     postMessageToWorker(worker, {
       type: MainMessageType.Initialization,
       value: {

@@ -13,7 +13,7 @@ export default function PlayerContainersWrapper(): JSX.Element {
 
     setPlayers((prevPlayers) => {
       const newPlayers = prevPlayers.slice();
-      newPlayers.push(newContainer);
+      newPlayers.splice(0, 0, newContainer);
       return newPlayers;
     });
 
@@ -42,8 +42,8 @@ export default function PlayerContainersWrapper(): JSX.Element {
 
   return (
     <>
-      {players}
       <CreateNewPlayerButton onClick={createNewPlayer} />
+      {players}
     </>
   );
 }

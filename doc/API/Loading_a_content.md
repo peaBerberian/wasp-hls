@@ -3,8 +3,8 @@
 ## Description
 
 Loading a content through the `WaspHlsPlayer` can only be done once it has been
-[instantiated](./Instantiation.md) and once [initialization](./Initialization.md)
-finished with success.
+[instantiated](./Instantiation.md) and once [`initialize`](./Initialization.md)
+has been called (it is not necessary to await the returned Promise though). 
 
 This is the step where the URL of the Multivariant Playlist (before known as the
 "Master Playlist") is provided to the `WaspHlsPlayer`, that takes care of media
