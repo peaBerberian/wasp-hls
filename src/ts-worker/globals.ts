@@ -158,6 +158,9 @@ export function updateDispatcherConfig(
   if (config.bufferGoal !== undefined) {
     dispatcher.set_buffer_goal(config.bufferGoal);
   }
+  if (config.segmentMaxRetry !== undefined) {
+    dispatcher.set_segment_request_max_retry(config.segmentMaxRetry);
+  }
   if (config.segmentRequestTimeout !== undefined) {
     dispatcher.set_segment_request_timeout(
       config.segmentRequestTimeout ?? undefined
@@ -168,6 +171,9 @@ export function updateDispatcherConfig(
   }
   if (config.segmentBackoffMax !== undefined) {
     dispatcher.set_segment_backoff_max(config.segmentBackoffMax);
+  }
+  if (config.multiVariantPlaylistMaxRetry !== undefined) {
+    dispatcher.set_multi_variant_playlist_request_max_retry(config.multiVariantPlaylistMaxRetry);
   }
   if (config.multiVariantPlaylistRequestTimeout !== undefined) {
     dispatcher.set_multi_variant_playlist_request_timeout(
@@ -184,19 +190,22 @@ export function updateDispatcherConfig(
       config.multiVariantPlaylistBackoffMax
     );
   }
-  if (config.multiVariantPlaylistRequestTimeout !== undefined) {
+  if (config.mediaPlaylistMaxRetry !== undefined) {
+    dispatcher.set_media_playlist_request_max_retry(config.mediaPlaylistMaxRetry);
+  }
+  if (config.mediaPlaylistRequestTimeout !== undefined) {
     dispatcher.set_media_playlist_request_timeout(
-      config.multiVariantPlaylistRequestTimeout ?? undefined
+      config.mediaPlaylistRequestTimeout ?? undefined
     );
   }
-  if (config.multiVariantPlaylistBackoffBase !== undefined) {
+  if (config.mediaPlaylistBackoffBase !== undefined) {
     dispatcher.set_media_playlist_backoff_base(
-      config.multiVariantPlaylistBackoffBase
+      config.mediaPlaylistBackoffBase
     );
   }
-  if (config.multiVariantPlaylistBackoffMax !== undefined) {
+  if (config.mediaPlaylistBackoffMax !== undefined) {
     dispatcher.set_media_playlist_backoff_max(
-      config.multiVariantPlaylistBackoffMax
+      config.mediaPlaylistBackoffMax
     );
   }
 }

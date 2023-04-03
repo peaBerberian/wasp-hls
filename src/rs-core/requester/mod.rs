@@ -10,188 +10,81 @@ use crate::{
     Logger,
 };
 
+mod configuration;
+
+pub(crate) use configuration::RequesterConfiguration;
+
 const PRIORITY_STEPS: [f64; 6] = [2., 4., 8., 12., 18., 25.];
-
-const DEFAULT_BACKOFF_BASE: f64 = 300.;
-const DEFAULT_BACKOFF_MAX: f64 = 3000.;
-
-#[derive(Clone, Copy, Debug, PartialEq, PartialOrd, Eq, Ord)]
-enum PriorityLevel {
-    ExtremelyHigh = 0,
-    VeryHigh = 1,
-    High = 2,
-    Medium = 3,
-    Low = 4,
-    VeryLow = 5,
-    ExtremelyLow = 6,
-}
-
-impl PriorityLevel {
-    fn from_time_distance(distance: f64) -> Self {
-        let step_info = PRIORITY_STEPS
-            .iter()
-            .enumerate()
-            .find(|(_, step)| distance < **step);
-        match step_info {
-            Some((0, _)) => PriorityLevel::ExtremelyHigh,
-            Some((1, _)) => PriorityLevel::VeryHigh,
-            Some((2, _)) => PriorityLevel::High,
-            Some((3, _)) => PriorityLevel::Medium,
-            Some((4, _)) => PriorityLevel::Low,
-            Some((5, _)) => PriorityLevel::VeryLow,
-            _ => PriorityLevel::ExtremelyLow,
-        }
-    }
-}
-
-fn get_segment_priority(start_time: Option<f64>, current_time: f64) -> PriorityLevel {
-    match start_time {
-        Some(start_time) => PriorityLevel::from_time_distance(start_time - current_time),
-        _ => PriorityLevel::ExtremelyHigh,
-    }
-}
 
 /// The `Requester` is the module performing HTTP(s) requests.
 ///
-/// Depending on the nature of the resource and on its configuration, it also
-/// has both a request-scheduling mechanism, allowing to perform more urgent
-/// request first, and a retry mechanism based on an exponential backoff delay,
-/// to retry requesting resources without overloading the server serving them.
+/// Depending on the nature of the resource and on its configuration, it also has both a
+/// request-scheduling mechanism, allowing to perform more urgent request first, and a retry
+/// mechanism based on an exponential backoff delay, to retry requesting resources without
+/// overloading the server serving them.
 pub(crate) struct Requester {
-    /// List information on the current playlist requests awaited, by chronological order
-    /// (from the time the request was made).
+    /// List information on the current playlist requests awaited, by chronological order (from the
+    /// time the request was made).
     pending_playlist_requests: Vec<PlaylistRequestInfo>,
 
-    /// List information on the current segment requests performed, by chronological order
-    /// (from the time the request was made).
+    /// List information on the current segment requests performed, by chronological order (from the
+    /// time the request was made).
     ///
-    /// There should be only one request per MediaType pending or waiting (i.e. in
-    /// the `segment_waiting_queue` vector) at the same time.
+    /// There should be only one request per MediaType pending or waiting (i.e. in the
+    /// `segment_waiting_queue` vector) at the same time.
     pending_segment_requests: Vec<SegmentRequestInfo>,
 
-    /// List information on segment requests awaiting for segment requests of
-    /// higher priorities to finish before actually being made.
+    /// List information on segment requests awaiting for segment requests of higher priorities to
+    /// finish before actually being made.
     ///
-    /// There should be only one request per MediaType pending (i.e. in
-    /// the `pending_segment_requests` vector) or waiting at the same time.
+    /// There should be only one request per MediaType pending (i.e. in the
+    /// `pending_segment_requests` vector) or waiting at the same time.
     segment_waiting_queue: Vec<WaitingSegmentInfo>,
 
     /// Depending the nature of the failure, failed requests might be retried.
     ///
-    /// To avoid overloading the server serving those resources, retried
-    /// requests are actually performed after a timer.
-    /// This variable allows to store and link here a timer's TimerId (which
-    /// will be communicated back when the timer has elapsed) to the RequestId.
+    /// To avoid overloading the server serving those resources, retried requests are actually
+    /// performed after a timer.
+    /// This variable allows to store and link here a timer's TimerId (which will be communicated
+    /// back when the timer has elapsed) to the RequestId.
     ///
-    /// Note that retried segment requests stay in the
-    /// `pending_segment_requests` vector and retried playlist requests stay in
-    /// the `pending_playlist_requests` vector, even when the request is not
-    /// really pending.
+    /// Note that retried segment requests stay in the `pending_segment_requests` vector and retried
+    /// playlist requests stay in the `pending_playlist_requests` vector, even when the request is
+    /// not really pending.
     retry_timers: Vec<(TimerId, RequestId)>,
 
     /// If `true`, no new requests will be started (they all will be pushed in
     /// `segment_waiting_queue` instead) until it is set to `false` again.
     ///
-    /// Using this strategy allows to let outside code schedule multiple
-    /// requests while the "lock" is on.
-    /// Once all wanted requests have been scheduled, the same "lock" can be
-    /// removed resulting in the `Requester` choosing between all of them which
-    /// one it will actually requests immediately based on its internal
-    /// priorization algorithm.
+    /// Using this strategy allows to let outside code schedule multiple requests while the "lock"
+    /// is on.
+    /// Once all wanted requests have been scheduled, the same "lock" can be removed resulting in
+    /// the `Requester` choosing between all of them which one it will actually requests immediately
+    /// based on its internal priorization algorithm.
     ///
-    /// Without the lock, priorization would be less efficient, for example, the
-    /// initial request would always be performed immediately as it would always
-    /// be the one with the highest priority until now.
+    /// Without the lock, priorization would be less efficient, for example, the initial request
+    /// would always be performed immediately as it would always be the one with the highest
+    /// priority until now.
     segment_request_locked: bool,
 
-    /// Position in seconds, on which the `Requester` will base itself to decide
-    /// segment requests priority.
+    /// Position in seconds, on which the `Requester` will base itself to decide segment requests
+    /// priority.
     ///
     /// This position should be close the current playback condition.
     ///
-    /// When `None`, all segment requests will have the highest possible
-    /// priority.
+    /// When `None`, all segment requests will have the highest possible priority.
     base_position: Option<f64>,
 
-    /// Timeout, in milliseconds, used for segment requests.
-    ///
-    /// If that timeout is exceeded, the corresponding request will fail.
-    ///
-    /// To set to `None` to disable.
-    segment_request_timeout: Option<f64>,
-
-    /// When a request is retried, a timeout is awaited to avoid overloading the
-    /// server.
-    /// That timeout then grows exponentially the more the request has to be
-    /// retried (in the case it fails multiple time consecutively).
-    ///
-    /// This is roughly the initial delay, in milliseconds, the initial backoff
-    /// for a retried segment request should be.
-    segment_backoff_base: f64,
-
-    /// When a request is retried, a timeout is awaited to avoid overloading the
-    /// server.
-    /// That timeout then grows exponentially the more the request has to be
-    /// retried (in the case it fails multiple time consecutively).
-    ///
-    /// This is roughly the maximum delay, in milliseconds, the backoff delay
-    /// for a retried segment request should be.
-    segment_backoff_max: f64,
-
-    /// Timeout, in milliseconds, used for Multivariant playlist requests.
-    ///
-    /// If that timeout is exceeded, the corresponding request will fail.
-    ///
-    /// To set to `None` to disable.
-    multi_variant_playlist_request_timeout: Option<f64>,
-
-    /// When a request is retried, a timeout is awaited to avoid overloading the
-    /// server.
-    /// That timeout then grows exponentially the more the request has to be
-    /// retried (in the case it fails multiple time consecutively).
-    ///
-    /// This is roughly the initial delay, in milliseconds, the initial backoff
-    /// for a retried Multivariant Playlist request should be.
-    multi_variant_playlist_backoff_base: f64,
-
-    /// When a request is retried, a timeout is awaited to avoid overloading the
-    /// server.
-    /// That timeout then grows exponentially the more the request has to be
-    /// retried (in the case it fails multiple time consecutively).
-    ///
-    /// This is roughly the maximum delay, in milliseconds, the backoff delay
-    /// for a retried Multivariant Playlist request should be.
-    multi_variant_playlist_backoff_max: f64,
-
-    /// Timeout, in milliseconds, used for Media playlist requests.
-    ///
-    /// If that timeout is exceeded, the corresponding request will fail.
-    ///
-    /// To set to `None` to disable.
-    media_playlist_request_timeout: Option<f64>,
-
-    /// When a request is retried, a timeout is awaited to avoid overloading the
-    /// server.
-    /// That timeout then grows exponentially the more the request has to be
-    /// retried (in the case it fails multiple time consecutively).
-    ///
-    /// This is roughly the initial delay, in milliseconds, the initial backoff
-    /// for a retried Media Playlist request should be.
-    media_playlist_backoff_base: f64,
-
-    /// When a request is retried, a timeout is awaited to avoid overloading the
-    /// server.
-    /// That timeout then grows exponentially the more the request has to be
-    /// retried (in the case it fails multiple time consecutively).
-    ///
-    /// This is roughly the maximum delay, in milliseconds, the backoff delay
-    /// for a retried Media Playlist request should be.
-    media_playlist_backoff_max: f64,
+    /// Current configuration on which the `Requester` relies.
+    config: RequesterConfiguration,
 }
 
+/// Identify a type of Playlist requested.
 #[derive(PartialEq)]
 pub(crate) enum PlaylistFileType {
+    /// This is a Multivariant Playlist
     MultivariantPlaylist,
+    /// This is a Media Playlist with this associated `id` and `MediaType`.
     MediaPlaylist {
         id: MediaPlaylistPermanentId,
         media_type: MediaType,
@@ -240,31 +133,56 @@ pub(crate) struct WaitingSegmentInfo {
 }
 
 impl WaitingSegmentInfo {
+    /// Returns the type of media of the awaiting segment.
     pub(crate) fn media_type(&self) -> MediaType {
         self.media_type
     }
 
+    /// Returns a reference to the URL leading to this awaiting segment.
+    ///
+    /// Note that this segment might only be present at a byte-range inside the
+    /// resource fetched through that URL. You can know whether this is the case
+    /// by calling `byte_range()`.
     pub(crate) fn url(&self) -> &Url {
         &self.url
     }
 
+    /// If set, the resource is located at `url()` only at the range indicated by the returned
+    /// `ByteRange` object.
     pub(crate) fn byte_range(&self) -> Option<&ByteRange> {
         self.byte_range.as_ref()
     }
 
+    /// Time information on that segment. `None` for initialization segment - which do not have
+    /// media data.
     pub(crate) fn time_info(&self) -> Option<&SegmentTimeInfo> {
         self.time_info.as_ref()
     }
 
+    /// "Context" allowing to detect and compare the quality of this segment with others.
     pub(crate) fn context(&self) -> &SegmentQualityContext {
         &self.context
     }
 }
 
+/// Trait unifying the Requester's segment which are either in a pending request or which are
+/// awaiting one.
 pub(crate) trait RequesterSegmentInfo {
+    /// Returns the type of media of the corresponding segment.
     fn media_type(&self) -> MediaType;
+    /// Returns the start time, in playlist time in seconds, at which the segment starts at.
+    ///
+    /// Should be `None` only for initialization segment.
     fn start_time(&self) -> Option<f64>;
+    /// Returns the duration, in seconds, of that segment.
+    ///
+    /// Should be `None` only for initialization segment.
     fn duration(&self) -> Option<f64>;
+    /// Returns the Url at which that segment is available.
+    ///
+    /// Note that this segment might only be present at a byte-range inside the
+    /// resource fetched through that URL. You can know whether this is the case
+    /// by calling `byte_range()`.
     fn url(&self) -> &Url;
 }
 
@@ -408,18 +326,11 @@ impl Requester {
             segment_request_locked: false,
             base_position: None,
             retry_timers: vec![],
-            segment_request_timeout: None,
-            multi_variant_playlist_request_timeout: None,
-            media_playlist_request_timeout: None,
-            segment_backoff_base: DEFAULT_BACKOFF_BASE,
-            segment_backoff_max: DEFAULT_BACKOFF_MAX,
-            multi_variant_playlist_backoff_base: DEFAULT_BACKOFF_BASE,
-            multi_variant_playlist_backoff_max: DEFAULT_BACKOFF_MAX,
-            media_playlist_backoff_base: DEFAULT_BACKOFF_BASE,
-            media_playlist_backoff_max: DEFAULT_BACKOFF_MAX,
+            config: RequesterConfiguration::default(),
         }
     }
 
+    /// Abort all pending requests and reset the `Requester` to a base state.
     pub(crate) fn reset(&mut self) {
         self.segment_request_locked = true;
         self.abort_all();
@@ -429,6 +340,11 @@ impl Requester {
         self.retry_timers.clear();
         self.base_position = None;
         self.segment_request_locked = false;
+    }
+
+    /// Returns mutable reference to the `Requester`'s inner configuration. Allowing to update it.
+    pub(crate) fn config_mut(&mut self) -> &mut RequesterConfiguration {
+        &mut self.config
     }
 
     /// Update the `Requester`'s inner concept of a `base_position`, which is the position in
@@ -445,104 +361,16 @@ impl Requester {
         self.check_segment_queue();
     }
 
-    #[inline(always)]
-    pub(crate) fn segment_request_timeout(&mut self) -> Option<f64> {
-        self.segment_request_timeout
-    }
-
-    #[inline(always)]
-    pub(crate) fn segment_backoff_base(&mut self) -> f64 {
-        self.segment_backoff_base
-    }
-
-    #[inline(always)]
-    pub(crate) fn segment_backoff_max(&mut self) -> f64 {
-        self.segment_backoff_max
-    }
-
-    #[inline(always)]
-    pub(crate) fn multi_variant_playlist_request_timeout(&mut self) -> Option<f64> {
-        self.multi_variant_playlist_request_timeout
-    }
-
-    #[inline(always)]
-    pub(crate) fn multi_variant_playlist_backoff_base(&mut self) -> f64 {
-        self.multi_variant_playlist_backoff_base
-    }
-
-    #[inline(always)]
-    pub(crate) fn multi_variant_playlist_backoff_max(&mut self) -> f64 {
-        self.multi_variant_playlist_backoff_max
-    }
-
-    #[inline(always)]
-    pub(crate) fn media_playlist_request_timeout(&mut self) -> Option<f64> {
-        self.media_playlist_request_timeout
-    }
-
-    #[inline(always)]
-    pub(crate) fn media_playlist_backoff_base(&mut self) -> f64 {
-        self.media_playlist_backoff_base
-    }
-
-    #[inline(always)]
-    pub(crate) fn media_playlist_backoff_max(&mut self) -> f64 {
-        self.media_playlist_backoff_max
-    }
-
-    #[inline(always)]
-    pub(crate) fn update_segment_request_timeout(&mut self, timeout: Option<f64>) {
-        self.segment_request_timeout = timeout;
-    }
-
-    #[inline(always)]
-    pub(crate) fn update_segment_backoff_base(&mut self, base: f64) {
-        self.segment_backoff_base = base;
-    }
-
-    #[inline(always)]
-    pub(crate) fn update_segment_backoff_max(&mut self, max: f64) {
-        self.segment_backoff_max = max;
-    }
-
-    #[inline(always)]
-    pub(crate) fn update_multi_variant_playlist_request_timeout(&mut self, timeout: Option<f64>) {
-        self.multi_variant_playlist_request_timeout = timeout;
-    }
-
-    #[inline(always)]
-    pub(crate) fn update_multi_variant_playlist_backoff_base(&mut self, base: f64) {
-        self.multi_variant_playlist_backoff_base = base;
-    }
-
-    #[inline(always)]
-    pub(crate) fn update_multi_variant_playlist_backoff_max(&mut self, max: f64) {
-        self.multi_variant_playlist_backoff_max = max;
-    }
-
-    #[inline(always)]
-    pub(crate) fn update_media_playlist_request_timeout(&mut self, timeout: Option<f64>) {
-        self.media_playlist_request_timeout = timeout;
-    }
-
-    #[inline(always)]
-    pub(crate) fn update_media_playlist_backoff_base(&mut self, base: f64) {
-        self.media_playlist_backoff_base = base;
-    }
-
-    #[inline(always)]
-    pub(crate) fn update_media_playlist_backoff_max(&mut self, max: f64) {
-        self.media_playlist_backoff_max = max;
-    }
-
     /// Fetch either the MultivariantPlaylist or a MediaPlaylist reachable
     /// through the given `url` and add its `request_id` to `pending_playlist_requests`.
     ///
     /// Once it succeeds, the `on_request_finished` function will be called.
     pub(crate) fn fetch_playlist(&mut self, url: Url, playlist_type: PlaylistFileType) {
         let timeout = match playlist_type {
-            PlaylistFileType::MultivariantPlaylist => self.multi_variant_playlist_request_timeout,
-            PlaylistFileType::MediaPlaylist { .. } => self.media_playlist_request_timeout,
+            PlaylistFileType::MultivariantPlaylist => {
+                self.config.multi_variant_playlist_request_timeout
+            }
+            PlaylistFileType::MediaPlaylist { .. } => self.config.media_playlist_request_timeout,
         };
         let url_ref = url.get_ref();
         let request_id = jsFetch(url_ref, None, None, timeout);
@@ -680,7 +508,20 @@ impl Requester {
                 .iter()
                 .position(|x| x.request_id == request_id)
             {
-                self.retry_playlist_request(pos, reason, status)
+                match self.pending_playlist_requests[pos].playlist_type {
+                    PlaylistFileType::MultivariantPlaylist => self.retry_playlist_request(
+                        pos,
+                        reason,
+                        status,
+                        self.config.multi_variant_playlist_max_retry,
+                    ),
+                    _ => self.retry_playlist_request(
+                        pos,
+                        reason,
+                        status,
+                        self.config.media_playlist_max_retry,
+                    ),
+                }
             } else {
                 Logger::info(&format!("Req: Request to retry not found, id:{request_id}"));
                 RetryResult::NotFound
@@ -714,7 +555,7 @@ impl Requester {
                         seg.url.get_ref(),
                         range_start,
                         range_end,
-                        self.segment_request_timeout,
+                        self.config.segment_request_timeout,
                     );
                     seg.request_id = request_id;
                 } else {
@@ -726,10 +567,10 @@ impl Requester {
                         pla.is_waiting_for_retry = false;
                         let timeout = match pla.playlist_type {
                             PlaylistFileType::MultivariantPlaylist => {
-                                self.multi_variant_playlist_request_timeout
+                                self.config.multi_variant_playlist_request_timeout
                             }
                             PlaylistFileType::MediaPlaylist { .. } => {
-                                self.media_playlist_request_timeout
+                                self.config.media_playlist_request_timeout
                             }
                         };
                         let request_id = jsFetch(pla.url.get_ref(), None, None, timeout);
@@ -846,10 +687,8 @@ impl Requester {
         reason: RequestErrorReason,
         status: Option<u32>,
     ) -> RetryResult {
-        Logger::warn("BEFORE");
         let req = self.pending_segment_requests.get(pos).unwrap();
-        Logger::warn("AFTER");
-        if req.attempts_failed >= 3 {
+        if req.attempts_failed >= self.config.segment_request_max_retry {
             Logger::info(&format!(
                 "Req: Too much attempts for segment request id:{} a:{}",
                 req.request_id, req.attempts_failed
@@ -866,8 +705,8 @@ impl Requester {
             req.is_waiting_for_retry = true;
             let retry_delay = get_waiting_delay(
                 req.attempts_failed,
-                self.segment_backoff_base,
-                self.segment_backoff_max,
+                self.config.segment_backoff_base,
+                self.config.segment_backoff_max,
             );
             Logger::info(&format!(
                 "Req: Retrying segment request after timer id:{} d:{} a:{}",
@@ -889,9 +728,10 @@ impl Requester {
         pos: usize,
         reason: RequestErrorReason,
         status: Option<u32>,
+        max_retry: u32,
     ) -> RetryResult {
         let req = self.pending_playlist_requests.get(pos).unwrap();
-        if req.attempts_failed >= 3 {
+        if req.attempts_failed >= max_retry {
             Logger::info(&format!(
                 "Req: Too much attempts for playlist request id:{} a:{}",
                 req.request_id, req.attempts_failed
@@ -908,12 +748,12 @@ impl Requester {
             req.is_waiting_for_retry = true;
             let (base, max) = match req.playlist_type {
                 PlaylistFileType::MultivariantPlaylist => (
-                    self.multi_variant_playlist_backoff_base,
-                    self.multi_variant_playlist_backoff_max,
+                    self.config.multi_variant_playlist_backoff_base,
+                    self.config.multi_variant_playlist_backoff_max,
                 ),
                 PlaylistFileType::MediaPlaylist { .. } => (
-                    self.media_playlist_backoff_base,
-                    self.media_playlist_backoff_max,
+                    self.config.media_playlist_backoff_base,
+                    self.config.media_playlist_backoff_max,
                 ),
             };
             let retry_delay = get_waiting_delay(req.attempts_failed, base, max);
@@ -1062,7 +902,7 @@ impl Requester {
             url_ref,
             range_start,
             range_end,
-            self.segment_request_timeout,
+            self.config.segment_request_timeout,
         );
         Logger::debug(&format!(
             "Req: Performing segment request. u:{url_ref} id:{request_id}"
@@ -1123,4 +963,40 @@ fn get_waiting_delay(retry_attempt: u32, base: f64, max: f64) -> f64 {
     let delay = f64::min(base * f64::from(u32::pow(2, retry_attempt - 1)), max);
     let fuzzing_factor = (jsGetRandom() * 2. - 1.) * 0.3; // Max 1.3 Min 0.7
     delay * (fuzzing_factor + 1.)
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, PartialOrd, Eq, Ord)]
+enum PriorityLevel {
+    ExtremelyHigh = 0,
+    VeryHigh = 1,
+    High = 2,
+    Medium = 3,
+    Low = 4,
+    VeryLow = 5,
+    ExtremelyLow = 6,
+}
+
+impl PriorityLevel {
+    fn from_time_distance(distance: f64) -> Self {
+        let step_info = PRIORITY_STEPS
+            .iter()
+            .enumerate()
+            .find(|(_, step)| distance < **step);
+        match step_info {
+            Some((0, _)) => PriorityLevel::ExtremelyHigh,
+            Some((1, _)) => PriorityLevel::VeryHigh,
+            Some((2, _)) => PriorityLevel::High,
+            Some((3, _)) => PriorityLevel::Medium,
+            Some((4, _)) => PriorityLevel::Low,
+            Some((5, _)) => PriorityLevel::VeryLow,
+            _ => PriorityLevel::ExtremelyLow,
+        }
+    }
+}
+
+fn get_segment_priority(start_time: Option<f64>, current_time: f64) -> PriorityLevel {
+    match start_time {
+        Some(start_time) => PriorityLevel::from_time_distance(start_time - current_time),
+        _ => PriorityLevel::ExtremelyHigh,
+    }
 }

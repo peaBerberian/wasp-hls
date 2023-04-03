@@ -32,7 +32,7 @@ access to two files:
    internal logic.
 
 Both of those files can be retrieved [in the release page](https://github.com/peaBerberian/wasp-hls/releases)
-(you MUST choose the one linked to your actual `WaspHlsPlayer`'s version).
+(you should choose the one linked to your actual `WaspHlsPlayer`'s version).
 They then have to be served via HTTP(S) (through a solution of your choosing),
 and can be communicated to the `WaspHlsPlayer` through its `initialize` method:
 

@@ -10,7 +10,7 @@ the `WaspHlsPlayer`, namely its worker file and WebAssembly file are
 setup.
 
 Both of those files can be retrieved in [in the release page](https://github.com/peaBerberian/wasp-hls/releases),
-note that you MUST chose the files linked to the `WaspHlsPlayer`'s version used
+note that you should chose the files linked to the `WaspHlsPlayer`'s version used
 by your application.
 
 After recuperating both of those files, you need to host them, to then provide
@@ -150,7 +150,7 @@ const initializationPromise = player.initialize({
 
   1. initObject `Object`: The properties required for initialization.
 
-     This object MUST have the following properties present:
+     This object should have the following properties present:
 
      - _workerUrl_ (`string`): URL to the Worker file, that you have hosted.
 

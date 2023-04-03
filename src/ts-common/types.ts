@@ -1194,18 +1194,118 @@ export interface SetAudioTrackMainMessage {
   };
 }
 
+/**
+ * Configuration object relied on by the `WaspHlsPlayer`.
+ */
 export interface WaspHlsPlayerConfig {
+  /**
+   * Amount of buffer, in seconds, to "build" ahead of the currently wated
+   * position.
+   *
+   * Once that amount is reached, we'll stop loading new data until we go under
+   * again.
+   */
   bufferGoal: number;
 
   // Request options
 
+  /**
+   * Amount of times a failed segment request might be retried on errors that
+   * seem temporary: `1` meaning it will be retried once, `2` twice, `0`
+   * never retried etc.
+   */
+  segmentMaxRetry: number | undefined;
+  /**
+   * Number of milliseconds after which a segment request with no response will
+   * be automatically cancelled due to a "timeout".
+   *
+   * Depending on the configuration, the segment request might then be retried.
+   */
   segmentRequestTimeout: number | null | undefined;
+  /**
+   * If a segment request has to be retried, we will wait an amount of time
+   * before restarting the request. That delay raises if the same segment
+   * request fails multiple consecutive times, starting from around this value
+   * in milliseconds to `segmentBackoffMax` milliseconds.
+   *
+   * The step at which it raises is not configurable here, but can be resumed
+   * as a power of 2 raise on the previous value each time.
+   */
   segmentBackoffBase: number;
+  /**
+   * If a segment request has to be retried, we will wait an amount of time
+   * before restarting the request. That delay raises if the same segment
+   * request fails multiple consecutive times, starting from around
+   * `segmentBackoffBase` milliseconds to this value in milliseconds.
+   *
+   * The step at which it raises is not configurable here, but can be resumed
+   * as a power of 2 raise on the previous value each time.
+   */
   segmentBackoffMax: number;
+  /**
+   * Amount of times a failed Multivariant Playlist request might be retried on
+   * errors that seem temporary: `1` meaning it will be retried once, `2` twice,
+   * `0` never retried etc.
+   */
+  multiVariantPlaylistMaxRetry: number | undefined;
+  /**
+   * Number of milliseconds after which a Multivariant Playlist request with no
+   * response will be automatically cancelled due to a "timeout".
+   *
+   * Depending on the configuration, the request might then be retried.
+   */
   multiVariantPlaylistRequestTimeout: number | null | undefined;
+  /**
+   * If a Multivariant Playlist request has to be retried, we will wait an
+   * amount of time before restarting the request. That delay raises if the same
+   * request fails multiple consecutive times, starting from around this value
+   * in milliseconds to `segmentBackoffMax` milliseconds.
+   *
+   * The step at which it raises is not configurable here, but can be resumed
+   * as a power of 2 raise on the previous value each time.
+   */
   multiVariantPlaylistBackoffBase: number;
+  /**
+   * If a Multivariant Playlist request has to be retried, we will wait an
+   * amount of time before restarting the request. That delay raises if the
+   * same request fails multiple consecutive times, starting from around
+   * `segmentBackoffBase` milliseconds to this value in milliseconds.
+   *
+   * The step at which it raises is not configurable here, but can be resumed
+   * as a power of 2 raise on the previous value each time.
+   */
   multiVariantPlaylistBackoffMax: number;
+  /**
+   * Amount of times a failed Media Playlist request might be retried on errors
+   * that seem temporary: `1` meaning it will be retried once, `2` twice, `0`
+   * never retried etc.
+   */
+  mediaPlaylistMaxRetry: number | undefined;
+  /**
+   * Number of milliseconds after which a Media Playlist request with no
+   * response will be automatically cancelled due to a "timeout".
+   *
+   * Depending on the configuration, the request might then be retried.
+   */
   mediaPlaylistRequestTimeout: number;
+  /**
+   * If a Media Playlist request has to be retried, we will wait an amount of
+   * time before restarting the request. That delay raises if the same request
+   * fails multiple consecutive times, starting from around this value in
+   * milliseconds to `segmentBackoffMax` milliseconds.
+   *
+   * The step at which it raises is not configurable here, but can be resumed
+   * as a power of 2 raise on the previous value each time.
+   */
   mediaPlaylistBackoffBase: number;
+  /**
+   * If a Media Playlist request has to be retried, we will wait an amount of
+   * time before restarting the request. That delay raises if the same request
+   * fails multiple consecutive times, starting from around `segmentBackoffBase`
+   * milliseconds to this value in milliseconds.
+   *
+   * The step at which it raises is not configurable here, but can be resumed
+   * as a power of 2 raise on the previous value each time.
+   */
   mediaPlaylistBackoffMax: number;
 }
