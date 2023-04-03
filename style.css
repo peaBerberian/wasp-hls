@@ -89,8 +89,8 @@ body {
   width: 80%;
   min-width: 500px;
   position: relative;
-  max-width: 1280px;
-  max-height: 720px;
+  max-width: 992px;
+  max-height: 558px;
   margin: 0px auto 7px auto;
 }
 
