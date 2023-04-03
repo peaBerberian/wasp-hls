@@ -166,8 +166,8 @@ export default function BufferContentGraph({
     ) {
       return;
     }
-    for (let i = 0; i < currentRangesScaled.length; i++) {
-      paintRange(currentRangesScaled[i], ctx);
+    for (const scaledRange of currentRangesScaled) {
+      paintRange(scaledRange, ctx);
     }
     paintCurrentPosition(position, usedMinimum, usedMaximum, ctx);
   }, [usedMinimum, usedMaximum, currentRangesScaled]);

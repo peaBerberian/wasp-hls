@@ -38,7 +38,7 @@ function SpeedSetting({
   const optionsEl = React.useMemo(() => {
     return OPTIONS.map((optName, index) => {
       return (
-        <option key={index} value={index}>
+        <option key={optName} value={index}>
           {optName}
         </option>
       );

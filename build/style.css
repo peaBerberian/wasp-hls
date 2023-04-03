@@ -18,7 +18,7 @@ body {
   z-index: 10;
   min-width: 542px;
   margin-bottom: 30px;
-  padding: 10px 10px;
+  padding: 10px;
 }
 
 .header-right {
@@ -33,7 +33,7 @@ body {
 
 .header-right svg:hover {
   height: 40px;
-  fill: #fff900;;
+  fill: #fff900;
   padding-top: 3px;
 }
 

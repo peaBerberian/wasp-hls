@@ -56,7 +56,6 @@ export function requestFullscreen(elt: HTMLElement): void {
     } else if ((elt as any).mozRequestFullScreen) {
       (elt as any).mozRequestFullScreen();
     } else if ((elt as any).webkitRequestFullscreen) {
-      // TODO Open issue in TypeScript?
       (elt as any).webkitRequestFullscreen(
         (Element as any).ALLOW_KEYBOARD_INPUT
       );

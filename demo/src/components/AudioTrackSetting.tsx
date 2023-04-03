@@ -15,9 +15,6 @@ function AudioTrackSetting({
   isAuto: boolean;
   updateAudioTrack: (t: AudioTrackInfo) => void;
 }): JSX.Element | null {
-  if (audioTrackList.length === 0) {
-    return null;
-  }
   const onSelectChange = React.useCallback(
     (evt: React.SyntheticEvent<HTMLSelectElement>) => {
       if (audioTrackList.length <= 1) {
@@ -38,12 +35,16 @@ function AudioTrackSetting({
   const optionsEl = React.useMemo(() => {
     return audioTrackList.map((t, index) => {
       return (
-        <option key={index} value={index}>
+        <option key={t.id} value={index}>
           {formatAudioTrack(t)}
         </option>
       );
     });
   }, [audioTrack, audioTrackList]);
+
+  if (audioTrackList.length === 0) {
+    return null;
+  }
 
   return (
     <div className="video-setting audio-track-setting">

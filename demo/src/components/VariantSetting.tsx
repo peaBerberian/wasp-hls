@@ -16,9 +16,6 @@ function VariantSetting({
   isAuto: boolean;
   updateVariant: (v: VariantInfo | undefined) => void;
 }): JSX.Element | null {
-  if (variantList.length < 1) {
-    return null;
-  }
   const onSelectChange = React.useCallback(
     (evt: React.SyntheticEvent<HTMLSelectElement>) => {
       if (variantList.length < 2) {
@@ -43,7 +40,7 @@ function VariantSetting({
   const optionsEl = React.useMemo(() => {
     const variantChoices = variantList.map((v, index) => {
       return (
-        <option key={index + 1} value={index + 1}>
+        <option key={v.id} value={index + 1}>
           {getVariantLine(v)}
         </option>
       );
@@ -62,6 +59,10 @@ function VariantSetting({
       variantChoices,
     ];
   }, [isAuto, variant, variantList]);
+
+  if (variantList.length < 1) {
+    return null;
+  }
 
   return (
     <div className="video-setting variant-setting">

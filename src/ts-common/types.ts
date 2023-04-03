@@ -211,7 +211,6 @@ export interface ErrorWorkerMessage {
       | MultivariantPlaylistParsingErrorWorkerInfo
       | MediaPlaylistParsingErrorWorkerInfo
       | SegmentParsingErrorWorkerInfo
-      | MediaPlaylistRequestErrorWorkerInfo
       | SegmentRequestErrorWorkerInfo
       | MultivariantPlaylistRequestErrorWorkerInfo
       | MediaPlaylistRequestErrorWorkerInfo
@@ -250,7 +249,6 @@ export interface WarningWorkerMessage {
       | MultivariantPlaylistParsingErrorWorkerInfo
       | MediaPlaylistParsingErrorWorkerInfo
       | SegmentParsingErrorWorkerInfo
-      | MediaPlaylistRequestErrorWorkerInfo
       | SegmentRequestErrorWorkerInfo
       | MultivariantPlaylistRequestErrorWorkerInfo
       | MediaPlaylistRequestErrorWorkerInfo
