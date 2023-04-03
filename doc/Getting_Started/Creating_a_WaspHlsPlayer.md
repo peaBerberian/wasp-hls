@@ -52,6 +52,35 @@ player
   );
 ```
 
+Alternatively, if you don't want the hassle of having to serve those files
+separately when developping, the `WaspHlsPlayer` also provide both the
+WebAssembly and Worker files through JavaScript-embedded versions, respectively
+through the `"wasp-hls/wasm"` and the `"wasp-hls/worker"` path:
+
+```js
+import EmbeddedWasm from "wasp-hls/wasm";
+import EmbeddedWorker from "wasp-hls/worker";
+
+player
+  .initialize({
+    workerUrl: EmbeddedWorker,
+    wasmUrl: EmbeddedWasm,
+  })
+  .then(
+    () => {
+      // we can now use the player
+    },
+    (err) => {
+      console.error("Could not initialize WaspHlsPlayer:", err);
+    }
+  );
+```
+
+Note however that this leads to a huge file size (though which is drastically
+reduced when compressed) and to some small inefficencies on initialization (as
+those JavaScript files have to first be interpreted in the main thread), which
+is why I recommend serving both those files separately for production.
+
 It's also possible to communicate an initial bandwidth estimate through the
 `initialize` method to improve the `WaspHlsPlayer`'s accuracy regarding its
 initially loaded quality.

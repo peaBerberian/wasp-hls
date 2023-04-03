@@ -38,7 +38,6 @@ time period.
 _Schema of how HLS basically works, found on Apple's Website which is the one
 behind HLS_
 
-
 This architecture allows to:
 
 - only load the wanted media data (thus not e.g. also loading all unwanted
@@ -259,6 +258,8 @@ Tracks:
 Miscellaneous:
 
 - [x] Error API
+- [x] Export embedded versions of the WebAssembly and Worker files to facilitate
+      application's development code.
 - [ ] Initial position API
       _Priority: average_
 - [ ] Delta playlist handling.

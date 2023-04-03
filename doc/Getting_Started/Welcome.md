@@ -19,26 +19,34 @@ buffering operations won't be felt when interacting with the page.
 
 ## Very quick start
 
-Because on a Web Browser, both WebWorker and WebAssembly files have to be
-loaded separately from your main script, both of those also have to be
-served (on your servers) separately from your application's script.
+To let you quickly test the project, the `WaspHlsPlayer` provides embedded
+versions of its WebAssembly and Worker files, even if I recommend to store
+and serve those as separate files on production (more details in the rest of the
+documentation).
 
-You can find them [on the release page](https://github.com/peaBerberian/wasp-hls/releases),
-they are respectively the files whose name starts by "worker" and "wasm", listed
-in the files of the release you're using (on the bottom of the release note).
+You can thus very quickly test the `WaspHlsPlayer` by just installing it:
 
-Once they are hosted on your server, you can now play your HLS content by
-writing:
+```sh
+// With npm
+npm install wasp-hls
+
+// or with yarn
+yarn add wasp-hls
+```
+
+And then running the following JavaScript file.
 
 ```js
 import WaspHlsPlayer from "wasp-hls";
+import EmbeddedWasm from "wasp-hls/wasm";
+import EmbeddedWorker from "wasp-hls/worker";
 
 const player = new WaspHlsPlayer(videoElement);
 
 player
   .initialize({
-    workerUrl: WORKER_URL,
-    wasmUrl: WASM_URL,
+    workerUrl: EmbeddedWorker,
+    wasmUrl: EmbeddedWasm,
   })
   .then(
     () => {
@@ -51,12 +59,8 @@ player
   );
 ```
 
-Where:
-
-- `WORKER_URL` is the URL to the `WaspHlsPlayer`'s WebWorker file,
-- `WASM_URL` is the URL of the `WaspHlsPlayer`'s WebAssembly file and
-- `HLS_MULTIVARIANT_PLAYLIST_URL` is the URL to the main playlist (called
-  either the Multivariant Playlist or the Master Playlist) of your HLS content.
+Where `HLS_MULTIVARIANT_PLAYLIST_URL` is the URL to the main playlist (called
+either the Multivariant Playlist or the Master Playlist) of your HLS content.
 
 Of course, once `initialize` has succeeded, you can play any HLS content you
 want on that `WaspHlsPlayer` instance.

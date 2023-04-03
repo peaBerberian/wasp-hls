@@ -6,3 +6,5 @@
 /.gitignore
 /Cargo.lock
 /package-lock.json
+/wasm.js
+/worker.js

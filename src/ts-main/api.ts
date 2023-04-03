@@ -17,7 +17,12 @@ import DEFAULT_CONFIG from "./default_config";
 import { WaspError, WaspInitializationError } from "./errors";
 import postMessageToWorker from "./postMessageToWorker";
 import { ContentMetadata, PlayerState } from "./types";
-import { canDemuxMpeg2Ts, requestStopForContent, waitForLoad } from "./utils";
+import {
+  canDemuxMpeg2Ts,
+  potentiallyRelativeUrlToAbsoluteUrl,
+  requestStopForContent,
+  waitForLoad,
+} from "./utils";
 import {
   onAppendBufferMessage,
   onAttachMediaSourceMessage,
@@ -808,7 +813,7 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
           /* eslint-disable-next-line */
           (MediaSource as any).canConstructInDedicatedWorker === true,
         canDemuxMpeg2Ts: canDemuxMpeg2Ts(),
-        wasmUrl: opts.wasmUrl,
+        wasmUrl: potentiallyRelativeUrlToAbsoluteUrl(opts.wasmUrl),
         initialBandwidth: opts.initialBandwidth ?? 0,
         logLevel: logger.getLevel(),
         initialConfig: this.__config__,

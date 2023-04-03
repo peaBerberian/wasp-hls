@@ -42,6 +42,40 @@ player
   );
 ```
 
+### Preventing the need to serve those files separately
+
+Note that if you don't want to have the supplementary step of serving both those
+files when developping (as opposed to when it is "in production"), the
+`WaspHlsPlayer` also provides embedded versions of both.
+With them, the code would be written as:
+
+```js
+import EmbeddedWasm from "wasp-hls/wasm";
+import EmbeddedWorker from "wasp-hls/worker";
+
+player
+  .initialize({
+    workerUrl: EmbeddedWorker,
+    wasmUrl: EmbeddedWasm,
+    initialBandwidth: 200000,
+  })
+  .then(
+    () => {
+      // we can now use the player
+    },
+    (err) => {
+      console.error("Could not initialize WaspHlsPlayer:", err);
+    }
+  );
+```
+
+However I don't recommend relying on embedded versions for production:
+Those versions lead to a huge file size (though which is drastically
+reduced when compressed) and to some small inefficencies on initialization (as
+those JavaScript files have to first be interpreted in the main thread).
+
+### Be notified of when initialization succeeds (or fails)
+
 As you can see, the `initialize` method returns a promise, which is only
 resolved once the initialization process succeeded. You have to wait for
 that condition before using most of the `WaspHlsPlayer`'s methods.

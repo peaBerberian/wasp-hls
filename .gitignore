@@ -7,4 +7,7 @@
 !/build/logo-white.png
 !/build/favicon.ico
 
+/wasm.js
+/worker.js
+
 /doc/generated

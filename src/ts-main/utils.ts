@@ -164,3 +164,13 @@ export function clearElementSrc(element: HTMLMediaElement): void {
   // Microsoft recommended to use element.removeAttr("src").
   element.removeAttribute("src");
 }
+
+/**
+ * Transform a URL which is potentially relative to the current script to
+ * an absolute URL.
+ * @param {string} url
+ * @returns {string}
+ */
+export function potentiallyRelativeUrlToAbsoluteUrl(url: string): string {
+  return new URL(url, location.href).toString();
+}
