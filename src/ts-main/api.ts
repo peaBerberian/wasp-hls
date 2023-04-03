@@ -1102,24 +1102,47 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
 }
 
 export interface LoadOptions {
+  /**
+   * Optional position to start at.
+   *
+   * Either as a position directly in playlist time in seconds, or as an object
+   * allowing to give relative position to a given base.
+   */
   startingPosition?: StartingPosition | number | undefined;
 }
 
+/**
+ * Format of the more complex way to express a starting position.
+ */
 export type StartingPosition =
   | AbsoluteStartingPosition
   | FromBeginningStartingPosition
   | FromEndStartingPosition;
 
+/**
+ * Object to set when wanting an absolute position, in terms of playlist time in
+ * seconds.
+ */
 interface AbsoluteStartingPosition {
   startType: "Absolute";
   position: number;
 }
 
+/**
+ * Object to set when wanting a position in seconds relative to the initial
+ * minimum position of the content.
+ */
 interface FromBeginningStartingPosition {
   startType: "FromBeginning";
   position: number;
 }
 
+/**
+ * Object to set when wanting a position in seconds relative to the initial
+ * maximum position of the content.
+ * Here a higher `position` will mean further BEFORE the maximum position, and
+ * thus an earlier position.
+ */
 interface FromEndStartingPosition {
   startType: "FromEnd";
   position: number;
