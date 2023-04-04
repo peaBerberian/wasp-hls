@@ -43,11 +43,6 @@ pub(super) struct SourceBuffer {
     /// buffer, so special considerations, such as calling the `jsFlush` function might need to be
     /// taken on buffer updates.
     needs_reflush: bool,
-
-    /// Identifier for the next pushed media segment.
-    /// Identifying pushed segments this way may be helpful to keep track of when that operation is
-    /// finished.
-    next_segment_id: u64,
 }
 
 impl SourceBuffer {
@@ -65,7 +60,6 @@ impl SourceBuffer {
         Logger::info(&format!("Creating new {} SourceBuffer", media_type));
         match jsAddSourceBuffer(media_type, &typ).result() {
             Ok(x) => Ok(Self {
-                next_segment_id: 0,
                 id: x,
                 typ,
                 queue: VecDeque::new(),
@@ -112,12 +106,8 @@ impl SourceBuffer {
         segment_data: JsMemoryBlob,
     ) -> Result<AppendBufferResponse, PushSegmentError> {
         self.was_used = true;
-        let segment_id = self.next_segment_id;
-        self.next_segment_id += 1;
-        self.queue.push_back(SourceBufferQueueElement::PushInit((
-            segment_data.id(),
-            segment_id,
-        )));
+        self.queue
+            .push_back(SourceBufferQueueElement::PushInit(segment_data.id()));
         Logger::debug(&format!(
             "Buffer {} ({}): Pushing initialization segment",
             self.id, self.typ
@@ -127,10 +117,7 @@ impl SourceBuffer {
                 self.media_type,
                 err,
             )),
-            Ok(x) => Ok(AppendBufferResponse {
-                parsed: x,
-                id: segment_id,
-            }),
+            Ok(x) => Ok(AppendBufferResponse { parsed: x }),
         }
     }
 
@@ -142,8 +129,7 @@ impl SourceBuffer {
     /// # Arguments
     ///
     /// * `data` - Actual data AND metadata on the segment you want to push. See
-    /// `MediaSegmentPushData`
-    ///   documentation for more information.
+    /// `MediaSegmentPushData` documentation for more information.
     ///
     /// * `parse_time_info` - If set to `true`, the segment's data will be read before pushing it
     ///   to try recuperate its timing information. If it has been parsed with success, it will
@@ -156,20 +142,16 @@ impl SourceBuffer {
         self.last_segment_pushed = false;
         self.was_used = true;
         let segment_data = data.segment_data.id();
-        let segment_id = self.next_segment_id;
-        self.next_segment_id += 1;
+        let id = data.id;
         self.queue
-            .push_back(SourceBufferQueueElement::PushMedia((data, segment_id)));
+            .push_back(SourceBufferQueueElement::PushMedia((data, id)));
         Logger::debug(&format!("Buffer {} ({}): Pushing", self.id, self.typ));
         match jsAppendBuffer(self.id, segment_data, parse_time_info).result() {
             Err(err) => Err(PushSegmentError::from_js_append_buffer_error(
                 self.media_type,
                 err,
             )),
-            Ok(x) => Ok(AppendBufferResponse {
-                parsed: x,
-                id: segment_id,
-            }),
+            Ok(x) => Ok(AppendBufferResponse { parsed: x }),
         }
     }
 
@@ -237,6 +219,12 @@ impl SourceBuffer {
 
 /// Structure describing a media segment that should be pushed to the SourceBuffer.
 pub(crate) struct MediaSegmentPushData {
+    /// Identifier used to identify the pushed segment in question.
+    ///
+    /// It can be useful for example to easily detect which segment has succesfully been pushed or
+    /// caused an issue.
+    id: u64,
+
     /// Raw data of the segment to push.
     segment_data: JsMemoryBlob,
 
@@ -250,11 +238,18 @@ impl MediaSegmentPushData {
     ///
     /// # Arguments
     ///
+    /// * `id` - Identifier for the `MediaSegmentPushData`
+    ///
     /// * `segment_data` - The segment's actual data.
     ///
     /// * `time_info` - The playlist-originated time information on that segment.
-    pub(crate) fn new(segment_data: JsMemoryBlob, time_info: SegmentTimeInfo) -> Self {
+    pub(super) fn new(
+        id: u64,
+        segment_data: JsMemoryBlob,
+        time_info: SegmentTimeInfo,
+    ) -> Self {
         Self {
+            id,
             segment_data,
             time_info,
         }
@@ -280,19 +275,9 @@ impl MediaSegmentPushData {
 pub(crate) struct AppendBufferResponse {
     /// Time information optionally parsed from the segment itself.
     parsed: Option<ParsedSegmentInfo>,
-
-    /// Identifier for the segment, this same identifier will also be returned by
-    /// `on_operation_end` once it finishes the corresponding operation.
-    id: u64,
 }
 
 impl AppendBufferResponse {
-    /// Returns the `id` for the pushed segment, this same identifier will also be returned by
-    /// `on_operation_end` once it finishes the corresponding operation.
-    pub(crate) fn segment_id(&self) -> u64 {
-        self.id
-    }
-
     /// Returns the optionally parsed start time, in seconds, found when parsing the segment's
     /// internals.
     ///
@@ -315,9 +300,11 @@ impl AppendBufferResponse {
 /// Enum listing possible operations awaiting to be performed on a `SourceBuffer`.
 pub(crate) enum SourceBufferQueueElement {
     /// A new initialization segment needs to be pushed.
-    PushInit((ResourceId, u64)),
+    PushInit(ResourceId),
 
     /// A new chunk of media data needs to be pushed.
+    /// The `u64` is the corresponding `id` of the given `MediaSegmentPushData` when the
+    /// `push_media_segment` method was called.
     PushMedia((MediaSegmentPushData, u64)),
 
     /// Some already-buffered needs to be removed, `start` and `end` giving the

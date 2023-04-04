@@ -77,7 +77,9 @@ enum PlayerReadyState {
     Stopped,
 
     /// We're preparing a content's playlist, MediaSource and SourceBuffers
-    Loading { starting_position: Option<StartingPosition> },
+    Loading {
+        starting_position: Option<StartingPosition>,
+    },
 
     /// The SourceBuffers are all ready but currently awaiting segments before
     /// being aple to play.
@@ -91,10 +93,7 @@ enum PlayerReadyState {
 
 impl PlayerReadyState {
     pub(crate) fn is_loading(&self) -> bool {
-        match self {
-            PlayerReadyState::Loading { .. } => true,
-            _ => false,
-        }
+        matches!(self, PlayerReadyState::Loading { .. })
     }
 }
 
@@ -109,7 +108,10 @@ pub struct StartingPosition {
 impl StartingPosition {
     #[wasm_bindgen(constructor)]
     pub fn new(start_type: StartingPositionType, position: f64) -> Self {
-        Self { start_type, position }
+        Self {
+            start_type,
+            position,
+        }
     }
 }
 

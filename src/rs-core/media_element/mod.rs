@@ -6,6 +6,7 @@ use crate::bindings::{
     AttachMediaSourceErrorCode, JsResult, MediaType, SourceBufferId,
 };
 use crate::dispatcher::{JsMemoryBlob, JsTimeRanges, MediaObservation, MediaSourceReadyState};
+use crate::parser::SegmentTimeInfo;
 use crate::Logger;
 pub(crate) use source_buffers::{PushSegmentError, RemoveDataError};
 
@@ -294,16 +295,64 @@ impl MediaElementReference {
         }
     }
 
+    /// Announces that a media segment will be imminently pushed through the `push_media_segment`
+    /// method and returns metadata allowing to call the latter method.
+    ///
+    /// Push operations are performed in two steps like this (first through
+    /// `announce_incoming_media_segment` then through `push_media_segment`) because the second
+    /// method call may take a lot of blocking time depending on the type of segment, especially
+    /// if there's transmuxing involved.
+    ///
+    /// Hence splitting those methods in two allows to:
+    ///
+    ///   1. "announce" that a media segment will be assured to soon be pushed to the buffer,
+    ///      allowing the `MediaElementReference` to update its internal inventory so it already
+    ///      contains the corresponding segment entry.
+    ///
+    ///   2. perform all operations you now would prefer to perform quickly, such as choosing which
+    ///      is the next segment to request.
+    ///      As this step might rely on the inventory, having called
+    ///      `announce_incoming_media_segment` first is thus here preferrable.
+    ///
+    ///   3. Actually push the corresponding segment, which may take some blocking time, but we do
+    ///      not care much as all urgent tasks have been done in the previous point.
+    pub(crate) fn announce_incoming_media_segment(
+        &mut self,
+        media_type: MediaType,
+        segment_data: JsMemoryBlob,
+        time_info: SegmentTimeInfo,
+        context: SegmentQualityContext,
+    ) -> MediaSegmentPushData {
+        let metadata_start = time_info.start();
+        let metadata_end = time_info.end();
+        let inventory_metadata = BufferedSegmentMetadata {
+            start: metadata_start,
+            end: metadata_end,
+            context,
+            playlist_start: metadata_start,
+            playlist_end: metadata_end,
+        };
+        let id = match media_type {
+            MediaType::Audio => self.audio_inventory.insert_segment(inventory_metadata),
+            MediaType::Video => self.video_inventory.insert_segment(inventory_metadata),
+        };
+        MediaSegmentPushData::new(id, segment_data, time_info)
+    }
+
     /// Push a media segment to the SourceBuffer of the media type given.
     ///
-    /// You should have created a SourceBuffer of the corresponding type with
-    /// `create_source_buffer` before calling this method. If you did not this method will return a
-    /// `NoSourceBuffer` error.
+    /// Before calling this method:
+    ///
+    ///   1. You should have created a SourceBuffer of the corresponding type with
+    ///      `create_source_buffer`. If you did not this method will return a `NoSourceBuffer`
+    ///      error.
+    ///
+    ///   2. You should have called `announce_incoming_media_segment` first for the same segment,
+    ///      and here use the return value of that method.
     pub(crate) fn push_media_segment(
         &mut self,
         media_type: MediaType,
         metadata: MediaSegmentPushData,
-        context: SegmentQualityContext,
     ) -> Result<(), PushSegmentError> {
         let has_media_offset = self.media_offset.is_some();
         match self.buffer_mut_for(media_type) {
@@ -311,24 +360,9 @@ impl MediaElementReference {
 
             Some(sb) => {
                 let metadata_start = metadata.start();
-                let metadata_end = metadata.end();
                 let do_time_parsing = !has_media_offset
                     && (media_type == MediaType::Audio || media_type == MediaType::Video);
-
                 let response = sb.push_media_segment(metadata, do_time_parsing)?;
-                let inventory_metadata = BufferedSegmentMetadata {
-                    id: response.segment_id(),
-                    start: metadata_start,
-                    end: metadata_end,
-                    context,
-                    playlist_start: metadata_start,
-                    playlist_end: metadata_end,
-                };
-                match media_type {
-                    MediaType::Audio => self.audio_inventory.insert_segment(inventory_metadata),
-                    MediaType::Video => self.video_inventory.insert_segment(inventory_metadata),
-                };
-
                 if let Some(media_start) = response.media_start() {
                     let media_offset = media_start - metadata_start;
                     Logger::info(&format!(

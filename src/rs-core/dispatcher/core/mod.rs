@@ -18,7 +18,7 @@ use crate::{
         MultivariantPlaylistParsingErrorCode, OtherErrorCode, PushedSegmentErrorCode, RequestId,
         SourceBufferId, TimerId, TimerReason,
     },
-    media_element::{MediaSegmentPushData, SegmentQualityContext, SourceBufferCreationError},
+    media_element::{SegmentQualityContext, SourceBufferCreationError},
     parser::{MultivariantPlaylist, SegmentTimeInfo},
     playlist_store::{
         LockVariantResponse, MediaPlaylistPermanentId, PlaylistStore, PlaylistStoreError,
@@ -397,10 +397,12 @@ impl Dispatcher {
     /// and the potential initialization segments are requested.
     fn check_ready_to_load_segments(&mut self) {
         let starting_pos = match self.ready_state {
-            PlayerReadyState::Loading { ref starting_position } => starting_position,
+            PlayerReadyState::Loading {
+                ref starting_position,
+            } => starting_position,
             _ => {
                 return;
-            },
+            }
         };
 
         match self.media_element_ref.media_source_ready_state() {
@@ -417,16 +419,16 @@ impl Dispatcher {
         };
 
         if playlist_store.are_playlists_ready() {
-
             if let Some(starting_pos) = starting_pos {
                 let actual_start = match starting_pos.start_type {
                     StartingPositionType::Absolute => starting_pos.position,
-                    StartingPositionType::FromBeginning =>
-                        playlist_store.curr_min_position().unwrap_or(0.) + starting_pos.position,
-                    StartingPositionType::FromEnd =>
-                        playlist_store.curr_max_position().map(|max| {
-                            max - starting_pos.position
-                        }).unwrap_or(playlist_store.expected_start_time()),
+                    StartingPositionType::FromBeginning => {
+                        playlist_store.curr_min_position().unwrap_or(0.) + starting_pos.position
+                    }
+                    StartingPositionType::FromEnd => playlist_store
+                        .curr_max_position()
+                        .map(|max| max - starting_pos.position)
+                        .unwrap_or(playlist_store.expected_start_time()),
                 };
                 if actual_start > 0. {
                     self.media_element_ref.seek(actual_start);
@@ -836,55 +838,6 @@ impl Dispatcher {
         }
     }
 
-    fn push_and_validate_segment(
-        &mut self,
-        data: JsMemoryBlob,
-        media_type: MediaType,
-        time_info: Option<SegmentTimeInfo>,
-        context: SegmentQualityContext,
-    ) {
-        if let Some(time_info) = time_info {
-            // Media segment
-            let segment_start = time_info.start();
-            let segment_end = time_info.end();
-            let md = MediaSegmentPushData::new(data, time_info);
-            match self
-                .media_element_ref
-                .push_media_segment(media_type, md, context)
-            {
-                Err(x) => {
-                    let media_type = x.media_type();
-                    let message = x.to_string();
-                    jsSendSegmentParsingError(true, x.into(), media_type, &message);
-                    self.stop_current_content();
-                }
-                Ok(()) => {
-                    self.segment_selectors
-                        .get_mut(media_type)
-                        .validate_media_until(segment_end);
-                    if was_last_segment(self.playlist_store.as_ref(), media_type, segment_start) {
-                        Logger::info(&format!(
-                            "Last {} segment request finished, declaring its buffer's end",
-                            media_type
-                        ));
-                        self.media_element_ref.end_buffer(media_type);
-                    }
-                }
-            }
-        } else {
-            // Initialization segment
-            match self.media_element_ref.push_init_segment(media_type, data) {
-                Err(x) => {
-                    let media_type = x.media_type();
-                    let message = x.to_string();
-                    jsSendSegmentParsingError(true, x.into(), media_type, &message);
-                    self.stop_current_content();
-                }
-                Ok(()) => self.segment_selectors.get_mut(media_type).validate_init(),
-            }
-        }
-    }
-
     /// Perform all actions that should be commonly taken after the current variant changes.
     fn handle_variant_update(&mut self, result: VariantUpdateResult, flush: bool) {
         let (changed_media_types, has_worsened) = match result {
@@ -968,11 +921,75 @@ impl Dispatcher {
             }
         });
 
-        let media_type = segment_req.media_type();
-        let (_, _, time_info, context) = segment_req.deconstruct();
-        self.push_and_validate_segment(result, media_type, time_info, context);
         self.adaptive_selector
             .add_metric(duration_ms, resource_size);
+
+        let media_type = segment_req.media_type();
+        let (_, _, time_info, context) = segment_req.deconstruct();
+        if let Some(time_info) = time_info {
+            self.on_media_segment_loaded(result, media_type, time_info, context);
+        } else {
+            self.on_init_segment_loaded(result, media_type);
+        }
+    }
+
+    fn on_media_segment_loaded(
+        &mut self,
+        data: JsMemoryBlob,
+        media_type: MediaType,
+        time_info: SegmentTimeInfo,
+        context: SegmentQualityContext,
+    ) {
+        let segment_start = time_info.start();
+        let segment_end = time_info.end();
+        let prepared_data = self
+            .media_element_ref
+            .announce_incoming_media_segment(media_type, data, time_info, context);
+
+        // Check next segment BEFORE actually pushing, as the pushing operation could take in the
+        // tens of ms or even in the hundreds depending on segment size and platform performance.
+        //
+        // We still announce the incoming segment first to ensure the `MediaElementReference`'s
+        // inventory is up-to-date.
+        self.check_best_variant();
+        self.segment_selectors
+            .get_mut(media_type)
+            .validate_media_until(segment_end);
+        self.check_segments_to_request();
+
+        match self
+            .media_element_ref
+            .push_media_segment(media_type, prepared_data)
+        {
+            Err(x) => {
+                let media_type = x.media_type();
+                let message = x.to_string();
+                jsSendSegmentParsingError(true, x.into(), media_type, &message);
+                self.stop_current_content();
+            }
+            Ok(()) => {
+                if was_last_segment(self.playlist_store.as_ref(), media_type, segment_start) {
+                    Logger::info(&format!(
+                        "Last {} segment request finished, declaring its buffer's end",
+                        media_type
+                    ));
+                    self.media_element_ref.end_buffer(media_type);
+                }
+            }
+        }
+    }
+
+    fn on_init_segment_loaded(&mut self, data: JsMemoryBlob, media_type: MediaType) {
+        match self.media_element_ref.push_init_segment(media_type, data) {
+            Err(x) => {
+                let media_type = x.media_type();
+                let message = x.to_string();
+                jsSendSegmentParsingError(true, x.into(), media_type, &message);
+                self.stop_current_content();
+            }
+            Ok(()) => self.segment_selectors.get_mut(media_type).validate_init(),
+        }
+
         self.check_best_variant();
         self.check_segments_to_request();
     }

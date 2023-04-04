@@ -220,7 +220,7 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
   /**
    * Create a new WaspHlsPlayer, associating with a video element.
    *
-   * Note that you will need to call `initialize` on it befor actually loading
+   * Note that you will need to call `initialize` on it before actually loading
    * the content and perform most other operations.
    *
    * @param {HTMLVideoElement} videoElement
@@ -320,7 +320,7 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
    */
   public updateConfig(overwrite: Partial<WaspHlsPlayerConfig>): void {
     if (this.__worker__ === null) {
-      throw new Error("The Player is not initialized or disposed.");
+      throw new Error("The Player is not initialized or is disposed.");
     }
     this.__config__ = { ...this.__config__, ...overwrite };
     postMessageToWorker(this.__worker__, {
@@ -349,7 +349,7 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
    */
   public load(url: string, opts?: LoadOptions | undefined): void {
     if (this.__worker__ === null) {
-      throw new Error("The Player is not initialized or disposed.");
+      throw new Error("The Player is not initialized or is disposed.");
     }
     if (this.__contentMetadata__ !== null) {
       requestStopForContent(this.__contentMetadata__, this.__worker__);
@@ -444,7 +444,10 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
    * @returns {number}
    */
   public getPosition(): number {
-    if (this.__contentMetadata__ === null) {
+    if (
+      this.__contentMetadata__ === null ||
+      this.getPlayerState() !== PlayerState.Loaded
+    ) {
       return 0;
     }
     const currentTime = this.videoElement.currentTime;
@@ -508,6 +511,9 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
    * @returns {boolean}
    */
   public isRebuffering(): boolean {
+    if (this.getPlayerState() !== PlayerState.Loaded) {
+      return false;
+    }
     return this.__contentMetadata__?.isRebuffering ?? false;
   }
 
@@ -557,7 +563,7 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
    */
   public stop(): void {
     if (this.__worker__ === null) {
-      throw new Error("The Player is not initialized or disposed.");
+      throw new Error("The Player is not initialized or is disposed.");
     }
     if (this.__contentMetadata__ !== null) {
       requestStopForContent(this.__contentMetadata__, this.__worker__);
@@ -594,7 +600,7 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
     //
     // For now I went with the second solution
     if (this.__worker__ === null) {
-      throw new Error("The Player is not initialized or disposed.");
+      throw new Error("The Player is not initialized or is disposed.");
     }
     if (
       this.__contentMetadata__ === null ||
@@ -714,7 +720,7 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
    */
   public setAudioTrack(trackId: number | null): void {
     if (this.__worker__ === null) {
-      throw new Error("The Player is not initialized or disposed.");
+      throw new Error("The Player is not initialized or is disposed.");
     }
     if (this.__contentMetadata__ === null) {
       throw new Error("No content loaded");
@@ -744,7 +750,7 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
    */
   public lockVariant(variantId: number): void {
     if (this.__worker__ === null) {
-      throw new Error("The Player is not initialized or disposed.");
+      throw new Error("The Player is not initialized or is disposed.");
     }
     if (this.__contentMetadata__ === null) {
       throw new Error("No content loaded");
@@ -766,7 +772,7 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
    */
   public unlockVariant(): void {
     if (this.__worker__ === null) {
-      throw new Error("The Player is not initialized or disposed.");
+      throw new Error("The Player is not initialized or is disposed.");
     }
     if (this.__contentMetadata__ === null) {
       throw new Error("No content loaded");
@@ -1021,7 +1027,9 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
               this.videoElement
             )
           ) {
-            this.trigger("rebufferingStarted", null);
+            if (this.getPlayerState() === PlayerState.Loaded) {
+              this.trigger("rebufferingStarted", null);
+            }
           }
           break;
         case WorkerMessageType.RebufferingEnded:
@@ -1032,11 +1040,12 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
               this.videoElement
             )
           ) {
-            this.trigger("rebufferingEnded", null);
-
-            // If still loading, send loaded event as soon as the
-            // `HTMLMediaElement` say we can
-            if (this.__contentMetadata__?.loadingAborter !== undefined) {
+            if (this.getPlayerState() === PlayerState.Loaded) {
+              this.trigger("rebufferingEnded", null);
+            } else if (this.__contentMetadata__?.loadingAborter !== undefined) {
+              // If still loading, send loaded event as soon as the
+              // `HTMLMediaElement` say we can (it should generally be directly
+              // as the Worker has more drastic conditions)
               waitForLoad(
                 this.videoElement,
                 this.__contentMetadata__.loadingAborter.signal
@@ -1101,6 +1110,7 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
   }
 }
 
+/** Options that can be given to a `load` call`. */
 export interface LoadOptions {
   /**
    * Optional position to start at.

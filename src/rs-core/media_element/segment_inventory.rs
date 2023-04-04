@@ -106,10 +106,10 @@ pub(crate) struct BufferedChunk {
 }
 
 impl BufferedChunk {
-    fn new(metadata: BufferedSegmentMetadata) -> Self {
+    fn new(metadata: BufferedSegmentMetadata, id: u64) -> Self {
         BufferedChunk {
             end: metadata.end,
-            id: metadata.id,
+            id,
             variant_score: metadata.context.variant_score,
             start: metadata.start,
             media_id: metadata.context.media_id,
@@ -203,6 +203,9 @@ pub(super) struct SegmentInventory {
 
     /// The concerned media type. This is just used for logs.
     media_type: MediaType,
+
+    /// Identifier for the next inserted media segment.
+    next_segment_id: u64,
 }
 
 impl SegmentInventory {
@@ -218,6 +221,7 @@ impl SegmentInventory {
         Self {
             inventory: vec![],
             media_type,
+            next_segment_id: 0,
         }
     }
 
@@ -405,7 +409,9 @@ impl SegmentInventory {
     ///
     /// This should be done any time a segment just began to be pushed to the `SourceBuffer`. It
     /// allows the `SegmentInventory` to construct its representation of buffered segments.
-    pub(super) fn insert_segment(&mut self, metadata: BufferedSegmentMetadata) {
+    pub(super) fn insert_segment(&mut self, metadata: BufferedSegmentMetadata) -> u64 {
+        let segment_id = self.next_segment_id;
+        self.next_segment_id += 1;
         let start = metadata.start;
         let end = metadata.end;
         if start >= end {
@@ -413,7 +419,7 @@ impl SegmentInventory {
                 "SI: Invalid {} chunked inserted: start ({}) inferior or equal to ({})",
                 self.media_type, start, end
             ));
-            return;
+            return segment_id;
         }
 
         // Operations which will need to be performed at the end on the inventory to include the
@@ -635,15 +641,15 @@ impl SegmentInventory {
 
         match insertion_task {
             Some(PendingBufferChunkInsertionTask::Replace(index)) => {
-                self.inventory[index] = BufferedChunk::new(metadata);
+                self.inventory[index] = BufferedChunk::new(metadata, segment_id);
             }
             Some(PendingBufferChunkInsertionTask::Insert(index)) => {
-                self.inventory.insert(index, BufferedChunk::new(metadata));
+                self.inventory
+                    .insert(index, BufferedChunk::new(metadata, segment_id));
             }
             Some(PendingBufferChunkInsertionTask::InsertInside { index, .. }) => {
                 if let Some(seg) = self.inventory.get_mut(index) {
                     let duplicated = BufferedSegmentMetadata {
-                        id: seg.id,
                         playlist_start: seg.playlist_start,
                         playlist_end: seg.playlist_end,
                         start: end,
@@ -653,10 +659,10 @@ impl SegmentInventory {
                             media_id: seg.media_id,
                         },
                     };
-                    let duplicated_after = BufferedChunk::new(duplicated);
+                    let duplicated_after = BufferedChunk::new(duplicated, seg.id);
                     seg.end = start;
                     self.inventory
-                        .insert(index + 1, BufferedChunk::new(metadata));
+                        .insert(index + 1, BufferedChunk::new(metadata, segment_id));
                     self.inventory.insert(index + 2, duplicated_after);
                 } else {
                     Logger::error("SI: unfound index when inserting inside");
@@ -667,6 +673,7 @@ impl SegmentInventory {
             }
         }
         self.clean_up();
+        segment_id
     }
 
     /// Returns the whole inventory.
@@ -1047,10 +1054,6 @@ fn check_next_overlapping_segments(
 
 #[derive(Clone, Debug)]
 pub(super) struct BufferedSegmentMetadata {
-    /// Identifier for that segment, unique between all other segments currently
-    /// buffered.
-    pub(super) id: u64,
-
     pub(super) playlist_start: f64,
 
     pub(super) playlist_end: f64,

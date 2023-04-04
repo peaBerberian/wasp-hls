@@ -38,7 +38,9 @@ impl Dispatcher {
     pub fn load_content(&mut self, content_url: String, starting_pos: Option<StartingPosition>) {
         Logger::info("load_content called");
         self.stop();
-        self.ready_state = PlayerReadyState::Loading { starting_position: starting_pos };
+        self.ready_state = PlayerReadyState::Loading {
+            starting_position: starting_pos,
+        };
         let content_url = Url::new(content_url);
         self.requester
             .fetch_playlist(content_url, PlaylistFileType::MultivariantPlaylist);
@@ -121,17 +123,20 @@ impl Dispatcher {
 
     pub fn set_multi_variant_playlist_request_timeout(&mut self, timeout: Option<f64>) {
         self.requester
-            .config_mut().multi_variant_playlist_request_timeout = timeout;
+            .config_mut()
+            .multi_variant_playlist_request_timeout = timeout;
     }
 
     pub fn set_multi_variant_playlist_backoff_base(&mut self, base: f64) {
         self.requester
-            .config_mut().multi_variant_playlist_backoff_base = base;
+            .config_mut()
+            .multi_variant_playlist_backoff_base = base;
     }
 
     pub fn set_multi_variant_playlist_backoff_max(&mut self, max: f64) {
         self.requester
-            .config_mut().multi_variant_playlist_backoff_max = max;
+            .config_mut()
+            .multi_variant_playlist_backoff_max = max;
     }
 
     pub fn set_media_playlist_request_max_retry(&mut self, max_retry: u32) {
@@ -139,8 +144,7 @@ impl Dispatcher {
     }
 
     pub fn set_media_playlist_request_timeout(&mut self, timeout: Option<f64>) {
-        self.requester
-            .config_mut().media_playlist_request_timeout = timeout;
+        self.requester.config_mut().media_playlist_request_timeout = timeout;
     }
 
     pub fn set_media_playlist_backoff_base(&mut self, base: f64) {
