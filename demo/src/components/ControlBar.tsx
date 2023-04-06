@@ -233,7 +233,9 @@ export default React.memo(function ControlBar({
 
   const togglePlayPause = React.useCallback(() => {
     if (isPaused) {
-      player.resume();
+      player.resume().catch(function() {
+        // noop
+      });
       setIsPaused(false);
     } else {
       player.pause();

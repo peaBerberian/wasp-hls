@@ -84,10 +84,10 @@ export default React.memo(VariantSetting);
 
 function getVariantLine(variant: VariantInfo): string {
   const info = [];
-  if (variant.height !== 0) {
+  if (variant.height !== undefined) {
     info.push(`${variant.height}p`);
   }
-  if (variant.bandwidth !== 0) {
+  if (variant.bandwidth !== undefined) {
     info.push(`${Math.round(variant.bandwidth / 1000)}kbps`);
   }
   if (info.length === 0) {

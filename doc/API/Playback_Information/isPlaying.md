@@ -1,0 +1,4 @@
+# `isPlaying` method
+
+XXX TODO
+

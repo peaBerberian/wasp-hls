@@ -688,7 +688,8 @@ impl Requester {
         status: Option<u32>,
     ) -> RetryResult {
         let req = self.pending_segment_requests.get(pos).unwrap();
-        if req.attempts_failed >= self.config.segment_request_max_retry {
+        let max_retry = self.config.segment_request_max_retry;
+        if max_retry >= 0 && req.attempts_failed >= (max_retry as u32) {
             Logger::info(&format!(
                 "Req: Too much attempts for segment request id:{} a:{}",
                 req.request_id, req.attempts_failed
@@ -728,10 +729,10 @@ impl Requester {
         pos: usize,
         reason: RequestErrorReason,
         status: Option<u32>,
-        max_retry: u32,
+        max_retry: i32,
     ) -> RetryResult {
         let req = self.pending_playlist_requests.get(pos).unwrap();
-        if req.attempts_failed >= max_retry {
+        if max_retry >= 0 && req.attempts_failed >= (max_retry as u32) {
             Logger::info(&format!(
                 "Req: Too much attempts for playlist request id:{} a:{}",
                 req.request_id, req.attempts_failed

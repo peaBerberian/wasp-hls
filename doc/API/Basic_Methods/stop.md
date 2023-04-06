@@ -1,0 +1,4 @@
+# `stop` method
+
+XXX TODO
+

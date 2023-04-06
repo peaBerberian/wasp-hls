@@ -6,7 +6,7 @@ Once it has been [Instantiated](./Instantiation.md), the `WaspHlsPlayer` needs
 to be "initialized".
 
 That initialization task is the step during which the two external parts of
-the `WaspHlsPlayer`, namely its worker file and WebAssembly file are
+the `WaspHlsPlayer`, namely its worker file and WebAssembly file, are
 setup.
 
 Both of those files can be retrieved in [in the release page](https://github.com/peaBerberian/wasp-hls/releases),
@@ -40,13 +40,14 @@ player
       console.error("Could not initialize WaspHlsPlayer:", err);
     }
   );
+
+// we can now use the player (we don't need to await the Promise here)
 ```
 
 ### Preventing the need to serve those files separately
 
-Note that if you don't want to have the supplementary step of serving both those
-files when developping (as opposed to when it is "in production"), the
-`WaspHlsPlayer` also provides embedded versions of both.
+Note that if you don't want the supplementary step of serving both those
+files for now, the `WaspHlsPlayer` also provides embedded versions of both.
 With them, the code would be written as:
 
 ```js
@@ -61,12 +62,14 @@ player
   })
   .then(
     () => {
-      // we can now use the player
+      console.log("WaspHlsPlayer initialized with success!");
     },
     (err) => {
       console.error("Could not initialize WaspHlsPlayer:", err);
     }
   );
+
+// we can now use the player (we don't need to await the Promise here)
 ```
 
 However I don't recommend relying on embedded versions for production:
@@ -127,49 +130,3 @@ with the a `Content-Type` HTTP(S) response header set to `application-wasm`.
 
 Note however that this is not an obligation and that the actual performance
 impact is relatively small.
-
-## Syntax
-
-```js
-// Without an initial bandwidth setup:
-const initializationPromise = player.initialize({
-  workerUrl,
-  wasmUrl,
-});
-
-// With an initial bandwidth, generally to start playing with an appropriate
-// quality directly:
-const initializationPromise = player.initialize({
-  workerUrl,
-  wasmUrl,
-  initialBandwidth,
-});
-```
-
-- **arguments**:
-
-  1. initObject `Object`: The properties required for initialization.
-
-     This object should have the following properties present:
-
-     - _workerUrl_ (`string`): URL to the Worker file, that you have hosted.
-
-     - _wasmUrl_ (`string`): URL to the WebAssembly file, that you have
-       hosted.
-
-     It has one additional optional property:
-
-     - _initialBandwidth_ (`number|undefined`): An initial bandwidth estimate,
-       in bits per second, which will be relied on initially when starting to
-       load the first content. If `undefined` or not set, the `WaspHlsPlayer`
-       will define its own initial bandwidth, generally of a poor quality (but
-       will be able to provide a better estimate soon enough).
-
-- **return value**:
-
-`Promise`: Promise resolving when and if the initialization step finished with
-success.
-
-That Promise may also reject in case any of its step failed (such as the
-fetching of the required resources), in which case the `WaspHlsPlayer` won't be
-able to be used.

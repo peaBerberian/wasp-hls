@@ -6,14 +6,16 @@ const DEFAULT_BACKOFF_MAX: f64 = 3000.;
 pub(crate) struct RequesterConfiguration {
     /// Amount of times a failed segment request might be retried on errors that seem temporary: `1`
     /// meaning it will be retried once, `2` twice, `0` never retried etc.
-    pub(crate) segment_request_max_retry: u32,
+    ///
+    /// To set to `-1` for infinite retry.
+    pub(crate) segment_request_max_retry: i32,
 
     /// Timeout, in milliseconds, used for segment requests.
     ///
     /// If that timeout is exceeded, the corresponding request will fail.
     ///
-    /// To set to `None` to disable.
-    pub(crate) segment_request_timeout: Option<f64>,
+    /// To set to `-1` to disable.
+    pub(crate) segment_request_timeout: f64,
 
     /// When a request is retried, a timeout is awaited to avoid overloading the server.
     /// That timeout then grows exponentially the more the request has to be retried (in the case it
@@ -33,14 +35,16 @@ pub(crate) struct RequesterConfiguration {
 
     /// Amount of times a failed Multivariant Playlist request might be retried on errors that seem
     /// temporary: `1` meaning it will be retried once, `2` twice, `0` never retried etc.
-    pub(crate) multi_variant_playlist_max_retry: u32,
+    ///
+    /// To set to `-1` for infinite retry.
+    pub(crate) multi_variant_playlist_max_retry: i32,
 
     /// Timeout, in milliseconds, used for Multivariant playlist requests.
     ///
     /// If that timeout is exceeded, the corresponding request will fail.
     ///
-    /// To set to `None` to disable.
-    pub(crate) multi_variant_playlist_request_timeout: Option<f64>,
+    /// To set to `-1` to disable.
+    pub(crate) multi_variant_playlist_request_timeout: f64,
 
     /// When a request is retried, a timeout is awaited to avoid overloading the server.
     /// That timeout then grows exponentially the more the request has to be retried (in the case it
@@ -60,14 +64,16 @@ pub(crate) struct RequesterConfiguration {
 
     /// Amount of times a failed Media Playlist request might be retried on errors that seem
     /// temporary: `1` meaning it will be retried once, `2` twice, `0` never retried etc.
-    pub(crate) media_playlist_max_retry: u32,
+    ///
+    /// To set to `-1` for infinite retry.
+    pub(crate) media_playlist_max_retry: i32,
 
     /// Timeout, in milliseconds, used for Media playlist requests.
     ///
     /// If that timeout is exceeded, the corresponding request will fail.
     ///
-    /// To set to `None` to disable.
-    pub(crate) media_playlist_request_timeout: Option<f64>,
+    /// To set to `-1` to disable.
+    pub(crate) media_playlist_request_timeout: f64,
 
     /// When a request is retried, a timeout is awaited to avoid overloading the server.
     /// That timeout then grows exponentially the more the request has to be retried (in the case it
@@ -90,10 +96,10 @@ impl Default for RequesterConfiguration {
     fn default() -> Self {
         Self {
             segment_request_max_retry: 0,
-            segment_request_timeout: None,
-            multi_variant_playlist_request_timeout: None,
+            segment_request_timeout: 30000.,
+            multi_variant_playlist_request_timeout: 10000.,
             media_playlist_max_retry: 0,
-            media_playlist_request_timeout: None,
+            media_playlist_request_timeout: 10000.,
             segment_backoff_base: DEFAULT_BACKOFF_BASE,
             segment_backoff_max: DEFAULT_BACKOFF_MAX,
             multi_variant_playlist_max_retry: 0,

@@ -56,7 +56,7 @@ impl Dispatcher {
     }
 
     pub fn flush_buffer(&mut self, mt: MediaType) {
-        if let Err(e) = self.media_element_ref.remove_data(mt, 0., f64::INFINITY) {
+        if let Err(e) = self.media_element_ref.flush(mt) {
             Logger::error(&format!("Error when flushing {mt} buffer: {}", e));
         }
     }
@@ -101,11 +101,11 @@ impl Dispatcher {
         self.set_audio_track_core(track_id)
     }
 
-    pub fn set_segment_request_max_retry(&mut self, max_retry: u32) {
+    pub fn set_segment_request_max_retry(&mut self, max_retry: i32) {
         self.requester.config_mut().segment_request_max_retry = max_retry;
     }
 
-    pub fn set_segment_request_timeout(&mut self, timeout: Option<f64>) {
+    pub fn set_segment_request_timeout(&mut self, timeout: f64) {
         self.requester.config_mut().segment_request_timeout = timeout;
     }
 
@@ -117,11 +117,11 @@ impl Dispatcher {
         self.requester.config_mut().segment_backoff_max = max;
     }
 
-    pub fn set_multi_variant_playlist_request_max_retry(&mut self, max_retry: u32) {
+    pub fn set_multi_variant_playlist_request_max_retry(&mut self, max_retry: i32) {
         self.requester.config_mut().multi_variant_playlist_max_retry = max_retry;
     }
 
-    pub fn set_multi_variant_playlist_request_timeout(&mut self, timeout: Option<f64>) {
+    pub fn set_multi_variant_playlist_request_timeout(&mut self, timeout: f64) {
         self.requester
             .config_mut()
             .multi_variant_playlist_request_timeout = timeout;
@@ -139,11 +139,11 @@ impl Dispatcher {
             .multi_variant_playlist_backoff_max = max;
     }
 
-    pub fn set_media_playlist_request_max_retry(&mut self, max_retry: u32) {
+    pub fn set_media_playlist_request_max_retry(&mut self, max_retry: i32) {
         self.requester.config_mut().media_playlist_max_retry = max_retry;
     }
 
-    pub fn set_media_playlist_request_timeout(&mut self, timeout: Option<f64>) {
+    pub fn set_media_playlist_request_timeout(&mut self, timeout: f64) {
         self.requester.config_mut().media_playlist_request_timeout = timeout;
     }
 

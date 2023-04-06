@@ -84,7 +84,9 @@ export default React.memo(function VideoPlayer({
           disableSpinner();
           enableClickableVideo();
           setError(null);
-          player.resume();
+          player.resume().catch(function() {
+            // noop
+          });
           break;
         case PlayerState.Error:
           disableSpinner();
@@ -130,7 +132,9 @@ export default React.memo(function VideoPlayer({
 
   const togglePlayPause = React.useCallback(() => {
     if (player.isPaused()) {
-      player.resume();
+      player.resume().catch(function() {
+        // noop
+      });
     } else {
       player.pause();
     }

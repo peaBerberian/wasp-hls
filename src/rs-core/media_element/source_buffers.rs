@@ -243,11 +243,7 @@ impl MediaSegmentPushData {
     /// * `segment_data` - The segment's actual data.
     ///
     /// * `time_info` - The playlist-originated time information on that segment.
-    pub(super) fn new(
-        id: u64,
-        segment_data: JsMemoryBlob,
-        time_info: SegmentTimeInfo,
-    ) -> Self {
+    pub(super) fn new(id: u64, segment_data: JsMemoryBlob, time_info: SegmentTimeInfo) -> Self {
         Self {
             id,
             segment_data,
@@ -409,6 +405,7 @@ pub(crate) enum PushSegmentError {
 }
 
 impl PushSegmentError {
+    /// Returns the `MediaType` associated to the `PushSegmentError`.
     pub(crate) fn media_type(&self) -> MediaType {
         match self {
             PushSegmentError::NoResource(m) => *m,

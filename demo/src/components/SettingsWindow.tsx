@@ -18,7 +18,7 @@ function SettingsWindow({ player }: { player: WaspHlsPlayer }): JSX.Element {
   );
   const [audioTrack, setAudioTrack] = React.useState<
     AudioTrackInfo | undefined
-  >(player.getAudioTrack());
+  >(player.getCurrentAudioTrack());
   const [audioTrackList, setAudioTrackList] = React.useState<AudioTrackInfo[]>(
     player.getAudioTrackList()
   );

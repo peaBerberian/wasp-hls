@@ -15,6 +15,42 @@
     {
       "path": "./Loading_a_content.md",
       "displayName": "Loading a content"
+    },
+    {
+      "path": "./Player_Events.md",
+      "displayName": "Player Events"
+    },
+    {
+      "path": "./Configuration_Object.md",
+      "displayName": "Configuration Object"
+    },
+    {
+      "path": "./Player_Errors.md",
+      "displayName": "Player Errors"
+    },
+    {
+      "path": "./Basic_Methods/",
+      "displayName": "Basic Methods"
+    },
+    {
+      "path": "./Playback_Information/",
+      "displayName": "Playback Information"
+    },
+    {
+      "path": "./Position_Control/",
+      "displayName": "Position Control"
+    },
+    {
+      "path": "./Speed_Control/",
+      "displayName": "Speed Control"
+    },
+    {
+      "path": "./Variant_Selection/",
+      "displayName": "Variant Selection"
+    },
+    {
+      "path": "./Audio_Track_Selection/",
+      "displayName": "Audio Track Selection"
     }
   ]
 }

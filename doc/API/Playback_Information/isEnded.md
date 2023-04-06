@@ -1,0 +1,4 @@
+# `isEnded` method
+
+XXX TODO
+

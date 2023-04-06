@@ -1,0 +1,3 @@
+# `lockVariant` method
+
+XXX TODO

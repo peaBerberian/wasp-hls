@@ -1,0 +1,4 @@
+# `getPlayerState` method
+
+XXX TODO
+

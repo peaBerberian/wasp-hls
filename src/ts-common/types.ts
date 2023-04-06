@@ -450,10 +450,10 @@ export interface VariantLockStatusChangeWorkerMessage {
 
 export interface VariantInfo {
   id: number;
-  width: number;
-  height: number;
-  frameRate: number;
-  bandwidth: number;
+  width: number | undefined;
+  height: number | undefined;
+  frameRate: number | undefined;
+  bandwidth: number | undefined;
 }
 
 export interface AudioTrackInfo {
@@ -921,15 +921,17 @@ export interface LoadContentMainMessage {
     /** URL to the HLS Multivariant Playlist. */
     url: string;
     /** Optional starting position to start at. */
-    startingPosition?: {
-      /**
-       * Whether this is the absolute position or relative to the start or end
-       * of the content.
-       */
-      startingType: StartingPositionType;
-      /** The position, its semantic depends on `startingType`. */
-      position: number;
-    } | undefined;
+    startingPosition?:
+      | {
+          /**
+           * Whether this is the absolute position or relative to the start or end
+           * of the content.
+           */
+          startingType: StartingPositionType;
+          /** The position, its semantic depends on `startingType`. */
+          position: number;
+        }
+      | undefined;
   };
 }
 
@@ -1224,15 +1226,19 @@ export interface WaspHlsPlayerConfig {
    * Amount of times a failed segment request might be retried on errors that
    * seem temporary: `1` meaning it will be retried once, `2` twice, `0`
    * never retried etc.
+   *
+   * To set to `-1` for infinite retry.
    */
-  segmentMaxRetry: number | undefined;
+  segmentMaxRetry: number;
   /**
    * Number of milliseconds after which a segment request with no response will
    * be automatically cancelled due to a "timeout".
    *
    * Depending on the configuration, the segment request might then be retried.
+   *
+   * To set to `-1` for no timeout.
    */
-  segmentRequestTimeout: number | null | undefined;
+  segmentRequestTimeout: number;
   /**
    * If a segment request has to be retried, we will wait an amount of time
    * before restarting the request. That delay raises if the same segment
@@ -1257,20 +1263,24 @@ export interface WaspHlsPlayerConfig {
    * Amount of times a failed Multivariant Playlist request might be retried on
    * errors that seem temporary: `1` meaning it will be retried once, `2` twice,
    * `0` never retried etc.
+   *
+   * To set to `-1` for infinite retry.
    */
-  multiVariantPlaylistMaxRetry: number | undefined;
+  multiVariantPlaylistMaxRetry: number;
   /**
    * Number of milliseconds after which a Multivariant Playlist request with no
    * response will be automatically cancelled due to a "timeout".
    *
    * Depending on the configuration, the request might then be retried.
+   *
+   * To set to `-1` for no timeout.
    */
-  multiVariantPlaylistRequestTimeout: number | null | undefined;
+  multiVariantPlaylistRequestTimeout: number;
   /**
    * If a Multivariant Playlist request has to be retried, we will wait an
    * amount of time before restarting the request. That delay raises if the same
    * request fails multiple consecutive times, starting from around this value
-   * in milliseconds to `segmentBackoffMax` milliseconds.
+   * in milliseconds to `multiVariantPlaylistBackoffMax` milliseconds.
    *
    * The step at which it raises is not configurable here, but can be resumed
    * as a power of 2 raise on the previous value each time.
@@ -1280,7 +1290,7 @@ export interface WaspHlsPlayerConfig {
    * If a Multivariant Playlist request has to be retried, we will wait an
    * amount of time before restarting the request. That delay raises if the
    * same request fails multiple consecutive times, starting from around
-   * `segmentBackoffBase` milliseconds to this value in milliseconds.
+   * `multiVariantPlaylistBackoffBase` milliseconds to this value in milliseconds.
    *
    * The step at which it raises is not configurable here, but can be resumed
    * as a power of 2 raise on the previous value each time.
@@ -1290,20 +1300,24 @@ export interface WaspHlsPlayerConfig {
    * Amount of times a failed Media Playlist request might be retried on errors
    * that seem temporary: `1` meaning it will be retried once, `2` twice, `0`
    * never retried etc.
+   *
+   * To set to `-1` for infinite retry.
    */
-  mediaPlaylistMaxRetry: number | undefined;
+  mediaPlaylistMaxRetry: number;
   /**
    * Number of milliseconds after which a Media Playlist request with no
    * response will be automatically cancelled due to a "timeout".
    *
    * Depending on the configuration, the request might then be retried.
+   *
+   * To set to `-1` for no timeout.
    */
   mediaPlaylistRequestTimeout: number;
   /**
    * If a Media Playlist request has to be retried, we will wait an amount of
    * time before restarting the request. That delay raises if the same request
    * fails multiple consecutive times, starting from around this value in
-   * milliseconds to `segmentBackoffMax` milliseconds.
+   * milliseconds to `mediaPlaylistBackoffMax` milliseconds.
    *
    * The step at which it raises is not configurable here, but can be resumed
    * as a power of 2 raise on the previous value each time.
@@ -1312,8 +1326,8 @@ export interface WaspHlsPlayerConfig {
   /**
    * If a Media Playlist request has to be retried, we will wait an amount of
    * time before restarting the request. That delay raises if the same request
-   * fails multiple consecutive times, starting from around `segmentBackoffBase`
-   * milliseconds to this value in milliseconds.
+   * fails multiple consecutive times, starting from around
+   * `mediaPlaylistBackoffBase` milliseconds to this value in milliseconds.
    *
    * The step at which it raises is not configurable here, but can be resumed
    * as a power of 2 raise on the previous value each time.

@@ -155,6 +155,7 @@ export function updateDispatcherConfig(
   dispatcher: Dispatcher,
   config: Partial<WaspHlsPlayerConfig>
 ): void {
+  // XXX TODO check format of each
   if (config.bufferGoal !== undefined) {
     dispatcher.set_buffer_goal(config.bufferGoal);
   }
@@ -162,9 +163,7 @@ export function updateDispatcherConfig(
     dispatcher.set_segment_request_max_retry(config.segmentMaxRetry);
   }
   if (config.segmentRequestTimeout !== undefined) {
-    dispatcher.set_segment_request_timeout(
-      config.segmentRequestTimeout ?? undefined
-    );
+    dispatcher.set_segment_request_timeout(config.segmentRequestTimeout);
   }
   if (config.segmentBackoffBase !== undefined) {
     dispatcher.set_segment_backoff_base(config.segmentBackoffBase);
@@ -173,11 +172,13 @@ export function updateDispatcherConfig(
     dispatcher.set_segment_backoff_max(config.segmentBackoffMax);
   }
   if (config.multiVariantPlaylistMaxRetry !== undefined) {
-    dispatcher.set_multi_variant_playlist_request_max_retry(config.multiVariantPlaylistMaxRetry);
+    dispatcher.set_multi_variant_playlist_request_max_retry(
+      config.multiVariantPlaylistMaxRetry
+    );
   }
   if (config.multiVariantPlaylistRequestTimeout !== undefined) {
     dispatcher.set_multi_variant_playlist_request_timeout(
-      config.multiVariantPlaylistRequestTimeout ?? undefined
+      config.multiVariantPlaylistRequestTimeout
     );
   }
   if (config.multiVariantPlaylistBackoffBase !== undefined) {
@@ -191,22 +192,20 @@ export function updateDispatcherConfig(
     );
   }
   if (config.mediaPlaylistMaxRetry !== undefined) {
-    dispatcher.set_media_playlist_request_max_retry(config.mediaPlaylistMaxRetry);
+    dispatcher.set_media_playlist_request_max_retry(
+      config.mediaPlaylistMaxRetry
+    );
   }
   if (config.mediaPlaylistRequestTimeout !== undefined) {
     dispatcher.set_media_playlist_request_timeout(
-      config.mediaPlaylistRequestTimeout ?? undefined
+      config.mediaPlaylistRequestTimeout
     );
   }
   if (config.mediaPlaylistBackoffBase !== undefined) {
-    dispatcher.set_media_playlist_backoff_base(
-      config.mediaPlaylistBackoffBase
-    );
+    dispatcher.set_media_playlist_backoff_base(config.mediaPlaylistBackoffBase);
   }
   if (config.mediaPlaylistBackoffMax !== undefined) {
-    dispatcher.set_media_playlist_backoff_max(
-      config.mediaPlaylistBackoffMax
-    );
+    dispatcher.set_media_playlist_backoff_max(config.mediaPlaylistBackoffMax);
   }
 }
 

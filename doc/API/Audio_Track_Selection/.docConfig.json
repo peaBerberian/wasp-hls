@@ -1,0 +1,16 @@
+{
+  "pages": [
+    {
+      "path": "./getCurrentAudioTrack.md",
+      "displayName": "getCurrentAudioTrack"
+    },
+    {
+      "path": "./getAudioTrackList.md",
+      "displayName": "getAudioTrackList"
+    },
+    {
+      "path": "./setAudioTrack.md",
+      "displayName": "setAudioTrack"
+    }
+  ]
+}

@@ -1,0 +1,52 @@
+{
+  "pages": [
+    {
+      "path": "./initialize.md",
+      "displayName": "initialize"
+    },
+    {
+      "path": "./load.md",
+      "displayName": "load"
+    },
+    {
+      "path": "./updateConfig.md",
+      "displayName": "updateConfig"
+    },
+    {
+      "path": "./getConfig.md",
+      "displayName": "getConfig"
+    },
+    {
+      "path": "./getPlayerState.md",
+      "displayName": "getPlayerState"
+    },
+    {
+      "path": "./pause.md",
+      "displayName": "Pause"
+    },
+    {
+      "path": "./resume.md",
+      "displayName": "Resume"
+    },
+    {
+      "path": "./getError.md",
+      "displayName": "getError"
+    },
+    {
+      "path": "./stop.md",
+      "displayName": "stop"
+    },
+    {
+      "path": "./addEventListener.md",
+      "displayName": "addEventListener"
+    },
+    {
+      "path": "./removeEventListener.md",
+      "displayName": "removeEventListener"
+    },
+    {
+      "path": "./dispose.md",
+      "displayName": "dispose"
+    }
+  ]
+}

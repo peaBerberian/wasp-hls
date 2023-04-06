@@ -383,6 +383,10 @@ impl MediaElementReference {
     /// You should have created a SourceBuffer of the corresponding type with
     /// `create_source_buffer` before calling this method. If you did not this method will return a
     /// `NoSourceBuffer` error.
+    ///
+    /// Also you should avoid removing data around the currently played media position. if you do
+    /// this, playback issues may occur. If you want to completely empty the buffer, please call
+    /// `flush` instead.
     pub(crate) fn remove_data(
         &mut self,
         media_type: MediaType,
@@ -398,6 +402,14 @@ impl MediaElementReference {
         }
     }
 
+    /// Empty the buffer of the given `MediaType`.
+    ///
+    /// Note that it may lead to some seek in-place to ensure that the lower-level buffers are up
+    /// to date.
+    ///
+    /// You should have created a SourceBuffer of the corresponding type with
+    /// `create_source_buffer` before calling this method. If you did not this method will return a
+    /// `NoSourceBuffer` error.
     pub(crate) fn flush(&mut self, media_type: MediaType) -> Result<(), RemoveDataError> {
         match self.buffer_mut_for(media_type) {
             None => Err(RemoveDataError::NoSourceBuffer(media_type)),
@@ -408,6 +420,15 @@ impl MediaElementReference {
         }
     }
 
+    /// Get reference to the inventory of buffered segments of the given type to be able to list
+    /// which segments are in the corresponding `SourceBuffer`, which have been removed or
+    /// partially garbage collected etc.
+    ///
+    /// New segment information is added to the inventory thanks to the
+    /// `announce_last_segment_pushed` method, which thus has to be called before this one if you
+    /// want the corresponding segment to be included. Then synchronizations to the lower-level
+    /// buffers are performed automatically on lifecycle methods such as `on_observation` and
+    /// `on_source_buffer_update`.
     pub(crate) fn inventory(&self, media_type: MediaType) -> &[BufferedChunk] {
         match media_type {
             MediaType::Audio => self.audio_inventory.inventory(),
@@ -483,6 +504,8 @@ impl MediaElementReference {
         }
     }
 
+    /// The "min_buffer_time" is the minimum amount of time to have in the media element's buffer
+    /// before getting out of rebuffering (and thus also re-starting playback).
     pub(crate) fn update_min_buffer_time(&mut self, val: f64) {
         self.min_buffer_time = val;
     }
@@ -704,6 +727,7 @@ impl MediaElementReference {
 
 use thiserror::Error;
 
+/// Error that may be returned by a `create_source_buffer` call.
 #[derive(Error, Debug)]
 pub(crate) enum SourceBufferCreationError {
     #[error("SourceBuffer initialization impossible: {message}")]
@@ -723,7 +747,6 @@ pub(crate) enum SourceBufferCreationError {
 }
 
 use source_buffers::AddSourceBufferError;
-
 impl From<AddSourceBufferError> for SourceBufferCreationError {
     fn from(src: AddSourceBufferError) -> Self {
         match src {
@@ -747,6 +770,7 @@ impl From<AddSourceBufferError> for SourceBufferCreationError {
     }
 }
 
+/// Error that may be returned by an `attach_media_source` call.
 #[derive(Error, Debug)]
 pub(crate) enum AttachMediaSourceError {
     #[error("Error when attaching MediaSource: No content is currently loaded.")]
@@ -766,6 +790,13 @@ impl From<(AttachMediaSourceErrorCode, Option<String>)> for AttachMediaSourceErr
     }
 }
 
+/// From the `MediaObservation` gives the difference between the end of the currently played time
+/// range in the media element's buffered ranges and the current position in seconds.
+///
+/// That is, the amount of seconds that may be played before going into buffer starvation at
+/// regular playback if no new segment is pushed.
+///
+/// Returns `None` if there's no data buffered at the current position.
 fn get_buffer_gap(observation: &MediaObservation) -> Option<f64> {
     let current_time = observation.current_time();
     let current_buffered = observation

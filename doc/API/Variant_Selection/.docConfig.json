@@ -1,0 +1,24 @@
+{
+  "pages": [
+    {
+      "path": "./getCurrentVariant.md",
+      "displayName": "getCurrentVariant"
+    },
+    {
+      "path": "./getVariantList.md",
+      "displayName": "getVariantList"
+    },
+    {
+      "path": "./lockVariant.md",
+      "displayName": "lockVariant"
+    },
+    {
+      "path": "./unlockVariant.md",
+      "displayName": "unlockVariant"
+    },
+    {
+      "path": "./getLockedVariant.md",
+      "displayName": "getLockedVariant"
+    }
+  ]
+}

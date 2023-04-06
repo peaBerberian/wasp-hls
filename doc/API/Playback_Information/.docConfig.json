@@ -1,0 +1,20 @@
+{
+  "pages": [
+    {
+      "path": "./isPlaying.md",
+      "displayName": "isPlaying"
+    },
+    {
+      "path": "./isPaused.md",
+      "displayName": "isPaused"
+    },
+    {
+      "path": "./isRebuffering.md",
+      "displayName": "isRebuffering"
+    },
+    {
+      "path": "./isEnded.md",
+      "displayName": "isEnded"
+    }
+  ]
+}

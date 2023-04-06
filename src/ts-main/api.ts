@@ -119,6 +119,16 @@ interface WaspHlsPlayerEvents {
    */
   variantUpdate: VariantInfo | undefined;
   /**
+   * Sent when a variant becomes locked (in which case the payload corresponds
+   * to the information on the locked variant) or unlocked (in which case the
+   * payload is set to `null`).
+   */
+  variantLockUpdate: VariantInfo | null;
+  /**
+   * Sent when the list of available HLS variants changed.
+   */
+  variantListUpdate: VariantInfo[];
+  /**
    * Sent when the current audio track loaded by the `WaspHlsPlayer` changed.
    */
   audioTrackUpdate: AudioTrackInfo | undefined;
@@ -126,16 +136,6 @@ interface WaspHlsPlayerEvents {
    * Sent when the list of available audio tracks changed.
    */
   audioTrackListUpdate: AudioTrackInfo[];
-  /**
-   * Sent when the list of available HLS variants changed.
-   */
-  variantListUpdate: VariantInfo[];
-  /**
-   * Sent when a variant becomes locked (in which case the payload corresponds
-   * to the information on the locked variant) or unlocked (in which case the
-   * payload is set to `null`).
-   */
-  variantLockUpdate: VariantInfo | null;
 }
 
 /** Various statuses that may be set for a WaspHlsPlayer's initialization. */
@@ -322,7 +322,11 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
     if (this.__worker__ === null) {
       throw new Error("The Player is not initialized or is disposed.");
     }
-    this.__config__ = { ...this.__config__, ...overwrite };
+    for (const [key, value] of Object.entries(overwrite)) {
+      if (value !== undefined) {
+        this.__config__[key as keyof WaspHlsPlayerConfig] = value;
+      }
+    }
     postMessageToWorker(this.__worker__, {
       type: MainMessageType.UpdateConfig,
       value: this.__config__,
@@ -470,6 +474,19 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
       position + (this.__contentMetadata__?.mediaOffset ?? 0);
   }
 
+  /**
+   * Returns the offset to convert from playlist time (the time the content is
+   * at and most `WaspHlsPlayer` API are) into media time (the time the media
+   * element on the page is at) by additionning that offset to the former value
+   * (playlist time + media offset = media time).
+   *
+   * You may want to rely on that value when directly exploiting time
+   * information from the media element.
+   *
+   * Returns `undefined` if that offset is unknown yet.
+   *
+   * @returns {number|undefined}
+   */
   public getMediaOffset(): number | undefined {
     return this.__contentMetadata__?.mediaOffset ?? undefined;
   }
@@ -542,13 +559,11 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
    * This method can only be called if a content is loaded (`Loaded`
    * player state).
    */
-  public resume(): void {
+  public resume(): Promise<void> {
     if (this.getPlayerState() !== PlayerState.Loaded) {
       throw new Error("Cannot resume: no content loaded.");
     }
-    this.videoElement.play().catch(() => {
-      /* noop */
-    });
+    return this.videoElement.play();
   }
 
   /**
@@ -568,6 +583,7 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
     if (this.__contentMetadata__ !== null) {
       requestStopForContent(this.__contentMetadata__, this.__worker__);
     }
+    this.__contentMetadata__ = null;
   }
 
   /**
@@ -696,7 +712,7 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
    *
    * @returns {Object|undefined}
    */
-  public getAudioTrack(): AudioTrackInfo | undefined {
+  public getCurrentAudioTrack(): AudioTrackInfo | undefined {
     const id = this.__contentMetadata__?.currentAudioTrack?.id;
     if (id === undefined) {
       return undefined;
@@ -975,7 +991,7 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
         case WorkerMessageType.TrackUpdate:
           if (onTrackUpdateMessage(data, this.__contentMetadata__)) {
             if (data.value.mediaType === MediaType.Audio) {
-              this.trigger("audioTrackUpdate", this.getAudioTrack());
+              this.trigger("audioTrackUpdate", this.getCurrentAudioTrack());
             }
           }
           break;

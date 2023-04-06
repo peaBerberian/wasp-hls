@@ -1,0 +1,4 @@
+# `setSpeed` method
+
+XXX TODO
+

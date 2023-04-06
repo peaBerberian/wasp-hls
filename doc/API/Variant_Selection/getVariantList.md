@@ -1,0 +1,4 @@
+# `getVariantList` method
+
+XXX TODO
+

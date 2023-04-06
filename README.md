@@ -260,7 +260,7 @@ Miscellaneous:
 - [x] Error API
 - [x] Export embedded versions of the WebAssembly and Worker files to facilitate
       application's development code.
-- [X] Initial position API
+- [x] Initial position API
 - [ ] Delta playlist handling.
       _Priority: low_
 - [ ] Content Steering handling.

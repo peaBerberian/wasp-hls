@@ -1,0 +1,4 @@
+# `getSpeed` method
+
+XXX TODO
+

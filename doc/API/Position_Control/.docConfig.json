@@ -1,0 +1,24 @@
+{
+  "pages": [
+    {
+      "path": "./getPosition.md",
+      "displayName": "getPosition"
+    },
+    {
+      "path": "./seek.md",
+      "displayName": "seek"
+    },
+    {
+      "path": "./getMinimumPosition.md",
+      "displayName": "getMinimumPosition"
+    },
+    {
+      "path": "./getMaximumPosition.md",
+      "displayName": "getMaximumPosition"
+    },
+    {
+      "path": "./getMediaOffset.md",
+      "displayName": "getMediaOffset"
+    }
+  ]
+}

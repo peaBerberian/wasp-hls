@@ -1,0 +1,4 @@
+# `getMediaOffset` method
+
+XXX TODO
+

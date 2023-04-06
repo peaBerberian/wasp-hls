@@ -29,6 +29,14 @@ export default class WaspMediaPlaylistRequestError extends Error {
   public readonly mediaType: MediaType | undefined;
 
   /**
+   * The failed request's HTTP(S) response status.
+   *
+   * `undefined` if unknown, not checked or if not yet received (e.g. in case of a
+   * timeout).
+   */
+  public readonly status: number | undefined;
+
+  /**
    * Specifies the exact error encountered.
    *
    * This is actually the same value as `code` but with a type common to all
@@ -57,6 +65,7 @@ export default class WaspMediaPlaylistRequestError extends Error {
     Object.setPrototypeOf(this, WaspMediaPlaylistRequestError.prototype);
 
     this.name = "WaspMediaPlaylistRequestError";
+    this.status = status;
     this.mediaType = mediaType;
     this.url = url;
     let formattedMsg = message;

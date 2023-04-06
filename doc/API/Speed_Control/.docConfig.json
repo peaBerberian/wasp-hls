@@ -1,0 +1,12 @@
+{
+  "pages": [
+    {
+      "path": "./setSpeed.md",
+      "displayName": "setSpeed"
+    },
+    {
+      "path": "./getSpeed.md",
+      "displayName": "getSpeed"
+    }
+  ]
+}

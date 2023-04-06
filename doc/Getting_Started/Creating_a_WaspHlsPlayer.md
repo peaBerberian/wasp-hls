@@ -15,7 +15,8 @@ API documentation page presenting the instantiation step](../API/Instantiation.m
 
 Note that the `WaspHlsPlayer`'s constructor optionally can take a second
 argument, which allows to overwrite its initial configuration.
-More information on this object is available [in the API documentation](XXX TODO).
+More information on this object is available [in the API
+documentation](../API/Configuration_Object.md).
 
 Before being ready to load contents on that new instance, we now have to
 "initialize" it, which is an operation described in the next chapter.

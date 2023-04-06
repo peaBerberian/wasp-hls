@@ -13,7 +13,6 @@ import WaspSourceBufferError from "./WaspSourceBufferError";
  * General type for all potential errors returned by the `WaspHlsPlayer`.
  */
 export type WaspError =
-  | WaspInitializationError
   | WaspMediaPlaylistParsingError
   | WaspMediaPlaylistRequestError
   | WaspMultivariantPlaylistParsingError

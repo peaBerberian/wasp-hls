@@ -1,6 +1,9 @@
 import { MediaType, RequestErrorReason } from "../../wasm/wasp_hls";
 import { WaspErrorCode } from "./common";
 
+// TODO add `MediaType`?
+// TODO add `status`?
+
 /**
  * Error used to describe a problem with a segment request.
  * @class WaspSegmentRequestError

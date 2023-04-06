@@ -1,0 +1,4 @@
+# `getCurrentVariant` method
+
+XXX TODO
+

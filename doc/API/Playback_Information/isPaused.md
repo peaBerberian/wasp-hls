@@ -1,0 +1,4 @@
+# `isPaused` method
+
+XXX TODO
+

@@ -35,26 +35,31 @@ extern "C" {
     // Returns the data, as a vector of bytes of a resource behind a `ResourceId`.
     //
     // Returns `None` if that `ResourceId` is not linked to any resource right now.
+    // TODO also return ContentType of the requested data?
     pub fn jsGetResourceData(id: ResourceId) -> Option<Vec<u8>>;
 
     // Fetch the given `url` from the network and await a response.
+    // If at least the `range_base` argument is set, the request will be a range request from
+    // `range_base` to `range_end` or to the end of the resource if `range_end` is set to `None`.
     //
-    // If and when it finishes with success, the result will be emitted as a
-    // `resource_id` through the `on_request_finished` method of this
+    // A timeout in milliseconds may also be communicated to `jsFetch`, after which the request will
+    // automatically be aborted and failure will be reported. To disable any timeout, you can set
+    // the `timeout` argument to a negative value.
+    //
+    // If and when it finishes with success, the result will be emitted as a `resource_id` through
+    // the `on_request_finished` method of this `WaspHlsPlayer`.
+    //
+    // If and when it fails, the error will be emitted through the `on_request_failed` method of this
     // `WaspHlsPlayer`.
     //
-    // If and when it fails, the error will be emitted through the
-    // `on_request_failed` method of this `WaspHlsPlayer`.
+    // In both cases, those methods will always be called asynchronously after the `jsFetch` call.
     //
-    // In both cases, those methods will always be called asynchronously after the `jsFetch`
-    // call.
+    // If the request has been aborted while pending through the `jsAbortRequest` function, none of
+    // those methods will be called.
     //
-    // If the request has been aborted while pending through the `jsAbortRequest`
-    // function, none of those methods will be called.
-    //
-    // The resource requested is actually kept in JavaScript's memory to avoid unnecesary copies
-    // of larges amount of data (and to avoid stressing JavaScript's garbage collector in case
-    // where the data would go back and forth between JavaScript and WASM).
+    // The resource requested is actually kept in JavaScript's memory to avoid unnecesary copies of
+    // larges amount of data (and to avoid stressing JavaScript's garbage collector in case where
+    // the data would go back and forth between JavaScript and WASM).
     //
     // To avoid memory leaks, it is __VERY__ important to call the `jsFreeResource` function with
     // that `ResourceId` once it is not needed anymore.
@@ -69,7 +74,7 @@ extern "C" {
         url: &str,
         range_base: Option<usize>,
         range_end: Option<usize>,
-        timeout: Option<f64>,
+        timeout: f64,
     ) -> RequestId;
 
     // Abort a request started with `jsFetch`` based on its

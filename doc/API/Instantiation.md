@@ -22,7 +22,7 @@ advised by this documentation (such as with [audio volume
 management](XXX TODO))._
 
 Optionally, you can give a second argument on instantiation, the
-`WaspHlsPlayer`'s original [configuration object](XXX TODO):
+`WaspHlsPlayer`'s original [configuration object](./Configuration_Object.md):
 
 ```js
 const config = {
@@ -37,9 +37,14 @@ const config = {
 const player = new WaspHlsPlayer(videoElement, config);
 ```
 
-Note however that this configuration can be updated at any time.
-More information on the configuration object [in its documentation
-page](XXX TODO).
+You may here only define a subset of those keys, in which case the
+`WaspHlsPlayer` will set sane default values for the others.
+You can also either not set it, set it to `undefined` or to an empty object, in
+which cases the `WaspHlsPlayerConfig` will use its inner default configuration
+instead.
+
+Note that this configuration object can be updated at any time through the
+[`updateConfig`](XXX TODO) method.
 
 ## Syntax
 

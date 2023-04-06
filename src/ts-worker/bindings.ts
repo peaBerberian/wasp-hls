@@ -428,7 +428,7 @@ export function doFetch(
   url: string,
   rangeStart: number | undefined,
   rangeEnd: number | undefined,
-  timeout: number | undefined
+  timeout: number
 ): RequestId {
   let timeouted = false;
   const abortController = new AbortController();
@@ -436,7 +436,7 @@ export function doFetch(
   const timestampBef = timerFn();
 
   let timeoutTimeoutId: number | undefined;
-  if (timeout !== undefined) {
+  if (timeout >= 0) {
     timeoutTimeoutId = setTimeout(() => {
       timeouted = true;
       abortController.abort();
@@ -1239,10 +1239,10 @@ export function announceFetchedContent(
 
       variantInfoObj.push({
         id,
-        height,
-        width,
-        frameRate,
-        bandwidth,
+        height: height === 0 ? undefined : height,
+        width: width === 0 ? undefined : width,
+        frameRate: frameRate === 0 ? undefined : frameRate,
+        bandwidth: bandwidth === 0 ? undefined : bandwidth,
       });
     }
   }

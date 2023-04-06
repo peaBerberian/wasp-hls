@@ -1,0 +1,3 @@
+# `getPosition` method
+
+XXX TODO

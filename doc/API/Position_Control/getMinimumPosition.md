@@ -1,0 +1,3 @@
+# `getMinimumPosition` method
+
+XXX TODO

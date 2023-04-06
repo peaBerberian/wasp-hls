@@ -1,0 +1,3 @@
+# `getLockedVariant` method
+
+XXX TODO

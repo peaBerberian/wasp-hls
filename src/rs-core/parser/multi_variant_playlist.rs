@@ -274,7 +274,6 @@ impl MultivariantPlaylist {
             } else {
                 self.audio_tracks.iter_media().fold(None, |acc, (_, m)| {
                     if m.group_id() == group_id
-                        && m.is_autoselect()
                         && (acc.is_none() || m.is_default())
                     {
                         if m.url().is_some() {
