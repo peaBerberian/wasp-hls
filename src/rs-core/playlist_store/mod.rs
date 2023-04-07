@@ -442,21 +442,6 @@ impl PlaylistStore {
         }
     }
 
-    /// Returns `Url` to the initialization segment of the MediaPlaylist corresponding to the given
-    /// `MediaType`.
-    ///
-    /// Returns `None` if any of the following is true:
-    ///   - There's no MediaPlaylist for that given `MediaType`.
-    ///   - The MediaPlaylist for that given `MediaType` is not yet loaded.
-    ///   - There's no initialization segment for the MediaPlaylist of that given `MediaType`.
-    pub(crate) fn curr_init_segment(&self, media_type: MediaType) -> Option<&Url> {
-        self.curr_media_playlist(media_type)
-            .as_ref()?
-            .segment_list()
-            .init()
-            .map(|i| i.uri())
-    }
-
     /// Returns currently estimated start time in seconds at which to begin playing the content.
     ///
     /// This value may change depending on the chosen MediaPlaylist that are also loaded.

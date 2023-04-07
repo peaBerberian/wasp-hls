@@ -4,7 +4,7 @@
   "description": "WebAssembly HLS Player Proof Of Concept",
   "scripts": {
     "build:all": "npm run clean && npm run build:wasm && npm run build:worker && npm run build:main",
-    "build:all:demo": "npm run clean && npm run build:wasm && npm run build:worker && npm build:demo",
+    "build:all:demo": "npm run clean && npm run build:wasm && npm run build:worker && npm run build:demo",
     "build:demo": "esbuild demo/src/index.tsx --bundle --outfile=build/demo.js",
     "build:demo:release": "esbuild demo/src/index.tsx --bundle --outfile=build/demo.js --minify",
     "build:demo:watch": "esbuild demo/src/index.tsx --bundle --outfile=build/demo.js --watch",

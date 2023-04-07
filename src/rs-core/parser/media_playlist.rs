@@ -37,17 +37,20 @@ impl SegmentTimeInfo {
 
 #[derive(Clone, Debug)]
 pub(crate) struct SegmentList {
-    init: Option<InitSegmentInfo>,
+    init: Vec<InitSegmentInfo>,
     media: Vec<SegmentInfo>,
 }
 
 impl SegmentList {
-    fn new(init: Option<InitSegmentInfo>, media: Vec<SegmentInfo>) -> Self {
+    fn new(init: Vec<InitSegmentInfo>, media: Vec<SegmentInfo>) -> Self {
         Self { init, media }
     }
 
-    pub(crate) fn init(&self) -> Option<&InitSegmentInfo> {
-        self.init.as_ref()
+    pub(crate) fn init_for(&self, seg: &SegmentInfo) -> Option<&InitSegmentInfo> {
+        self.init
+            .iter()
+            .rev()
+            .find(|i| i.start <= seg.time_info.start)
     }
 
     pub(crate) fn media(&self) -> &[SegmentInfo] {
@@ -78,11 +81,16 @@ pub struct MediaPlaylist {
 
 #[derive(Clone, Debug)]
 pub(crate) struct InitSegmentInfo {
+    start: f64,
     uri: Url,
     byte_range: Option<ByteRange>,
 }
 
 impl InitSegmentInfo {
+    pub(crate) fn id(&self) -> f64 {
+        self.start
+    }
+
     pub(crate) fn byte_range(&self) -> Option<&ByteRange> {
         self.byte_range.as_ref()
     }
@@ -184,6 +192,7 @@ impl MediaPlaylist {
     pub(crate) fn create(
         playlist: impl BufRead,
         url: Url,
+        prev_playlist: Option<&MediaPlaylist>,
         context: Option<&MediaPlaylistContext>,
     ) -> Result<Self, MediaPlaylistParsingError> {
         let mut version: Option<u32> = None;
@@ -193,7 +202,8 @@ impl MediaPlaylist {
         let mut end_list = false;
         let mut playlist_type = PlaylistType::None;
         let mut i_frames_only = false;
-        let mut map: Option<InitSegmentInfo> = None;
+        let mut last_incomplete_map = None;
+        let mut maps_info: Vec<InitSegmentInfo> = vec![];
         let mut start = None;
 
         let playlist_base_url = url.pathname();
@@ -317,10 +327,7 @@ impl MediaPlaylist {
                             }
                         }
                         if let Some(url) = map_info_url {
-                            map = Some(InitSegmentInfo {
-                                uri: url,
-                                byte_range: map_info_byte_range,
-                            });
+                            last_incomplete_map = Some((url, map_info_byte_range));
                         } else {
                             return Err(MediaPlaylistParsingError::UriMissingInMap);
                         }
@@ -344,6 +351,23 @@ impl MediaPlaylist {
                         byte_range: next_segment_byte_range,
                         url: seg_url,
                     };
+                    if let Some((url, byte_range)) = last_incomplete_map {
+                        last_incomplete_map = None;
+                        let init_start = prev_playlist
+                            .and_then(|p| {
+                                p.segment_list
+                                    .init
+                                    .iter()
+                                    .find(|s| s.uri == url && s.byte_range == byte_range)
+                                    .map(|i| i.start)
+                            })
+                            .unwrap_or(curr_start_time);
+                        maps_info.push(InitSegmentInfo {
+                            start: init_start,
+                            uri: url,
+                            byte_range,
+                        });
+                    }
                     media_segments.push(seg);
                     curr_start_time += duration;
                     next_segment_duration = None;
@@ -375,7 +399,7 @@ impl MediaPlaylist {
             end_list,
             playlist_type,
             i_frames_only,
-            segment_list: SegmentList::new(map, media_segments),
+            segment_list: SegmentList::new(maps_info, media_segments),
             url,
             // TODO
             // server_control,

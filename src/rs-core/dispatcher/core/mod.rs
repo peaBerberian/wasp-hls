@@ -27,7 +27,6 @@ use crate::{
     requester::{
         FinishedRequestType, PlaylistFileType, PlaylistRequestInfo, RetryResult, SegmentRequestInfo,
     },
-    segment_selector::NextSegmentInfo,
     utils::url::Url,
     Logger,
 };
@@ -767,43 +766,42 @@ impl Dispatcher {
 
                 let inventory = self.media_element_ref.inventory(mt);
                 if let Some(seg_info) = pl_store.curr_media_playlist_segment_info(mt) {
-                    match self.segment_selectors.get_mut(mt).most_needed_segment(
+                    let needed_segment = self.segment_selectors.get_mut(mt).most_needed_segment(
                         seg_info.0,
                         &seg_info.1,
                         inventory,
-                    ) {
-                        NextSegmentInfo::None => self.requester.abort_segments_with_type(mt),
-                        NextSegmentInfo::InitSegment(i) => {
-                            if !self
-                                .requester
-                                .is_requesting_segment(mt, i.uri(), i.byte_range())
-                            {
-                                Logger::debug(&format!(
-                                    "Core: {mt} init segment request not needed anymore, abort."
-                                ));
-                                self.requester.abort_segments_with_type(mt);
-                            } else {
-                                Logger::debug(&format!(
-                                    "Core: {mt} init segment request still needed."
-                                ));
-                            }
+                    );
+
+                    if let Some(i) = needed_segment.init_segment() {
+                        if !self
+                            .requester
+                            .is_requesting_segment(mt, i.uri(), i.byte_range())
+                        {
+                            Logger::debug(&format!(
+                                "Core: {mt} init segment request not needed anymore, abort."
+                            ));
+                            self.requester.abort_segments_with_type(mt);
+                        } else {
+                            Logger::debug(&format!(
+                                "Core: {mt} init segment request still needed."
+                            ));
                         }
-                        NextSegmentInfo::MediaSegment(seg) => {
-                            if !self.requester.is_requesting_segment(
-                                mt,
-                                seg.url(),
-                                seg.byte_range(),
-                            ) {
-                                Logger::debug(&format!(
-                                    "Core: {mt} media segment request not needed anymore, abort."
-                                ));
-                                self.requester.abort_segments_with_type(mt);
-                            } else {
-                                Logger::debug(&format!(
-                                    "Core: {mt} media segment request still needed."
-                                ));
-                            }
+                    } else if let Some(seg) = needed_segment.media_segment() {
+                        if !self
+                            .requester
+                            .is_requesting_segment(mt, seg.url(), seg.byte_range())
+                        {
+                            Logger::debug(&format!(
+                                "Core: {mt} media segment request not needed anymore, abort."
+                            ));
+                            self.requester.abort_segments_with_type(mt);
+                        } else {
+                            Logger::debug(&format!(
+                                "Core: {mt} media segment request still needed."
+                            ));
                         }
+                    } else {
+                        self.requester.abort_segments_with_type(mt);
                     }
                 }
             });
@@ -818,21 +816,20 @@ impl Dispatcher {
         if !self.requester.has_segment_request_pending(media_type) {
             let inventory = self.media_element_ref.inventory(media_type);
             if let Some(seg_info) = pl_store.curr_media_playlist_segment_info(media_type) {
-                match self
+                let most_needed_segment = self
                     .segment_selectors
                     .get_mut(media_type)
-                    .most_needed_segment(seg_info.0, &seg_info.1, inventory)
-                {
-                    NextSegmentInfo::None => {}
-                    NextSegmentInfo::InitSegment(i) => self.requester.request_init_segment(
+                    .most_needed_segment(seg_info.0, &seg_info.1, inventory);
+                if let Some(i) = most_needed_segment.init_segment() {
+                    self.requester.request_init_segment(
                         media_type,
                         i.uri().clone(),
                         i.byte_range(),
                         seg_info.1,
-                    ),
-                    NextSegmentInfo::MediaSegment(seg) => self
-                        .requester
-                        .request_media_segment(media_type, seg, seg_info.1),
+                    );
+                } else if let Some(seg) = most_needed_segment.media_segment() {
+                    self.requester
+                        .request_media_segment(media_type, seg, seg_info.1);
                 }
             }
         }

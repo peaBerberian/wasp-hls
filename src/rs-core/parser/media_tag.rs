@@ -293,7 +293,7 @@ impl MediaTag {
         url: Url,
         context: Option<&MediaPlaylistContext>,
     ) -> Result<&MediaPlaylist, MediaPlaylistParsingError> {
-        let new_mp = MediaPlaylist::create(playlist, url, context)?;
+        let new_mp = MediaPlaylist::create(playlist, url, self.media_playlist.as_ref(), context)?;
         self.media_playlist = Some(new_mp);
         Ok(self.media_playlist.as_ref().unwrap())
     }

@@ -225,6 +225,7 @@ Media demuxing/decoding, MSE API and buffer handling:
 - [x] End of stream support (as in: actually end when playback reaches the end!)
 - [x] Multiple simultaneous type of buffers support (for now only audio and
       video, through MSE `SourceBuffer`s)
+- [X] One and multiple initialization segments handling per rendition
 - [x] Lazy buffer memory management: Don't manually remove old buffers' media
       data if the browser thinks it's fine. Many players clean it up
       progressively as it also simplifies the logic (e.g. browser GC detection

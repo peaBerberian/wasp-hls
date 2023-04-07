@@ -183,7 +183,7 @@ impl NextSegmentSelector {
             base_pos: real_base_pos,
             buffer_goal,
             last_media_id: None,
-            init_status: InitializationSegmentSelectorStatus::Unvalidated,
+            init_status: InitializationSegmentSelectorStatus::Unchecked,
             skipped_segments: vec![],
         }
     }
@@ -192,7 +192,7 @@ impl NextSegmentSelector {
     /// returned by it, and start back from the given "base position".
     pub(crate) fn reset(&mut self, base_pos: f64) {
         self.base_pos = f64::max(0., base_pos);
-        self.init_status = InitializationSegmentSelectorStatus::Unvalidated;
+        self.init_status = InitializationSegmentSelectorStatus::Unchecked;
         self.last_media_id = None;
         self.segment_cursor = SegmentCursor::new(base_pos);
         self.skipped_segments.clear();
@@ -214,7 +214,11 @@ impl NextSegmentSelector {
     /// Calling this method allows to indicate that the initialization segment was requested and as
     /// such, don't need to be returned anymore by this `NextSegmentSelector`.
     pub(crate) fn validate_init(&mut self) {
-        self.init_status = InitializationSegmentSelectorStatus::Validated;
+        if let InitializationSegmentSelectorStatus::Unvalidated(start) = self.init_status {
+            self.init_status = InitializationSegmentSelectorStatus::Validated(start);
+        } else {
+            Logger::warn("Validation an initialization segment, but none were returned.");
+        }
     }
 
     /// Calling this method allows to indicate that the media segment ending at `pos` was requested
@@ -223,10 +227,10 @@ impl NextSegmentSelector {
         self.segment_cursor.move_cursor(pos);
     }
 
-    /// Returns the current most needed segment according to the current situation and to the last
-    /// "validated" init and media segment.
+    /// Returns the current most needed segment(s) according to the current situation and to the
+    /// last "validated" init and media segment.
     ///
-    /// Once returned, the segments object returned by this method have to be "validated" if they
+    /// Once returned, the segment objects returned by this method have to be "validated" if they
     /// do have been requested, to avoid just getting the same segment on the next
     /// `most_needed_segment` call.
     /// To "validate" a segment, you can call `validate_init` if we're talking about an
@@ -236,31 +240,49 @@ impl NextSegmentSelector {
         segment_list: &'a SegmentList,
         context: &SegmentQualityContext,
         inventory: &[BufferedChunk],
-    ) -> NextSegmentInfo<'a> {
+    ) -> NeededSegmentInfo<'a> {
         let new_media_id = context.media_id();
         let has_quality_changed = Some(new_media_id) != self.last_media_id;
         self.last_media_id = Some(new_media_id);
 
         if has_quality_changed {
             Logger::debug("Selector: Quality changed, recomputing starting position");
-            self.init_status = InitializationSegmentSelectorStatus::Unvalidated;
+            self.init_status = InitializationSegmentSelectorStatus::Unchecked;
             self.segment_cursor.move_cursor(self.base_pos);
             self.skipped_segments.clear();
             let start_pos = self.recompute_starting_position(context, inventory);
             self.segment_cursor.move_cursor(start_pos);
         }
 
-        if self.init_status == InitializationSegmentSelectorStatus::Unvalidated {
-            if let Some(i) = segment_list.init() {
-                return NextSegmentInfo::InitSegment(i);
-            } else {
-                self.init_status = InitializationSegmentSelectorStatus::None;
-            }
-        }
         if let Some(val) = self.check_skipped_segments(context, inventory) {
             self.segment_cursor.move_cursor(val);
         }
-        self.recursively_check_most_needed_media_segment(segment_list.media(), context, inventory)
+        let most_needed_segment = if let Some(seg) = self
+            .recursively_check_most_needed_media_segment(segment_list.media(), context, inventory)
+        {
+            seg
+        } else {
+            return NeededSegmentInfo {
+                init_segment: None,
+                media_segment: None,
+            };
+        };
+        let init_segment = if let Some(i) = segment_list.init_for(most_needed_segment) {
+            match self.init_status {
+                InitializationSegmentSelectorStatus::Validated(id) if id == i.id() => None,
+                _ => {
+                    self.init_status = InitializationSegmentSelectorStatus::Unvalidated(i.id());
+                    Some(i)
+                }
+            }
+        } else {
+            self.init_status = InitializationSegmentSelectorStatus::NoneExists;
+            None
+        };
+        NeededSegmentInfo {
+            media_segment: Some(most_needed_segment),
+            init_segment,
+        }
     }
 
     /// Starts from `self.base_pos`, look at what is already buffered, and determine a new optimal
@@ -354,43 +376,34 @@ impl NextSegmentSelector {
         media_segments: &'a [SegmentInfo],
         context: &SegmentQualityContext,
         inventory: &[BufferedChunk],
-    ) -> NextSegmentInfo<'a> {
+    ) -> Option<&'a SegmentInfo> {
         let maximum_position = self.buffer_goal + self.base_pos;
-        match self
+        let si = self
             .segment_cursor
-            .get_next(media_segments, maximum_position)
-        {
-            None => NextSegmentInfo::None,
-            Some(si) => {
-                let segment_end = si.end();
+            .get_next(media_segments, maximum_position)?;
+        let segment_end = si.end();
 
-                // Check for "smart-switching", which is to avoid returning segments who have
-                // already an equal or even better quality in the buffer.
-                if self.can_be_skipped(si.start(), segment_end, context, inventory) {
-                    Logger::debug(&format!(
-                        "Selector: Segment can be skipped (s:{}, d: {})",
-                        si.start(),
-                        si.duration()
-                    ));
-                    let skipped = SegmentTimeInfo::new(si.start(), si.duration());
-                    match self
-                        .skipped_segments
-                        .iter()
-                        .position(|sk| sk.start() > si.start())
-                    {
-                        Some(pos) => self.skipped_segments.insert(pos, skipped),
-                        None => self.skipped_segments.push(skipped),
-                    }
-                    self.segment_cursor.move_cursor(segment_end);
-                    self.recursively_check_most_needed_media_segment(
-                        media_segments,
-                        context,
-                        inventory,
-                    )
-                } else {
-                    NextSegmentInfo::MediaSegment(si)
-                }
+        // Check for "smart-switching", which is to avoid returning segments who have
+        // already an equal or even better quality in the buffer.
+        if self.can_be_skipped(si.start(), segment_end, context, inventory) {
+            Logger::debug(&format!(
+                "Selector: Segment can be skipped (s:{}, d: {})",
+                si.start(),
+                si.duration()
+            ));
+            let skipped = SegmentTimeInfo::new(si.start(), si.duration());
+            match self
+                .skipped_segments
+                .iter()
+                .position(|sk| sk.start() > si.start())
+            {
+                Some(pos) => self.skipped_segments.insert(pos, skipped),
+                None => self.skipped_segments.push(skipped),
             }
+            self.segment_cursor.move_cursor(segment_end);
+            self.recursively_check_most_needed_media_segment(media_segments, context, inventory)
+        } else {
+            Some(si)
         }
     }
 
@@ -463,16 +476,25 @@ impl NextSegmentSelector {
 /// This enumeration allows to keep track of if the initialization segment for the last asked media
 /// was validated (or if it doesn't exist), or not, thus allowing the `NextSegmentSelector` to
 /// indicate whether it should be loaded or not.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug)]
 enum InitializationSegmentSelectorStatus {
+    /// We did not check for an initialization segment yet.
+    Unchecked,
     /// No initialization segment exist for that media
-    None,
-    /// The initialization segment was not "validated" it may thus need to be returned if it
-    /// exists.
-    Unvalidated,
+    NoneExists,
+    /// We checked an returned an initialization segment the last call which add as an `id`
+    /// property the f64 attached to this enum variant.
+    ///
+    /// Note that this `id` only identifies initialization segments per-quality. This identifier
+    /// can be repeated in other qualities.
+    Unvalidated(f64),
     /// An initialization segment exists and was "validated" it is not necessary to return it
     /// anymore.
-    Validated,
+    /// The associated `f64` is the `id` of that initialization segment.
+    ///
+    /// Note that this `id` only identifies initialization segments per-quality. This identifier
+    /// can be repeated in other qualities.
+    Validated(f64),
 }
 
 /// Segment information for segments that may now be loaded as returned by the
@@ -480,13 +502,34 @@ enum InitializationSegmentSelectorStatus {
 ///
 /// Its lifetime is generally linked to the `MediaPlaylist` to which those information are
 /// initially linked to.
-pub(crate) enum NextSegmentInfo<'a> {
-    /// No segment is needed currently.
-    None,
-    /// A media segment should now be needed, corresponding to the inner information.
-    MediaSegment(&'a SegmentInfo),
-    /// An initialization segment should now be needed, corresponding to the inner information.
-    InitSegment(&'a InitSegmentInfo),
+pub(crate) struct NeededSegmentInfo<'a> {
+    /// The initialization segment that should now be needed, corresponding to the inner
+    /// information.
+    ///
+    /// `None` either if there's no needed initialization segment or if we consider that the last
+    /// validated one is still compatible.
+    init_segment: Option<&'a InitSegmentInfo>,
+    /// The media segment that should now be needed, corresponding to the inner information.
+    ///
+    /// `None` if no media segment is currently needed.
+    media_segment: Option<&'a SegmentInfo>,
+}
+
+impl<'a> NeededSegmentInfo<'a> {
+    /// Returns initialization segment that should be loaded.
+    ///
+    /// `None` either if there's no needed initialization segment or if we consider that the last
+    /// validated one is still compatible.
+    pub(crate) fn media_segment(&self) -> Option<&SegmentInfo> {
+        self.media_segment
+    }
+
+    /// Returns media segment that should be loaded, corresponding to the inner information.
+    ///
+    /// `None` if no media segment is currently needed.
+    pub(crate) fn init_segment(&self) -> Option<&InitSegmentInfo> {
+        self.init_segment
+    }
 }
 
 /// Inner `NextSegmentSelector` mechanism allowing to keep track of until which segment we have
