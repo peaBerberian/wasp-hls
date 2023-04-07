@@ -1,4 +1,3 @@
 # `isEnded` method
 
 XXX TODO
-

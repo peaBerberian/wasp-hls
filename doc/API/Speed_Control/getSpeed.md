@@ -1,4 +1,3 @@
 # `getSpeed` method
 
 XXX TODO
-

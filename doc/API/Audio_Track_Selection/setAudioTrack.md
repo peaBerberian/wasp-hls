@@ -1,4 +1,3 @@
 # `setAudioTrack` method
 
 XXX TODO
-

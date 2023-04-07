@@ -1,4 +1,3 @@
 # `getVariantList` method
 
 XXX TODO
-

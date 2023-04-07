@@ -193,7 +193,7 @@ player.addEventlistener("error", (error) => {
   media decoders initialization).
 
   If `false`, it concerns a media segment (a segment with media data).
-   
+
   If `undefined` it is not known whether it concerns an initialization or
   media segment.
 

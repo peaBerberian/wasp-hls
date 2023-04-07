@@ -1,4 +1,3 @@
 # `isRebuffering` method
 
 XXX TODO
-

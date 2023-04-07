@@ -1,4 +1,3 @@
 # `getPlayerState` method
 
 XXX TODO
-

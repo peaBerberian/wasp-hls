@@ -1,4 +1,3 @@
 # `getCurrentVariant` method
 
 XXX TODO
-

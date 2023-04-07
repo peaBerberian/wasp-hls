@@ -1,4 +1,3 @@
 # `getAudioTrackList` method
 
 XXX TODO
-

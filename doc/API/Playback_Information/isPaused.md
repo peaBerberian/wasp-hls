@@ -1,4 +1,3 @@
 # `isPaused` method
 
 XXX TODO
-

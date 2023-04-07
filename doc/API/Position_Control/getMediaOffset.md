@@ -1,4 +1,3 @@
 # `getMediaOffset` method
 
 XXX TODO
-

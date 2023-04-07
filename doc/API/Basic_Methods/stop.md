@@ -1,4 +1,3 @@
 # `stop` method
 
 XXX TODO
-

@@ -1,4 +1,3 @@
 # `seek` method
 
 XXX TODO
-

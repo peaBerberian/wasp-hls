@@ -1,4 +1,3 @@
 # `getCurrentAudioTrack` method
 
 XXX TODO
-

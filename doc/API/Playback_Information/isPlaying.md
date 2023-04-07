@@ -1,4 +1,3 @@
 # `isPlaying` method
 
 XXX TODO
-

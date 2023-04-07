@@ -1,4 +1,3 @@
 # `getMaximumPosition` method
 
 XXX TODO
-
