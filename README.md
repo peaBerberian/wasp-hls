@@ -164,7 +164,7 @@ The reasons why I started this project are mainly:
 
 - to work on and improve my Rust skills
 
-## What's left to do?
+## What's done
 
 It already has a lot of features but there's still some left work:
 
@@ -358,3 +358,197 @@ most of them are not needed for playback):
       need for...
 - [ ] EXT-X-DISCONTINUITY-SEQUENCE: I don't think we need this, at least I
       didn't encounter a case for it now that isn't handled by other tags.
+
+## Setup
+
+If you want to contribute or build the Wasp-hls locally, you will need to have
+[nodejs](https://nodejs.org/) and [rust](https://www.rust-lang.org/tools/install)
+installed.
+
+Then you need to install node dependencies by calling in your shell:
+
+```sh
+# Install all node dependencies (needs npm, generally installed with nodejs)
+npm install
+```
+
+You also need to add the rust wasm32 target and some rust dependencies:
+
+```sh
+# Add wasm32 target (needs rustup that you most likely took with rust)
+rustup target add wasm32-unknown-unknown
+
+# Add wasm-bindgen CLI (needs cargo, generally installed with rust)
+cargo install wasm-bindgen-cli
+
+# Optionally, you may also need clippy, for checking Rust code mistakes
+rustup component add clippy
+```
+
+## Build
+
+The building of the Wasp-hls player may be performed by module, if you just
+updated one area of the code (the Rust code for example), or as a whole.
+
+### The Rust (WebAssembly) code
+
+To build only the Rust code in `src/rs-core/` to its destination WebAssembly
+file (`build/wasp_hls_bg.wasm`), you can run any of the following commands:
+
+```sh
+# Build in debug mode, which leads to a bigger file and slower code, but is
+# more useful and quicker to build when developping
+npm run build:wasm
+
+# Build in release mode, which is the actual delivered result
+npm run build:wasm:release
+```
+
+### The TypeScript Worker code
+
+To build only the Worker code in `src/ts-worker` to its destination JavaScript
+file (`build/worker.js`), you can run any of the following commands:
+
+```sh
+# Build in debug mode, which leads to a bigger file though much easier to debug
+npm run build:worker
+
+# Build in release mode, which is the actual delivered minified result
+npm run build:worker:release
+```
+
+### The Main (API) code
+
+To build only the code running in the main thread present in `src/ts-main` to
+its destination JavaScript file (`build/main.js`), you can run any of the
+following commands:
+
+```sh
+# Build in debug mode, which leads to a bigger file though much easier to debug
+npm run build:main
+
+# Build in release mode, which is the actual delivered minified result
+npm run build:main:release
+```
+
+### The Demo
+
+To build only the demo application showcasing the Wasp-hls player, whose code
+is present in the (`demo/`) directory, to its destination JavaScript file
+(`build/demo.js`), you can run any of the following commands:
+
+```sh
+# Build in debug mode, which leads to a bigger file though much easier to debug
+npm run build:demo
+
+# Build in debug mode, with a "watcher" rebuilding each time one of its files
+# changes
+npm run build:demo:watch
+
+# Build in release mode, which is the actual delivered minified result
+npm run build:demo:release
+```
+
+Then to perform your tests, you generally want to serve the demo. You can do so
+with:
+
+```sh
+npm run serve
+```
+
+### Combinations
+
+If you just want to build the whole Wasp-hls player code, without the demo, you
+may call:
+
+```sh
+npm run build:all
+```
+
+If you want to build all that code AND the demo:
+
+```sh
+npm run build:all && npm run build:demo
+```
+
+Though what you most likely want to do here is build the full code used by
+the demo to perform your tests, here just write:
+
+```sh
+npm run build:all:demo
+```
+
+That last script bypass the generation of the `build/main.js` file, as the demo
+file (`build/demo.js`) already includes the content of that file anyway.
+
+To build everything in release mode, for an actual release or for tests in
+production conditions, write:
+
+```sh
+# WebAssembly + Worker + Main in release mode
+npm run build:release
+
+# If you also want the demo in release mode
+npm run build:demo:release
+```
+
+### The Documentation
+
+The documentation, written in `doc/` may also be built to its final directory
+(`doc/generated`), through the following command:
+
+```sh
+npm run doc
+```
+
+It may then be served, so it can be read on a web browser, through:
+
+```sh
+npm run serve:doc
+```
+
+## Update the code
+
+You're welcome to read the code which should be hopefully documented enough and
+readable enough to dive into. The source code of the player is in the `src`
+directory, if you would prefer to work on the demo, it's in the `demo`
+directory, as for the documentation, it's in the `demo` directory.
+
+## Check the code
+
+To check the TypeScript types of TypeScript files and their code style with
+the `eslint` package, you can run:
+
+```sh
+# Check all TypeScript files in the project
+npm run check
+
+# OR, check only the Worker code
+npm run check:worker
+
+# OR, check only the Main code
+npm run check:main
+
+# OR, check only the Demo code
+npm run check:demo
+```
+
+To check the Rust code, with clippy, you can run:
+
+```sh
+# Check all Rust files in the project
+npm run clippy
+```
+
+You also might want to format automatically the code before commiting:
+
+```sh
+# Format all TypeScript, JavaScript, Markdown and HTML files in the project
+npm run fmtt
+
+# Format all Rust code
+npm run fmtr
+
+# Do both
+npm run fmt
+```
