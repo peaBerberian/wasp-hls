@@ -176,7 +176,7 @@ impl MultivariantPlaylist {
     /// `bandwidth` ascending, for which all codecs are known to be supported and which are linked
     /// to the given track_id
     pub(crate) fn supported_variants_for_audio(&self, track_id: u32) -> Vec<&VariantStream> {
-        let group_ids = self.audio_tracks.groups_for(track_id);
+        let group_ids = self.audio_tracks.groups_for_track_id(track_id);
         self.variants
             .iter()
             .filter(|v| {
@@ -272,25 +272,27 @@ impl MultivariantPlaylist {
                         }
                     })
             } else {
-                self.audio_tracks.iter_media().fold(None, |acc, (_, m)| {
-                    if m.group_id() == group_id && (acc.is_none() || m.is_default()) {
-                        if m.url().is_some() {
-                            Some(MediaPlaylistPermanentId::new(
-                                MediaPlaylistUrlLocation::AudioTrack,
-                                m.id().to_owned(),
-                            ))
+                self.audio_tracks
+                    .iter_tracks_media()
+                    .fold(None, |acc, (_, m)| {
+                        if m.group_id() == group_id && (acc.is_none() || m.is_default()) {
+                            if m.url().is_some() {
+                                Some(MediaPlaylistPermanentId::new(
+                                    MediaPlaylistUrlLocation::AudioTrack,
+                                    m.id().to_owned(),
+                                ))
+                            } else {
+                                // AudioTrack without URL have in fact their MediaPlaylist's URL in the
+                                // variant
+                                Some(MediaPlaylistPermanentId::new(
+                                    MediaPlaylistUrlLocation::Variant,
+                                    curr_variant.id().to_owned(),
+                                ))
+                            }
                         } else {
-                            // AudioTrack without URL have in fact their MediaPlaylist's URL in the
-                            // variant
-                            Some(MediaPlaylistPermanentId::new(
-                                MediaPlaylistUrlLocation::Variant,
-                                curr_variant.id().to_owned(),
-                            ))
+                            acc
                         }
-                    } else {
-                        acc
-                    }
-                })
+                    })
             }
         } else {
             None
@@ -304,7 +306,7 @@ impl MultivariantPlaylist {
     /// particular `Url` is linked to it (e.g. because its corresponding data is directly in
     /// segments of the variant's MediaPlaylist).
     fn audio_url(&self, media_id: u32) -> Option<&Url> {
-        self.audio_tracks.get_media(media_id).and_then(|x| {
+        self.audio_tracks.media_tag(media_id).and_then(|x| {
             if let Some(playlist) = x.media_playlist() {
                 Some(playlist.url())
             } else {
@@ -319,7 +321,7 @@ impl MultivariantPlaylist {
     /// linked `MediaPlaylist` or if its Media Playlist hasn't been fetched yet.
     fn audio_playlist(&self, media_id: u32) -> Option<&MediaPlaylist> {
         self.audio_tracks
-            .get_media(media_id)
+            .media_tag(media_id)
             .and_then(|x| x.media_playlist())
     }
 
@@ -418,7 +420,7 @@ impl MultivariantPlaylist {
         media_playlist_data: impl io::BufRead,
         url: Url,
     ) -> Result<&MediaPlaylist, MediaPlaylistUpdateError> {
-        match self.audio_tracks.get_mut_media(id) {
+        match self.audio_tracks.media_tag_mut(id) {
             Some(m) => Ok(m.update(media_playlist_data, url, self.context.as_ref())?),
             None => Err(MediaPlaylistUpdateError::NotFound),
         }
@@ -445,12 +447,12 @@ impl MultivariantPlaylist {
         id: &MediaPlaylistPermanentId,
     ) -> Option<&AudioTrack> {
         match id.location() {
-            MediaPlaylistUrlLocation::AudioTrack => self.audio_tracks.track_for_media(id.id()),
+            MediaPlaylistUrlLocation::AudioTrack => self.audio_tracks.track_for_media_tag(id.id()),
             MediaPlaylistUrlLocation::Variant => {
                 let variant = self.variant(id.id())?;
                 let group = variant.audio_group()?;
                 self.audio_tracks
-                    .iter_media()
+                    .iter_tracks_media()
                     .find(|(_, a)| a.url().is_none() && a.group_id() == group)
                     .map(|t| t.0)
             }
