@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<!--[if lt IE 7]>      <html class="no-js lt-ie9 lt-ie8 lt-ie7"> <![endif]-->
+<!--[if IE 7]>         <html class="no-js lt-ie9 lt-ie8"> <![endif]-->
+<!--[if IE 8]>         <html class="no-js lt-ie9"> <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js"> <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+  <title></title>
+  <meta name="description" content="">
+  <meta name="viewport" content="width=device-width">
+
+  <link rel="stylesheet" href="css/normalize.min.css">
+  <link rel="stylesheet" href="css/main.css">
+
+  <script src="js/vendor/modernizr-2.6.2.min.js"></script>
+</head>
+<body>
+  <!--[if lt IE 7]>
+      <p class="chromeframe">You are using an <strong>outdated</strong> browser. Please <a href="http://browsehappy.com/">upgrade your browser</a> or <a href="http://www.google.com/chromeframe/?redirect=true">activate Google Chrome Frame</a> to improve your experience.</p>
+      <![endif]-->
+
+  <div class="header-container">
+    <header class="wrapper clearfix">
+      <h1 class="title">Transmux Analyzer</h1>
+    </header>
+  </div>
+
+  <div class="main-container">
+    <div class="main wrapper clearfix">
+
+      <article>
+        <header>
+          <p>
+            This page can help you compare the results of the
+            transmuxing performed by mux.js with a known, working file
+            produced by another tool. You could use ffmpeg to
+            transform an MPEG-2 transport stream into an FLV with a
+            command like this:
+            <pre>ffmpeg -i input.ts -acodec copy -vcodec copy output.flv</pre>
+          </p>
+          <p>
+            This page only compares FLVs files. There is
+            a <a href="index.html">similar utility</a> for testing the mp4
+            conversion.
+          </p>
+        </header>
+        <section>
+          <h2>Inputs</h2>
+          <form id="inputs">
+            <fieldset>
+              <label>
+                Your original MP2T segment:
+                <input type="file" id="original">
+              </label>
+            </fieldset>
+            <label>
+              A working, FLV version of the underlying stream
+              produced by another tool:
+              <input type="file" id="working">
+            </label>
+          </form>
+        </section>
+        <section>
+          <h2>Comparison</h2>
+          <div id="comparison">
+            A diff of the structure of the two FLVs will appear here
+            once you've specified an input TS file and a known working
+            FLV.
+          </div>
+        </section>
+        <section>
+          <h2>Tag Comparison</h2>
+          <div class="result-wrapper">
+            <h3>mux.js</h3>
+            <ol class="vjs-tags">
+            </ol>
+          </div>
+          <div class="result-wrapper">
+            <h3>Working</h3>
+            <ol class="working-tags">
+            </ol>
+          </div>
+        </section>
+      </article>
+
+    </div> <!-- #main -->
+  </div> <!-- #main-container -->
+
+  <div class="footer-container">
+    <footer class="wrapper">
+      <h3>footer</h3>
+    </footer>
+  </div>
+
+
+  <!-- transmuxing -->
+  <script src="../dist/mux.js"></script>
+
+  <!-- Include QUnit for object diffs -->
+  <script src="../node_modules/qunitjs/qunit/qunit.js"></script>
+  <script>
+    var inputs = document.getElementById('inputs'),
+        original = document.getElementById('original'),
+        working = document.getElementById('working'),
+
+        vjsTags = document.querySelector('.vjs-tags'),
+        workingTags = document.querySelector('.working-tags'),
+        getOrderedTags,
+        vjsParsed,
+        workingParsed,
+        // output a diff of the two parsed MP4s
+        diffParsed = function() {
+          var comparison, diff, transmuxed;
+          if (!vjsParsed || !workingParsed) {
+            // wait until both inputs have been provided
+            return;
+          }
+          comparison = document.querySelector('#comparison');
+          transmuxed = vjsParsed;
+          diff = '<p>A <del>red background</del> indicates ' +
+            'properties present in the transmuxed file but missing from the ' +
+            'working version. A <ins>green background</ins> indicates ' +
+            'properties present in the working version but missing in the ' +
+            'transmuxed output.</p>';
+          diff += '<pre class="flv-diff">' +
+            QUnit.diff(transmuxed, workingParsed) +
+            '</pre>';
+
+          comparison.innerHTML = diff;
+        };
+
+
+    // assemble the FLV tags in decoder order
+    getOrderedTags = function(segmentData) {
+      var
+        videoTags = segmentData.tags.videoTags,
+        audioTags = segmentData.tags.audioTags,
+        tag,
+        tags = [];
+
+      while (videoTags.length || audioTags.length) {
+        if (!videoTags.length) {
+          // only audio tags remain
+          tag = audioTags.shift();
+        } else if (!audioTags.length) {
+          // only video tags remain
+          tag = videoTags.shift();
+        } else if (audioTags[0].dts < videoTags[0].dts) {
+          // audio should be decoded next
+          tag = audioTags.shift();
+        } else {
+          // video should be decoded next
+          tag = videoTags.shift();
+        }
+
+        tags.push(tag.finalize());
+      }
+
+      return tags;
+    };
+
+    original.addEventListener('change', function() {
+      var reader = new FileReader();
+      reader.addEventListener('loadend', function() {
+        var parser = new muxjs.flv.Transmuxer(),
+            tags = [parser.getFlvHeader()],
+            tag,
+            bytes,
+            li,
+            byteLength = 0,
+            data,
+            i,
+            pos;
+
+        // clear old tag info
+        vjsTags.innerHTML = '';
+
+        bytes = new Uint8Array(reader.result);
+
+        parser.on('data', function(segmentData) {
+          var tags = getOrderedTags(segmentData), tag, parseResults = [];
+
+          // collect all the tags
+          for (var i = 0; i < tags.length; i++) {
+            tag = tags[i];
+            parseResults.push(muxjs.flv.tools.inspectTag(tag.bytes.subarray(0, tag.bytes.byteLength - 4)));
+          }
+
+          pre = document.createElement('pre');
+          vjsParsed = muxjs.flv.tools.textify(parseResults);
+          pre.innerHTML = vjsParsed;
+          vjsTags.appendChild(pre);
+
+          // create a uint8array for the entire segment and copy everything over
+/*          i = tags.length;
+          while (i--) {
+            byteLength += tags[i].bytes.byteLength;
+          }
+          data = new Uint8Array(byteLength);
+          i = tags.length;
+          pos = byteLength;
+          while (i--) {
+            pos -= tags[i].bytes.byteLength;
+            data.set(tags[i].bytes, pos);
+          }*/
+
+          diffParsed();
+        });
+
+        parser.push(bytes);
+        parser.flush();
+      });
+
+      reader.readAsArrayBuffer(this.files[0]);
+    }, false);
+
+    working.addEventListener('change', function() {
+      var reader = new FileReader();
+      reader.addEventListener('loadend', function() {
+        var bytes = new Uint8Array(reader.result),
+            i = 9, // header
+            dataSize,
+            parseResults = [],
+            pre, tag;
+
+        // clear old tag info
+        workingTags.innerHTML = '';
+        parseResults = muxjs.flv.tools.inspect(bytes);
+        pre = document.createElement('pre');
+        workingParsed = muxjs.flv.tools.textify(parseResults)
+        pre.innerHTML = workingParsed;
+        workingTags.appendChild(pre);
+
+        diffParsed();
+      });
+      reader.readAsArrayBuffer(this.files[0]);
+    }, false);
+  </script>
+</body>
+</html>
