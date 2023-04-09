@@ -4,7 +4,7 @@ use crate::{
         RequestErrorReason, RequestId, TimerId, TimerReason,
     },
     media_element::SegmentQualityContext,
-    parser::{ByteRange, SegmentInfo, SegmentTimeInfo},
+    parser::{ByteRange, MediaSegmentInfo, SegmentTimeInfo},
     playlist_store::MediaPlaylistPermanentId,
     utils::url::Url,
     Logger,
@@ -431,7 +431,7 @@ impl Requester {
     pub(crate) fn request_media_segment(
         &mut self,
         media_type: MediaType,
-        seg: &SegmentInfo,
+        seg: &MediaSegmentInfo,
         context: SegmentQualityContext,
     ) {
         Logger::info(&format!(

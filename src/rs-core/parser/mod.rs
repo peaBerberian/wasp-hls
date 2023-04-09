@@ -7,8 +7,8 @@ mod variant_stream;
 
 pub(crate) use audio_track_list::AudioTrack;
 pub(crate) use media_playlist::{
-    ByteRange, InitSegmentInfo, MediaPlaylist, MediaPlaylistParsingError, SegmentInfo, SegmentList,
-    SegmentTimeInfo,
+    ByteRange, InitSegmentInfo, MediaPlaylist, MediaPlaylistParsingError, MediaSegmentInfo,
+    SegmentList, SegmentTimeInfo,
 };
 pub(crate) use media_tag::{MediaTag, MediaTagType};
 pub(crate) use multi_variant_playlist::{

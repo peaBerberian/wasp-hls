@@ -225,7 +225,7 @@ Media demuxing/decoding, MSE API and buffer handling:
 - [x] End of stream support (as in: actually end when playback reaches the end!)
 - [x] Multiple simultaneous type of buffers support (for now only audio and
       video, through MSE `SourceBuffer`s)
-- [X] One and multiple initialization segments handling per rendition
+- [x] One and multiple initialization segments handling per rendition
 - [x] Lazy buffer memory management: Don't manually remove old buffers' media
       data if the browser thinks it's fine. Many players clean it up
       progressively as it also simplifies the logic (e.g. browser GC detection
@@ -286,6 +286,7 @@ most of them are not needed for playback):
 - [x] EXT-X-BYTERANGE: Used for range requests
 - [x] EXT-X-PLAYLIST-TYPE: Used To know if a Playlist may be refreshed
 - [x] EXT-X-TARGETDURATION: Useful for heuristics for playlist refresh
+- [x] EXT-X-START: Used to determine a default start time in the content.
 - EXT-X-MAP:
   - [x] URI: Used to fetch the initialization segment if one is present
   - [x] BYTERANGE: To perform a range request for the initialization segment
@@ -329,9 +330,6 @@ most of them are not needed for playback):
   - [ ] PATHWAY-ID: Content Steering not handled yet
   - [ ] HDCP-LEVEL: DRM are not handled for now
   - [ ] ALLOWED-CPC: DRM are not handled for now
-- [ ] EXT-X-START: This one is not too hard to implement, but its implementation
-      has enough annoyances and it is unimportant enough for me to have
-      postponed its support.
 - [ ] EXT-X-GAP
 - [ ] EXT-X-VERSION: Not specifically considered for now, most differences
       handled until now had compatible behaviors from version to version

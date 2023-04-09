@@ -1,7 +1,7 @@
 use crate::{
     bindings::MediaType,
     media_element::{BufferedChunk, SegmentQualityContext},
-    parser::{InitSegmentInfo, SegmentInfo, SegmentList, SegmentTimeInfo},
+    parser::{InitSegmentInfo, MediaSegmentInfo, SegmentList, SegmentTimeInfo},
     Logger,
 };
 
@@ -373,10 +373,10 @@ impl NextSegmentSelector {
     /// process we here call "smart-switching".
     fn recursively_check_most_needed_media_segment<'a>(
         &mut self,
-        media_segments: &'a [SegmentInfo],
+        media_segments: &'a [MediaSegmentInfo],
         context: &SegmentQualityContext,
         inventory: &[BufferedChunk],
-    ) -> Option<&'a SegmentInfo> {
+    ) -> Option<&'a MediaSegmentInfo> {
         let maximum_position = self.buffer_goal + self.base_pos;
         let si = self
             .segment_cursor
@@ -512,7 +512,7 @@ pub(crate) struct NeededSegmentInfo<'a> {
     /// The media segment that should now be needed, corresponding to the inner information.
     ///
     /// `None` if no media segment is currently needed.
-    media_segment: Option<&'a SegmentInfo>,
+    media_segment: Option<&'a MediaSegmentInfo>,
 }
 
 impl<'a> NeededSegmentInfo<'a> {
@@ -520,7 +520,7 @@ impl<'a> NeededSegmentInfo<'a> {
     ///
     /// `None` either if there's no needed initialization segment or if we consider that the last
     /// validated one is still compatible.
-    pub(crate) fn media_segment(&self) -> Option<&SegmentInfo> {
+    pub(crate) fn media_segment(&self) -> Option<&MediaSegmentInfo> {
         self.media_segment
     }
 
@@ -545,7 +545,7 @@ pub(crate) struct SegmentCursor {
     /// The `SegmentCursor` will return as next segment the segment ending after this position.
     ///
     /// Can be set to the initially wanted position initially.
-    /// Then, can be updated to the end playlist time of the last returned `SegmentInfo`'s.
+    /// Then, can be updated to the end playlist time of the last returned `MediaSegmentInfo`'s.
     current_cursor: f64,
 }
 
@@ -569,9 +569,9 @@ impl SegmentCursor {
     /// Returns `None` if no segment in `media_segments` respect those conditions.
     pub(crate) fn get_next<'a>(
         &mut self,
-        media_segments: &'a [SegmentInfo],
+        media_segments: &'a [MediaSegmentInfo],
         maximum_position: f64,
-    ) -> Option<&'a SegmentInfo> {
+    ) -> Option<&'a MediaSegmentInfo> {
         let position = self.current_cursor;
         let next_seg = media_segments.iter().find(|s| (s.end()) > position);
         match next_seg {

@@ -775,7 +775,7 @@ impl Dispatcher {
                     if let Some(i) = needed_segment.init_segment() {
                         if !self
                             .requester
-                            .is_requesting_segment(mt, i.uri(), i.byte_range())
+                            .is_requesting_segment(mt, i.url(), i.byte_range())
                         {
                             Logger::debug(&format!(
                                 "Core: {mt} init segment request not needed anymore, abort."
@@ -823,7 +823,7 @@ impl Dispatcher {
                 if let Some(i) = most_needed_segment.init_segment() {
                     self.requester.request_init_segment(
                         media_type,
-                        i.uri().clone(),
+                        i.url().clone(),
                         i.byte_range(),
                         seg_info.1,
                     );
