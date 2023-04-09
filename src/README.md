@@ -25,8 +25,19 @@ The code is splitted into several directories:
   to call API only normally exposed through JavaScript (like the MSE API,
   used for media buffering).
 
-- **ts-common**: Code that may be used both by **ts-main** and/or by
-  **ts-worker**. Those are either util functions or logic that may run in
+- **ts-transmux**: mpeg2ts to fmp4 transmuxer, initially forked from the one in
+  [mux.js](https://github.com/videojs/mux.js/). I however (tried) to rewrite in
+  TypeScript and go from its Event-based approach to a more procedural one to
+  get the hang of it, cut what I don't need and add what I need.
+  A majority of the code is still theirs, so I kept their license.
+
+  A potential long-term goal is to reimplement it in Rust.
+
+  That code is always used by the worker code in **ts-worker**, even if they're
+  in two separate directories.
+
+- **ts-common**: Code that may be used by **ts-main**, **ts-worker** and/or
+  **ts-transmux**. Those are either util functions or logic that may run in
   either the main thread or the worker based on the browser capabilities.
 
 ## Architecture
