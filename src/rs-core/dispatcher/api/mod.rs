@@ -1,6 +1,6 @@
 use crate::{
     adaptive::AdaptiveQualitySelector,
-    bindings::{jsSendOtherError, MediaType, OtherErrorCode},
+    bindings::{jsSendOtherError, OtherErrorCode},
     media_element::MediaElementReference,
     requester::{PlaylistFileType, Requester},
     segment_selector::NextSegmentSelectors,
@@ -55,29 +55,39 @@ impl Dispatcher {
         }
     }
 
-    pub fn flush_buffer(&mut self, mt: MediaType) {
-        if let Err(e) = self.media_element_ref.flush(mt) {
-            Logger::error(&format!("Error when flushing {mt} buffer: {}", e));
-        }
-    }
-
+    /// Returns the minimum position, in playlist time in seconds, at which media segments can be
+    /// loaded currently in the content.
+    ///
+    /// Returns `None` if unknown or if no content is loaded yet.
     pub fn minimum_position(&self) -> Option<f64> {
         self.playlist_store
             .as_ref()
             .and_then(|c| c.curr_min_position())
     }
 
+    /// Returns the maximum position, in playlist time in seconds, at which media segments can be
+    /// loaded currently in the content.
+    ///
+    /// Returns `None` if unknown or if no content is loaded yet.
     pub fn maximum_position(&self) -> Option<f64> {
         self.playlist_store
             .as_ref()
             .and_then(|c| c.curr_max_position())
     }
 
+    /// Set the wanted playback rate, at which we will play when not rebuffering.
     pub fn set_wanted_speed(&mut self, speed: f64) {
         self.media_element_ref.update_wanted_speed(speed);
         self.check_best_variant();
     }
 
+    /// Update the buffer goal to the given value.
+    ///
+    /// The buffer goal is the amount of buffer, ahead of the current position we want to build in
+    /// seconds.
+    /// Once we reached that point, we won't try to load load new segments.
+    ///
+    /// This can for example be used to limit memory and network bandwidth usage.
     pub fn set_buffer_goal(&mut self, buffer_goal: f64) {
         self.buffer_goal = buffer_goal;
         self.segment_selectors.update_buffer_goal(buffer_goal);
@@ -89,14 +99,18 @@ impl Dispatcher {
         self.stop_current_content();
     }
 
+    /// Begin "locking" HLS variant whose `id` is given in argument, meaning that we will keep only
+    /// playing that one.
     pub fn lock_variant(&mut self, variant_id: u32) {
         self.lock_variant_core(variant_id)
     }
 
+    /// Remove an HLS variant previously put in place through `lock_variant`.
     pub fn unlock_variant(&mut self) {
         self.unlock_variant_core()
     }
 
+    /// Set an audio track whose `id` is given in argument.
     pub fn set_audio_track(&mut self, track_id: Option<u32>) {
         self.set_audio_track_core(track_id)
     }
