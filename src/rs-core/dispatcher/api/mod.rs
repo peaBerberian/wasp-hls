@@ -94,6 +94,12 @@ impl Dispatcher {
         self.check_segments_to_request();
     }
 
+    pub fn transmux(data: Vec<u8>) {
+        let as_read = mpeg2ts::ts::TsPacketReader::new(data.as_slice());
+        let res = mse_fmp4::mpeg2_ts::to_fmp4(as_read);
+        res
+    }
+
     /// Stop the currently loaded content.
     pub fn stop(&mut self) {
         self.stop_current_content();
