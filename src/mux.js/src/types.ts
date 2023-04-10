@@ -43,6 +43,7 @@ export interface TrackInfo {
   maxSegmentDts: number | undefined;
 
   timelineStartInfo: {
+    baseMediaDecodeTime: number | undefined;
     pts: number | undefined;
     dts: number | undefined;
   };

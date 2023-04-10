@@ -14,17 +14,19 @@ import { isLikelyAacData } from "./aac-utils";
 import * as clock from "./clock";
 import { AUDIO_PROPERTIES, VIDEO_PROPERTIES } from "./constants";
 import { createMdat, createMoof, createInitSegment } from "./mp4-utils";
+import {
+  calculateTrackBaseMediaDecodeTime,
+  collectDtsInfo,
+  clearDtsInfo,
+} from "./track-decode-info";
 import { TrackInfo } from "./types";
 
 var frameUtils = require("./frame-utils");
 var audioFrameUtils = require("./audio-frame-utils");
-var trackDecodeInfo = require("./track-decode-info");
 var m2ts = require("../m2ts/m2ts.js");
 var AdtsStream = require("../codecs/adts.js");
 var H264Stream = require("../codecs/h264").H264Stream;
 var AacStream = require("../aac");
-
-const { ONE_SECOND_IN_TS } = clock;
 
 /**
  * Compare two arrays (even typed) for same-ness
@@ -89,51 +91,56 @@ function generateSegmentTimingInfo(
 
 interface AudioSegmentStreamOptions {
   firstSequenceNumber?: number | undefined;
+  keepOriginalTimestamps?: boolean | undefined;
+}
+
+interface AudioSegmentStreamEvents {
+  reset: null;
+  done: "AudioSegmentStream";
+  data: {
+    trackInfo: TrackInfo;
+    boxes: Uint8Array;
+  };
 }
 
 /**
- * Constructs a single-track, ISO BMFF media segment from AAC data
- * events. The output of this stream can be fed to a SourceBuffer
- * configured with a suitable initialization segment.
+ * Constructs a single-track, ISOBMFF media segment from AAC data events.
+ *
+ * The output of this stream can be fed to a SourceBuffer configured with a
+ * suitable initialization segment.
+ * @class AudioSegmentStream
  */
-class AudioSegmentStream extends EventEmitter<unknown> {
+class AudioSegmentStream extends EventEmitter<AudioSegmentStreamEvents> {
   private _adtsFrames: TrackInfo[];
   private _earliestAllowedDts: number;
   private _audioAppendStartTs: number;
   private _videoBaseMediaDecodeTime: number;
   private _sequenceNumber: number;
-  private _trackInfo: TrackInfo | undefined;
+  private _keepOriginalTimestamps: boolean;
+  private _trackInfo: TrackInfo;
 
   /**
    * @param {Object} trackInfo
    * @param {Object} options
-   * @param {boolean} options.keepOriginalTimestamps - If true, keep
-   * the timestamps in the source; false to adjust the first segment
-   * to start at 0.
    */
-  constructor(
-    trackInfo: TrackInfo | undefined,
-    options: AudioSegmentStreamOptions = {}
-  ) {
+  constructor(trackInfo: TrackInfo, options: AudioSegmentStreamOptions = {}) {
     super();
     this._adtsFrames = [];
     this._earliestAllowedDts = 0;
     this._audioAppendStartTs = 0;
     this._videoBaseMediaDecodeTime = Infinity;
-    this._sequenceNumber = options.firstSequenceNumber ?? 0;
     this._trackInfo = trackInfo;
+    this._sequenceNumber = options.firstSequenceNumber ?? 0;
+    this._keepOriginalTimestamps = options.keepOriginalTimestamps === true;
   }
 
   public push(data: TrackInfo): void {
-    trackDecodeInfo.collectDtsInfo(this._trackInfo, data);
-
-    if (this._trackInfo !== undefined) {
-      this._trackInfo.audioobjecttype = data.audioobjecttype;
-      this._trackInfo.channelcount = data.channelcount;
-      this._trackInfo.samplerate = data.samplerate;
-      this._trackInfo.samplingfrequencyindex = data.samplingfrequencyindex;
-      this._trackInfo.samplesize = data.samplesize;
-    }
+    collectDtsInfo(this._trackInfo, data);
+    this._trackInfo.audioobjecttype = data.audioobjecttype;
+    this._trackInfo.channelcount = data.channelcount;
+    this._trackInfo.samplerate = data.samplerate;
+    this._trackInfo.samplingfrequencyindex = data.samplingfrequencyindex;
+    this._trackInfo.samplesize = data.samplesize;
     this._adtsFrames.push(data);
   }
 
@@ -158,55 +165,52 @@ class AudioSegmentStream extends EventEmitter<unknown> {
     const frames = audioFrameUtils.trimAdtsFramesByEarliestDts(
       this._adtsFrames,
       this._trackInfo,
-      earliestAllowedDts
+      this._earliestAllowedDts
     );
-    trackInfo.baseMediaDecodeTime =
-      trackDecodeInfo.calculateTrackBaseMediaDecodeTime(
-        trackInfo,
-        options.keepOriginalTimestamps
-      );
+
+    this._trackInfo.baseMediaDecodeTime = calculateTrackBaseMediaDecodeTime(
+      this._trackInfo,
+      this._keepOriginalTimestamps
+    );
 
     // amount of audio filled but the value is in video clock rather than audio clock
-    videoClockCyclesOfSilencePrefixed = audioFrameUtils.prefixWithSilence(
-      trackInfo,
+    const videoClockCyclesOfSilencePrefixed = audioFrameUtils.prefixWithSilence(
+      this._trackInfo,
       frames,
-      audioAppendStartTs,
-      videoBaseMediaDecodeTime
+      this._audioAppendStartTs,
+      this._videoBaseMediaDecodeTime
     );
 
     // we have to build the index from byte locations to
     // samples (that is, adts frames) in the audio data
-    trackInfo.samples = audioFrameUtils.generateSampleTable(frames);
+    this._trackInfo.samples = audioFrameUtils.generateSampleTable(frames);
 
     // concatenate the audio data to constuct the mdat
-    mdat = createMdat(audioFrameUtils.concatenateFrameData(frames));
+    const mdat = createMdat(audioFrameUtils.concatenateFrameData(frames));
 
-    adtsFrames = [];
+    this._adtsFrames = [];
 
-    moof = createMoof(sequenceNumber, [trackInfo]);
-    boxes = new Uint8Array(moof.byteLength + mdat.byteLength);
+    const moof = createMoof(this._sequenceNumber, [this._trackInfo]);
+    const boxes = new Uint8Array(moof.byteLength + mdat.byteLength);
 
     // bump the sequence number for next time
-    sequenceNumber++;
+    this._sequenceNumber++;
 
     boxes.set(moof);
     boxes.set(mdat, moof.byteLength);
 
-    trackDecodeInfo.clearDtsInfo(trackInfo);
+    clearDtsInfo(this._trackInfo);
 
-    frameDuration = Math.ceil((ONE_SECOND_IN_TS * 1024) / trackInfo.samplerate);
     this.trigger("data", { trackInfo: trackInfo, boxes: boxes });
     this.trigger("done", "AudioSegmentStream");
   }
 
-  public reset = function () {
-    trackDecodeInfo.clearDtsInfo(trackInfo);
-    adtsFrames = [];
-    this.trigger("reset");
-  };
+  public reset() {
+    clearDtsInfo(this._trackInfo);
+    this._adtsFrames = [];
+    this.trigger("reset", null);
+  }
 }
-
-AudioSegmentStream.prototype = new Stream();
 
 /**
  * Constructs a single-track, ISO BMFF media segment from H264 data
