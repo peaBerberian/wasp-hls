@@ -4,7 +4,16 @@ export default function Header(): JSX.Element {
   return (
     <div className="nav-header">
       <div className="header-left" />
-      <a style={{ textDecoration: "none", color: "inherit" }} href="./">
+      <a
+        style={{
+          textDecoration: "none",
+          color: "inherit",
+          position: "absolute",
+          textAlign: "center",
+          width: "100%",
+        }}
+        href="./"
+      >
         <img className="title" src="./logo-white.png" alt="wasp-hls-player" />
       </a>
       <div className="header-right">

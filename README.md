@@ -1,6 +1,6 @@
 <p align="center">
-  <img height="200px" src="https://user-images.githubusercontent.com/8694124/188496034-3b9bde98-58f0-49d0-9744-f3355cd2236e.png#gh-light-mode-only" alt="Wasp-hls's logo"/>
-  <img height="200px" src="https://user-images.githubusercontent.com/8694124/188496177-e02ac9f2-ecc5-4d79-a7ce-624eaa71a55b.png#gh-dark-mode-only" alt="Wasp-hls's logo"/>
+  <img height="100px" src="https://user-images.githubusercontent.com/8694124/231414483-eb38f21a-68bf-41b9-98f7-2c8012e2d52e.png#gh-light-mode-only" alt="Wasp-hls's logo"/>
+  <img height="100px" src="https://user-images.githubusercontent.com/8694124/231414514-9742e81b-bc4f-4af2-99be-35154c0281cc.png#gh-dark-mode-only" alt="Wasp-hls's logo"/>
 </p>
 
 Wasp-hls is an [HLS](https://en.wikipedia.org/wiki/HTTP_Live_Streaming) media
