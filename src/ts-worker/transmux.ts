@@ -1,22 +1,7 @@
-// TODO Muxjs is not typed for now, just put any everywhere for the moment.
-// We should find a better solution in the future (I'm not against writing my
-// own transmuxer).
-/* eslint-disable @typescript-eslint/no-explicit-any */
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
-/* eslint-disable @typescript-eslint/no-unsafe-call */
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
-/* eslint-disable @typescript-eslint/no-unsafe-argument */
-/* eslint-disable @typescript-eslint/restrict-plus-operands */
-
 import logger from "../ts-common/logger.js";
 import Transmuxer from "../ts-transmux";
 import { MediaType } from "../wasm/wasp_hls.js";
 import { canTransmux } from "./utils.js";
-
-
-(globalThis as any).hasTransmuxer = true;
-
-let transmuxer2 : Transmuxer
 
 export function getTransmuxedType(typ: string, mediaType: MediaType): string {
   if (!canTransmux(typ)) {
@@ -64,9 +49,6 @@ export function getTransmuxedType(typ: string, mediaType: MediaType): string {
   return mimeType;
 }
 
-export function transmux2(inputSegment: Uint8Array): Uint8Array | null {
-  if (transmuxer2 === undefined) {
-    transmuxer2 = new Transmuxer();
-  }
-  return transmuxer2.transmuxSegment(inputSegment);
+export function createTransmuxer(): Transmuxer {
+  return new Transmuxer({ keepOriginalTimestamp: true });
 }

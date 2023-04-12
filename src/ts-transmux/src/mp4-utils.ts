@@ -1,6 +1,6 @@
-import { MAX_UINT32 } from "./numbers";
 import { TrackInfo, TrackSample } from "./types";
 
+const MAX_UINT32 = Math.pow(2, 32);
 const BOXES_NAME = {
   avc1: [97, 118, 99, 49],
   avcC: [97, 118, 99, 67],
@@ -652,9 +652,7 @@ function createStsd(trackInfo: TrackInfo): Uint8Array {
       0x00,
       0x01,
     ]),
-    trackInfo.type === "video"
-      ? createAvc1(trackInfo)
-      : createMp4a(trackInfo)
+    trackInfo.type === "video" ? createAvc1(trackInfo) : createMp4a(trackInfo)
   );
 }
 
