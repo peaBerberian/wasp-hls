@@ -51,7 +51,7 @@ import {
   getTrackFragmentDecodeTime,
 } from "./isobmff-utils.js";
 import postMessageToMain from "./postMessage.js";
-import { getTransmuxedType, transmux } from "./transmux.js";
+import { getTransmuxedType, createTransmuxer } from "./transmux.js";
 import { formatErrMessage, shouldTransmux } from "./utils.js";
 
 // Some environments (such as Safari Desktop) weirdly do not support
@@ -780,7 +780,7 @@ export function addSourceBuffer(
       sourceBuffers.push({
         lastInitTimescale: undefined,
         id: sourceBufferId,
-        transmuxer: mimeType === typ ? null : transmux,
+        transmuxer: mimeType === typ ? null : createTransmuxer(),
         sourceBuffer: null,
         mediaType,
       });
@@ -829,7 +829,7 @@ export function addSourceBuffer(
         lastInitTimescale: undefined,
         id: sourceBufferId,
         sourceBuffer: queuedSourceBuffer,
-        transmuxer: mimeType === typ ? null : transmux,
+        transmuxer: mimeType === typ ? null : createTransmuxer(),
         mediaType,
       });
       contentInfo.mediaSourceObj.nextSourceBufferId++;
@@ -905,7 +905,8 @@ export function appendBuffer(
   const sourceBufferObj = mediaSourceObj.sourceBuffers[sourceBufferObjIdx];
   if (sourceBufferObj.transmuxer !== null) {
     try {
-      const transmuxedData = sourceBufferObj.transmuxer(segment);
+      const transmuxedData =
+        sourceBufferObj.transmuxer.transmuxSegment(segment);
       if (transmuxedData !== null) {
         segment = transmuxedData;
       } else {
