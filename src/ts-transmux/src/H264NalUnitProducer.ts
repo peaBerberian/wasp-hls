@@ -1,50 +1,41 @@
-import EventEmitter from "../../ts-common/EventEmitter";
+import { VideoElementaryPacket } from "./ElementaryPacketParser";
 import ExpGolomb from "./exp-golomb";
-
-export interface NalByteStreamEvents {
-  data: Uint8Array;
-  done: null;
-  partialdone: null;
-  reset: null;
-  endedtimeline: null;
-}
 
 /**
  * Accepts a NAL unit byte stream and unpacks the embedded NAL units.
  */
-class NalByteStream extends EventEmitter<NalByteStreamEvents> {
+class NalUnitFinder {
   private _syncPoint: number;
   private _buffer: Uint8Array | null;
 
   // TODO Better name
   private _nalBound: number | undefined;
+
   constructor() {
-    super();
     this._syncPoint = 0;
     this._buffer = null;
     this._nalBound = undefined;
   }
 
-  /*
-   * Scans a byte stream and triggers a data event with the NAL units found.
-   * @param {Object} data Event received from H264Stream
-   * @param {Uint8Array} data.data The h264 byte stream to be scanned
-   *
-   * @see H264Stream.push
+  /**
+   * Scans a byte stream and return the NAL units found.
+   * @param {Uint8Array} data - The h264 byte stream to be scanned
+   * @returns {Uint8Array|null}
    */
-  public push(data: any): void {
+  public findNext(data: Uint8Array): Uint8Array[] {
     if (this._buffer === null) {
-      this._buffer = data.data as Uint8Array;
+      this._buffer = data;
     } else {
       const swapBuffer = new Uint8Array(
-        this._buffer.byteLength + data.data.byteLength
+        this._buffer.byteLength + data.byteLength
       );
       swapBuffer.set(this._buffer);
-      swapBuffer.set(data.data, this._buffer.byteLength);
+      swapBuffer.set(data, this._buffer.byteLength);
       this._buffer = swapBuffer;
     }
 
     const len = this._buffer.byteLength;
+    const res: Uint8Array[] = [];
 
     // Rec. ITU-T H.264, Annex B
     // scan for NAL unit boundaries
@@ -82,10 +73,7 @@ class NalByteStream extends EventEmitter<NalByteStreamEvents> {
 
           // deliver the NAL unit if it isn't empty
           if (this._syncPoint + 3 !== this._nalBound - 2) {
-            this.trigger(
-              "data",
-              buffer.subarray(this._syncPoint + 3, this._nalBound - 2)
-            );
+            res.push(buffer.subarray(this._syncPoint + 3, this._nalBound - 2));
           }
 
           // drop trailing zeroes
@@ -106,10 +94,7 @@ class NalByteStream extends EventEmitter<NalByteStreamEvents> {
           }
 
           // deliver the NAL unit
-          this.trigger(
-            "data",
-            buffer.subarray(this._syncPoint + 3, this._nalBound - 2)
-          );
+          res.push(buffer.subarray(this._syncPoint + 3, this._nalBound - 2));
           this._syncPoint = this._nalBound - 2;
           this._nalBound += 3;
           break;
@@ -126,34 +111,25 @@ class NalByteStream extends EventEmitter<NalByteStreamEvents> {
       this._nalBound -= this._syncPoint;
     }
     this._syncPoint = 0;
+    return res;
   }
 
   public reset(): void {
     this._buffer = null;
     this._nalBound = undefined;
     this._syncPoint = 0;
-    this.trigger("reset", null);
   }
 
-  public flush(): void {
+  public flush(): Uint8Array | null {
+    let nalUnit: Uint8Array | null = null;
     // deliver the last buffered NAL unit
     if (this._buffer !== null && this._buffer.byteLength > 3) {
-      this.trigger("data", this._buffer.subarray(this._syncPoint + 3));
+      nalUnit = this._buffer.subarray(this._syncPoint + 3);
     }
-    // reset the stream state
     this._buffer = null;
     this._syncPoint = 0;
     this._nalBound = undefined;
-    this.trigger("done", null);
-  }
-
-  public partialFlush(): void {
-    this.trigger("partialdone", null);
-  }
-
-  public endTimeline() {
-    this.flush();
-    this.trigger("endedtimeline", null);
+    return nalUnit;
   }
 }
 
@@ -161,7 +137,7 @@ class NalByteStream extends EventEmitter<NalByteStreamEvents> {
 // see Recommendation ITU-T H.264 (4/2013),
 // 7.3.2.1.1 Sequence parameter set data syntax
 /* eslint-disable @typescript-eslint/naming-convention */
-const PROFILES_WITH_OPTIONAL_SPS_DATA = {
+const PROFILES_WITH_OPTIONAL_SPS_DATA: Partial<Record<number, true>> = {
   100: true,
   110: true,
   122: true,
@@ -177,128 +153,185 @@ const PROFILES_WITH_OPTIONAL_SPS_DATA = {
   138: true,
   139: true,
   134: true,
-} as const;
+};
 /* eslint-enable @typescript-eslint/naming-convention */
 
-export interface H264StreamEvents {
-  data: any;
-  done: null;
-  partialdone: null;
-  reset: null;
-  endedtimeline: null;
+export const enum NalUnitType {
+  SliceLayerWo = 0,
+  SeiRbsp = 1,
+  SeqParamSetRbsp = 2,
+  PicParamSet = 3,
+  AccessUnitDelim = 4,
+  Undefined = 5,
+}
+
+export interface SliceLayerWoNalUnit extends ParsedNalUnitBase {
+  nalUnitType: NalUnitType.SliceLayerWo;
+}
+
+export interface SeiRbspNalUnit extends ParsedNalUnitBase {
+  nalUnitType: NalUnitType.SeiRbsp;
+  escapedRBSP: Uint8Array;
+}
+
+export interface SeqParamSetRbspNalUnit extends ParsedNalUnitBase {
+  nalUnitType: NalUnitType.SeqParamSetRbsp;
+  escapedRBSP: Uint8Array;
+  config: NalVideoProperties;
+}
+
+export interface PicParamSetNalUnit extends ParsedNalUnitBase {
+  nalUnitType: NalUnitType.PicParamSet;
+}
+
+export interface AccessUnitDelimNalUnit extends ParsedNalUnitBase {
+  nalUnitType: NalUnitType.AccessUnitDelim;
+}
+
+export interface UndefinedNalUnit extends ParsedNalUnitBase {
+  nalUnitType: NalUnitType.Undefined;
+}
+
+export type ParsedNalUnit =
+  | SliceLayerWoNalUnit
+  | SeiRbspNalUnit
+  | SeqParamSetRbspNalUnit
+  | PicParamSetNalUnit
+  | AccessUnitDelimNalUnit
+  | UndefinedNalUnit;
+
+interface ParsedNalUnitBase {
+  trackId: number;
+  pts: number;
+  dts: number;
+  data: Uint8Array;
+}
+
+export interface NalVideoProperties {
+  profileIdc: number;
+  levelIdc: number;
+  profileCompatibility: number;
+  width: number;
+  height: number;
+  sarRatio: number[];
 }
 
 /**
- * Accepts input from a ElementaryStream and produces H.264 NAL unit data
- * events.
+ * Produces H.264 NAL unit data events.
+ * @class H264NalUnitProducer
  */
-class H264Stream extends EventEmitter<H264StreamEvents> {
-  private _nalByteStream: NalByteStream;
-  private _trackId: number | undefined;
-  private _currentPts: number | undefined;
-  private _currentDts: number | undefined;
+export default class H264NalUnitProducer {
+  private _nalUnitFinder: NalUnitFinder;
+  private _lastTrackId: number | undefined;
+  private _lastPts: number | undefined;
+  private _lastDts: number | undefined;
   constructor() {
-    super();
-    this._nalByteStream = new NalByteStream();
-    this._trackId = undefined;
-    this._currentPts = undefined;
-    this._currentDts = undefined;
-
-    /*
-     * Identify NAL unit types and pass on the NALU, trackId, presentation and
-     * decode timestamps for the NALUs to the next stream component.
-     * Also, preprocess caption and sequence parameter NALUs.
-     *
-     * @param {Uint8Array} data - A NAL unit identified by `NalByteStream.push`
-     * @see NalByteStream.push
-     */
-    this._nalByteStream.addEventListener("data", (data: Uint8Array): void => {
-      const event: any = {
-        trackId: this._trackId,
-        pts: this._currentPts,
-        dts: this._currentDts,
-        data,
-        nalUnitTypeCode: data[0] & 0x1f,
-      };
-
-      switch (event.nalUnitTypeCode) {
-        case 0x05:
-          event.nalUnitType = "slice_layer_without_partitioning_rbsp_idr";
-          break;
-        case 0x06:
-          event.nalUnitType = "sei_rbsp";
-          event.escapedRBSP = this._discardEmulationPreventionBytes(
-            data.subarray(1)
-          );
-          break;
-        case 0x07:
-          event.nalUnitType = "seq_parameter_set_rbsp";
-          event.escapedRBSP = this._discardEmulationPreventionBytes(
-            data.subarray(1)
-          );
-          event.config = this._readSequenceParameterSet(event.escapedRBSP);
-          break;
-        case 0x08:
-          event.nalUnitType = "pic_parameter_set_rbsp";
-          break;
-        case 0x09:
-          event.nalUnitType = "access_unit_delimiter_rbsp";
-          break;
-        default:
-          break;
-      }
-      // This triggers data on the H264Stream
-      this.trigger("data", event);
-    });
-    this._nalByteStream.addEventListener("done", () => {
-      this.trigger("done", null);
-    });
-    this._nalByteStream.addEventListener("partialdone", () => {
-      this.trigger("partialdone", null);
-    });
-    this._nalByteStream.addEventListener("reset", () => {
-      this.trigger("reset", null);
-    });
-    this._nalByteStream.addEventListener("endedtimeline", () => {
-      this.trigger("endedtimeline", null);
-    });
+    this._nalUnitFinder = new NalUnitFinder();
+    this._lastTrackId = undefined;
+    this._lastPts = undefined;
+    this._lastDts = undefined;
   }
 
-  /*
-   * Pushes a packet from a stream onto the NalByteStream
-   *
-   * @param {Object} packet - A packet received from a stream
+  /**
+   * Pushes a video packet to parse its inner Nal Units.
+   * @param {Object} packet
    * @param {Uint8Array} packet.data - The raw bytes of the packet
-   * @param {Number} packet.dts - Decode timestamp of the packet
-   * @param {Number} packet.pts - Presentation timestamp of the packet
-   * @param {Number} packet.trackId - The id of the h264 track this packet came from
-   * @param {('video'|'audio')} packet.type - The type of packet
-   *
+   * @param {number} packet.dts - Decode timestamp of the packet
+   * @param {number} packet.pts - Presentation timestamp of the packet
+   * @param {number} packet.trackId - The id of the h264 track this packet came
+   * from.
+   * @param {string} packet.type - The type of packet. Should normally be video.
    */
-  public push(packet: any): void {
+  public pushPacket(packet: VideoElementaryPacket): ParsedNalUnit[] {
     if (packet.type !== "video") {
-      return;
+      return [];
     }
-    this._trackId = packet.trackId;
-    this._currentPts = packet.pts;
-    this._currentDts = packet.dts;
-    this._nalByteStream.push(packet);
+    const trackId = packet.trackId;
+    const pts = packet.pts as number;
+    const dts = packet.dts as number;
+    this._lastTrackId = trackId;
+    this._lastPts = pts;
+    this._lastDts = dts;
+    const nalUnits = this._nalUnitFinder.findNext(packet.data);
+    return nalUnits.map((data) => {
+      return this._onNalUnit(data, trackId, pts, dts);
+    });
   }
 
-  public flush() {
-    this._nalByteStream.flush();
+  /**
+   * Identify NAL unit types and pass on the NALU, trackId, presentation and
+   * decode timestamps.
+   * Also, preprocess caption and sequence parameter NALUs.
+   *
+   * @param {Uint8Array} data - A NAL unit
+   */
+  private _onNalUnit(
+    data: Uint8Array,
+    trackId: number,
+    pts: number,
+    dts: number
+  ): ParsedNalUnit {
+    const parsed: ParsedNalUnitBase = {
+      trackId,
+      pts,
+      dts,
+      data,
+    };
+    const nalUnitTypeCode = data[0] & 0x1f;
+    switch (nalUnitTypeCode) {
+      case 0x05:
+        return Object.assign(parsed, {
+          nalUnitType: NalUnitType.SliceLayerWo,
+        } as const);
+      case 0x06:
+        return Object.assign(parsed, {
+          nalUnitType: NalUnitType.SeiRbsp,
+          escapedRBSP: this._discardEmulationPreventionBytes(data.subarray(1)),
+        } as const);
+      case 0x07:
+        const escapedRBSP = this._discardEmulationPreventionBytes(
+          data.subarray(1)
+        );
+        return Object.assign(parsed, {
+          nalUnitType: NalUnitType.SeqParamSetRbsp,
+          escapedRBSP,
+          config: this._readSequenceParameterSet(escapedRBSP),
+        } as const);
+      case 0x08:
+        return Object.assign(parsed, {
+          nalUnitType: NalUnitType.PicParamSet,
+        } as const);
+      case 0x09:
+        return Object.assign(parsed, {
+          nalUnitType: NalUnitType.AccessUnitDelim,
+        } as const);
+      default:
+        return Object.assign(parsed, {
+          nalUnitType: NalUnitType.Undefined,
+        } as const);
+    }
   }
 
-  public partialFlush() {
-    this._nalByteStream.partialFlush();
+  public flush(): ParsedNalUnit | null {
+    const lastNalUnit = this._nalUnitFinder.flush();
+    if (
+      lastNalUnit !== null &&
+      this._lastTrackId !== undefined &&
+      this._lastDts !== undefined &&
+      this._lastPts !== undefined
+    ) {
+      return this._onNalUnit(
+        lastNalUnit,
+        this._lastTrackId,
+        this._lastPts,
+        this._lastDts
+      );
+    }
+    return null;
   }
 
   public reset() {
-    this._nalByteStream.reset();
-  }
-
-  public endTimeline() {
-    this._nalByteStream.endTimeline();
+    this._nalUnitFinder.reset();
   }
 
   /**
@@ -380,7 +413,7 @@ class H264Stream extends EventEmitter<H264StreamEvents> {
    * sequence parameter set, including the dimensions of the
    * associated video frames.
    */
-  private _readSequenceParameterSet(data: Uint8Array): any {
+  private _readSequenceParameterSet(data: Uint8Array): NalVideoProperties {
     let frameCropLeftOffset = 0;
     let frameCropRightOffset = 0;
     let frameCropTopOffset = 0;
@@ -539,4 +572,4 @@ class H264Stream extends EventEmitter<H264StreamEvents> {
   }
 }
 
-export { H264Stream, NalByteStream };
+export { NalUnitFinder };

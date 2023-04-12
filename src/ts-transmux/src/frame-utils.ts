@@ -1,8 +1,11 @@
 // Convert an array of nal units into an array of frames with each frame being
 // composed of the nal units that make up that frame
 // Also keep track of cummulative data about the frame from the nal units such
+
+import { NalUnitType, ParsedNalUnit } from "./H264NalUnitProducer";
+
 // as the frame duration, starting pts, etc.
-function groupNalsIntoFrames(nalUnits: any[]): any {
+function groupNalsIntoFrames(nalUnits: ParsedNalUnit[]): any[] {
   let currentFrame: any = [];
   const frames: any = [];
 
@@ -17,7 +20,7 @@ function groupNalsIntoFrames(nalUnits: any[]): any {
     const currentNal = nalUnits[i];
 
     // Split on 'aud'-type nal units
-    if (currentNal.nalUnitType === "access_unit_delimiter_rbsp") {
+    if (currentNal.nalUnitType === NalUnitType.AccessUnitDelim) {
       // Since the very first nal unit is expected to be an AUD
       // only push to the frames array when currentFrame is not empty
       if (currentFrame.length > 0) {
@@ -34,9 +37,7 @@ function groupNalsIntoFrames(nalUnits: any[]): any {
       currentFrame.dts = currentNal.dts;
     } else {
       // Specifically flag key frames for ease of use later
-      if (
-        currentNal.nalUnitType === "slice_layer_without_partitioning_rbsp_idr"
-      ) {
+      if (currentNal.nalUnitType === NalUnitType.SliceLayerWo) {
         currentFrame.keyFrame = true;
       }
       currentFrame.duration = currentNal.dts - currentFrame.dts;
@@ -135,7 +136,7 @@ function groupFramesIntoGops(frames: any[]): any {
  * @param {Array} gops video GOPs
  * @returns {Array} modified video GOPs
  */
-function extendFirstKeyFrame(gops) {
+function extendFirstKeyFrame(gops: any): any {
   if (gops[0][0].keyFrame !== true && gops.length > 1) {
     // Remove the first GOP
     const currentGop = gops.shift();
@@ -180,7 +181,7 @@ function createDefaultSample(): any {
  * @param {Number} dataOffset the byte offset to position the sample
  * @return {Object} object containing sample table info for a frame
  */
-function sampleForFrame(frame, dataOffset) {
+function sampleForFrame(frame: any, dataOffset: number): any {
   const sample = createDefaultSample();
 
   sample.dataOffset = dataOffset;

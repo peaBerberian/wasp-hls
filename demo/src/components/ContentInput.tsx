@@ -43,7 +43,7 @@ export default React.memo(function ContentInput({
         name={`url${nameEltId}`}
         id={`url${nameEltId}`}
         /* eslint-disable-next-line max-len */
-        defaultValue="https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8"
+        defaultValue="https://storage.googleapis.com/shaka-demo-assets/angel-one-hls/hls.m3u8"
       />
 
       <button className="loading-button white-button" onClick={loadContent}>

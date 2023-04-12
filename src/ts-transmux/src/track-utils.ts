@@ -10,9 +10,25 @@ import { TrackInfo } from "./types";
  * @param {Object} trackInfo
  * @param {Object} data
  */
-function collectDtsInfo(trackInfo: any, data: Partial<TrackInfo>) {
+function collectDtsInfo<
+  T extends {
+    timelineStartInfo?:
+      | {
+          pts?: number | undefined;
+          dts?: number | undefined;
+        }
+      | undefined;
+    minSegmentDts?: number | undefined;
+    minSegmentPts?: number | undefined;
+    maxSegmentDts?: number | undefined;
+    maxSegmentPts?: number | undefined;
+  }
+>(trackInfo: T, data: Partial<TrackInfo>) {
+  if (trackInfo.timelineStartInfo === undefined) {
+    trackInfo.timelineStartInfo = {};
+  }
   if (typeof data.pts === "number") {
-    if (trackInfo.timelineStartInfo?.pts === undefined) {
+    if (trackInfo.timelineStartInfo.pts === undefined) {
       trackInfo.timelineStartInfo.pts = data.pts;
     }
 
@@ -52,7 +68,14 @@ function collectDtsInfo(trackInfo: any, data: Partial<TrackInfo>) {
  * Clear values used to calculate the baseMediaDecodeTime between
  * tracks
  */
-function clearDtsInfo(trackInfo: any): void {
+function clearDtsInfo<
+  T extends {
+    minSegmentDts: number | undefined;
+    minSegmentPts: number | undefined;
+    maxSegmentDts: number | undefined;
+    maxSegmentPts: number | undefined;
+  }
+>(trackInfo: T): void {
   trackInfo.minSegmentDts = undefined;
   trackInfo.maxSegmentDts = undefined;
   trackInfo.minSegmentPts = undefined;
@@ -67,10 +90,17 @@ function clearDtsInfo(trackInfo: any): void {
  * @param {boolean} keepOriginalTimestamps - If true, keep the timestamps in the
  * source. If `false`, adjust the first segment to start at 0.
  */
-function calculateTrackBaseMediaDecodeTime(
-  trackInfo: any,
-  keepOriginalTimestamps: boolean
-): number {
+function calculateTrackBaseMediaDecodeTime<
+  T extends {
+    type: string;
+    minSegmentDts: number;
+    timelineStartInfo: {
+      dts: number;
+      baseMediaDecodeTime: number;
+    };
+    samplerate?: number;
+  }
+>(trackInfo: T, keepOriginalTimestamps: boolean): number {
   let minSegmentDts = trackInfo.minSegmentDts;
 
   // Optionally adjust the time so the first segment starts at zero.
@@ -91,7 +121,7 @@ function calculateTrackBaseMediaDecodeTime(
   if (trackInfo.type === "audio") {
     // Audio has a different clock equal to the sampling_rate so we need to
     // scale the PTS values into the clock rate of the track
-    const scale = trackInfo.samplerate / ONE_SECOND_IN_TS;
+    const scale = (trackInfo.samplerate as number) / ONE_SECOND_IN_TS;
     baseMediaDecodeTime *= scale;
     baseMediaDecodeTime = Math.floor(baseMediaDecodeTime);
   }

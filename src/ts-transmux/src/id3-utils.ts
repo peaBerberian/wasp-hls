@@ -247,9 +247,9 @@ function parseId3Frames(data: Uint8Array) {
     };
 
     // parse frame values
-    if (frameParsers[frame.id] !== undefined) {
+    if (frameParsers[frame.id as keyof typeof frameParsers] !== undefined) {
       // use frame specific parser
-      frameParsers[frame.id](frame);
+      frameParsers[frame.id as keyof typeof frameParsers](frame);
     } else if (frame.id[0] === "T") {
       // use text frame generic parser
       frameParsers["T*"](frame);

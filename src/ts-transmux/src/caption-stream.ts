@@ -7,6 +7,9 @@ import {
   USER_DATA_REGISTERED_ITU_T_T35,
   CaptionPacket,
 } from "./caption-packet-parser";
+import { NalUnitType, ParsedNalUnit } from "./H264NalUnitProducer";
+
+// TODO Convert it and use it?
 
 const PADDING = 0x0000;
 
@@ -78,8 +81,8 @@ class CaptionStream extends EventEmitter<CaptionStreamEvents> {
     }
   }
 
-  public push(event: any): void {
-    if (event.nalUnitType !== "sei_rbsp") {
+  public push(event: ParsedNalUnit): void {
+    if (event.nalUnitType !== NalUnitType.SeiRbsp) {
       return;
     }
 
