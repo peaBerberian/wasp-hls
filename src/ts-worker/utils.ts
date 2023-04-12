@@ -20,11 +20,5 @@ export function shouldTransmux(typ: string) {
 }
 
 export function canTransmux(typ: string): boolean {
-  /* eslint-disable @typescript-eslint/no-explicit-any */
-  /* eslint-disable @typescript-eslint/no-unsafe-member-access */
-  /* eslint-disable @typescript-eslint/no-unsafe-return */
-  return isMpegTsType(typ) && (globalThis as any).hasTransmuxer;
-  /* eslint-enable @typescript-eslint/no-explicit-any */
-  /* eslint-enable @typescript-eslint/no-unsafe-member-access */
-  /* eslint-enable @typescript-eslint/no-unsafe-return */
+  return isMpegTsType(typ);
 }

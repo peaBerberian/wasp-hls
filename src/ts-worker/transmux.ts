@@ -13,8 +13,6 @@ import logger from "../ts-common/logger.js";
 import { MediaType } from "../wasm/wasp_hls.js";
 import { canTransmux } from "./utils.js";
 
-(globalThis as any).hasTransmuxer = true;
-
 let transmuxer: any;
 
 export function getTransmuxedType(typ: string, mediaType: MediaType): string {
@@ -58,10 +56,6 @@ export function getTransmuxedType(typ: string, mediaType: MediaType): string {
     mimeType = `avc1.${newProfile}${newLevel}`;
   }
   return mimeType;
-}
-
-export function resetTransmuxer() {
-  transmuxer = undefined;
 }
 
 export function transmux(inputSegment: Uint8Array): Uint8Array | null {

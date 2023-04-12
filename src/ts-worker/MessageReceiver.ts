@@ -27,7 +27,6 @@ import {
   WorkerInitializationOptions,
 } from "./globals";
 import postMessageToMain from "./postMessage";
-import { resetTransmuxer } from "./transmux";
 
 let wasInitializedCalled = false;
 
@@ -110,7 +109,6 @@ export default function MessageReceiver() {
           observationsObj: null,
         };
         playerInstance.changeContent(contentInfo);
-        resetTransmuxer();
         let startingPosition;
         if (data.value.startingPosition !== undefined) {
           startingPosition = new StartingPosition(
