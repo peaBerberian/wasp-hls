@@ -23,7 +23,7 @@ export function getTransmuxedType(typ: string, mediaType: MediaType): string {
   }
   let mimeType = typ.replace(/mp2t/i, "mp4");
   if (mediaType === MediaType.Audio) {
-    mimeType = typ.replace(/video/i, "audio");
+    mimeType = mimeType.replace(/video/i, "audio");
   }
 
   // This is a workaround seen in the Shaka-player, which allows to play some
