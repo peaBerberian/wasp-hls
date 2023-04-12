@@ -5,8 +5,14 @@ export function formatErrMessage(err: unknown, defaultMsg: string) {
 }
 
 const MPEG_TS_REGEXP = /^[a-z]+\/mp2t;/i;
+const AAC_REGEXP = /^audio\/aac;/i;
+
 export function isMpegTsType(typ: string): boolean {
   return MPEG_TS_REGEXP.test(typ);
+}
+
+export function isAacType(typ: string): boolean {
+  return AAC_REGEXP.test(typ);
 }
 
 export function shouldTransmux(typ: string) {
@@ -20,5 +26,5 @@ export function shouldTransmux(typ: string) {
 }
 
 export function canTransmux(typ: string): boolean {
-  return isMpegTsType(typ);
+  return isMpegTsType(typ) || isAacType(typ);
 }

@@ -17,6 +17,9 @@ export function getTransmuxedType(typ: string, mediaType: MediaType): string {
   if (!canTransmux(typ)) {
     return typ;
   }
+  if (typ.startsWith("audio/aac;")) {
+    return typ.replace(/^audio\/aac;/i, "audio/mp4;");
+  }
   let mimeType = typ.replace(/mp2t/i, "mp4");
   if (mediaType === MediaType.Audio) {
     mimeType = mimeType.replace(/video/i, "audio");
