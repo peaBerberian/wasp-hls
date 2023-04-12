@@ -583,7 +583,6 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
     if (this.__contentMetadata__ !== null) {
       requestStopForContent(this.__contentMetadata__, this.__worker__);
     }
-    this.__contentMetadata__ = null;
   }
 
   /**
