@@ -25,11 +25,9 @@ export default class TransportStreamSplitter {
   public feed(bytes: Uint8Array): void {
     // If there are bytes remaining from the last segment, prepend them to the
     // bytes that were pushed in
-    if (this._bytesInIncompletePacketBuffer > 0 || this._input !== null) {
-      const prevInputLength =
-        this._input !== null ? this._input.byteLength - this._startIndex : 0;
+    if (this._bytesInIncompletePacketBuffer > 0) {
       const newInput = new Uint8Array(
-        bytes.byteLength + this._bytesInIncompletePacketBuffer + prevInputLength
+        bytes.byteLength + this._bytesInIncompletePacketBuffer
       );
       newInput.set(
         this._incompletePacketBuffer.subarray(
@@ -38,12 +36,6 @@ export default class TransportStreamSplitter {
         )
       );
       newInput.set(bytes, this._bytesInIncompletePacketBuffer);
-      if (this._input !== null && prevInputLength > 0) {
-        newInput.set(
-          this._input.subarray(this._startIndex),
-          this._bytesInIncompletePacketBuffer + bytes.byteLength
-        );
-      }
       this._input = newInput;
       this._bytesInIncompletePacketBuffer = 0;
     } else {

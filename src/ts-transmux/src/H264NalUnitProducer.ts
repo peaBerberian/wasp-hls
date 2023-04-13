@@ -106,7 +106,11 @@ class NalUnitFinder {
       }
     }
     // filter out the NAL units that were delivered
-    this._buffer = this._buffer.subarray(this._syncPoint);
+    if (this._syncPoint < this._buffer.length) {
+      this._buffer = this._buffer.subarray(this._syncPoint);
+    } else {
+      this._buffer = null;
+    }
     if (this._nalBound !== undefined) {
       this._nalBound -= this._syncPoint;
     }
