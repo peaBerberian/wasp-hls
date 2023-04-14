@@ -132,48 +132,44 @@ export default class FullMp4SegmentConstructor {
       // and track definitions
       seg.initSegment.set(initSegment);
 
-      // Create a new typed array to hold the moof+mdats
-      seg.data = new Uint8Array(this.pendingBytes);
-
       // Append each moof+mdat (one per track) together
-      for (let i = 0; i < this.pendingBoxes.length; i++) {
-        seg.data.set(this.pendingBoxes[i], offset);
-        offset += this.pendingBoxes[i].byteLength;
-      }
+      seg.data = this.pendingBoxes.reduce((acc, box) => {
+        acc.set(box, offset);
+        offset += box.byteLength;
+        return acc;
+      }, new Uint8Array(this.pendingBytes));
 
-      // Translate caption PTS times into second offsets to match the
-      // video timeline for the segment, and add track info
-      for (let i = 0; i < this.pendingCaptions.length; i++) {
-        if (timelineStartPts !== undefined) {
-          const caption = this.pendingCaptions[i];
+      if (timelineStartPts !== undefined) {
+        const timelinePts: number = timelineStartPts;
+
+        // Translate caption PTS times into second offsets to match the
+        // video timeline for the segment, and add track info
+        seg.captions = this.pendingCaptions.map((caption) => {
           caption.startTime = clock.metadataTsToSeconds(
             caption.startPts,
-            timelineStartPts,
+            timelinePts,
             this.keepOriginalTimestamps
           );
           caption.endTime = clock.metadataTsToSeconds(
             caption.endPts,
-            timelineStartPts,
+            timelinePts,
             this.keepOriginalTimestamps
           );
 
           seg.captionStreams[caption.stream] = true;
-          seg.captions.push(caption);
-        }
-      }
+          return caption;
+        });
 
-      // Translate ID3 frame PTS times into second offsets to match the
-      // video timeline for the segment
-      for (let i = 0; i < this.pendingMetadata.length; i++) {
-        if (timelineStartPts !== undefined) {
-          const id3 = this.pendingMetadata[i];
+        // Translate ID3 frame PTS times into second offsets to match the
+        // video timeline for the segment
+        seg.metadata = this.pendingMetadata.map((id3) => {
           id3.cueTime = clock.metadataTsToSeconds(
             id3.pts,
-            timelineStartPts,
+            timelinePts,
             this.keepOriginalTimestamps
           );
-          seg.metadata.push(id3);
-        }
+          return id3;
+        });
       }
 
       // We add this to every single emitted segment even though we only need
@@ -183,6 +179,7 @@ export default class FullMp4SegmentConstructor {
       // Reset state
       this.pendingTracks.length = 0;
       this.videoTrack = null;
+      this.audioTrack = null;
       this.pendingBoxes.length = 0;
       this.pendingCaptions.length = 0;
       this.pendingBytes = 0;
@@ -191,5 +188,15 @@ export default class FullMp4SegmentConstructor {
       return seg;
     }
     return null;
+  }
+
+  public cancel(): void {
+    this.pendingTracks.length = 0;
+    this.videoTrack = null;
+    this.audioTrack = null;
+    this.pendingBoxes.length = 0;
+    this.pendingCaptions.length = 0;
+    this.pendingBytes = 0;
+    this.pendingMetadata.length = 0;
   }
 }

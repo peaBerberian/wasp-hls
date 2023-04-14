@@ -7,14 +7,12 @@ import ExpGolomb from "./exp-golomb";
 class NalUnitFinder {
   private _syncPoint: number;
   private _buffer: Uint8Array | null;
-
-  // TODO Better name
-  private _nalBound: number | undefined;
+  private _cursor: number | undefined;
 
   constructor() {
     this._syncPoint = 0;
     this._buffer = null;
-    this._nalBound = undefined;
+    this._cursor = undefined;
   }
 
   /**
@@ -51,57 +49,57 @@ class NalUnitFinder {
     for (; this._syncPoint < len - 3; this._syncPoint++) {
       if (this._buffer[this._syncPoint + 2] === 1) {
         // the sync point is properly aligned
-        this._nalBound = this._syncPoint + 5;
+        this._cursor = this._syncPoint + 5;
         break;
       }
     }
 
     const buffer = this._buffer;
-    while (this._nalBound !== undefined && this._nalBound < len) {
+    while (this._cursor !== undefined && this._cursor < len) {
       // look at the current byte to determine if we've hit the end of
       // a NAL unit boundary
-      switch (buffer[this._nalBound]) {
+      switch (buffer[this._cursor]) {
         case 0:
           // skip past non-sync sequences
-          if (buffer[this._nalBound - 1] !== 0) {
-            this._nalBound += 2;
+          if (buffer[this._cursor - 1] !== 0) {
+            this._cursor += 2;
             break;
-          } else if (buffer[this._nalBound - 2] !== 0) {
-            this._nalBound++;
+          } else if (buffer[this._cursor - 2] !== 0) {
+            this._cursor++;
             break;
           }
 
           // deliver the NAL unit if it isn't empty
-          if (this._syncPoint + 3 !== this._nalBound - 2) {
-            res.push(buffer.subarray(this._syncPoint + 3, this._nalBound - 2));
+          if (this._syncPoint + 3 !== this._cursor - 2) {
+            res.push(buffer.subarray(this._syncPoint + 3, this._cursor - 2));
           }
 
           // drop trailing zeroes
           do {
-            this._nalBound++;
-          } while (buffer[this._nalBound] !== 1 && this._nalBound < len);
-          this._syncPoint = this._nalBound - 2;
-          this._nalBound += 3;
+            this._cursor++;
+          } while (buffer[this._cursor] !== 1 && this._cursor < len);
+          this._syncPoint = this._cursor - 2;
+          this._cursor += 3;
           break;
         case 1:
           // skip past non-sync sequences
           if (
-            buffer[this._nalBound - 1] !== 0 ||
-            buffer[this._nalBound - 2] !== 0
+            buffer[this._cursor - 1] !== 0 ||
+            buffer[this._cursor - 2] !== 0
           ) {
-            this._nalBound += 3;
+            this._cursor += 3;
             break;
           }
 
           // deliver the NAL unit
-          res.push(buffer.subarray(this._syncPoint + 3, this._nalBound - 2));
-          this._syncPoint = this._nalBound - 2;
-          this._nalBound += 3;
+          res.push(buffer.subarray(this._syncPoint + 3, this._cursor - 2));
+          this._syncPoint = this._cursor - 2;
+          this._cursor += 3;
           break;
         default:
           // the current byte isn't a one or zero, so it cannot be part
           // of a sync sequence
-          this._nalBound += 3;
+          this._cursor += 3;
           break;
       }
     }
@@ -111,8 +109,8 @@ class NalUnitFinder {
     } else {
       this._buffer = null;
     }
-    if (this._nalBound !== undefined) {
-      this._nalBound -= this._syncPoint;
+    if (this._cursor !== undefined) {
+      this._cursor -= this._syncPoint;
     }
     this._syncPoint = 0;
     return res;
@@ -120,7 +118,7 @@ class NalUnitFinder {
 
   public reset(): void {
     this._buffer = null;
-    this._nalBound = undefined;
+    this._cursor = undefined;
     this._syncPoint = 0;
   }
 
@@ -132,7 +130,7 @@ class NalUnitFinder {
     }
     this._buffer = null;
     this._syncPoint = 0;
-    this._nalBound = undefined;
+    this._cursor = undefined;
     return nalUnit;
   }
 }
@@ -140,25 +138,13 @@ class NalUnitFinder {
 // values of profile_idc that indicate additional fields are included in the SPS
 // see Recommendation ITU-T H.264 (4/2013),
 // 7.3.2.1.1 Sequence parameter set data syntax
-/* eslint-disable @typescript-eslint/naming-convention */
-const PROFILES_WITH_OPTIONAL_SPS_DATA: Partial<Record<number, true>> = {
-  100: true,
-  110: true,
-  122: true,
-  244: true,
-  44: true,
-  83: true,
-  86: true,
-  118: true,
-  128: true,
+const PROFILES_WITH_OPTIONAL_SPS_DATA = [
+  100, 110, 122, 244, 44, 83, 86, 118, 128,
 
   // TODO: the three profiles below don't
   // appear to have sps data in the specificiation anymore?
-  138: true,
-  139: true,
-  134: true,
-};
-/* eslint-enable @typescript-eslint/naming-convention */
+  138, 139, 134,
+];
 
 export const enum NalUnitType {
   SliceLayerWo = 0,
@@ -432,7 +418,7 @@ export default class H264NalUnitProducer {
     expGolombDecoder.skipUnsignedExpGolomb(); // seq_parameter_set_id
 
     // some profiles have more optional data we don't need
-    if (PROFILES_WITH_OPTIONAL_SPS_DATA[profileIdc] !== undefined) {
+    if (PROFILES_WITH_OPTIONAL_SPS_DATA.includes(profileIdc)) {
       const chromaFormatIdc = expGolombDecoder.readUnsignedExpGolomb();
       if (chromaFormatIdc === 3) {
         expGolombDecoder.skipBits(1); // separate_colour_plane_flag

@@ -18,6 +18,14 @@ function typedArrayIndexOf(
   return -1;
 }
 
+function getNullTerminatedStr(str: string): string {
+  const indexOf = str.indexOf("\0");
+  if (indexOf < 0) {
+    return str;
+  }
+  return str.substring(0, indexOf);
+}
+
 const textEncodingDescriptionByte = {
   Iso88591: 0x00, // ISO-8859-1, terminated with \0.
   Utf16: 0x01, // UTF-16 encoded Unicode BOM, terminated with \0\0
@@ -104,9 +112,8 @@ const frameParsers = {
     // parse text field, do not include null terminator in the frame value
     // frames that allow different types of encoding contain terminated text
     // [ID3v2.4.0 section 4.]
-    frame.value = parseUtf8(frame.data, 1, frame.data.length).replace(
-      /\0*$/,
-      ""
+    frame.value = getNullTerminatedStr(
+      parseUtf8(frame.data, 1, frame.data.length)
     );
     // text information frames supports multiple strings, stored as a terminator
     // separated list [ID3v2.4.0 section 4.2.]
@@ -129,11 +136,9 @@ const frameParsers = {
     // do not include the null terminator in the tag value
     // frames that allow different types of encoding contain terminated text
     // [ID3v2.4.0 section 4.]
-    frame.value = parseUtf8(
-      frame.data,
-      descriptionEndIndex + 1,
-      frame.data.length
-    ).replace(/\0*$/, "");
+    frame.value = getNullTerminatedStr(
+      parseUtf8(frame.data, descriptionEndIndex + 1, frame.data.length)
+    );
     frame.data = frame.value;
   },
   "W*": function (frame: any): void {
@@ -141,9 +146,8 @@ const frameParsers = {
     // [ID3v2.4.0 section 4.]
     // if the value is followed by a string termination all the following
     // information should be ignored [ID3v2.4.0 section 4.3]
-    frame.url = parseIso88591(frame.data, 0, frame.data.length).replace(
-      /\0.*$/,
-      ""
+    frame.url = getNullTerminatedStr(
+      parseIso88591(frame.data, 0, frame.data.length)
     );
   },
   WXXX: function (frame: any): void {
@@ -163,11 +167,9 @@ const frameParsers = {
     // URL fields are always represented as ISO-8859-1 [ID3v2.4.0 section 4.]
     // if the value is followed by a string termination all the following information
     // should be ignored [ID3v2.4.0 section 4.3]
-    frame.url = parseIso88591(
-      frame.data,
-      descriptionEndIndex + 1,
-      frame.data.length
-    ).replace(/\0.*$/, "");
+    frame.url = getNullTerminatedStr(
+      parseIso88591(frame.data, descriptionEndIndex + 1, frame.data.length)
+    );
   },
   PRIV: function (frame: any): void {
     let i: number;

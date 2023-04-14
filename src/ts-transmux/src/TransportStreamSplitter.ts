@@ -51,20 +51,18 @@ export default class TransportStreamSplitter {
       return [null, true];
     }
 
-    const everything = this._input;
-
     // While we have enough data for a packet
-    while (this._endIndex < everything.byteLength) {
+    while (this._endIndex < this._input.byteLength) {
       // Look for a pair of start and end sync bytes in the data..
       if (
-        everything[this._startIndex] === SYNC_BYTE &&
-        everything[this._endIndex] === SYNC_BYTE
+        this._input[this._startIndex] === SYNC_BYTE &&
+        this._input[this._endIndex] === SYNC_BYTE
       ) {
         // We found a packet so emit it and jump one whole packet forward
-        const data = everything.subarray(this._startIndex, this._endIndex);
+        const data = this._input.subarray(this._startIndex, this._endIndex);
         this._startIndex += MP2T_PACKET_LENGTH;
         this._endIndex += MP2T_PACKET_LENGTH;
-        const isEnded = this._startIndex >= everything.byteLength;
+        const isEnded = this._startIndex >= this._input.byteLength;
         return [data, isEnded];
       }
       // If we get here, we have somehow become de-synchronized and we need to step
@@ -77,13 +75,13 @@ export default class TransportStreamSplitter {
     // If there was some data left over at the end of the segment that couldn't
     // possibly be a whole packet, keep it because it might be the start of a packet
     // that continues in the next segment
-    if (this._startIndex < everything.byteLength) {
+    if (this._startIndex < this._input.byteLength) {
       this._incompletePacketBuffer.set(
-        everything.subarray(this._startIndex),
+        this._input.subarray(this._startIndex),
         0
       );
       this._bytesInIncompletePacketBuffer =
-        everything.byteLength - this._startIndex;
+        this._input.byteLength - this._startIndex;
     }
     // If the buffer contains a whole packet when we are being flushed, emit it
     // and empty the buffer. Otherwise hold onto the data because it may be
@@ -97,6 +95,13 @@ export default class TransportStreamSplitter {
       return [this._incompletePacketBuffer, true];
     }
     return [null, true];
+  }
+
+  public reset(): void {
+    this._input = null;
+    this._bytesInIncompletePacketBuffer = 0;
+    this._startIndex = 0;
+    this._endIndex = MP2T_PACKET_LENGTH;
   }
 }
 

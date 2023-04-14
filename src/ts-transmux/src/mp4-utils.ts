@@ -662,26 +662,26 @@ function createStsd(trackInfo: TrackInfo): Uint8Array {
  * @returns {Uint8Array}
  */
 function createAvc1(trackInfo: TrackInfo): Uint8Array {
-  const sps = trackInfo.sps ?? [];
-  const pps = trackInfo.pps ?? [];
+  const spss = trackInfo.sps ?? [];
+  const ppss = trackInfo.pps ?? [];
   let sequenceParameterSets: number[] = [];
   let pictureParameterSets: number[] = [];
 
   // assemble the SPSs
-  for (let i = 0; i < sps.length; i++) {
-    sequenceParameterSets.push((sps[i].byteLength & 0xff00) >>> 8);
-    sequenceParameterSets.push(sps[i].byteLength & 0xff); // sequenceParameterSetLength
+  for (const sps of spss) {
+    sequenceParameterSets.push((sps.byteLength & 0xff00) >>> 8);
+    sequenceParameterSets.push(sps.byteLength & 0xff); // sequenceParameterSetLength
     sequenceParameterSets = sequenceParameterSets.concat(
-      Array.prototype.slice.call(sps[i])
+      Array.prototype.slice.call(sps)
     ); // SPS
   }
 
   // assemble the PPSs
-  for (let i = 0; i < pps.length; i++) {
-    pictureParameterSets.push((pps[i].byteLength & 0xff00) >>> 8);
-    pictureParameterSets.push(pps[i].byteLength & 0xff);
+  for (const pps of ppss) {
+    pictureParameterSets.push((pps.byteLength & 0xff00) >>> 8);
+    pictureParameterSets.push(pps.byteLength & 0xff);
     pictureParameterSets = pictureParameterSets.concat(
-      Array.prototype.slice.call(pps[i])
+      Array.prototype.slice.call(pps)
     );
   }
 
@@ -776,9 +776,9 @@ function createAvc1(trackInfo: TrackInfo): Uint8Array {
           trackInfo.levelIdc, // AVCLevelIndication
           0xff, // lengthSizeMinusOne, hard-coded to 4 bytes
         ].concat(
-          [sps.length], // numOfSequenceParameterSets
+          [spss.length], // numOfSequenceParameterSets
           sequenceParameterSets, // "SPS"
-          [pps.length], // numOfPictureParameterSets
+          [ppss.length], // numOfPictureParameterSets
           pictureParameterSets // "PPS"
         )
       )
@@ -1194,9 +1194,7 @@ function createVideoTrun(
   bytes.set(header);
   let bytesOffset = header.length;
 
-  for (let i = 0; i < samples.length; i++) {
-    const sample = samples[i];
-
+  for (const sample of samples) {
     bytes[bytesOffset++] = (sample.duration & 0xff000000) >>> 24;
     bytes[bytesOffset++] = (sample.duration & 0xff0000) >>> 16;
     bytes[bytesOffset++] = (sample.duration & 0xff00) >>> 8;
@@ -1246,8 +1244,7 @@ function createAudioTrun(
   bytes.set(header);
   let bytesOffset = header.length;
 
-  for (let i = 0; i < samples.length; i++) {
-    const sample = samples[i];
+  for (const sample of samples) {
     bytes[bytesOffset++] = (sample.duration & 0xff000000) >>> 24;
     bytes[bytesOffset++] = (sample.duration & 0xff0000) >>> 16;
     bytes[bytesOffset++] = (sample.duration & 0xff00) >>> 8;

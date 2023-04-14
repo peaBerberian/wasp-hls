@@ -16,9 +16,7 @@ function groupNalsIntoFrames(nalUnits: ParsedNalUnit[]): any[] {
 
   currentFrame.byteLength = 0;
 
-  for (let i = 0; i < nalUnits.length; i++) {
-    const currentNal = nalUnits[i];
-
+  for (const currentNal of nalUnits) {
     // Split on 'aud'-type nal units
     if (currentNal.nalUnitType === NalUnitType.AccessUnitDelim) {
       // Since the very first nal unit is expected to be an AUD
@@ -88,9 +86,7 @@ function groupFramesIntoGops(frames: any[]): any {
   gops.pts = frames[0].pts;
   gops.dts = frames[0].dts;
 
-  for (let i = 0; i < frames.length; i++) {
-    const currentFrame = frames[i];
-
+  for (const currentFrame of frames) {
     if (currentFrame.keyFrame !== true) {
       // Since the very first frame is expected to be an keyframe
       // only push to the gops array when currentGop is not empty
@@ -202,10 +198,8 @@ function sampleForFrame(frame: any, dataOffset: number): any {
 function generateSampleTable(gops: any, baseDataOffset?: number): any[] {
   let dataOffset = baseDataOffset ?? 0;
   const samples: any[] = [];
-  for (let h = 0; h < gops.length; h++) {
-    const currentGop = gops[h];
-    for (let i = 0; i < currentGop.length; i++) {
-      const currentFrame = currentGop[i];
+  for (const currentGop of gops) {
+    for (const currentFrame of currentGop) {
       const sample = sampleForFrame(currentFrame, dataOffset);
       dataOffset += sample.size;
       samples.push(sample);
@@ -224,17 +218,11 @@ function concatenateNalData(gops: any): Uint8Array {
   const view = new DataView(data.buffer);
 
   // For each Gop..
-  for (let h = 0; h < gops.length; h++) {
-    const currentGop = gops[h];
-
+  for (const currentGop of gops) {
     // For each Frame..
-    for (let i = 0; i < currentGop.length; i++) {
-      const currentFrame = currentGop[i];
-
+    for (const currentFrame of currentGop) {
       // For each NAL..
-      for (let j = 0; j < currentFrame.length; j++) {
-        const currentNal = currentFrame[j];
-
+      for (const currentNal of currentFrame) {
         view.setUint32(dataOffset, currentNal.data.byteLength);
         dataOffset += 4;
         data.set(currentNal.data, dataOffset);
@@ -267,8 +255,7 @@ function concatenateNalDataForFrame(frame: any): Uint8Array {
   const view = new DataView(data.buffer);
 
   // For each NAL..
-  for (let i = 0; i < frame.length; i++) {
-    const currentNal = frame[i];
+  for (const currentNal of frame) {
     view.setUint32(dataOffset, currentNal.data.byteLength);
     dataOffset += 4;
     data.set(currentNal.data, dataOffset);

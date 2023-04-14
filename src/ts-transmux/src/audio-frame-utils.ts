@@ -12,11 +12,7 @@ import type { TrackInfo } from "./types";
  * @returns {number}
  */
 function sumFrameByteLengths(array: Array<{ data: Uint8Array }>): number {
-  let sum = 0;
-  for (let i = 0; i < array.length; i++) {
-    sum += array[i].data.byteLength;
-  }
-  return sum;
+  return array.reduce((acc, arr) => acc + arr.data.byteLength, 0);
 }
 
 export interface FrameData {

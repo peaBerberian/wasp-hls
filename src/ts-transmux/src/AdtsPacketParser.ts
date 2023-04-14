@@ -157,7 +157,6 @@ export default class AdtsPacketParser {
 
     if (typeof skip === "number") {
       skipWarn(skip, i, frameNum);
-      skip = undefined;
     }
 
     // remove processed bytes from the buffer.
@@ -166,5 +165,9 @@ export default class AdtsPacketParser {
       this._buffer = null;
     }
     return frames;
+  }
+
+  public reset(): void {
+    this._buffer = null;
   }
 }

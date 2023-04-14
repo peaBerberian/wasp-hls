@@ -46,8 +46,10 @@ export interface MetadataElementaryPacketTrack {
   };
   id: number;
   codec: string;
-  type: "video" | "audio" | "timed-metadata";
+  type: ElementaryPacketMediaType;
 }
+
+export type ElementaryPacketMediaType = "video" | "audio" | "timed-metadata";
 
 export type ElementaryPacket = MetadataElementaryPacket | MediaElementaryPacket;
 
@@ -81,114 +83,6 @@ export default class ElementaryPacketParser {
     this._programMapTable = null;
   }
 
-  private _parsePes(payload: Uint8Array, pes: MediaElementaryPacket): void {
-    const startPrefix = (payload[0] << 16) | (payload[1] << 8) | payload[2];
-    // In certain live streams, the start of a TS fragment has ts packets
-    // that are frame data that is continuing from the previous fragment. This
-    // is to check that the pes data is the start of a new pes payload
-    if (startPrefix !== 1) {
-      return;
-    }
-    // get the packet length, this will be 0 for video
-    pes.packetLength = 6 + ((payload[4] << 8) | payload[5]);
-
-    // find out if this packets starts a new keyframe
-    pes.dataAlignmentIndicator = (payload[6] & 0x04) !== 0;
-    // PES packets may be annotated with a PTS value, or a PTS value
-    // and a DTS value. Determine what combination of values is
-    // available to work with.
-    const ptsDtsFlags = payload[7];
-
-    // PTS and DTS are normally stored as a 33-bit number.  Javascript
-    // performs all bitwise operations on 32-bit integers but javascript
-    // supports a much greater range (52-bits) of integer using standard
-    // mathematical operations.
-    // We construct a 31-bit value using bitwise operators over the 31
-    // most significant bits and then multiply by 4 (equal to a left-shift
-    // of 2) before we add the final 2 least significant bits of the
-    // timestamp (equal to an OR.)
-    if (ptsDtsFlags & 0xc0) {
-      // the PTS and DTS are not written out directly. For information
-      // on how they are encoded, see
-      // http://dvd.sourceforge.net/dvdinfo/pes-hdr.html
-      pes.pts =
-        ((payload[9] & 0x0e) << 27) |
-        ((payload[10] & 0xff) << 20) |
-        ((payload[11] & 0xfe) << 12) |
-        ((payload[12] & 0xff) << 5) |
-        ((payload[13] & 0xfe) >>> 3);
-      pes.pts *= 4; // Left shift by 2
-      pes.pts += (payload[13] & 0x06) >>> 1; // OR by the two LSBs
-      pes.dts = pes.pts;
-      if (ptsDtsFlags & 0x40) {
-        pes.dts =
-          ((payload[14] & 0x0e) << 27) |
-          ((payload[15] & 0xff) << 20) |
-          ((payload[16] & 0xfe) << 12) |
-          ((payload[17] & 0xff) << 5) |
-          ((payload[18] & 0xfe) >>> 3);
-        pes.dts *= 4; // Left shift by 2
-        pes.dts += (payload[18] & 0x06) >>> 1; // OR by the two LSBs
-      }
-    }
-    // the data section starts immediately after the PES header.
-    // pes_header_data_length specifies the number of header bytes
-    // that follow the last byte of the field.
-    pes.data = payload.subarray(9 + payload[8]);
-  }
-  /**
-   * Pass completely parsed PES packets.
-   **/
-  private _flushStream(
-    stream: ElementaryTrackInfo,
-    type: "video" | "audio" | "timed-metadata",
-    forceFlush?: boolean
-  ): ElementaryPacket | null {
-    const packetData = new Uint8Array(stream.size);
-    let offset = 0;
-    let packetFlushable = false;
-
-    // do nothing if there is not enough buffered data for a complete
-    // PES header
-    if (stream.data.length === 0 || stream.size < 9) {
-      return null;
-    }
-    const packet: MediaElementaryPacket = {
-      type,
-      data: new Uint8Array(),
-      trackId: stream.data[0].pid,
-    };
-    // reassemble the packet
-    for (let i = 0; i < stream.data.length; i++) {
-      const fragment = stream.data[i];
-
-      packetData.set(fragment.data, offset);
-      offset += fragment.data.byteLength;
-    }
-
-    // parse assembled packet's PES header
-    this._parsePes(packetData, packet);
-
-    // non-video PES packets MUST have a non-zero PES_packet_length
-    // check that there is enough stream data to fill the packet
-    packetFlushable =
-      type === "video" ||
-      (packet.packetLength !== undefined && packet.packetLength <= stream.size);
-
-    // flush pending packets if the conditions are right
-    if (forceFlush === true || packetFlushable) {
-      stream.size = 0;
-      stream.data.length = 0;
-    }
-
-    // only emit packets that are complete. this is to avoid assembling
-    // incomplete PES packets due to poor segmentation
-    if (packetFlushable) {
-      return packet;
-    }
-    return null;
-  }
-
   /**
    * Identifies M2TS packet types and parses PES packets using metadata
    * parsed from the PMT
@@ -201,7 +95,7 @@ export default class ElementaryPacketParser {
         break;
       case "pes": {
         let stream: { data: PesPacket[]; size: number };
-        let streamType: "audio" | "video" | "timed-metadata";
+        let streamType: ElementaryPacketMediaType;
         switch (data.streamType) {
           case H264_STREAM_TYPE:
             stream = this._video;
@@ -277,6 +171,113 @@ export default class ElementaryPacketParser {
     this._video.data.length = 0;
     this._audio.size = 0;
     this._audio.data.length = 0;
+  }
+
+  private _parsePes(payload: Uint8Array, pes: MediaElementaryPacket): void {
+    const startPrefix = (payload[0] << 16) | (payload[1] << 8) | payload[2];
+    // In certain live streams, the start of a TS fragment has ts packets
+    // that are frame data that is continuing from the previous fragment. This
+    // is to check that the pes data is the start of a new pes payload
+    if (startPrefix !== 1) {
+      return;
+    }
+    // get the packet length, this will be 0 for video
+    pes.packetLength = 6 + ((payload[4] << 8) | payload[5]);
+
+    // find out if this packets starts a new keyframe
+    pes.dataAlignmentIndicator = (payload[6] & 0x04) !== 0;
+    // PES packets may be annotated with a PTS value, or a PTS value
+    // and a DTS value. Determine what combination of values is
+    // available to work with.
+    const ptsDtsFlags = payload[7];
+
+    // PTS and DTS are normally stored as a 33-bit number.  Javascript
+    // performs all bitwise operations on 32-bit integers but javascript
+    // supports a much greater range (52-bits) of integer using standard
+    // mathematical operations.
+    // We construct a 31-bit value using bitwise operators over the 31
+    // most significant bits and then multiply by 4 (equal to a left-shift
+    // of 2) before we add the final 2 least significant bits of the
+    // timestamp (equal to an OR.)
+    if (ptsDtsFlags & 0xc0) {
+      // the PTS and DTS are not written out directly. For information
+      // on how they are encoded, see
+      // http://dvd.sourceforge.net/dvdinfo/pes-hdr.html
+      pes.pts =
+        ((payload[9] & 0x0e) << 27) |
+        ((payload[10] & 0xff) << 20) |
+        ((payload[11] & 0xfe) << 12) |
+        ((payload[12] & 0xff) << 5) |
+        ((payload[13] & 0xfe) >>> 3);
+      pes.pts *= 4; // Left shift by 2
+      pes.pts += (payload[13] & 0x06) >>> 1; // OR by the two LSBs
+      pes.dts = pes.pts;
+      if (ptsDtsFlags & 0x40) {
+        pes.dts =
+          ((payload[14] & 0x0e) << 27) |
+          ((payload[15] & 0xff) << 20) |
+          ((payload[16] & 0xfe) << 12) |
+          ((payload[17] & 0xff) << 5) |
+          ((payload[18] & 0xfe) >>> 3);
+        pes.dts *= 4; // Left shift by 2
+        pes.dts += (payload[18] & 0x06) >>> 1; // OR by the two LSBs
+      }
+    }
+    // the data section starts immediately after the PES header.
+    // pes_header_data_length specifies the number of header bytes
+    // that follow the last byte of the field.
+    pes.data = payload.subarray(9 + payload[8]);
+  }
+  /**
+   * Pass completely parsed PES packets.
+   **/
+  private _flushStream(
+    stream: ElementaryTrackInfo,
+    type: "video" | "audio" | "timed-metadata",
+    forceFlush?: boolean
+  ): ElementaryPacket | null {
+    let offset = 0;
+    let packetFlushable = false;
+
+    // do nothing if there is not enough buffered data for a complete
+    // PES header
+    if (stream.data.length === 0 || stream.size < 9) {
+      return null;
+    }
+    const packet: MediaElementaryPacket = {
+      type,
+      data: new Uint8Array(),
+      trackId: stream.data[0].pid,
+    };
+
+    // reassemble the packet
+    const packetData = new Uint8Array(stream.size);
+    stream.data.forEach((fragment) => {
+      packetData.set(fragment.data, offset);
+      offset += fragment.data.byteLength;
+    });
+
+    // parse assembled packet's PES header
+    this._parsePes(packetData, packet);
+
+    // non-video PES packets MUST have a non-zero PES_packet_length
+    // check that there is enough stream data to fill the packet
+    packetFlushable =
+      type === "video" ||
+      (packet.packetLength !== undefined && packet.packetLength <= stream.size);
+
+    // flush pending packets if the conditions are right
+    if (forceFlush === true || packetFlushable) {
+      stream.size = 0;
+      stream.data.length = 0;
+    }
+
+    // only emit packets that are complete. this is to avoid assembling
+    // incomplete PES packets due to poor segmentation
+    if (packetFlushable) {
+      return packet;
+    }
+    return null;
   }
 
   /**

@@ -132,6 +132,11 @@ export default class TransportPacketParser {
     }
   }
 
+  public reset(): void {
+    this.packetsWaitingForPmt = [];
+    this.programMapTable = null;
+  }
+
   private _parsePsi(payload: Uint8Array, psi: PartialPatPacket): PatPacket;
   private _parsePsi(
     payload: Uint8Array,

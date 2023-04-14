@@ -95,8 +95,8 @@ function calculateTrackBaseMediaDecodeTime<
     type: string;
     minSegmentDts: number;
     timelineStartInfo: {
-      dts: number;
-      baseMediaDecodeTime: number;
+      dts?: number | undefined;
+      baseMediaDecodeTime?: number | undefined;
     };
     samplerate?: number;
   }
@@ -104,7 +104,10 @@ function calculateTrackBaseMediaDecodeTime<
   let minSegmentDts = trackInfo.minSegmentDts;
 
   // Optionally adjust the time so the first segment starts at zero.
-  if (!keepOriginalTimestamps) {
+  if (
+    !keepOriginalTimestamps &&
+    trackInfo.timelineStartInfo.dts !== undefined
+  ) {
     minSegmentDts -= trackInfo.timelineStartInfo.dts;
   }
 
@@ -112,8 +115,13 @@ function calculateTrackBaseMediaDecodeTime<
   // we want the start of the first segment to be placed
   let baseMediaDecodeTime = trackInfo.timelineStartInfo.baseMediaDecodeTime;
 
-  // Add to that the distance this segment is from the very first
-  baseMediaDecodeTime += minSegmentDts;
+  if (baseMediaDecodeTime !== undefined) {
+    // Add to that the distance this segment is from the very first
+    baseMediaDecodeTime += minSegmentDts;
+  } else {
+    baseMediaDecodeTime = minSegmentDts;
+    trackInfo.timelineStartInfo.baseMediaDecodeTime = baseMediaDecodeTime;
+  }
 
   // baseMediaDecodeTime must not become negative
   baseMediaDecodeTime = Math.max(0, baseMediaDecodeTime);

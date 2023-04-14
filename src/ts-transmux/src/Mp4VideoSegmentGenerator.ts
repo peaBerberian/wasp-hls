@@ -259,7 +259,7 @@ export default class Mp4VideoSegmentGenerator {
     return { trackInfo, boxes };
   }
 
-  public reset(): void {
+  public cancel(): void {
     this.resetStream_();
     this._nalUnits = [];
     this._gopCache.length = 0;
@@ -284,8 +284,7 @@ export default class Mp4VideoSegmentGenerator {
     let nearestGopObj: any | undefined;
 
     // Search for the GOP nearest to the beginning of this nal unit
-    for (let i = 0; i < this._gopCache.length; i++) {
-      const currentGopObj = this._gopCache[i];
+    this._gopCache.forEach((currentGopObj) => {
       const currentGop = currentGopObj.gop;
 
       // Reject Gops with different SPS or PPS
@@ -299,12 +298,12 @@ export default class Mp4VideoSegmentGenerator {
           arrayEquals(this._trackInfo.sps[0], currentGopObj.sps[0])
         )
       ) {
-        continue;
+        return;
       }
 
       // Reject Gops that would require a negative baseMediaDecodeTime
       if (currentGop.dts < this._trackInfo.timelineStartInfo.dts) {
-        continue;
+        return;
       }
 
       // The distance between the end of the gop and the start of the nalUnit
@@ -320,7 +319,7 @@ export default class Mp4VideoSegmentGenerator {
           nearestDistance = dtsDistance;
         }
       }
-    }
+    });
 
     if (nearestGopObj !== undefined) {
       return nearestGopObj.gop;
