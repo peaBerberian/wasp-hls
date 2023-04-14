@@ -221,7 +221,7 @@ Request Scheduling:
 
 Media demuxing/decoding, MSE API and buffer handling:
 
-- [x] Transmux mpeg2-ts (thanks to mux.js on the worker for now)
+- [x] Transmux mpeg2-ts (through JS for now, Rust rewrite pending)
 - [x] End of stream support (as in: actually end when playback reaches the end!)
 - [x] Multiple simultaneous type of buffers support (for now only audio and
       video, through MSE `SourceBuffer`s)
