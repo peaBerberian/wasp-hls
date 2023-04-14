@@ -4,8 +4,8 @@
 </p>
 
 Wasp-hls is an [HLS](https://en.wikipedia.org/wiki/HTTP_Live_Streaming) media
-player (the library, streaming engine part, and not the UI/application part for
-which I just developped a modest demo) for the web which:
+player (the library, streaming engine part, not the UI/application part which has
+to be built on top of it) for the web which:
 
 1. Relies the most possible on [WebAssembly](https://webassembly.org/) (Written
    in the [Rust](https://www.rust-lang.org/) language before being compiled).
@@ -128,7 +128,7 @@ through what we call the packaging step - separately by using what's called a
 
 For example the [shaka-packager](https://github.com/shaka-project/shaka-packager)
 is a relatively easy to use packager. With it and [FFmpeg](https://ffmpeg.org/),
-you should have all the tools you need to produce any HLS contents you want.
+you are armed with the right tools to produce HLS contents.
 
 ## Why starting this project?
 
@@ -221,7 +221,7 @@ Request Scheduling:
 
 Media demuxing/decoding, MSE API and buffer handling:
 
-- [x] Transmux mpeg2-ts (through JS for now, Rust rewrite pending)
+- [x] Transmux mpeg2-ts (through JS for now, Rust implementation pending).
 - [x] End of stream support (as in: actually end when playback reaches the end!)
 - [x] Multiple simultaneous type of buffers support (for now only audio and
       video, through MSE `SourceBuffer`s)
