@@ -15,8 +15,11 @@ export default class TimedMetadataParser {
   public dispatchType: string;
 
   private _descriptor: number[] | undefined;
+  // the total size in bytes of the ID3 tag being parsed
   private _tagSize: number;
+  // tag data that is not complete enough to be parsed
   private _buffer: TimedMetadataPacket[];
+  // the total number of bytes currently in the buffer
   private _bufferSize: number;
   private _onTimestamp: ((val: any) => void) | null;
 
@@ -26,11 +29,8 @@ export default class TimedMetadataParser {
   ) {
     this._onTimestamp = onTimestamp;
     this._descriptor = options?.descriptor;
-    // the total size in bytes of the ID3 tag being parsed
     this._tagSize = 0;
-    // tag data that is not complete enough to be parsed
     this._buffer = [];
-    // the total number of bytes currently in the buffer
     this._bufferSize = 0;
 
     // calculate the text track in-band metadata track dispatch type
@@ -38,11 +38,9 @@ export default class TimedMetadataParser {
     // https://html.spec.whatwg.org/multipage/embedded-content.html#steps-to-expose-a-media-resource-specific-text-track
     this.dispatchType = METADATA_STREAM_TYPE.toString(16);
     if (this._descriptor !== undefined) {
-      for (let i = 0; i < this._descriptor.length; i++) {
-        this.dispatchType += ("00" + this._descriptor[i].toString(16)).slice(
-          -2
-        );
-      }
+      this._descriptor.forEach((desc) => {
+        this.dispatchType += ("00" + desc.toString(16)).slice(-2);
+      });
     }
   }
 
@@ -193,5 +191,11 @@ export default class TimedMetadataParser {
       frameStart += frameSize; // advance past the frame body
     } while (frameStart < this._tagSize);
     return tag;
+  }
+
+  public reset() {
+    this._tagSize = 0;
+    this._buffer = [];
+    this._bufferSize = 0;
   }
 }

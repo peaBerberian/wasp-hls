@@ -13,6 +13,25 @@ import { NalUnitType, ParsedNalUnit } from "./H264NalUnitProducer";
 
 const PADDING = 0x0000;
 
+function trimLineBreaksAtBeginningAndEnd(str: string): string {
+  let trimmed = str;
+  let endIndex = trimmed.length - 1;
+  while (trimmed[endIndex] === "\n") {
+    endIndex--;
+  }
+  if (endIndex < trimmed.length - 1) {
+    trimmed = trimmed.substring(0, endIndex + 1);
+  }
+  let startIndex = 0;
+  while (trimmed[startIndex] === "\n") {
+    startIndex++;
+  }
+  if (startIndex > 0) {
+    trimmed = trimmed.substring(startIndex);
+  }
+  return trimmed;
+}
+
 export interface CaptionStreamEvents {
   data: any;
   done: null;
@@ -1671,7 +1690,7 @@ class Cea608Stream extends EventEmitter<Cea608StreamEvents> {
   // Trigger a cue point that captures the current state of the
   // display buffer
   public flushDisplayed(pts: number): void {
-    const content = this.displayed_
+    let content = this.displayed_
       // remove spaces from the start and end of the string
       .map(function (row, index) {
         try {
@@ -1688,9 +1707,10 @@ class Cea608Stream extends EventEmitter<Cea608StreamEvents> {
         }
       }, this)
       // combine all text rows to display in one cue
-      .join("\n")
-      // and remove blank rows from the start and end, but not the middle
-      .replace(/^\n+|\n+$/g, "");
+      .join("\n");
+
+    // and remove blank rows from the start and end, but not the middle
+    content = trimLineBreaksAtBeginningAndEnd(content);
 
     if (content.length) {
       this.trigger("data", {
@@ -1862,7 +1882,8 @@ class Cea608Stream extends EventEmitter<Cea608StreamEvents> {
     if (!this.formatting_.length) {
       return;
     }
-    const text = this.formatting_.reverse().reduce(function (txt, format) {
+    this.formatting_.reverse();
+    const text = this.formatting_.reduce(function (txt, format) {
       return txt + "</" + format + ">";
     }, "");
     this.formatting_ = [];

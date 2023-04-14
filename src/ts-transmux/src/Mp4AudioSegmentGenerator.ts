@@ -107,7 +107,7 @@ export class Mp4AudioSegmentGenerator {
     return { trackInfo: this._trackInfo, boxes };
   }
 
-  public reset(): void {
+  public cancel(): void {
     clearDtsInfo(this._trackInfo);
     this._aacFrames = [];
   }

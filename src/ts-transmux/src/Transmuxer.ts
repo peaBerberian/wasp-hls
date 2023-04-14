@@ -17,25 +17,25 @@ interface AacPipelineElements {
   name: "aac";
   adtsParser: AdtsPacketParser;
   audioTimestampRolloverHandler: TimestampRolloverHandler;
-  timedMetadataRolloverHandler: TimestampRolloverHandler;
-  metadataParser: TimedMetadataParser;
   getAdtsTimestamp(): number;
+  metadataParser: TimedMetadataParser;
   mp4AudioSegmentGenerator: Mp4AudioSegmentGenerator | null;
   mp4SegmentConstructor: FullMp4SegmentConstructor;
+  timedMetadataRolloverHandler: TimestampRolloverHandler;
 }
 
 interface TsPipelineElements {
   name: "ts";
-  transportStreamSplitter: TransportStreamSplitter;
-  metadataParser: TimedMetadataParser;
-  timestampRolloverHandler: TimestampRolloverHandler;
   adtsParser: AdtsPacketParser;
-  transportPacketParser: TransportPacketParser;
   elementaryPacketParser: ElementaryPacketParser;
   h264NalUnitProducer: H264NalUnitProducer;
+  metadataParser: TimedMetadataParser;
+  mp4AudioSegmentGenerator: Mp4AudioSegmentGenerator | null;
   mp4SegmentConstructor: FullMp4SegmentConstructor;
   mp4VideoSegmentGenerator: Mp4VideoSegmentGenerator | null;
-  mp4AudioSegmentGenerator: Mp4AudioSegmentGenerator | null;
+  timestampRolloverHandler: TimestampRolloverHandler;
+  transportPacketParser: TransportPacketParser;
+  transportStreamSplitter: TransportStreamSplitter;
 }
 
 export interface TransmuxerOptions {
@@ -97,8 +97,10 @@ export default class Transmuxer {
       }
       if (isEnded) {
         // We've finished reading the segment!
-        // First, flush `ElementaryPacketParser` for any remaining packet
+
+        // Flush `ElementaryPacketParser` for any remaining packet
         const ePckts = pipeline.elementaryPacketParser.flush();
+        pipeline.elementaryPacketParser.reset();
         for (const ePckt of ePckts) {
           this._onElementaryStreamTsPacket(ePckt, pipeline);
         }
@@ -108,6 +110,16 @@ export default class Transmuxer {
         if (nalUnit !== null && pipeline.mp4VideoSegmentGenerator !== null) {
           pipeline.mp4VideoSegmentGenerator.pushNalUnit(nalUnit);
         }
+
+        // Because we're only parsing whole segments for now, reset the
+        // the pipeline as a security.
+        pipeline.adtsParser.reset();
+        pipeline.elementaryPacketParser.reset();
+        pipeline.h264NalUnitProducer.reset();
+        pipeline.metadataParser.reset();
+        pipeline.timestampRolloverHandler.signalEndOfSegment();
+        pipeline.transportPacketParser.reset();
+        pipeline.transportStreamSplitter.reset();
         return this._buildSegment();
       }
     }
@@ -118,10 +130,25 @@ export default class Transmuxer {
     if (pipeline === null || pipeline.name !== "aac") {
       pipeline = this._setupAacPipeline();
     }
+
+    const onSegmentParsed = (): Uint8Array | null => {
+      if (pipeline === null || pipeline.name !== "aac") {
+        return null;
+      }
+
+      // Because we're only parsing whole segments for now, reset the
+      // the pipeline at the end of each segment as a security.
+      pipeline.adtsParser.reset();
+      pipeline.audioTimestampRolloverHandler.signalEndOfSegment();
+      pipeline.metadataParser.reset();
+      pipeline.timedMetadataRolloverHandler.signalEndOfSegment();
+      return this._buildSegment();
+    };
+
     let remainingInput: Uint8Array | null = input;
     while (true) {
       if (remainingInput === null) {
-        return this._buildSegment();
+        return onSegmentParsed();
       }
       const [packet, remainingBuffer] = readNextAdtsOrId3(
         remainingInput,
@@ -129,7 +156,7 @@ export default class Transmuxer {
       );
       remainingInput = remainingBuffer;
       if (packet === null) {
-        return this._buildSegment();
+        return onSegmentParsed();
       }
 
       if (packet.type === "timed-metadata") {
