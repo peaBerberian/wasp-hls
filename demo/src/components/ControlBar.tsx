@@ -11,6 +11,21 @@ import VolumeButton from "./VolumeButton";
 
 const TIME_CHECK_INTERVAL = 200;
 
+const INPUT_TYPES_WITH_KBD_SUPPORT = [
+  "text",
+  "time",
+  "date",
+  "datetime-local",
+  "number",
+  "email",
+  "month",
+  "password",
+  "search",
+  "url",
+  "week",
+  "datetime",
+];
+
 export default React.memo(function ControlBar({
   player,
   isInFullScreenMode,
@@ -279,9 +294,14 @@ export default React.memo(function ControlBar({
       document.removeEventListener("keydown", onKeyDown);
     };
     function onKeyDown(evt: { preventDefault: () => void; key: string }) {
+      if (
+        document.activeElement instanceof HTMLInputElement &&
+        INPUT_TYPES_WITH_KBD_SUPPORT.includes(document.activeElement.type)
+      ) {
+        return;
+      }
       switch (evt.key) {
         case " ":
-          evt.preventDefault();
           displayControlBar(false);
           togglePlayPause();
           break;
