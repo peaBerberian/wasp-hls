@@ -50,5 +50,5 @@ export function getTransmuxedType(typ: string, mediaType: MediaType): string {
 }
 
 export function createTransmuxer(): Transmuxer {
-  return new Transmuxer({ keepOriginalTimestamps: true });
+  return new Transmuxer();
 }
