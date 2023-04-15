@@ -462,6 +462,11 @@ body {
   color: #008bd3;
 }
 
+.content-choice.selected:hover {
+  background-color: #f4ef00;
+  color: #008bd3;
+}
+
 .dropdown-container {
   overflow-y: hidden;
   max-height: 0;
