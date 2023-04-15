@@ -27,8 +27,8 @@ The code is splitted into several directories:
 
 - **ts-transmux**: mpeg2ts to fmp4 transmuxer, initially forked from the one in
   [mux.js](https://github.com/videojs/mux.js/). I however (tried) to rewrite in
-  TypeScript and go from its Event-based approach to a procedural one to get the
-  hang of it, cut what I don't need and add what I need.
+  TypeScript and go from its Event-based approach to a more procedural one to
+  get the hang of it, cut what I don't need and add what I need.
   A majority of the code is still theirs, so I kept their license.
 
   A potential long-term goal is to reimplement it in Rust.
