@@ -427,12 +427,12 @@ body {
   cursor: pointer;
 }
 
-.content-list-arrow:hover {
-  fill: #fff900;
-}
-
 .content-list-arrow.active {
   fill: #4a4200;
+}
+
+.content-list-arrow:hover {
+  fill: #fff900;
 }
 
 .btn-dropdown {
@@ -458,11 +458,6 @@ body {
 }
 
 .content-choice:hover {
-  background-color: #f4ef00;
-  color: #008bd3;
-}
-
-.content-choice.selected:hover {
   background-color: #f4ef00;
   color: #008bd3;
 }
