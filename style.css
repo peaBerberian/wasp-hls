@@ -76,6 +76,13 @@ body {
   color: black;
 }
 
+.white-button.disabled {
+  background-color: #d9d9d9;
+  border-color: #d9d9d9;
+  cursor: initial;
+  color: #424242;
+}
+
 .create-new-player {
   margin-bottom: 10px;
 }
@@ -389,6 +396,7 @@ body {
   right: 10px;
   padding: 0px 10px;
   font-family: "Open Sans", sans-serif;
+  border-radius: 5px;
 }
 .settings.hidden {
   transition: visibility 0s 0.5s, opacity 0.5s linear;
@@ -423,25 +431,43 @@ body {
 
 .content-list-arrow {
   height: 20px;
-  fill: #008bd3;
+  fill: #000;
   cursor: pointer;
 }
 
 .content-list-arrow.active {
-  fill: #d0b624;
+  fill: #008bd3;
 }
 
 .content-list-arrow:hover {
-  fill: #fff900;
+  fill: #d0b624;
+}
+
+.settings-btn-wrapper {
+  margin-right: 5px;
+  top: 5px;
+  position: relative;
+}
+
+.settings-button {
+  height: 20px;
+  fill: #000;
+  cursor: pointer;
+}
+
+.settings-button.active {
+  fill: #008bd3;
+}
+
+.settings-button:hover {
+  fill: #d0b624;
 }
 
 .btn-dropdown {
   cursor: pointer;
-  background-color: #008bd3;
+  background-color: #fff;
   font-weight: bold;
-  border-radius: 3px;
-  color: #fff;
-  border: none;
+  color: #000;
   text-align: left;
   font-size: 0.79em;
   width: 70%;
@@ -450,16 +476,17 @@ body {
 
 .content-choice {
   padding: 5px;
+  background-color: #f7f8ff
 }
 
 .content-choice.selected {
-  background-color: #d3f0ff;
-  color: #008bd3;
+  background-color: #008bd3;
+  color: #fff;
 }
 
 .content-choice:hover {
   background-color: #f4ef00;
-  color: #008bd3;
+  color: #000;
 }
 
 .dropdown-container {
@@ -472,4 +499,53 @@ body {
   max-height: 200px;
   overflow: auto;
   transition: all 0.4s;
+}
+
+.settings {
+  text-align: left;
+  border: 1px dotted black;
+  padding: 10px;
+  margin: 5px;
+  font-family: monospace;
+  font-size: 0.92em;
+  max-width: 700px;
+  margin: 5px auto;
+}
+
+.settings-title {
+  margin-bottom: 15px;
+  text-align: center;
+}
+
+.settings-title-text {
+  font-weight: bold;
+  font-size: 1.3em;
+  margin-bottom: 3px;
+}
+
+.setting-elt {
+  margin: 10px 5px;
+  padding: 10px 5px;
+  background-color: #f7f8ff;
+  border-radius: 5px;
+}
+
+.settings-title-desc {
+  font-size: 0.94em;
+}
+
+.setting-elt-title {
+  display: inline;
+  font-weight: bold;
+  margin-right: 5px;
+}
+
+.apply-button.white-button {
+  margin: 0px 5px;
+}
+
+.setting-elt-desc {
+  font-style: italic;
+  font-size: 0.94em;
+  margin-top: 5px;
 }
