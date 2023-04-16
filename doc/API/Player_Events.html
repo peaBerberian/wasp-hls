@@ -1,0 +1,450 @@
+<!DOCTYPE html><html lang="en"><head><meta name="viewport" content="width=device-width, initial-scale=1"><meta charset="utf-8"><link rel="stylesheet" href="../styles/style.css"/><link rel="stylesheet" href="../styles/code.css"/><title>Player Events</title></head><body class="no-js"><script type="text/javascript">document.body.className = "";window.rootUrl = "..";</script><div class="page-wrapper"><nav class="navbar-parent"><div class="navbar-wrapper"><div class="navbar-items"><button aria-label="Open website index" class="hamburger-opener"><svg width="30" height="30" viewBox="0 0 30 30" aria-hidden="true"><path stroke="currentColor" stroke-linecap="round" stroke-miterlimit="10" stroke-width="2" d="M4 7h22M4 15h22M4 23h22"></path></svg></button><a class="logo-link" href="https://github.com/peaBerberian/wasp-hls"><img alt="Logo" class="navbar-item navbar-item-logo" src="../images/logo_big.png" /></a><a class="navbar-item hideable"href="../Getting_Started/Welcome.html">Getting Started</a>
+<a class="navbar-item navbar-active hideable"href="./Overview.html">API</a>
+<a class="navbar-item hideable"href="https://peaberberian.github.io/wasp-hls/index.html">Demo</a>
+<span class="navbar-item search-icon last-left"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20"><title>search</title><path d="M19 17l-5.15-5.15a7 7 0 1 0-2 2L17 19zM3.5 8A4.5 4.5 0 1 1 8 12.5 4.5 4.5 0 0 1 3.5 8z"/><script xmlns=""/></svg></span>
+<a aria-label="Link to repository" class="navbar-item first-right github-link hideable" href="https://github.com/peaBerberian/wasp-hls"><svg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'><path d='M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12'/></svg></a></div></div> </nav><aside class="sidebar-parent"><div class="sidebar-header"><a href="https://github.com/peaBerberian/wasp-hls"><img alt="logo" class="sidebar-header-logo" src="../images/logo_big.png" /></a></div><div class="sidebar-wrapper"><div class="sidebar-items"><li class="sidebar-item"><a class="sidebar-link" href="./Overview.html">API Overview</a></li><li class="sidebar-item"><a class="sidebar-link" href="./Instantiation.html">WaspHlsPlayer Instantiation</a></li><li class="sidebar-item"><a class="sidebar-link" href="./Initialization.html">Initialization</a></li><li class="sidebar-item"><a class="sidebar-link" href="./Loading_a_content.html">Loading a content</a></li><li class="sidebar-item"><a class="sidebar-link active" href="./Player_Events.html">Player Events</a></li><li class="sidebar-item"><a class="sidebar-link" href="./Configuration_Object.html">Configuration Object</a></li><li class="sidebar-item"><a class="sidebar-link" href="./Player_Errors.html">Player Errors</a></li><li class="sidebar-item"><div class="sidebar-item sidebar-item-group">Basic Methods</div><ul><li class="sidebar-item"><a class="sidebar-link" href="./Basic_Methods/initialize.html">initialize</a></li><li class="sidebar-item"><a class="sidebar-link" href="./Basic_Methods/load.html">load</a></li><li class="sidebar-item"><a class="sidebar-link" href="./Basic_Methods/updateConfig.html">updateConfig</a></li><li class="sidebar-item"><a class="sidebar-link" href="./Basic_Methods/getConfig.html">getConfig</a></li><li class="sidebar-item"><a class="sidebar-link" href="./Basic_Methods/getPlayerState.html">getPlayerState</a></li><li class="sidebar-item"><a class="sidebar-link" href="./Basic_Methods/pause.html">Pause</a></li><li class="sidebar-item"><a class="sidebar-link" href="./Basic_Methods/resume.html">Resume</a></li><li class="sidebar-item"><a class="sidebar-link" href="./Basic_Methods/getError.html">getError</a></li><li class="sidebar-item"><a class="sidebar-link" href="./Basic_Methods/stop.html">stop</a></li><li class="sidebar-item"><a class="sidebar-link" href="./Basic_Methods/addEventListener.html">addEventListener</a></li><li class="sidebar-item"><a class="sidebar-link" href="./Basic_Methods/removeEventListener.html">removeEventListener</a></li><li class="sidebar-item"><a class="sidebar-link" href="./Basic_Methods/dispose.html">dispose</a></li></ul></li><li class="sidebar-item"><div class="sidebar-item sidebar-item-group">Playback Information</div><ul><li class="sidebar-item"><a class="sidebar-link" href="./Playback_Information/isPlaying.html">isPlaying</a></li><li class="sidebar-item"><a class="sidebar-link" href="./Playback_Information/isPaused.html">isPaused</a></li><li class="sidebar-item"><a class="sidebar-link" href="./Playback_Information/isRebuffering.html">isRebuffering</a></li><li class="sidebar-item"><a class="sidebar-link" href="./Playback_Information/isEnded.html">isEnded</a></li></ul></li><li class="sidebar-item"><div class="sidebar-item sidebar-item-group">Position Control</div><ul><li class="sidebar-item"><a class="sidebar-link" href="./Position_Control/getPosition.html">getPosition</a></li><li class="sidebar-item"><a class="sidebar-link" href="./Position_Control/seek.html">seek</a></li><li class="sidebar-item"><a class="sidebar-link" href="./Position_Control/getMinimumPosition.html">getMinimumPosition</a></li><li class="sidebar-item"><a class="sidebar-link" href="./Position_Control/getMaximumPosition.html">getMaximumPosition</a></li><li class="sidebar-item"><a class="sidebar-link" href="./Position_Control/getMediaOffset.html">getMediaOffset</a></li></ul></li><li class="sidebar-item"><div class="sidebar-item sidebar-item-group">Speed Control</div><ul><li class="sidebar-item"><a class="sidebar-link" href="./Speed_Control/setSpeed.html">setSpeed</a></li><li class="sidebar-item"><a class="sidebar-link" href="./Speed_Control/getSpeed.html">getSpeed</a></li></ul></li><li class="sidebar-item"><div class="sidebar-item sidebar-item-group">Variant Selection</div><ul><li class="sidebar-item"><a class="sidebar-link" href="./Variant_Selection/getCurrentVariant.html">getCurrentVariant</a></li><li class="sidebar-item"><a class="sidebar-link" href="./Variant_Selection/getVariantList.html">getVariantList</a></li><li class="sidebar-item"><a class="sidebar-link" href="./Variant_Selection/lockVariant.html">lockVariant</a></li><li class="sidebar-item"><a class="sidebar-link" href="./Variant_Selection/unlockVariant.html">unlockVariant</a></li><li class="sidebar-item"><a class="sidebar-link" href="./Variant_Selection/getLockedVariant.html">getLockedVariant</a></li></ul></li><li class="sidebar-item"><div class="sidebar-item sidebar-item-group">Audio Track Selection</div><ul><li class="sidebar-item"><a class="sidebar-link" href="./Audio_Track_Selection/getCurrentAudioTrack.html">getCurrentAudioTrack</a></li><li class="sidebar-item"><a class="sidebar-link" href="./Audio_Track_Selection/getAudioTrackList.html">getAudioTrackList</a></li><li class="sidebar-item"><a class="sidebar-link" href="./Audio_Track_Selection/setAudioTrack.html">setAudioTrack</a></li></ul></li></div></div></aside><div class="content-wrapper"><div class="content"><div id="search-wrapper"><input type="search" name="search" id="searchbar" placeholder="Search in this documentation" class="active" /><div id="search-results"></div></div><html><head></head><body><p><a name="player_events"></a></p>
+<h1>Player Events</h1>
+<p><a name="overview"></a></p>
+<h2>Overview</h2>
+<p>As it begins to load a content, the <code>WaspHlsPlayer</code> will send various events
+allowing you:</p>
+<ul>
+<li>to let you know the current playback conditions</li>
+<li>what audio tracks are available and which one is selected</li>
+<li>what variants (i.e. qualities) are available and which one is selected</li>
+<li>and so on</li>
+</ul>
+<p>This page will document every one of them.</p>
+<p><a name="listening_to_an_event"></a></p>
+<h2>Listening to an event</h2>
+<p>The <code>WaspHlsPlayer</code> copies the same event listening API than the <code>EventTarget</code>
+you’re generally used to on the web. That is, you can use a method called
+<a href="./Basic_Methods/addEventListener.html"><code>addEventlistener</code></a> to register a callback on an event
+and <a href="./Basic_Methods/removeEventListener.html"><code>removeEventListener</code></a> to remove it.</p>
+<p>For example, to add then immediately remove an event listener for the
+<code>"playerStateChange"</code> event, you can write:</p>
+<pre><code class="language-js"><span class="hljs-keyword">const</span> <span class="hljs-title function_">onPlayerStateChange</span> = (<span class="hljs-params">state</span>) =&gt; {
+  <span class="hljs-variable language_">console</span>.<span class="hljs-title function_">log</span>(<span class="hljs-string">"new player state:"</span>, state);
+};
+player.<span class="hljs-title function_">addEventListener</span>(<span class="hljs-string">"playerStateChange"</span>, onPlayerStateChange);
+player.<span class="hljs-title function_">removeEventListener</span>(<span class="hljs-string">"playerStateChange"</span>, onPlayerStateChange);
+</code></pre>
+<p><a name="event:_%60playerstatechange%60"></a></p>
+<h2>Event: <code>playerStateChange</code></h2>
+<p>The <code>"playerStateChange"</code> event is sent when the “state” of playback is
+updpated, with a string describing that new state as a payload.</p>
+<p>This is the event you want to listen to to be alerted when your <a href="./Loading_a_content.html">loaded</a>
+content can start to play, or when it was actually stopped.</p>
+<p>The various values that this state can be set to are:</p>
+<ul>
+<li>
+<p><code>"Stopped"</code>: The content has just been stopped. No content is playing
+anymore.</p>
+</li>
+<li>
+<p><code>"Loading"</code>: Set synchronously when the <code>load</code> method is called, to indicate
+that a new content is being loaded.</p>
+</li>
+<li>
+<p><code>"Loaded"</code>: the last content loaded with <code>load</code> is now ready to play.</p>
+</li>
+<li>
+<p><code>"Error"</code>: the last content loaded with <code>load</code> has been interrupted due to
+an error. An <code>"error"</code> event should also have been triggered. You can
+also know which error happened by calling the [<code>getError</code>](XXX TODO) method.</p>
+</li>
+</ul>
+<p>As such, for example to automatically play when the content is loaded, you can
+combine this event with a call to [<code>resume</code>](XXX TODO), by writing:</p>
+<pre><code class="language-js">player.<span class="hljs-title function_">addEventListener</span>(<span class="hljs-string">"playerStateChange"</span>, <span class="hljs-function">(<span class="hljs-params">state</span>) =&gt;</span> {
+  <span class="hljs-keyword">if</span> (state === <span class="hljs-string">"Loaded"</span>) {
+    <span class="hljs-comment">// auto-play when loaded</span>
+    player.<span class="hljs-title function_">resume</span>();
+  }
+});
+</code></pre>
+<p>You can also know the player’s state at any time by calling the
+[<code>getPlayerState</code>](XXX TODO) method.</p>
+<p><a name="event:_%60paused%60"></a></p>
+<h2>Event: <code>paused</code></h2>
+<p>The <code>"paused"</code> event is sent when a loaded content (which is a content which
+currently is in the [<code>"Loaded"</code> state](XXX TODO) was just paused, generally
+due to a previous call to the [<code>pause</code> method](XXX TOOD).</p>
+<p>This event doesn’t have a payload.</p>
+<p>Example of usage:</p>
+<pre><code class="language-js">player.<span class="hljs-title function_">addEventListener</span>(<span class="hljs-string">"paused"</span>, <span class="hljs-function">() =&gt;</span> {
+  <span class="hljs-variable language_">console</span>.<span class="hljs-title function_">log</span>(<span class="hljs-string">"Playback is now effectively paused."</span>);
+});
+</code></pre>
+<p>You can also know whether playback is currently paused at any time by calling
+the [<code>isPaused</code>](XXX TODO) method.</p>
+<p><a name="event:_%60playing%60"></a></p>
+<h2>Event: <code>playing</code></h2>
+<p>The <code>"playing"</code> event is sent when a loaded content (which is a content which
+currently is in the [<code>"Loaded"</code> state](XXX TODO) went out of a “paused” status,
+generally due to a previous call to the [<code>resume</code> method](XXX TOOD).</p>
+<p>XXX TODO what about when ended then calling play? To check</p>
+<p>This event doesn’t have a payload.</p>
+<p>Example of usage:</p>
+<pre><code class="language-js">player.<span class="hljs-title function_">addEventListener</span>(<span class="hljs-string">"playing"</span>, <span class="hljs-function">() =&gt;</span> {
+  <span class="hljs-variable language_">console</span>.<span class="hljs-title function_">log</span>(<span class="hljs-string">"Playback is now effectively playing."</span>);
+});
+</code></pre>
+<p>You can also know whether playback is currently playing at any time by calling
+the [<code>isPlaying</code>](XXX TODO) method.</p>
+<p><a name="event:_%60ended%60"></a></p>
+<h2>Event: <code>ended</code></h2>
+<p>The <code>"ended"</code> event is sent when playback reached the end of the content.</p>
+<p>Playback is now paused, generally at the last video frame visible of the
+content.</p>
+<p>XXX TODO is the “paused” event also sent? To check.</p>
+<p>This event doesn’t have a payload.</p>
+<p>Example of usage:</p>
+<pre><code class="language-js">player.<span class="hljs-title function_">addEventListener</span>(<span class="hljs-string">"ended"</span>, <span class="hljs-function">() =&gt;</span> {
+  <span class="hljs-variable language_">console</span>.<span class="hljs-title function_">log</span>(<span class="hljs-string">"Playback is now ended."</span>);
+});
+</code></pre>
+<p>You can also know whether the end is currently reached at any time by calling
+the [<code>isEnded</code>](XXX TODO) method.</p>
+<p><a name="event:_%60error%60"></a></p>
+<h2>Event: <code>error</code></h2>
+<p>The <code>"error"</code> event is sent when an error interrupted playback of the last
+content.</p>
+<p>The corresponding Error object is sent as a payload.
+For more information on the potential errors see the [Errors and warnings
+page](XXX TODO).</p>
+<p>Example of a callback registered to that event:</p>
+<pre><code class="language-js">player.<span class="hljs-title function_">addEventListener</span>(<span class="hljs-string">"error"</span>, <span class="hljs-function">(<span class="hljs-params">error</span>) =&gt;</span> {
+  <span class="hljs-variable language_">console</span>.<span class="hljs-title function_">error</span>(<span class="hljs-string">"An error just stopped playback:"</span>, error);
+});
+</code></pre>
+<p>Just before the <code>"error"</code> event is sent, the player’s start (as returned by the
+[getPlayerState](XXX TODO) method and emitted by the <code>playerStateChange</code> event
+are set to <code>"Error"</code>.</p>
+<p>Also, the [<code>getError</code>](XXX TODO) method should now return the same error object
+than the one emitted as a payload of the <code>error</code> event, until another content is
+loaded or until [<code>stop</code>](XXX TODO) is called, whichever comes first.</p>
+<p><a name="event:_%60warning%60"></a></p>
+<h2>Event: <code>warning</code></h2>
+<p>The <code>"warning"</code> event is sent when a minor error happened, though unlike the
+<code>error</code> event, it hasn’t resulted in playback interruption.</p>
+<p>The corresponding Error object is sent as a payload.
+For more information on the potential errors see the [Errors and warnings
+page](XXX TODO).</p>
+<p>Example of a callback registered to that event:</p>
+<pre><code class="language-js">player.<span class="hljs-title function_">addEventListener</span>(<span class="hljs-string">"warning"</span>, <span class="hljs-function">(<span class="hljs-params">error</span>) =&gt;</span> {
+  <span class="hljs-variable language_">console</span>.<span class="hljs-title function_">warn</span>(<span class="hljs-string">"A minor error just happened:"</span>, error);
+});
+</code></pre>
+<p><a name="event:_%60rebufferingstarted%60"></a></p>
+<h2>Event: <code>rebufferingStarted</code></h2>
+<p>The <code>"rebufferingStarted"</code> event is sent when a loaded content (which is a
+content which currently is in the [<code>"Loaded"</code> state](XXX TODO) just began
+rebuffering.</p>
+<p><em>Rebuffering is a period during which playback is paused to build back buffer,
+in that condition, playback will only restart (by itself) once enough buffer
+is loaded.</em></p>
+<p><em>Rebuffering can for example happen if the network bandwidth is currently too
+low to play sustainably the current content or due to some other event like
+a [<code>seek</code>](XXX TODO).</em></p>
+<p><em>Note that rebuffering can also happen when playback is paused. It just means
+that there’s not enough media data to begin playback.</em></p>
+<p>This event doesn’t have a payload.</p>
+<p>Example of usage:</p>
+<pre><code class="language-js">player.<span class="hljs-title function_">addEventListener</span>(<span class="hljs-string">"rebufferingStarted"</span>, <span class="hljs-function">() =&gt;</span> {
+  <span class="hljs-variable language_">console</span>.<span class="hljs-title function_">log</span>(<span class="hljs-string">"Playback is now paused due to a started rebuffering period"</span>);
+});
+</code></pre>
+<p>You can also know whether playback is currently rebuffering at any time by
+calling the [<code>isRebuffering</code>](XXX TODO) method.</p>
+<p><a name="event:_%60rebufferingended%60"></a></p>
+<h2>Event: <code>rebufferingEnded</code></h2>
+<p>The <code>"rebufferingEnded"</code> event is sent when a loaded content (which is a
+content which currently is in the [<code>"Loaded"</code> state](XXX TODO) just exited a
+rebuffering period.</p>
+<p>You should have previously received a <code>"rebufferingStarted"</code> event when that
+rebuffering period had started.</p>
+<p><em>Rebuffering is a period during which playback is paused to build back buffer,
+in that condition, playback will only restart (by itself) once enough buffer
+is loaded.</em></p>
+<p><em>Rebuffering can for example happen if the network bandwidth is currently too
+low to play sustainably the current content or due to some other event like
+a [<code>seek</code>](XXX TODO).</em></p>
+<p><em>Note that rebuffering can also happen when playback is paused. It just means
+that there’s not enough media data to begin playback.</em></p>
+<p>This event doesn’t have a payload.</p>
+<p>Example of usage:</p>
+<pre><code class="language-js">player.<span class="hljs-title function_">addEventListener</span>(<span class="hljs-string">"rebufferingEnded"</span>, <span class="hljs-function">() =&gt;</span> {
+  <span class="hljs-variable language_">console</span>.<span class="hljs-title function_">log</span>(<span class="hljs-string">"Playback can now restart as we're exited a rebuffering period."</span>);
+});
+</code></pre>
+<p>You can also know whether playback is currently rebuffering at any time by
+calling the [<code>isRebuffering</code>](XXX TODO) method.</p>
+<p><a name="event:_%60variantupdate%60"></a></p>
+<h2>Event: <code>variantUpdate</code></h2>
+<p>The <code>"variantUpdate</code> event is sent when the currently-loaded variant, which
+basically represents the video and audio qualities, has changed.</p>
+<p>Note that the <code>variantUpdate</code> is only about the variant being loaded, which may
+be different than the one being currently played (you’re generally playing
+already-loaded content).</p>
+<p>The payload of that event contains the information available on that variant if
+known, or <code>undefined</code> if the characteristics of the variant is unknown.
+When set to an object, it should contain the following keys:</p>
+<ul>
+<li>
+<p><code>id</code> (<code>number</code>): The identifier for that variant. Might be useful for
+example when wanting to lock that variant in place through the
+[<code>lockVariant</code>](XXX TODO) method.</p>
+</li>
+<li>
+<p><code>width</code> (<code>number | undefined</code>): The optimal width at which the video media
+data linked to that variant is displayed, in pixel.</p>
+<p><code>undefined</code> if unknown or if there’s no video data.</p>
+</li>
+<li>
+<p><code>height</code> (<code>number | undefined</code>): The optimal height at which the video media
+data linked to that variant is displayed, in pixel.</p>
+<p><code>undefined</code> if unknown or if there’s no video data.</p>
+</li>
+<li>
+<p><code>frameRate</code> (<code>number | undefined</code>): The maximum frame for the video media data
+linked to that variant.</p>
+<p><code>undefined</code> if unknown or if there’s no video data.</p>
+</li>
+<li>
+<p><code>bandwidth</code> (<code>number | undefined</code>): The peak segment bit rate of any media
+combination in that variant, in bits per second.</p>
+<p><code>undefined</code> if unknown,</p>
+</li>
+</ul>
+<p>You can also know at any time the same characteristics of the current variant
+by calling the [<code>getCurrentVariant</code>](XXX TODO) method.</p>
+<p><a name="event:_%60variantlockupdate%60"></a></p>
+<h2>Event: <code>variantLockUpdate</code></h2>
+<p>The <code>"variantLockUpdate</code> event is sent when the current variant has been
+“locked” or unlocked.</p>
+<p>A variant lock is the result of calling the [<code>lockVariant</code>](XXX TODO) method,
+which allows to force a given variant (e.g. manually forcing 1080p video
+content).
+When a single variant is forced, we say that it is “locked”, when the
+<code>WaspHlsPlayer</code> actually chooses its variant amongst the pool of
+currenly-available ones, we say that it is “unlocked”.</p>
+<p>This variant may be locked due to various events. For example due to a
+[<code>unlockVariant</code>](XXX TODO) call or due to a change of track (e.g. through the
+[<code>setAudioTrack</code>](XXX TODO) method) incompatible with the locked variant.</p>
+<p>When the variant is actually “unlocked”, the payload of that event will be
+<code>null</code>.</p>
+<p>When the variant is now “locked”, it is set to an object representing that
+variant’s characteristics. That object will have the following keys (same than
+for the <code>variantUpdate</code> event):</p>
+<ul>
+<li>
+<p><code>id</code> (<code>number</code>): The identifier for that variant. Might be useful for
+example when wanting to lock that variant in place through the
+[<code>lockVariant</code>](XXX TODO) method.</p>
+</li>
+<li>
+<p><code>width</code> (<code>number | undefined</code>): The optimal width at which the video media
+data linked to that variant is displayed, in pixel.</p>
+<p><code>undefined</code> if unknown or if there’s no video data.</p>
+</li>
+<li>
+<p><code>height</code> (<code>number | undefined</code>): The optimal height at which the video media
+data linked to that variant is displayed, in pixel.</p>
+<p><code>undefined</code> if unknown or if there’s no video data.</p>
+</li>
+<li>
+<p><code>frameRate</code> (<code>number | undefined</code>): The maximum frame for the video media data
+linked to that variant.</p>
+<p><code>undefined</code> if unknown or if there’s no video data.</p>
+</li>
+<li>
+<p><code>bandwidth</code> (<code>number | undefined</code>): The peak segment bit rate of any media
+combination in that variant, in bits per second.</p>
+<p><code>undefined</code> if unknown,</p>
+</li>
+</ul>
+<p>If that change of lock status led to a change of currently-loaded variant,
+you’ll also receive a <code>variantUpdate</code> event.</p>
+<p>You can know at any time whether a variant is currently locked and which one
+from the [<code>getLockedVariant</code>](XXX TODO) method.</p>
+<p><a name="event:_%60variantlistupdate%60"></a></p>
+<h2>Event: <code>variantListUpdate</code></h2>
+<p>The <code>"variantListUpdate</code> event is sent when the list of available variants,
+which basically represent the video and audio qualities, has changed.</p>
+<p>The payload of that event contains an array object, each object containing the
+information available for a particular variant.</p>
+<p>Each object should contain the following keys (same than for the
+<code>variantUpdate</code> event):</p>
+<ul>
+<li>
+<p><code>id</code> (<code>number</code>): The identifier for that variant. Might be useful for
+example when wanting to lock that variant in place through the
+[<code>lockVariant</code>](XXX TODO) method.</p>
+</li>
+<li>
+<p><code>width</code> (<code>number | undefined</code>): The optimal width at which the video media
+data linked to that variant is displayed, in pixel.</p>
+<p><code>undefined</code> if unknown or if there’s no video data.</p>
+</li>
+<li>
+<p><code>height</code> (<code>number | undefined</code>): The optimal height at which the video media
+data linked to that variant is displayed, in pixel.</p>
+<p><code>undefined</code> if unknown or if there’s no video data.</p>
+</li>
+<li>
+<p><code>frameRate</code> (<code>number | undefined</code>): The maximum frame for the video media data
+linked to that variant.</p>
+<p><code>undefined</code> if unknown or if there’s no video data.</p>
+</li>
+<li>
+<p><code>bandwidth</code> (<code>number | undefined</code>): The peak segment bit rate of any media
+combination in that variant, in bits per second.</p>
+<p><code>undefined</code> if unknown,</p>
+</li>
+</ul>
+<p>You can also know at any time the list of available variants by calling the
+[<code>getVariantList</code>](XXX TODO) method.</p>
+<p><a name="event:_%60audiotrackupdate%60"></a></p>
+<h2>Event: <code>audioTrackUpdate</code></h2>
+<p>The <code>"audioTrackUpdate</code> event is sent when the currently-loaded audio track has
+changed.</p>
+<p>Note that what we call “audio track” here may actually be a set of multiple
+audio qualities (generally dispatched in various variants) all with the same
+characteristics (same language, same name, same accessibility, same number of
+channels etc.).</p>
+<p>The payload of that event contains the information available on that audio track
+if known, or <code>undefined</code> either if the characteristics of the audio track is
+unknown or if no audio track is active.
+When set to an object, it should contain the following keys:</p>
+<ul>
+<li>
+<p><code>id</code> (<code>number</code>): The identifier for that audio track. It is generally useful
+to for example set the audio track though a [<code>setAudioTrack</code>](XXX TODO) call.</p>
+</li>
+<li>
+<p><code>language</code> (<code>string | undefined</code>): The primary language used in this audio
+track, as a <a href="https://datatracker.ietf.org/doc/html/rfc5646">language tag</a>.</p>
+<p><code>undefined</code> if unknown or if there’s no language involved.</p>
+</li>
+<li>
+<p><code>assocLanguage</code> (<code>string | undefined</code>): A secondary language associated to the
+audio track, as a <a href="https://datatracker.ietf.org/doc/html/rfc5646">language tag</a>.
+Such language is often used in a different role than the language specified
+through the <code>language</code> property (e.g., written versus spoken, or a fallback
+dialect).</p>
+<p><code>undefined</code> if unknown or if there’s no language involved.</p>
+</li>
+<li>
+<p><code>name</code> (<code>string</code>): Human-readable description of the audio track.
+If the <code>language</code> property is set, it should generally be in that language.</p>
+</li>
+<li>
+<p><code>channels</code> (<code>number | undefined</code>): If set, it is the count of audio channels,
+indicating the maximum number of independent and simultaneous audio channels
+present in any media data in that audio track.</p>
+<p>For example, an AC-3 5.1 Rendition would have a CHANNELS=“6” attribute.</p>
+</li>
+</ul>
+<p>You can also know at any time the same characteristics of the current audio
+track by calling the [<code>getCurrentAudioTrack</code>](XXX TODO) method.</p>
+<p><a name="event:_%60audiotracklistupdate%60"></a></p>
+<h2>Event: <code>audioTrackListUpdate</code></h2>
+<p>The <code>"audioTrackListUpdate</code> event is sent when the list of available audio
+tracks has changed.</p>
+<p>The payload of that event contains an array object, each object containing the
+information available for a particular audio track.</p>
+<p>Each object should contain the following keys (same than for the
+<code>audioTrackUpdate</code> event):</p>
+<ul>
+<li>
+<p><code>id</code> (<code>number</code>): The identifier for that audio track. It is generally useful
+to for example set the audio track though a [<code>setAudioTrack</code>](XXX TODO) call.</p>
+</li>
+<li>
+<p><code>language</code> (<code>string | undefined</code>): The primary language used in this audio
+track, as a <a href="https://datatracker.ietf.org/doc/html/rfc5646">language tag</a>.</p>
+<p><code>undefined</code> if unknown or if there’s no language involved.</p>
+</li>
+<li>
+<p><code>assocLanguage</code> (<code>string | undefined</code>): A secondary language associated to the
+audio track, as a <a href="https://datatracker.ietf.org/doc/html/rfc5646">language tag</a>.
+Such language is often used in a different role than the language specified
+through the <code>language</code> property (e.g., written versus spoken, or a fallback
+dialect).</p>
+<p><code>undefined</code> if unknown or if there’s no language involved.</p>
+</li>
+<li>
+<p><code>name</code> (<code>string</code>): Human-readable description of the audio track.
+If the <code>language</code> property is set, it should generally be in that language.</p>
+</li>
+<li>
+<p><code>channels</code> (<code>number | undefined</code>): If set, it is the count of audio channels,
+indicating the maximum number of independent and simultaneous audio channels
+present in any media data in that audio track.</p>
+<p>For example, an AC-3 5.1 Rendition would have a CHANNELS=“6” attribute.</p>
+</li>
+</ul>
+<p>You can also know at any time the list of available audio tracks by calling the
+[<code>getAudioTrackList</code>](xxx todo) method.</p>
+</body></html><nav class="next-previous-page-wrapper" aria-label="Navigate between pages"><div class="next-or-previous-page"><a class="next-or-previous-page-link" href="./Loading_a_content.html"><div class="next-or-previous-page-link-label">Previous</div><div class="next-or-previous-page-link-name">Loading a content</div></a></div><div class="next-or-previous-page next-page"><a class="next-or-previous-page-link" href="./Configuration_Object.html"><div class="next-or-previous-page-link-label">Next</div><div class="next-or-previous-page-link-name">Configuration Object</div></a></div></nav></div><div class="tocbar-wrapper"><div class="tocbar"><p><a href="#player_events">Player Events</a></p>
+<ul>
+<li><a href="#overview">Overview</a></li>
+<li><a href="#listening_to_an_event">Listening to an event</a></li>
+<li><a href="#event:_%60playerstatechange%60">Event: <code>playerStateChange</code></a></li>
+<li><a href="#event:_%60paused%60">Event: <code>paused</code></a></li>
+<li><a href="#event:_%60playing%60">Event: <code>playing</code></a></li>
+<li><a href="#event:_%60ended%60">Event: <code>ended</code></a></li>
+<li><a href="#event:_%60error%60">Event: <code>error</code></a></li>
+<li><a href="#event:_%60warning%60">Event: <code>warning</code></a></li>
+<li><a href="#event:_%60rebufferingstarted%60">Event: <code>rebufferingStarted</code></a></li>
+<li><a href="#event:_%60rebufferingended%60">Event: <code>rebufferingEnded</code></a></li>
+<li><a href="#event:_%60variantupdate%60">Event: <code>variantUpdate</code></a></li>
+<li><a href="#event:_%60variantlockupdate%60">Event: <code>variantLockUpdate</code></a></li>
+<li><a href="#event:_%60variantlistupdate%60">Event: <code>variantListUpdate</code></a></li>
+<li><a href="#event:_%60audiotrackupdate%60">Event: <code>audioTrackUpdate</code></a></li>
+<li><a href="#event:_%60audiotracklistupdate%60">Event: <code>audioTrackListUpdate</code></a></li>
+</ul>
+</div></div></div></div><div class="hamburger-bar"><div class="hamburger-header"><span class="hamburger-title">Page List</span><button aria-label="Close website index" type="button" class="hamburger-bar-closer"><svg viewBox="0 0 15 15" width="21" height="21"><g stroke="black" stroke-width="1.2"><path d="M.75.75l13.5 13.5M14.25.75L.75 14.25"></path></g></svg></button></div><ul class="page-list-wrapper"><li class="page-list-item"><div class="page-list-group">Getting Started</div><ul class="page-list-cat-group"><li class="page-list-item"><a href="../Getting_Started/Welcome.html">Welcome</a></li>
+<li class="page-list-item"><a href="../Getting_Started/Creating_a_WaspHlsPlayer.html">Creating a WaspHlsPlayer</a></li></ul></li>
+<li class="page-list-item"><div class="page-list-group opened active">API</div><ul class="page-list-cat-group"><li class="page-list-item"><a href="./Overview.html">API Overview</a></li>
+<li class="page-list-item"><a href="./Instantiation.html">WaspHlsPlayer Instantiation</a></li>
+<li class="page-list-item"><a href="./Initialization.html">Initialization</a></li>
+<li class="page-list-item"><a href="./Loading_a_content.html">Loading a content</a></li>
+<li class="page-list-item active"><a href="./Player_Events.html">Player Events</a></li>
+<li class="page-list-item"><a href="./Configuration_Object.html">Configuration Object</a></li>
+<li class="page-list-item"><a href="./Player_Errors.html">Player Errors</a></li>
+<li><div class="page-list-item page-list-group">Basic Methods</div><ul class="page-list-group-group"><li class="page-list-item"><a href="./Basic_Methods/initialize.html">initialize</a></li>
+<li class="page-list-item"><a href="./Basic_Methods/load.html">load</a></li>
+<li class="page-list-item"><a href="./Basic_Methods/updateConfig.html">updateConfig</a></li>
+<li class="page-list-item"><a href="./Basic_Methods/getConfig.html">getConfig</a></li>
+<li class="page-list-item"><a href="./Basic_Methods/getPlayerState.html">getPlayerState</a></li>
+<li class="page-list-item"><a href="./Basic_Methods/pause.html">Pause</a></li>
+<li class="page-list-item"><a href="./Basic_Methods/resume.html">Resume</a></li>
+<li class="page-list-item"><a href="./Basic_Methods/getError.html">getError</a></li>
+<li class="page-list-item"><a href="./Basic_Methods/stop.html">stop</a></li>
+<li class="page-list-item"><a href="./Basic_Methods/addEventListener.html">addEventListener</a></li>
+<li class="page-list-item"><a href="./Basic_Methods/removeEventListener.html">removeEventListener</a></li>
+<li class="page-list-item"><a href="./Basic_Methods/dispose.html">dispose</a></li></ul></li>
+<li><div class="page-list-item page-list-group">Playback Information</div><ul class="page-list-group-group"><li class="page-list-item"><a href="./Playback_Information/isPlaying.html">isPlaying</a></li>
+<li class="page-list-item"><a href="./Playback_Information/isPaused.html">isPaused</a></li>
+<li class="page-list-item"><a href="./Playback_Information/isRebuffering.html">isRebuffering</a></li>
+<li class="page-list-item"><a href="./Playback_Information/isEnded.html">isEnded</a></li></ul></li>
+<li><div class="page-list-item page-list-group">Position Control</div><ul class="page-list-group-group"><li class="page-list-item"><a href="./Position_Control/getPosition.html">getPosition</a></li>
+<li class="page-list-item"><a href="./Position_Control/seek.html">seek</a></li>
+<li class="page-list-item"><a href="./Position_Control/getMinimumPosition.html">getMinimumPosition</a></li>
+<li class="page-list-item"><a href="./Position_Control/getMaximumPosition.html">getMaximumPosition</a></li>
+<li class="page-list-item"><a href="./Position_Control/getMediaOffset.html">getMediaOffset</a></li></ul></li>
+<li><div class="page-list-item page-list-group">Speed Control</div><ul class="page-list-group-group"><li class="page-list-item"><a href="./Speed_Control/setSpeed.html">setSpeed</a></li>
+<li class="page-list-item"><a href="./Speed_Control/getSpeed.html">getSpeed</a></li></ul></li>
+<li><div class="page-list-item page-list-group">Variant Selection</div><ul class="page-list-group-group"><li class="page-list-item"><a href="./Variant_Selection/getCurrentVariant.html">getCurrentVariant</a></li>
+<li class="page-list-item"><a href="./Variant_Selection/getVariantList.html">getVariantList</a></li>
+<li class="page-list-item"><a href="./Variant_Selection/lockVariant.html">lockVariant</a></li>
+<li class="page-list-item"><a href="./Variant_Selection/unlockVariant.html">unlockVariant</a></li>
+<li class="page-list-item"><a href="./Variant_Selection/getLockedVariant.html">getLockedVariant</a></li></ul></li>
+<li><div class="page-list-item page-list-group">Audio Track Selection</div><ul class="page-list-group-group"><li class="page-list-item"><a href="./Audio_Track_Selection/getCurrentAudioTrack.html">getCurrentAudioTrack</a></li>
+<li class="page-list-item"><a href="./Audio_Track_Selection/getAudioTrackList.html">getAudioTrackList</a></li>
+<li class="page-list-item"><a href="./Audio_Track_Selection/setAudioTrack.html">setAudioTrack</a></li></ul></li></ul></li>
+<li class="page-list-item"><a href="https://peaberberian.github.io/wasp-hls/index.html">Demo</a></li>
+
+<li class="page-list-item"><a aria-label="Link to repository" href="https://github.com/peaBerberian/wasp-hls"><svg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'><path d='M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12'/></svg></a></li></ul></div><script type="text/javascript" src="../scripts/lunr.js" charset="utf-8"></script><script type="text/javascript" src="../scripts/script.js" charset="utf-8"></script></body></html>

@@ -1,0 +1,222 @@
+<!DOCTYPE html><html lang="en"><head><meta name="viewport" content="width=device-width, initial-scale=1"><meta charset="utf-8"><link rel="stylesheet" href="../styles/style.css"/><link rel="stylesheet" href="../styles/code.css"/><title>Configuration Object</title></head><body class="no-js"><script type="text/javascript">document.body.className = "";window.rootUrl = "..";</script><div class="page-wrapper"><nav class="navbar-parent"><div class="navbar-wrapper"><div class="navbar-items"><button aria-label="Open website index" class="hamburger-opener"><svg width="30" height="30" viewBox="0 0 30 30" aria-hidden="true"><path stroke="currentColor" stroke-linecap="round" stroke-miterlimit="10" stroke-width="2" d="M4 7h22M4 15h22M4 23h22"></path></svg></button><a class="logo-link" href="https://github.com/peaBerberian/wasp-hls"><img alt="Logo" class="navbar-item navbar-item-logo" src="../images/logo_big.png" /></a><a class="navbar-item hideable"href="../Getting_Started/Welcome.html">Getting Started</a>
+<a class="navbar-item navbar-active hideable"href="./Overview.html">API</a>
+<a class="navbar-item hideable"href="https://peaberberian.github.io/wasp-hls/index.html">Demo</a>
+<span class="navbar-item search-icon last-left"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20"><title>search</title><path d="M19 17l-5.15-5.15a7 7 0 1 0-2 2L17 19zM3.5 8A4.5 4.5 0 1 1 8 12.5 4.5 4.5 0 0 1 3.5 8z"/><script xmlns=""/></svg></span>
+<a aria-label="Link to repository" class="navbar-item first-right github-link hideable" href="https://github.com/peaBerberian/wasp-hls"><svg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'><path d='M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12'/></svg></a></div></div> </nav><aside class="sidebar-parent"><div class="sidebar-header"><a href="https://github.com/peaBerberian/wasp-hls"><img alt="logo" class="sidebar-header-logo" src="../images/logo_big.png" /></a></div><div class="sidebar-wrapper"><div class="sidebar-items"><li class="sidebar-item"><a class="sidebar-link" href="./Overview.html">API Overview</a></li><li class="sidebar-item"><a class="sidebar-link" href="./Instantiation.html">WaspHlsPlayer Instantiation</a></li><li class="sidebar-item"><a class="sidebar-link" href="./Initialization.html">Initialization</a></li><li class="sidebar-item"><a class="sidebar-link" href="./Loading_a_content.html">Loading a content</a></li><li class="sidebar-item"><a class="sidebar-link" href="./Player_Events.html">Player Events</a></li><li class="sidebar-item"><a class="sidebar-link active" href="./Configuration_Object.html">Configuration Object</a></li><li class="sidebar-item"><a class="sidebar-link" href="./Player_Errors.html">Player Errors</a></li><li class="sidebar-item"><div class="sidebar-item sidebar-item-group">Basic Methods</div><ul><li class="sidebar-item"><a class="sidebar-link" href="./Basic_Methods/initialize.html">initialize</a></li><li class="sidebar-item"><a class="sidebar-link" href="./Basic_Methods/load.html">load</a></li><li class="sidebar-item"><a class="sidebar-link" href="./Basic_Methods/updateConfig.html">updateConfig</a></li><li class="sidebar-item"><a class="sidebar-link" href="./Basic_Methods/getConfig.html">getConfig</a></li><li class="sidebar-item"><a class="sidebar-link" href="./Basic_Methods/getPlayerState.html">getPlayerState</a></li><li class="sidebar-item"><a class="sidebar-link" href="./Basic_Methods/pause.html">Pause</a></li><li class="sidebar-item"><a class="sidebar-link" href="./Basic_Methods/resume.html">Resume</a></li><li class="sidebar-item"><a class="sidebar-link" href="./Basic_Methods/getError.html">getError</a></li><li class="sidebar-item"><a class="sidebar-link" href="./Basic_Methods/stop.html">stop</a></li><li class="sidebar-item"><a class="sidebar-link" href="./Basic_Methods/addEventListener.html">addEventListener</a></li><li class="sidebar-item"><a class="sidebar-link" href="./Basic_Methods/removeEventListener.html">removeEventListener</a></li><li class="sidebar-item"><a class="sidebar-link" href="./Basic_Methods/dispose.html">dispose</a></li></ul></li><li class="sidebar-item"><div class="sidebar-item sidebar-item-group">Playback Information</div><ul><li class="sidebar-item"><a class="sidebar-link" href="./Playback_Information/isPlaying.html">isPlaying</a></li><li class="sidebar-item"><a class="sidebar-link" href="./Playback_Information/isPaused.html">isPaused</a></li><li class="sidebar-item"><a class="sidebar-link" href="./Playback_Information/isRebuffering.html">isRebuffering</a></li><li class="sidebar-item"><a class="sidebar-link" href="./Playback_Information/isEnded.html">isEnded</a></li></ul></li><li class="sidebar-item"><div class="sidebar-item sidebar-item-group">Position Control</div><ul><li class="sidebar-item"><a class="sidebar-link" href="./Position_Control/getPosition.html">getPosition</a></li><li class="sidebar-item"><a class="sidebar-link" href="./Position_Control/seek.html">seek</a></li><li class="sidebar-item"><a class="sidebar-link" href="./Position_Control/getMinimumPosition.html">getMinimumPosition</a></li><li class="sidebar-item"><a class="sidebar-link" href="./Position_Control/getMaximumPosition.html">getMaximumPosition</a></li><li class="sidebar-item"><a class="sidebar-link" href="./Position_Control/getMediaOffset.html">getMediaOffset</a></li></ul></li><li class="sidebar-item"><div class="sidebar-item sidebar-item-group">Speed Control</div><ul><li class="sidebar-item"><a class="sidebar-link" href="./Speed_Control/setSpeed.html">setSpeed</a></li><li class="sidebar-item"><a class="sidebar-link" href="./Speed_Control/getSpeed.html">getSpeed</a></li></ul></li><li class="sidebar-item"><div class="sidebar-item sidebar-item-group">Variant Selection</div><ul><li class="sidebar-item"><a class="sidebar-link" href="./Variant_Selection/getCurrentVariant.html">getCurrentVariant</a></li><li class="sidebar-item"><a class="sidebar-link" href="./Variant_Selection/getVariantList.html">getVariantList</a></li><li class="sidebar-item"><a class="sidebar-link" href="./Variant_Selection/lockVariant.html">lockVariant</a></li><li class="sidebar-item"><a class="sidebar-link" href="./Variant_Selection/unlockVariant.html">unlockVariant</a></li><li class="sidebar-item"><a class="sidebar-link" href="./Variant_Selection/getLockedVariant.html">getLockedVariant</a></li></ul></li><li class="sidebar-item"><div class="sidebar-item sidebar-item-group">Audio Track Selection</div><ul><li class="sidebar-item"><a class="sidebar-link" href="./Audio_Track_Selection/getCurrentAudioTrack.html">getCurrentAudioTrack</a></li><li class="sidebar-item"><a class="sidebar-link" href="./Audio_Track_Selection/getAudioTrackList.html">getAudioTrackList</a></li><li class="sidebar-item"><a class="sidebar-link" href="./Audio_Track_Selection/setAudioTrack.html">setAudioTrack</a></li></ul></li></div></div></aside><div class="content-wrapper"><div class="content"><div id="search-wrapper"><input type="search" name="search" id="searchbar" placeholder="Search in this documentation" class="active" /><div id="search-results"></div></div><html><head></head><body><p><a name="player_configuration"></a></p>
+<h1>Player Configuration</h1>
+<p><a name="overview"></a></p>
+<h2>Overview</h2>
+<p>On <a href="./Instantiation.html"><code>WaspHlsPlayer</code> instantiation</a>, a configuration object
+is created and associated to this instance.</p>
+<p>It allows to configure many aspects of the player, from how much buffer you
+would prefer to build to how many request retry should be performed if some
+fails, and any of it can be updated at any time, even when a content impacted
+by it is playing.</p>
+<p>An initial config can optionally be given on instantiation (as indicated in the
+corresponding API documentation page). If not set, a sane default configuration
+will be generated instead by the <code>WaspHlsPlayer</code>.</p>
+<p>Any property of that configuration may also be updated at any time through the
+[<code>updateConfig</code>](XXX TODO) call.</p>
+<p>For example, to update the <code>bufferGoal</code> property to <code>20</code> seconds, you can write:</p>
+<pre><code class="language-js">player.<span class="hljs-title function_">updateConfig</span>({
+  <span class="hljs-attr">bufferGoal</span>: <span class="hljs-number">20</span>,
+});
+</code></pre>
+<p>Note that because most of that configuration’s values are actually relied on by
+code running in a worker, there’s a necessary delay before it actually becomes
+considered (it doesn’t happen synchronously).</p>
+<p>The last version of that configuration can also be recuperated through the
+[<code>getConfig</code>](XXX TODO) method.</p>
+<p>The rest of this page is going to focus on each properties declared on this
+configuration object.</p>
+<p><a name="%60buffergoal%60"></a></p>
+<h2><code>bufferGoal</code></h2>
+<p><em>type: <code>number</code></em></p>
+<p>Amount of buffer, in seconds, to “build” ahead of the currently wated position.</p>
+<p>Once that amount is reached, we’ll stop loading new data until we go under
+again.</p>
+<p>A lower value will mean less memory and network resources are generally taken,
+but more risk of rebuffering. A higher value will mean the opposite.</p>
+<p>A value in the <code>15</code>-<code>50</code> range is generally safe.</p>
+<p><a name="%60segmentmaxretry%60"></a></p>
+<h2><code>segmentMaxRetry</code></h2>
+<p><em>type: <code>number</code></em></p>
+<p>Amount of times a failed segment request might be retried on errors that seem
+temporary (such as an HTTP 404 for example):</p>
+<ul>
+<li><code>1</code> meaning it will be retried once</li>
+<li><code>2</code> twice</li>
+<li><code>0</code> never retried etc.</li>
+</ul>
+<p>To set to <code>-1</code> for infinite retry.</p>
+<p>Do not be scared to put a high value if you would prefer to retry over stopping
+on error. There’s an “exponential backoff” mechanism whose main objective is to
+avoid overloading servers and network resources. So retry never will happen in a
+quick loop.</p>
+<p><a name="%60segmentrequesttimeout%60"></a></p>
+<h2><code>segmentRequestTimeout</code></h2>
+<p><em>type: <code>number</code></em></p>
+<p>Number of milliseconds after which a segment request with no response will
+be automatically cancelled due to a “timeout”.</p>
+<p>Depending on the configuration, the segment request might then be retried.</p>
+<p>To set to <code>-1</code> for disabling segment request timeouts.</p>
+<p><a name="%60segmentbackoffbase%60"></a></p>
+<h2><code>segmentBackoffBase</code></h2>
+<p><em>type: <code>number</code></em></p>
+<p>If a segment request has to be retried, we will wait an amount of time
+before restarting the request. That delay raises if the same segment
+request fails multiple consecutive times, starting from around this value
+in milliseconds to <code>segmentBackoffMax</code> milliseconds.</p>
+<p>The step at which it raises is not configurable here, but can be resumed
+as a power of 2 raise on the previous value each time.</p>
+<p><a name="%60segmentbackoffmax%60"></a></p>
+<h2><code>segmentBackoffMax</code></h2>
+<p><em>type: <code>number</code></em></p>
+<p>If a segment request has to be retried, we will wait an amount of time
+before restarting the request. That delay raises if the same segment
+request fails multiple consecutive times, starting from around
+<code>segmentBackoffBase</code> milliseconds to this value in milliseconds.</p>
+<p>The step at which it raises is not configurable here, but can be resumed
+as a power of 2 raise on the previous value each time.</p>
+<p><a name="%60multivariantplaylistmaxretry%60"></a></p>
+<h2><code>multiVariantPlaylistMaxRetry</code></h2>
+<p><em>type: <code>number</code></em></p>
+<p>Amount of times a failed Multivariant Playlist request might be retried on
+errors that seem temporary (such as an HTTP 404 for example):</p>
+<ul>
+<li><code>1</code> meaning it will be retried once</li>
+<li><code>2</code> twice</li>
+<li><code>0</code> never retried etc.</li>
+</ul>
+<p>To set to <code>-1</code> for infinite retry.</p>
+<p>Do not be scared to put a high value if you would prefer to retry over stopping
+on error. There’s an “exponential backoff” mechanism whose main objective is to
+avoid overloading servers and network resources. So retry never will happen in a
+quick loop.</p>
+<p><a name="%60multivariantplaylistrequesttimeout%60"></a></p>
+<h2><code>multiVariantPlaylistRequestTimeout</code></h2>
+<p><em>type: <code>number</code></em></p>
+<p>Number of milliseconds after which a Multivariant Playlist request with no
+response will be automatically cancelled due to a “timeout”.</p>
+<p>Depending on the configuration, the Multivariant Playlist request might then be
+retried.</p>
+<p>To set to <code>-1</code> for disabling Multivariant Playlist request timeouts.</p>
+<p><a name="%60multivariantplaylistbackoffbase%60"></a></p>
+<h2><code>multiVariantPlaylistBackoffBase</code></h2>
+<p><em>type: <code>number</code></em></p>
+<p>If a Multivariant Playlist request has to be retried, we will wait an
+amount of time before restarting the request. That delay raises if the same
+request fails multiple consecutive times, starting from around this value
+in milliseconds to <code>multiVariantPlaylistBackoffMax</code> milliseconds.</p>
+<p>The step at which it raises is not configurable here, but can be resumed
+as a power of 2 raise on the previous value each time.</p>
+<p><a name="%60multivariantplaylistbackoffmax%60"></a></p>
+<h2><code>multiVariantPlaylistBackoffMax</code></h2>
+<p><em>type: <code>number</code></em></p>
+<p>If a Multivariant Playlist request has to be retried, we will wait an
+amount of time before restarting the request. That delay raises if the
+same request fails multiple consecutive times, starting from around
+<code>multiVariantPlaylistBackoffBase</code> milliseconds to this value in milliseconds.</p>
+<p>The step at which it raises is not configurable here, but can be resumed
+as a power of 2 raise on the previous value each time.</p>
+<p><a name="%60mediaplaylistmaxretry%60"></a></p>
+<h2><code>mediaPlaylistMaxRetry</code></h2>
+<p><em>type: <code>number</code></em></p>
+<p>Amount of times a failed Media Playlist request might be retried on
+errors that seem temporary (such as an HTTP 404 for example):</p>
+<ul>
+<li><code>1</code> meaning it will be retried once</li>
+<li><code>2</code> twice</li>
+<li><code>0</code> never retried etc.</li>
+</ul>
+<p>To set to <code>-1</code> for infinite retry.</p>
+<p>Do not be scared to put a high value if you would prefer to retry over stopping
+on error. There’s an “exponential backoff” mechanism whose main objective is to
+avoid overloading servers and network resources. So retry never will happen in a
+quick loop.</p>
+<p><a name="%60mediaplaylistrequesttimeout%60"></a></p>
+<h2><code>mediaPlaylistRequestTimeout</code></h2>
+<p><em>type: <code>number</code></em></p>
+<p>Number of milliseconds after which a Media Playlist request with no
+response will be automatically cancelled due to a “timeout”.</p>
+<p>Depending on the configuration, the Media Playlist request might then be
+retried.</p>
+<p>To set to <code>-1</code> for disabling Media Playlist request timeouts.</p>
+<p><a name="%60mediaplaylistbackoffbase%60"></a></p>
+<h2><code>mediaPlaylistBackoffBase</code></h2>
+<p><em>type: <code>number</code></em></p>
+<p>If a Media Playlist request has to be retried, we will wait an
+amount of time before restarting the request. That delay raises if the same
+request fails multiple consecutive times, starting from around this value
+in milliseconds to <code>mediaPlaylistBackoffMax</code> milliseconds.</p>
+<p>The step at which it raises is not configurable here, but can be resumed
+as a power of 2 raise on the previous value each time.</p>
+<p><a name="%60mediaplaylistbackoffmax%60"></a></p>
+<h2><code>mediaPlaylistBackoffMax</code></h2>
+<p><em>type: <code>number</code></em></p>
+<p>If a Media Playlist request has to be retried, we will wait an
+amount of time before restarting the request. That delay raises if the
+same request fails multiple consecutive times, starting from around
+<code>mediaPlaylistBackoffBase</code> milliseconds to this value in milliseconds.</p>
+<p>The step at which it raises is not configurable here, but can be resumed
+as a power of 2 raise on the previous value each time.</p>
+</body></html><nav class="next-previous-page-wrapper" aria-label="Navigate between pages"><div class="next-or-previous-page"><a class="next-or-previous-page-link" href="./Player_Events.html"><div class="next-or-previous-page-link-label">Previous</div><div class="next-or-previous-page-link-name">Player Events</div></a></div><div class="next-or-previous-page next-page"><a class="next-or-previous-page-link" href="./Player_Errors.html"><div class="next-or-previous-page-link-label">Next</div><div class="next-or-previous-page-link-name">Player Errors</div></a></div></nav></div><div class="tocbar-wrapper"><div class="tocbar"><p><a href="#player_configuration">Player Configuration</a></p>
+<ul>
+<li><a href="#overview">Overview</a></li>
+<li><a href="#%60buffergoal%60"><code>bufferGoal</code></a></li>
+<li><a href="#%60segmentmaxretry%60"><code>segmentMaxRetry</code></a></li>
+<li><a href="#%60segmentrequesttimeout%60"><code>segmentRequestTimeout</code></a></li>
+<li><a href="#%60segmentbackoffbase%60"><code>segmentBackoffBase</code></a></li>
+<li><a href="#%60segmentbackoffmax%60"><code>segmentBackoffMax</code></a></li>
+<li><a href="#%60multivariantplaylistmaxretry%60"><code>multiVariantPlaylistMaxRetry</code></a></li>
+<li><a href="#%60multivariantplaylistrequesttimeout%60"><code>multiVariantPlaylistRequestTimeout</code></a></li>
+<li><a href="#%60multivariantplaylistbackoffbase%60"><code>multiVariantPlaylistBackoffBase</code></a></li>
+<li><a href="#%60multivariantplaylistbackoffmax%60"><code>multiVariantPlaylistBackoffMax</code></a></li>
+<li><a href="#%60mediaplaylistmaxretry%60"><code>mediaPlaylistMaxRetry</code></a></li>
+<li><a href="#%60mediaplaylistrequesttimeout%60"><code>mediaPlaylistRequestTimeout</code></a></li>
+<li><a href="#%60mediaplaylistbackoffbase%60"><code>mediaPlaylistBackoffBase</code></a></li>
+<li><a href="#%60mediaplaylistbackoffmax%60"><code>mediaPlaylistBackoffMax</code></a></li>
+</ul>
+</div></div></div></div><div class="hamburger-bar"><div class="hamburger-header"><span class="hamburger-title">Page List</span><button aria-label="Close website index" type="button" class="hamburger-bar-closer"><svg viewBox="0 0 15 15" width="21" height="21"><g stroke="black" stroke-width="1.2"><path d="M.75.75l13.5 13.5M14.25.75L.75 14.25"></path></g></svg></button></div><ul class="page-list-wrapper"><li class="page-list-item"><div class="page-list-group">Getting Started</div><ul class="page-list-cat-group"><li class="page-list-item"><a href="../Getting_Started/Welcome.html">Welcome</a></li>
+<li class="page-list-item"><a href="../Getting_Started/Creating_a_WaspHlsPlayer.html">Creating a WaspHlsPlayer</a></li></ul></li>
+<li class="page-list-item"><div class="page-list-group opened active">API</div><ul class="page-list-cat-group"><li class="page-list-item"><a href="./Overview.html">API Overview</a></li>
+<li class="page-list-item"><a href="./Instantiation.html">WaspHlsPlayer Instantiation</a></li>
+<li class="page-list-item"><a href="./Initialization.html">Initialization</a></li>
+<li class="page-list-item"><a href="./Loading_a_content.html">Loading a content</a></li>
+<li class="page-list-item"><a href="./Player_Events.html">Player Events</a></li>
+<li class="page-list-item active"><a href="./Configuration_Object.html">Configuration Object</a></li>
+<li class="page-list-item"><a href="./Player_Errors.html">Player Errors</a></li>
+<li><div class="page-list-item page-list-group">Basic Methods</div><ul class="page-list-group-group"><li class="page-list-item"><a href="./Basic_Methods/initialize.html">initialize</a></li>
+<li class="page-list-item"><a href="./Basic_Methods/load.html">load</a></li>
+<li class="page-list-item"><a href="./Basic_Methods/updateConfig.html">updateConfig</a></li>
+<li class="page-list-item"><a href="./Basic_Methods/getConfig.html">getConfig</a></li>
+<li class="page-list-item"><a href="./Basic_Methods/getPlayerState.html">getPlayerState</a></li>
+<li class="page-list-item"><a href="./Basic_Methods/pause.html">Pause</a></li>
+<li class="page-list-item"><a href="./Basic_Methods/resume.html">Resume</a></li>
+<li class="page-list-item"><a href="./Basic_Methods/getError.html">getError</a></li>
+<li class="page-list-item"><a href="./Basic_Methods/stop.html">stop</a></li>
+<li class="page-list-item"><a href="./Basic_Methods/addEventListener.html">addEventListener</a></li>
+<li class="page-list-item"><a href="./Basic_Methods/removeEventListener.html">removeEventListener</a></li>
+<li class="page-list-item"><a href="./Basic_Methods/dispose.html">dispose</a></li></ul></li>
+<li><div class="page-list-item page-list-group">Playback Information</div><ul class="page-list-group-group"><li class="page-list-item"><a href="./Playback_Information/isPlaying.html">isPlaying</a></li>
+<li class="page-list-item"><a href="./Playback_Information/isPaused.html">isPaused</a></li>
+<li class="page-list-item"><a href="./Playback_Information/isRebuffering.html">isRebuffering</a></li>
+<li class="page-list-item"><a href="./Playback_Information/isEnded.html">isEnded</a></li></ul></li>
+<li><div class="page-list-item page-list-group">Position Control</div><ul class="page-list-group-group"><li class="page-list-item"><a href="./Position_Control/getPosition.html">getPosition</a></li>
+<li class="page-list-item"><a href="./Position_Control/seek.html">seek</a></li>
+<li class="page-list-item"><a href="./Position_Control/getMinimumPosition.html">getMinimumPosition</a></li>
+<li class="page-list-item"><a href="./Position_Control/getMaximumPosition.html">getMaximumPosition</a></li>
+<li class="page-list-item"><a href="./Position_Control/getMediaOffset.html">getMediaOffset</a></li></ul></li>
+<li><div class="page-list-item page-list-group">Speed Control</div><ul class="page-list-group-group"><li class="page-list-item"><a href="./Speed_Control/setSpeed.html">setSpeed</a></li>
+<li class="page-list-item"><a href="./Speed_Control/getSpeed.html">getSpeed</a></li></ul></li>
+<li><div class="page-list-item page-list-group">Variant Selection</div><ul class="page-list-group-group"><li class="page-list-item"><a href="./Variant_Selection/getCurrentVariant.html">getCurrentVariant</a></li>
+<li class="page-list-item"><a href="./Variant_Selection/getVariantList.html">getVariantList</a></li>
+<li class="page-list-item"><a href="./Variant_Selection/lockVariant.html">lockVariant</a></li>
+<li class="page-list-item"><a href="./Variant_Selection/unlockVariant.html">unlockVariant</a></li>
+<li class="page-list-item"><a href="./Variant_Selection/getLockedVariant.html">getLockedVariant</a></li></ul></li>
+<li><div class="page-list-item page-list-group">Audio Track Selection</div><ul class="page-list-group-group"><li class="page-list-item"><a href="./Audio_Track_Selection/getCurrentAudioTrack.html">getCurrentAudioTrack</a></li>
+<li class="page-list-item"><a href="./Audio_Track_Selection/getAudioTrackList.html">getAudioTrackList</a></li>
+<li class="page-list-item"><a href="./Audio_Track_Selection/setAudioTrack.html">setAudioTrack</a></li></ul></li></ul></li>
+<li class="page-list-item"><a href="https://peaberberian.github.io/wasp-hls/index.html">Demo</a></li>
+
+<li class="page-list-item"><a aria-label="Link to repository" href="https://github.com/peaBerberian/wasp-hls"><svg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'><path d='M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12'/></svg></a></li></ul></div><script type="text/javascript" src="../scripts/lunr.js" charset="utf-8"></script><script type="text/javascript" src="../scripts/script.js" charset="utf-8"></script></body></html>
