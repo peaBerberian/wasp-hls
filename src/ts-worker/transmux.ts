@@ -1,3 +1,4 @@
+import muxjs from "mux.js";
 import logger from "../ts-common/logger.js";
 import Transmuxer from "../ts-transmux";
 import { MediaType } from "../wasm/wasp_hls.js";
@@ -50,5 +51,54 @@ export function getTransmuxedType(typ: string, mediaType: MediaType): string {
 }
 
 export function createTransmuxer(): Transmuxer {
-  return new Transmuxer();
+  return new Transmuxer({
+    keepOriginalTimestamps: true,
+  });
+}
+
+export interface Transmuxer2 {
+  transmuxSegment(input: Uint8Array): Uint8Array | null;
+}
+
+export function createTransmuxer2(): Transmuxer2 {
+  const transmuxer = new muxjs.mp4.Transmuxer({
+    keepOriginalTimestamps: true,
+  });
+  return {
+    transmuxSegment(inputSegment: Uint8Array): Uint8Array | null {
+      const subSegments: Uint8Array[] = [];
+
+      // NOTE: Despite the syntax, mux.js' transmuxing is completely synchronous.
+      transmuxer.on("data", onTransmuxedData);
+      transmuxer.push(inputSegment);
+      transmuxer.flush();
+      transmuxer.off("data", onTransmuxedData);
+      if (subSegments.length === 0) {
+        return null;
+      } else if (subSegments.length === 1) {
+        return subSegments[0];
+      } else {
+        const segmentSize = subSegments.reduce((acc, s) => {
+          return acc + s.byteLength;
+        }, 0);
+
+        const fullSegment = new Uint8Array(segmentSize);
+        let currOffset = 0;
+        for (const subSegment of subSegments) {
+          fullSegment.set(subSegment, currOffset);
+          currOffset += subSegment.byteLength;
+        }
+        return fullSegment;
+      }
+
+      function onTransmuxedData(segment: any) {
+        const transmuxedSegment = new Uint8Array(
+          segment.initSegment.byteLength + segment.data.byteLength
+        );
+        transmuxedSegment.set(segment.initSegment, 0);
+        transmuxedSegment.set(segment.data, segment.initSegment.byteLength);
+        subSegments.push(transmuxedSegment);
+      }
+    },
+  };
 }

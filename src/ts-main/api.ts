@@ -51,6 +51,51 @@ import {
   onVariantLockStatusChangeMessage,
 } from "./worker-message-handlers";
 
+/* eslint-disable */
+import { createTransmuxer, createTransmuxer2 } from "../ts-worker/transmux";
+
+function hashCode(u8: Uint8Array): number {
+  let hash = 0;
+  for (var i = 0; i < u8.length; i++) {
+    var char = u8[8];
+    hash = ((hash<<5)-hash)+char;
+    hash = hash & hash; // Convert to 32bit integer
+  }
+  return hash;
+}
+const SEGMENTS = [
+  "http://192.168.1.21:8080/seg/seg.ts",
+  "http://192.168.1.21:8080/ffmpeg/audio/100.aac",
+  "http://192.168.1.21:8080/ffmpeg/h264_360p/100.ts",
+  "http://192.168.1.21:8080/ffmpeg/h264_360p/101.ts",
+];
+(window as any).fetchou = function() {
+  const transmuxer2 = createTransmuxer2();
+  const transmuxer = createTransmuxer();
+  fetch(SEGMENTS[2])
+    .then((e) => e.arrayBuffer())
+    .then((e) => {
+      parseAndLog(e);
+    });
+  fetch(SEGMENTS[3])
+    .then((e) => e.arrayBuffer())
+    .then((e) => {
+      parseAndLog(e);
+    });
+
+  function parseAndLog(e: ArrayBuffer) {
+    const u8 = new Uint8Array(e);
+    const res1 = transmuxer.transmuxSegment(u8);
+    const res2 = transmuxer2.transmuxSegment(u8);
+
+    console.warn(res1?.byteLength, res2?.byteLength);
+    if (res1 !== null && res2 !== null) {
+      console.warn(hashCode(res1), hashCode(res2));
+    }
+    // TODO HASH + len
+  }
+}
+
 // Allows to ensure a never-seen-before identifier is used for each content.
 const generateContentId = idGenerator();
 
