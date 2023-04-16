@@ -12,7 +12,7 @@ export default React.memo(function SettingsButton({
   return (
     <button
       disabled={disabled}
-      className="video-controls-button settings-button"
+      className="video-controls-button controls-settings-button"
       onClick={onClick}
     >
       <svg

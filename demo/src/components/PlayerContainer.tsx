@@ -1,9 +1,10 @@
 import * as React from "react";
 import WaspHlsPlayer, { PlayerState } from "../../../src";
 import BufferSizeChart from "./BufferSizeChart";
-import ContentInput from "./ContentInput";
+import ContentBar from "./ContentBar";
 import BufferContentGraph from "./MediaBufferContentGraph";
 import RemovePlayerButton from "./RemovePlayerButton";
+import Settings from "./Settings";
 import VideoPlayer from "./VideoPlayer";
 
 export default React.memo(function PlayerContainer({
@@ -16,6 +17,7 @@ export default React.memo(function PlayerContainer({
   const [shouldShowBufferGaps, setShouldShowBufferGaps] = React.useState(false);
   const [shouldShowBufferContent, setShouldShowBufferContent] =
     React.useState(true);
+  const [isSettingsOpened, setIsSettingsOpened] = React.useState(false);
   const [bufferGaps, setBufferGaps] = React.useState<
     Array<{
       date: number;
@@ -134,6 +136,10 @@ export default React.memo(function PlayerContainer({
     []
   );
 
+  const onSettingsClick = React.useCallback(() => {
+    setIsSettingsOpened((prev) => !prev);
+  }, []);
+
   if (player === null) {
     return null;
   }
@@ -141,7 +147,12 @@ export default React.memo(function PlayerContainer({
     <div className="player-container">
       <div className="player-parent">
         <RemovePlayerButton onClick={onClose} />
-        <ContentInput player={player} />
+        <ContentBar
+          player={player}
+          isSettingsOpened={isSettingsOpened}
+          onSettingsClick={onSettingsClick}
+        />
+        {isSettingsOpened ? <Settings player={player} /> : null}
         <VideoPlayer player={player} />
         <div className="chart">
           <input

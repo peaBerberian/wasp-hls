@@ -513,7 +513,7 @@ npm run build:demo:release
 ### The Documentation
 
 The documentation, written in `doc/` may also be built to its final directory
-(`doc/generated`), through the following command:
+(`build/doc`), through the following command:
 
 ```sh
 npm run doc
@@ -522,8 +522,10 @@ npm run doc
 It may then be served, so it can be read on a web browser, through:
 
 ```sh
-npm run serve:doc
+npm run serve
 ```
+
+And then requesting the `/doc` path.
 
 ## Update the code
 
