@@ -428,7 +428,7 @@ body {
 }
 
 .content-list-arrow.active {
-  fill: #4a4200;
+  fill: #d0b624;
 }
 
 .content-list-arrow:hover {
@@ -453,8 +453,8 @@ body {
 }
 
 .content-choice.selected {
-  background-color: #4a4200;
-  color: #fff;
+  background-color: #d3f0ff;
+  color: #008bd3;
 }
 
 .content-choice:hover {
