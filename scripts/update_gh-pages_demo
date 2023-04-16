@@ -31,6 +31,7 @@ fi
 npm install
 npm run build:release
 npm run build:demo:release
+npm run doc
 
 if [ -n "$(git status --porcelain)" ]; then
   echo "ERROR: Please commit your modifications to main"
