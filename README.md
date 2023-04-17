@@ -123,21 +123,21 @@ low-latency for now)!
 Even without taking into account low-latency contents, I consider WebAssembly to
 be particularly adapted for an adaptive media player:
 
-  - Such software generally handle large objects (not only talking about media
-    segments here). The relatively few controls JavaScript offers in terms of
-    memory management can be problematic (I've seen GC-pressure related issues
-    on another player I work on for example).
+- Such software generally handle large objects (not only talking about media
+  segments here). The relatively few controls JavaScript offers in terms of
+  memory management can be problematic (I've seen GC-pressure related issues
+  on another player I work on for example).
 
-    With WebAssembly and a source language with enough control over memory
-    management, GC-linked issues disappear (because no GC :p!) and the
-    application's memory usage is much more explicit and controlled, which is
-    usually what we want.
+  With WebAssembly and a source language with enough control over memory
+  management, GC-linked issues disappear (because no GC :p!) and the
+  application's memory usage is much more explicit and controlled, which is
+  usually what we want.
 
-  - Even if there's a lot of input/output and thus the need to interact with
-    JavaScript, the performance profile is completely different than your usual
-    JS front-end application: very few DOM access here, a lot of time is spent
-    on parsing/transmuxing and other logic that can be completely implemented in
-    WebAssembly.
+- Even if there's a lot of input/output and thus the need to interact with
+  JavaScript, the performance profile is completely different than your usual
+  JS front-end application: very few DOM access here, a lot of time is spent
+  on parsing/transmuxing and other logic that can be completely implemented in
+  WebAssembly.
 
 ### Generating an HLS content
 

@@ -22,7 +22,7 @@ player.load(MultivariantPlaylistUrl);
 You can then be notified of where the load operation is at (whether it is still
 loading the content, has loaded it or encountered an error) by either listening
 to [the `"playerStateChange"` event](./Player_Events.md) or at any point in time
-by calling [the `getPlayerState` method](XXX TODO):
+by calling [the `getPlayerState` method](./Basic_Methods/getPlayerState.md):
 
 ```js
 player.addEventlistener("playerStateChange", (playerState) => {
@@ -46,8 +46,8 @@ player.addEventlistener("playerStateChange", (playerState) => {
 ```
 
 Note that the `WaspHlsPlayer` doesn't automatically begin playback once the
-content is loaded. To do so, you have to call the [`resume`](XXX TODO) method
-once the `"Loaded"` player state is reached:
+content is loaded. To do so, you have to call the [`resume`](./Basic_Methods/resume.md)
+method once the `"Loaded"` player state is reached:
 
 ```js
 // Automatically play the content once it's loaded

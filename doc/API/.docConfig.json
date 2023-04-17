@@ -29,6 +29,10 @@
       "displayName": "Player Errors"
     },
     {
+      "path": "./Audio_Volume_Management.md",
+      "displayName": "Audio Volume Management"
+    },
+    {
       "path": "./Basic_Methods/",
       "displayName": "Basic Methods"
     },

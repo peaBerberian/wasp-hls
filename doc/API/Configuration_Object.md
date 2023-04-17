@@ -15,7 +15,7 @@ corresponding API documentation page). If not set, a sane default configuration
 will be generated instead by the `WaspHlsPlayer`.
 
 Any property of that configuration may also be updated at any time through the
-[`updateConfig`](XXX TODO) call.
+[`updateConfig`](./Basic_Methods/updateConfig.md) call.
 
 For example, to update the `bufferGoal` property to `20` seconds, you can write:
 
@@ -30,7 +30,7 @@ code running in a worker, there's a necessary delay before it actually becomes
 considered (it doesn't happen synchronously).
 
 The last version of that configuration can also be recuperated through the
-[`getConfig`](XXX TODO) method.
+[`getConfig`](./Basic_Methods/getConfig.md) method.
 
 The rest of this page is going to focus on each properties declared on this
 configuration object.

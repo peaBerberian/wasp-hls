@@ -91,3 +91,17 @@ It's also possible to communicate an initial bandwidth estimate through the
 initially loaded quality.
 For more information on this "initialization" step, you can consult [the API
 documentation page dedicated to it, here](../API/Initialization.md).
+
+## What if one of my targeted browser don't support WebAssembly?
+
+For now, the files exposed by the `WaspHlsPlayer` requires the compatibility
+with WebAssembly.
+
+Note however that tools exist to convert WebAssembly to JavaScript, the
+reference as of now being [binaryen](https://github.com/WebAssembly/binaryen)'s
+`wasm2js` tool.
+
+With it, you may convert the `WaspHlsPlayer`'s WebAssembly file to JavaScript
+and provide some bindings yourself (it shouldn't be too hard, though automating
+it to facilitate migration to new `WaspHlsPlayer` versions might take some more
+work), to also support environments not compatible with WebAssembly.

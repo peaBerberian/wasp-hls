@@ -19,7 +19,7 @@ _Note: For a more predictable behavior, it is best that you then use the
 `WaspHlsPlayer`'s API instead of any of the `HTMLVideoElement`'s own
 methods, attributes and events, excepted when the opposite is explicitely
 advised by this documentation (such as with [audio volume
-management](XXX TODO))._
+management](./Audio_Volume_Management.md))._
 
 Optionally, you can give a second argument on instantiation, the
 `WaspHlsPlayer`'s original [configuration object](./Configuration_Object.md):
@@ -44,7 +44,7 @@ which cases the `WaspHlsPlayerConfig` will use its inner default configuration
 instead.
 
 Note that this configuration object can be updated at any time through the
-[`updateConfig`](XXX TODO) method.
+[`updateConfig`](./Basic_Methods/updateConfig.md) method.
 
 ## Syntax
 

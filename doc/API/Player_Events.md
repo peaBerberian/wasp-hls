@@ -50,10 +50,12 @@ The various values that this state can be set to are:
 
 - `"Error"`: the last content loaded with `load` has been interrupted due to
   an error. An `"error"` event should also have been triggered. You can
-  also know which error happened by calling the [`getError`](XXX TODO) method.
+  also know which error happened by calling the [`getError`](./Basic_Methods/getError.md)
+  method.
 
 As such, for example to automatically play when the content is loaded, you can
-combine this event with a call to [`resume`](XXX TODO), by writing:
+combine this event with a call to [`resume`](./Basic_Methods/resume.md), by
+writing:
 
 ```js
 player.addEventListener("playerStateChange", (state) => {
@@ -65,13 +67,14 @@ player.addEventListener("playerStateChange", (state) => {
 ```
 
 You can also know the player's state at any time by calling the
-[`getPlayerState`](XXX TODO) method.
+[`getPlayerState`](./Basic_Methods/getPlayerState.md) method.
 
 ## Event: `paused`
 
 The `"paused"` event is sent when a loaded content (which is a content which
-currently is in the [`"Loaded"` state](XXX TODO) was just paused, generally
-due to a previous call to the [`pause` method](XXX TOOD).
+currently is in the [`"Loaded"` state](./Basic_Methods/getPlayerState.md) was
+just paused, generally due to a previous call to the [`pause`
+method](./Basic_Methods/pause.md).
 
 This event doesn't have a payload.
 
@@ -84,13 +87,14 @@ player.addEventListener("paused", () => {
 ```
 
 You can also know whether playback is currently paused at any time by calling
-the [`isPaused`](XXX TODO) method.
+the [`isPaused`](./Playback_Information/isPaused.md) method.
 
 ## Event: `playing`
 
 The `"playing"` event is sent when a loaded content (which is a content which
-currently is in the [`"Loaded"` state](XXX TODO) went out of a "paused" status,
-generally due to a previous call to the [`resume` method](XXX TOOD).
+currently is in the [`"Loaded"` state](./Basic_Methods/getPlayerState.md) went
+out of a "paused" status, generally due to a previous call to the [`resume`
+method](./Basic_Methods/resume.md).
 
 XXX TODO what about when ended then calling play? To check
 
@@ -105,7 +109,7 @@ player.addEventListener("playing", () => {
 ```
 
 You can also know whether playback is currently playing at any time by calling
-the [`isPlaying`](XXX TODO) method.
+the [`isPlaying`](./Playback_Information/isPlaying.md) method.
 
 ## Event: `ended`
 
@@ -127,7 +131,7 @@ player.addEventListener("ended", () => {
 ```
 
 You can also know whether the end is currently reached at any time by calling
-the [`isEnded`](XXX TODO) method.
+the [`isEnded`](./Playback_Information/isEnded.md) method.
 
 ## Event: `error`
 
@@ -136,7 +140,7 @@ content.
 
 The corresponding Error object is sent as a payload.
 For more information on the potential errors see the [Errors and warnings
-page](XXX TODO).
+page](./Player_Errors.md).
 
 Example of a callback registered to that event:
 
@@ -147,12 +151,13 @@ player.addEventListener("error", (error) => {
 ```
 
 Just before the `"error"` event is sent, the player's start (as returned by the
-[getPlayerState](XXX TODO) method and emitted by the `playerStateChange` event
-are set to `"Error"`.
+[getPlayerState](./Basic_Methods/getPlayerState.md) method and emitted by the
+`playerStateChange` event are set to `"Error"`.
 
-Also, the [`getError`](XXX TODO) method should now return the same error object
-than the one emitted as a payload of the `error` event, until another content is
-loaded or until [`stop`](XXX TODO) is called, whichever comes first.
+Also, the [`getError`](./Basic_Methods/getError.md) method should now return
+the same error object than the one emitted as a payload of the `error` event,
+until another content is loaded or until [`stop`](./Basic_Methods/stop.md) is
+called, whichever comes first.
 
 ## Event: `warning`
 
@@ -161,7 +166,7 @@ The `"warning"` event is sent when a minor error happened, though unlike the
 
 The corresponding Error object is sent as a payload.
 For more information on the potential errors see the [Errors and warnings
-page](XXX TODO).
+page](./Player_Errors.md).
 
 Example of a callback registered to that event:
 
@@ -174,8 +179,8 @@ player.addEventListener("warning", (error) => {
 ## Event: `rebufferingStarted`
 
 The `"rebufferingStarted"` event is sent when a loaded content (which is a
-content which currently is in the [`"Loaded"` state](XXX TODO) just began
-rebuffering.
+content which currently is in the [`"Loaded"` state](./Basic_Methods/getPlayerState.md)
+just began rebuffering.
 
 _Rebuffering is a period during which playback is paused to build back buffer,
 in that condition, playback will only restart (by itself) once enough buffer
@@ -183,7 +188,7 @@ is loaded._
 
 _Rebuffering can for example happen if the network bandwidth is currently too
 low to play sustainably the current content or due to some other event like
-a [`seek`](XXX TODO)._
+a [`seek`](./Position_Control/seek.md)._
 
 _Note that rebuffering can also happen when playback is paused. It just means
 that there's not enough media data to begin playback._
@@ -199,13 +204,13 @@ player.addEventListener("rebufferingStarted", () => {
 ```
 
 You can also know whether playback is currently rebuffering at any time by
-calling the [`isRebuffering`](XXX TODO) method.
+calling the [`isRebuffering`](./Playback_Information/isRebuffering.md) method.
 
 ## Event: `rebufferingEnded`
 
 The `"rebufferingEnded"` event is sent when a loaded content (which is a
-content which currently is in the [`"Loaded"` state](XXX TODO) just exited a
-rebuffering period.
+content which currently is in the [`"Loaded"` state](./Basic_Methods/getPlayerState.md)
+just exited a rebuffering period.
 
 You should have previously received a `"rebufferingStarted"` event when that
 rebuffering period had started.
@@ -216,7 +221,7 @@ is loaded._
 
 _Rebuffering can for example happen if the network bandwidth is currently too
 low to play sustainably the current content or due to some other event like
-a [`seek`](XXX TODO)._
+a [`seek`](./Position_Control/seek.md)._
 
 _Note that rebuffering can also happen when playback is paused. It just means
 that there's not enough media data to begin playback._
@@ -232,7 +237,7 @@ player.addEventListener("rebufferingEnded", () => {
 ```
 
 You can also know whether playback is currently rebuffering at any time by
-calling the [`isRebuffering`](XXX TODO) method.
+calling the [`isRebuffering`](./Playback_Information/isRebuffering.md) method.
 
 ## Event: `variantUpdate`
 
@@ -249,7 +254,7 @@ When set to an object, it should contain the following keys:
 
 - `id` (`number`): The identifier for that variant. Might be useful for
   example when wanting to lock that variant in place through the
-  [`lockVariant`](XXX TODO) method.
+  [`lockVariant`](./Variant_Selection/lockVariant.md) method.
 
 - `width` (`number | undefined`): The optimal width at which the video media
   data linked to that variant is displayed, in pixel.
@@ -272,23 +277,25 @@ When set to an object, it should contain the following keys:
   `undefined` if unknown,
 
 You can also know at any time the same characteristics of the current variant
-by calling the [`getCurrentVariant`](XXX TODO) method.
+by calling the [`getCurrentVariant`](./Variant_Selection/getCurrentVariant.md)
+method.
 
 ## Event: `variantLockUpdate`
 
 The `"variantLockUpdate` event is sent when the current variant has been
 "locked" or unlocked.
 
-A variant lock is the result of calling the [`lockVariant`](XXX TODO) method,
-which allows to force a given variant (e.g. manually forcing 1080p video
+A variant lock is the result of calling the [`lockVariant`](./Variant_Selection/lockVariant.md)
+method, which allows to force a given variant (e.g. manually forcing 1080p video
 content).
 When a single variant is forced, we say that it is "locked", when the
 `WaspHlsPlayer` actually chooses its variant amongst the pool of
 currenly-available ones, we say that it is "unlocked".
 
 This variant may be locked due to various events. For example due to a
-[`unlockVariant`](XXX TODO) call or due to a change of track (e.g. through the
-[`setAudioTrack`](XXX TODO) method) incompatible with the locked variant.
+[`unlockVariant`](./Variant_Selection/unlockVariant.md) call or due to a change
+of track (e.g. through the [`setAudioTrack`](./Audio_Track_Selection/setAudioTrack.md)
+method) incompatible with the locked variant.
 
 When the variant is actually "unlocked", the payload of that event will be
 `null`.
@@ -299,7 +306,7 @@ for the `variantUpdate` event):
 
 - `id` (`number`): The identifier for that variant. Might be useful for
   example when wanting to lock that variant in place through the
-  [`lockVariant`](XXX TODO) method.
+  [`lockVariant`](./Variant_Selection/lockVariant.md) method.
 
 - `width` (`number | undefined`): The optimal width at which the video media
   data linked to that variant is displayed, in pixel.
@@ -325,7 +332,7 @@ If that change of lock status led to a change of currently-loaded variant,
 you'll also receive a `variantUpdate` event.
 
 You can know at any time whether a variant is currently locked and which one
-from the [`getLockedVariant`](XXX TODO) method.
+from the [`getLockedVariant`](./Variant_Selection/getLockedVariant.md) method.
 
 ## Event: `variantListUpdate`
 
@@ -340,7 +347,7 @@ Each object should contain the following keys (same than for the
 
 - `id` (`number`): The identifier for that variant. Might be useful for
   example when wanting to lock that variant in place through the
-  [`lockVariant`](XXX TODO) method.
+  [`lockVariant`](./Variant_Selection/lockVariant.md) method.
 
 - `width` (`number | undefined`): The optimal width at which the video media
   data linked to that variant is displayed, in pixel.
@@ -363,7 +370,7 @@ Each object should contain the following keys (same than for the
   `undefined` if unknown,
 
 You can also know at any time the list of available variants by calling the
-[`getVariantList`](XXX TODO) method.
+[`getVariantList`](./Variant_Selection/getVariantList.md) method.
 
 ## Event: `audioTrackUpdate`
 
@@ -381,7 +388,8 @@ unknown or if no audio track is active.
 When set to an object, it should contain the following keys:
 
 - `id` (`number`): The identifier for that audio track. It is generally useful
-  to for example set the audio track though a [`setAudioTrack`](XXX TODO) call.
+  to for example set the audio track though a [`setAudioTrack`](./Audio_Track_Selection/setAudioTrack.md)
+  call.
 
 - `language` (`string | undefined`): The primary language used in this audio
   track, as a [language tag](https://datatracker.ietf.org/doc/html/rfc5646).
@@ -406,7 +414,8 @@ When set to an object, it should contain the following keys:
   For example, an AC-3 5.1 Rendition would have a CHANNELS="6" attribute.
 
 You can also know at any time the same characteristics of the current audio
-track by calling the [`getCurrentAudioTrack`](XXX TODO) method.
+track by calling the [`getCurrentAudioTrack`](./Audio_Track_Selection/getCurrentAudioTrack.md)
+method.
 
 ## Event: `audioTrackListUpdate`
 
@@ -420,7 +429,8 @@ Each object should contain the following keys (same than for the
 `audioTrackUpdate` event):
 
 - `id` (`number`): The identifier for that audio track. It is generally useful
-  to for example set the audio track though a [`setAudioTrack`](XXX TODO) call.
+  to for example set the audio track though a [`setAudioTrack`](./Audio_Track_Selection/setAudioTrack.md)
+  call.
 
 - `language` (`string | undefined`): The primary language used in this audio
   track, as a [language tag](https://datatracker.ietf.org/doc/html/rfc5646).
@@ -445,4 +455,4 @@ Each object should contain the following keys (same than for the
   For example, an AC-3 5.1 Rendition would have a CHANNELS="6" attribute.
 
 You can also know at any time the list of available audio tracks by calling the
-[`getAudioTrackList`](xxx todo) method.
+[`getAudioTrackList`](./Audio_Track_Selection/getAudioTrackList.md) method.

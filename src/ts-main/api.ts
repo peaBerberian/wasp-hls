@@ -492,7 +492,7 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
   }
 
   /**
-   * Returns `true when there's both a content loaded and playback is not
+   * Returns `true` when there's both a content loaded and playback is not
    * paused.
    * Note that `isPlaying` returns true even if playback is stalled due to
    * rebuffering (you can check `isRebuffering` for this).
