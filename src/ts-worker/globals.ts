@@ -152,16 +152,19 @@ export const playerInstance = new PlayerInstance();
 export const jsMemoryResources = new GenericStore<Uint8Array>();
 export const requestsStore = new GenericStore<RequestObject>();
 
+const I32_MAX_VALUE = 2147483647;
+
 export function updateDispatcherConfig(
   dispatcher: Dispatcher,
   config: Partial<WaspHlsPlayerConfig>
 ): void {
-  // XXX TODO check format of each
   if (config.bufferGoal !== undefined) {
     dispatcher.set_buffer_goal(config.bufferGoal);
   }
   if (config.segmentMaxRetry !== undefined) {
-    dispatcher.set_segment_request_max_retry(config.segmentMaxRetry);
+    let maxRetry = Math.min(config.segmentMaxRetry, I32_MAX_VALUE);
+    maxRetry = Math.max(config.segmentMaxRetry, -1);
+    dispatcher.set_segment_request_max_retry(maxRetry);
   }
   if (config.segmentRequestTimeout !== undefined) {
     dispatcher.set_segment_request_timeout(config.segmentRequestTimeout);
@@ -173,9 +176,9 @@ export function updateDispatcherConfig(
     dispatcher.set_segment_backoff_max(config.segmentBackoffMax);
   }
   if (config.multiVariantPlaylistMaxRetry !== undefined) {
-    dispatcher.set_multi_variant_playlist_request_max_retry(
-      config.multiVariantPlaylistMaxRetry
-    );
+    let maxRetry = Math.min(config.multiVariantPlaylistMaxRetry, I32_MAX_VALUE);
+    maxRetry = Math.max(config.multiVariantPlaylistMaxRetry, -1);
+    dispatcher.set_multi_variant_playlist_request_max_retry(maxRetry);
   }
   if (config.multiVariantPlaylistRequestTimeout !== undefined) {
     dispatcher.set_multi_variant_playlist_request_timeout(
@@ -193,9 +196,9 @@ export function updateDispatcherConfig(
     );
   }
   if (config.mediaPlaylistMaxRetry !== undefined) {
-    dispatcher.set_media_playlist_request_max_retry(
-      config.mediaPlaylistMaxRetry
-    );
+    let maxRetry = Math.min(config.mediaPlaylistMaxRetry, I32_MAX_VALUE);
+    maxRetry = Math.max(config.mediaPlaylistMaxRetry, -1);
+    dispatcher.set_media_playlist_request_max_retry(maxRetry);
   }
   if (config.mediaPlaylistRequestTimeout !== undefined) {
     dispatcher.set_media_playlist_request_timeout(
