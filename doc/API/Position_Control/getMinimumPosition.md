@@ -13,7 +13,10 @@ reachable position with both audio and video playable data).
 Its intended purpose is to indicate to you the range where you may be able to
 [seek](./seek.md) in the content (i.e. change the position).
 
-If no content is currently loaded, `getMaximumPosition` will return `undefined`.
+If no content is currently loaded, `getMinimumPosition` will return `undefined`.
+
+Note that this minimum position might evolve over time, depdending on the type
+of content being played. More information on this in this documentation page.
 
 ## About "playlist time"
 
@@ -32,13 +35,18 @@ If you wish to convert between media time and playlist time (for example if you
 want to exploit HTML properties), you may obtain the offset between the two
 through the [getMediaOffset method](./getMediaOffset.md).
 
-## For live contents
+## For live contents and other non-VoD contents
 
-When playing a live content, the minimum reachable position might increase over
-time as old data may become progressively unavailable.
+When playing some types of contents such as live contents, the minimum reachable
+position might increase over time as old data may become progressively
+unavailable.
 
-It should be noted that in this scenario, the value returned by
-`getMinimumPosition` might update, but will only do so gradually, e.g. once one
+To be alerted when the minimum position changes, you may want to listen to the
+`contentInfoUpdate` [event](../Player_Events.md) which sends a `minimumPosition`
+property reflecting that new minimum position as a payload.
+
+It should be noted that in this evoked scenario, the value returned by
+`getMinimumPosition` might change, but will only do so gradually, e.g. once one
 of the Media Playlist is updated.
 This might be counter-intuitive if for example you expect the minimum position
 to increase linearly (for example a 1 second increase every seconds) over time.
@@ -48,24 +56,26 @@ progress bar advancing at a regular pace, you'll have to calculate that linear
 progression yourself (you may still want to regularly re-synchronize it by
 getting `getMinimumPosition`).
 
+As a general rule, changes of the minimum position may be expected unless the
+content is a VoD content.
+You can know is you're playing a VoD content by calling the [`isVod`
+method](XXX TODO) after reaching the `"Loaded"` [state](../Basic_Methods/getPlayerState.md)
+for that content or by reading the `isVod` property from a `contentInfoUpdate`
+event (which is moreover first sent even before the `"Loaded"` state is
+reached).
+
+On live contents, the minimum position increase can generally be approximated as
+a linear increase (such as 1 second every seconds) until the end of the content.
 You can know is you're playing a live content by calling the [`isLive`
 method](XXX TODO) after reaching the `"Loaded"` [state](../Basic_Methods/getPlayerState.md)
-for that content.
-If it returns `true`, the minimum position might increase.
-On such contents, the minimum position increase can generally be approximated as
-a linear increase (such as 1 second every seconds) until the end of the content
-(at which point `isLive` returns `false`).
+for that content or by reading the `isLive` property from the `contentInfoUpdate`
+event. Once the live is ended, `isLive` should return `false`.
 
-## For VOD and EVENT contents
-
-When playing a VOD or an HLS EVENT content, the minimum position will be set
-before the [`"Loaded"` state](../Basic_Methods/getPlayerState.md) is reached
-and won't evolve as long as that content is loaded.
-
-You can know is you're playing such type of contents by calling the [`isLive`
-method](XXX TODO) after reaching the `"Loaded"` [state](../Basic_Methods/getPlayerState.md)
-for that content. If it returns `false`, you're playing one of both (either a
-VOD or an EVENT content).
+Note that a content may also become a VoD once it is finished, at which point
+the minimum position will be guaranteed to be definitive.
+To react directly to this eventuality, you may want to listen to the
+`contentInfoUpdate` [event](../Player_Events.md) and read its `isVoD` property,
+or call the [`isVod` method](./XXX TODO).
 
 ## Syntax
 

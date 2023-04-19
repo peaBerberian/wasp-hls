@@ -20,13 +20,9 @@
   though a locked variant will lead to an incompatible set audio track being
   changed. Update documentation to reflect this.
 
-- Add `isLive` method for when playing a live contents (i.e. no `END-LIST` in
-  playlist and not a `VOD` or `EVENT` PLAYLIST-TYPE)
+## Urgent
 
 - Document `isLive` in the API documentation.
-
-- Add `isVod` method for when playing a VOD contents (i.e a `VOD`
-  `PLAYLIST-TYPE` in the playlist)
 
 - Document `isVod` in the API documentation.
 
@@ -41,5 +37,4 @@
 - Use `getCurrentBufferGap` in the demo and document it in the API
   documentation.
 
-- add `playlistInfoUpdate` event for when either `getMinimumPosition`,
-  `getMaximumPosition`, `isLive` or `isVod` might be updated.
+- document `contentInfoUpdate` in the API documentation.

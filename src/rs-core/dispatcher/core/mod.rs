@@ -564,7 +564,7 @@ impl Dispatcher {
                     if let Some(playlist_store) = self.playlist_store.as_ref() {
                         let min_pos = playlist_store.curr_min_position();
                         let max_pos = playlist_store.curr_max_position();
-                        jsUpdateContentInfo(min_pos, max_pos);
+                        jsUpdateContentInfo(min_pos, max_pos, playlist_store.playlist_type());
                     }
                 }
             }

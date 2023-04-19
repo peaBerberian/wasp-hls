@@ -1,4 +1,8 @@
-use crate::{bindings::MediaType, utils::url::Url, Logger};
+use crate::{
+    bindings::{MediaType, PlaylistNature},
+    utils::url::Url,
+    Logger,
+};
 use std::{error, fmt, io::BufRead};
 
 use super::{
@@ -153,14 +157,6 @@ impl MediaSegmentInfo {
     }
 }
 
-/// Values for the "Playlist Type" as specified by the HLS specification.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum PlaylistType {
-    Event,
-    VoD,
-    None,
-}
-
 // #[derive(Clone, Debug)]
 // pub struct ServerControl {
 //     can_skip_until: Option<f64>,
@@ -227,7 +223,7 @@ pub struct MediaPlaylist {
     /// If `true`,  no more Media Segments will be added to the Media Playlist file.
     end_list: bool,
     /// Mutability information about the Media Playlist file.
-    playlist_type: PlaylistType,
+    playlist_type: PlaylistNature,
     /// If `true`, each media segment in the Playlist describes a single I-frame.
     ///
     /// I-frames are encoded video frames whose decoding does not depend on any other frame.
@@ -260,7 +256,7 @@ impl MediaPlaylist {
         let mut target_duration: Option<u32> = None;
         let mut media_sequence = 0;
         let mut end_list = false;
-        let mut playlist_type = PlaylistType::None;
+        let mut playlist_type = PlaylistNature::Unknown;
         let mut i_frames_only = false;
         let mut last_incomplete_map = None;
         let mut maps_info: Vec<InitSegmentInfo> = vec![];
@@ -333,11 +329,10 @@ impl MediaPlaylist {
                     }
                     "-X-PLAYLIST-TYPE" => match parse_enumerated_string(&str_line, colon_idx + 1).0
                     {
-                        "EVENT" => playlist_type = PlaylistType::Event,
-                        "VOD" => playlist_type = PlaylistType::VoD,
+                        "EVENT" => playlist_type = PlaylistNature::Event,
+                        "VOD" => playlist_type = PlaylistNature::VoD,
                         x => {
                             Logger::warn(&format!("Unrecognized playlist type: {}", x));
-                            playlist_type = PlaylistType::None;
                         }
                     },
                     "-X-PROGRAM-DATE-TIME" => {
@@ -469,6 +464,9 @@ impl MediaPlaylist {
             independent_segments = indep;
         }
 
+        if playlist_type == PlaylistNature::Unknown && !end_list {
+            playlist_type = PlaylistNature::Live;
+        }
         Ok(MediaPlaylist {
             version,
             independent_segments,
@@ -561,13 +559,17 @@ impl MediaPlaylist {
     /// Returns `true` if the `MediaPlaylist` may need to be refreshed later, `false` if it should
     /// not.
     pub(crate) fn may_be_refreshed(&self) -> bool {
-        !self.end_list && self.playlist_type != PlaylistType::VoD
+        !self.end_list && self.playlist_type != PlaylistNature::VoD
     }
 
     /// Returns `true` if the `MediaPlaylist` is linked to a "live content" which is an unfinished
     /// content that may need to be played close to its maximum position.
     pub(crate) fn is_live(&self) -> bool {
-        !self.end_list && self.playlist_type == PlaylistType::None
+        self.playlist_type == PlaylistNature::Live
+    }
+
+    pub(crate) fn playlist_type(&self) -> PlaylistNature {
+        self.playlist_type
     }
 
     /// Returns `true` if the last segment referenced in this `MediaPlaylist` can be assumed to be

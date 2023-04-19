@@ -10,6 +10,7 @@ import {
   SourceBufferCreationErrorCode as WasmSourceBufferCreationErrorCode,
   PushedSegmentErrorCode,
   StartingPositionType,
+  PlaylistNature,
 } from "../wasm/wasp_hls";
 import { LoggerLevel } from "./logger";
 import { SourceBufferOperation } from "./QueuedSourceBuffer";
@@ -76,7 +77,7 @@ export type WorkerMessage =
 
   // Related to content information
   | MultivariantPlaylistParsedWorkerMessage
-  | ContentTimeBoundsUpdateWorkerMessage
+  | ContentInfoUpdateWorkerMessage
   | MediaOffsetUpdateWorkerMessage
   | VariantUpdateWorkerMessage
   | TrackUpdateWorkerMessage
@@ -118,7 +119,7 @@ export const enum WorkerMessageType {
   InitializationError = "init-err",
   Error = "err",
   Warning = "warn",
-  ContentTimeBoundsUpdate = "time-upd",
+  ContentInfoUpdate = "content-upd",
   MultivariantPlaylistParsed = "m-playlist",
   TrackUpdate = "track-upd",
   ContentStopped = "ctnt-stop",
@@ -380,8 +381,8 @@ export interface OtherErrorWorkerInfo {
 /**
  * Message sent when the Worker has new information on the content being played.
  */
-export interface ContentTimeBoundsUpdateWorkerMessage {
-  type: WorkerMessageType.ContentTimeBoundsUpdate;
+export interface ContentInfoUpdateWorkerMessage {
+  type: WorkerMessageType.ContentInfoUpdate;
   value: {
     /**
      * The identifier for the content on which an error was received.
@@ -399,6 +400,10 @@ export interface ContentTimeBoundsUpdateWorkerMessage {
      * segments are declared in the playlist.
      */
     maximumPosition: number | undefined;
+    /**
+     * The type of the Multivariant Playlist being played: is it live? Vod?
+     */
+    playlistType: PlaylistNature;
   };
 }
 

@@ -25,6 +25,7 @@ import {
   MediaType,
   MultivariantPlaylistParsingErrorCode,
   OtherErrorCode,
+  PlaylistNature,
   PushedSegmentErrorCode,
   RemoveBufferErrorCode,
   RemoveBufferResult,
@@ -1190,21 +1191,24 @@ function getTimeInformationFromMp4(
 /**
  * @param {number|undefined} minimumPosition
  * @param {number|undefined} maximumPosition
+ * @param {number} playlistType
  */
 export function updateContentInfo(
   minimumPosition: number | undefined,
-  maximumPosition: number | undefined
+  maximumPosition: number | undefined,
+  playlistType: PlaylistNature
 ): void {
   const contentInfo = playerInstance.getContentInfo();
   if (contentInfo === null) {
     return;
   }
   postMessageToMain({
-    type: WorkerMessageType.ContentTimeBoundsUpdate,
+    type: WorkerMessageType.ContentInfoUpdate,
     value: {
       contentId: contentInfo.contentId,
       minimumPosition,
       maximumPosition,
+      playlistType,
     },
   });
 }

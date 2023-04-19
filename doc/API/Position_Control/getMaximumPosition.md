@@ -15,6 +15,9 @@ Its intended purpose is to indicate to you the range where you may be able to
 
 If no content is currently loaded, `getMaximumPosition` will return `undefined`.
 
+Note that this minimum position might evolve over time, depdending on the type
+of content being played. More information on this in this documentation page.
+
 ## About "playlist time"
 
 As written above, the returned time is in playlist time in seconds.
@@ -32,11 +35,15 @@ If you wish to convert between media time and playlist time (for example if you
 want to exploit HTML properties), you may obtain the offset between the two
 through the [getMediaOffset method](./getMediaOffset.md).
 
-## For live and EVENT contents
+## For non-VoD contents
 
-When playing a live content or an HLS "EVENT" content, the maximum reachable
+When playing non-VoD contents such as live contents, the maximum reachable
 position might increase over time as new data may be made available
 progressively.
+
+To be alerted when the maximum position changes, you may want to listen to the
+`contentInfoUpdate` [event](../Player_Events.md) which sends a `maximumPosition`
+property reflecting that new maximum position as a payload.
 
 It should be noted that in this scenario, the value returned by
 `getMaximumPosition` might update, but will only do so gradually, e.g. once one
@@ -51,14 +58,17 @@ getting `getMaximumPosition`).
 
 You can know is you're playing such type of content by calling the [`isVod`
 method](XXX TODO) after reaching the `"Loaded"` [state](../Basic_Methods/getPlayerState.md)
-for that content.
+for that content or by reading the `isVod` property from a `contentInfoUpdate`
+event (which is moreover first sent even before the `"Loaded"` state is
+reached).
 If it returns `false`, the maximum position might increase.
 
 For live contents for example (you can know if you're playing a live content by
 calling the [`isLive` method](XXX TODO) after reaching the `"Loaded"`
-[state](../Basic_Methods/getPlayerState.md)), the maximum position increase
-can generally be approximated as a linear increase (such as 1 second every
-seconds) until the end of the content (at which point `isLive` returns `false`).
+[state](../Basic_Methods/getPlayerState.md)) or by reading the `isLive` property
+from `ContentInfoUpdate` events, the maximum position increase can generally be
+approximated as a linear increase (such as 1 second every seconds) until the end
+of the content (at which point `isLive` will be set to `false`).
 
 ## For VOD contents
 
@@ -68,7 +78,9 @@ evolve as long as that content is loaded.
 
 You can know is you're playing a VOD content by calling the [`isVod`
 method](XXX TODO) after reaching the `"Loaded"` [state](../Basic_Methods/getPlayerState.md)
-for that content.
+for that content or by reading the `isVod` property from a `contentInfoUpdate`
+[event](../Player_Events.md) (which is moreover first sent even before the
+`"Loaded"` state is reached).
 
 ## Syntax
 

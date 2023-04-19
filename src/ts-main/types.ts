@@ -1,5 +1,6 @@
 import QueuedSourceBuffer from "../ts-common/QueuedSourceBuffer";
 import { AudioTrackInfo, VariantInfo } from "../ts-common/types";
+import { PlaylistNature } from "../wasm/wasp_hls";
 import { WaspError } from "./errors";
 import PlaybackObserver from "./observePlayback";
 
@@ -150,6 +151,11 @@ export interface ContentMetadata {
    * Set to `undefined` immediately after the content is loaded.
    */
   loadingAborter: AbortController | undefined;
+
+  /**
+   * The type of the Multivariant Playlist being played: is it live? Vod?
+   */
+  playlistType: PlaylistNature | undefined;
 
   /**
    * Error encountered in the content which led to the playback being completely

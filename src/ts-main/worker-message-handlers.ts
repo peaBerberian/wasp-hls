@@ -23,7 +23,7 @@ import {
   UpdatePlaybackRateWorkerMessage,
   MediaOffsetUpdateWorkerMessage,
   ErrorWorkerMessage,
-  ContentTimeBoundsUpdateWorkerMessage,
+  ContentInfoUpdateWorkerMessage,
   ContentStoppedWorkerMessage,
   WarningWorkerMessage,
   MultivariantPlaylistParsedWorkerMessage,
@@ -832,22 +832,36 @@ export function onWarningMessage(
 }
 
 /**
- * Handles `ContentTimeBoundsUpdateWorkerMessage` messages.
+ * Handles `ContentInfoUpdateWorkerMessage` messages.
  * @param {Object} msg - The worker's message received.
  * @param {Object|null} contentMetadata - Metadata of the content currently
  * playing. `null` if no content is currently playing.
  * This object may be mutated.
+ * @returns {boolean} - Returns `true` if at least one of the content's info
+ * attributes has changed.
  */
-export function onContentTimeBoundsUpdateMessage(
-  msg: ContentTimeBoundsUpdateWorkerMessage,
+export function onContentInfoUpdateMessage(
+  msg: ContentInfoUpdateWorkerMessage,
   contentMetadata: ContentMetadata | null
-): void {
+): boolean {
   if (contentMetadata?.contentId !== msg.value.contentId) {
     logger.info("API: Ignoring warning due to wrong `contentId`");
-    return;
+    return false;
   }
-  contentMetadata.minimumPosition = msg.value.minimumPosition;
-  contentMetadata.maximumPosition = msg.value.maximumPosition;
+  let hasChanged = false;
+  if (msg.value.minimumPosition !== contentMetadata.minimumPosition) {
+    contentMetadata.minimumPosition = msg.value.minimumPosition;
+    hasChanged = true;
+  }
+  if (msg.value.maximumPosition !== contentMetadata.maximumPosition) {
+    contentMetadata.maximumPosition = msg.value.maximumPosition;
+    hasChanged = true;
+  }
+  if (msg.value.playlistType !== contentMetadata.playlistType) {
+    contentMetadata.playlistType = msg.value.playlistType;
+    hasChanged = true;
+  }
+  return hasChanged;
 }
 
 /**

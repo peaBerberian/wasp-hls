@@ -1,5 +1,5 @@
 use crate::{
-    bindings::{jsIsTypeSupported, MediaType},
+    bindings::{jsIsTypeSupported, MediaType, PlaylistNature},
     media_element::SegmentQualityContext,
     parser::{
         AudioTrack, MediaPlaylist, MediaPlaylistUpdateError, MultivariantPlaylist, SegmentList,
@@ -440,6 +440,28 @@ impl PlaylistStore {
         } else {
             None
         }
+    }
+
+    pub(crate) fn playlist_type(&self) -> PlaylistNature {
+        let media_playlists = self.curr_media_playlists();
+        media_playlists
+            .iter()
+            .fold(PlaylistNature::Unknown, |acc, p| match acc {
+                PlaylistNature::Live => PlaylistNature::Live,
+                PlaylistNature::Event => {
+                    if p.1.playlist_type() == PlaylistNature::Live {
+                        PlaylistNature::Live
+                    } else {
+                        PlaylistNature::Event
+                    }
+                }
+                PlaylistNature::VoD => match p.1.playlist_type() {
+                    PlaylistNature::Live => PlaylistNature::Live,
+                    PlaylistNature::Event => PlaylistNature::Event,
+                    _ => PlaylistNature::VoD,
+                },
+                _ => p.1.playlist_type(),
+            })
     }
 
     /// Returns currently estimated start time in seconds at which to begin playing the content.

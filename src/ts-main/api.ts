@@ -12,7 +12,11 @@ import {
   WorkerMessage,
   WorkerMessageType,
 } from "../ts-common/types";
-import { MediaType, StartingPositionType } from "../wasm/wasp_hls";
+import {
+  MediaType,
+  PlaylistNature,
+  StartingPositionType,
+} from "../wasm/wasp_hls";
 import DEFAULT_CONFIG from "./default_config";
 import { WaspError, WaspInitializationError } from "./errors";
 import postMessageToWorker from "./postMessageToWorker";
@@ -28,7 +32,7 @@ import {
   onAttachMediaSourceMessage,
   onClearMediaSourceMessage,
   onErrorMessage,
-  onContentTimeBoundsUpdateMessage,
+  onContentInfoUpdateMessage,
   onContentStoppedMessage,
   onCreateMediaSourceMessage,
   onCreateSourceBufferMessage,
@@ -115,6 +119,11 @@ interface WaspHlsPlayerEvents {
    */
   rebufferingEnded: null;
   /**
+   * Sent when some information about the loaded content are updated, with those
+   * information as a payload.
+   */
+  contentInfoUpdate: ContentInfoUpdatePayload;
+  /**
    * Sent when the current HLS variant loaded by the `WaspHlsPlayer` changed.
    */
   variantUpdate: VariantInfo | undefined;
@@ -136,6 +145,18 @@ interface WaspHlsPlayerEvents {
    * Sent when the list of available audio tracks changed.
    */
   audioTrackListUpdate: AudioTrackInfo[];
+}
+
+/** Payload sent with a `contentInfoUpdate` event. */
+export interface ContentInfoUpdatePayload {
+  /** New minimum position reachable in the current content. */
+  minimumPosition: number | undefined;
+  /** New maximum position reachable in the current content. */
+  maximumPosition: number | undefined;
+  /** if `true` the content is a still pending live content. */
+  isLive: boolean;
+  /** if `true` the content is a finished VOD content. */
+  isVod: boolean;
 }
 
 /** Various statuses that may be set for a WaspHlsPlayer's initialization. */
@@ -377,6 +398,7 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
       wantedSpeed: 1,
       minimumPosition: undefined,
       maximumPosition: undefined,
+      playlistType: undefined,
       loadingAborter,
       error: null,
     };
@@ -663,6 +685,34 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
    */
   public getMaximumPosition(): number | undefined {
     return this.__contentMetadata__?.maximumPosition;
+  }
+
+  /**
+   * Returns `true` if the currently-loaded content is a still pending live
+   * content whose new segment might still get generated.
+   * On such content, the maximum and minimum positions are very likely to
+   * evolve.
+   *
+   * Return `false` if the content is not a live content, if no content is
+   * loaded or if it is unknown if the current content is a live content.
+   *
+   * @returns {boolean}
+   */
+  public isLive(): boolean {
+    return this.__contentMetadata__?.playlistType === PlaylistNature.Live;
+  }
+
+  /**
+   * Returns `true` if the currently-loaded content is completely finished
+   * VoD content whose minimum and maximum positions is very unlikely to change.
+   *
+   * Return `false` if the content is not a VoD content, if no content is
+   * loaded or if it is unknown if the current content is a VoD content.
+   *
+   * @returns {boolean}
+   */
+  public isVod(): boolean {
+    return this.__contentMetadata__?.playlistType === PlaylistNature.VoD;
   }
 
   /**
@@ -1025,8 +1075,15 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
           }
           break;
         }
-        case WorkerMessageType.ContentTimeBoundsUpdate:
-          onContentTimeBoundsUpdateMessage(data, this.__contentMetadata__);
+        case WorkerMessageType.ContentInfoUpdate:
+          if (onContentInfoUpdateMessage(data, this.__contentMetadata__)) {
+            this.trigger("contentInfoUpdate", {
+              minimumPosition: this.getMinimumPosition(),
+              maximumPosition: this.getMaximumPosition(),
+              isLive: this.isLive(),
+              isVod: this.isVod(),
+            });
+          }
           break;
         case WorkerMessageType.ContentStopped:
           if (onContentStoppedMessage(data, this.__contentMetadata__)) {

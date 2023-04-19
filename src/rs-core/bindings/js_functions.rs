@@ -212,7 +212,11 @@ extern "C" {
     // which is the time actually present on the HTMLMediaElement.
     pub fn jsSetMediaOffset(media_offset: f64);
 
-    pub fn jsUpdateContentInfo(minimum_position: Option<f64>, maximum_position: Option<f64>);
+    pub fn jsUpdateContentInfo(
+        minimum_position: Option<f64>,
+        maximum_position: Option<f64>,
+        playlist_nat: PlaylistNature,
+    );
 
     pub fn jsAnnounceFetchedContent(variant_info: Vec<u32>, audio_tracks_info: Vec<u32>);
 
@@ -1008,4 +1012,14 @@ impl fmt::Display for MediaType {
             }
         )
     }
+}
+
+/// Values for the "Playlist Type" as specified by the HLS specification.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[wasm_bindgen]
+pub enum PlaylistNature {
+    Event,
+    VoD,
+    Live,
+    Unknown,
 }
