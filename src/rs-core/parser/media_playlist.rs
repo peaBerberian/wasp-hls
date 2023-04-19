@@ -527,7 +527,7 @@ impl MediaPlaylist {
                     .media()
                     .last()
                     .map(|s| s.duration() * 1.1)
-                    .unwrap_or(f64::from(self.target_duration))
+                    .unwrap_or(f64::from(self.target_duration / 2))
                     * 1000.,
             )
         } else {
