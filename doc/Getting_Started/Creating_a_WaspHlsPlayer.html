@@ -84,10 +84,22 @@ is why I recommend serving both those files separately for production.</p>
 initially loaded quality.
 For more information on this “initialization” step, you can consult <a href="../API/Initialization.html">the API
 documentation page dedicated to it, here</a>.</p>
+<p><a name="what_if_one_of_my_targeted_browser_don't_support_webassembly?"></a></p>
+<h2>What if one of my targeted browser don’t support WebAssembly?</h2>
+<p>For now, the files exposed by the <code>WaspHlsPlayer</code> requires the compatibility
+with WebAssembly.</p>
+<p>Note however that tools exist to convert WebAssembly to JavaScript, the
+reference as of now being <a href="https://github.com/WebAssembly/binaryen">binaryen</a>’s
+<code>wasm2js</code> tool.</p>
+<p>With it, you may convert the <code>WaspHlsPlayer</code>’s WebAssembly file to JavaScript
+and provide some bindings yourself (it shouldn’t be too hard, though automating
+it to facilitate migration to new <code>WaspHlsPlayer</code> versions might take some more
+work), to also support environments not compatible with WebAssembly.</p>
 </body></html><nav class="next-previous-page-wrapper" aria-label="Navigate between pages"><div class="next-or-previous-page"><a class="next-or-previous-page-link" href="./Welcome.html"><div class="next-or-previous-page-link-label">Previous</div><div class="next-or-previous-page-link-name">Welcome</div></a></div><div class="next-or-previous-page next-page"></div></nav></div><div class="tocbar-wrapper"><div class="tocbar"><p><a href="#creating_a_new_wasphlsplayer">Creating a new WaspHlsPlayer</a></p>
 <ul>
 <li><a href="#instantiation">Instantiation</a></li>
 <li><a href="#wasphlsplayer_initialization">WaspHlsPlayer initialization</a></li>
+<li><a href="#what_if_one_of_my_targeted_browser_don't_support_webassembly?">What if one of my targeted browser don’t support WebAssembly?</a></li>
 </ul>
 </div></div></div></div><div class="hamburger-bar"><div class="hamburger-header"><span class="hamburger-title">Page List</span><button aria-label="Close website index" type="button" class="hamburger-bar-closer"><svg viewBox="0 0 15 15" width="21" height="21"><g stroke="black" stroke-width="1.2"><path d="M.75.75l13.5 13.5M14.25.75L.75 14.25"></path></g></svg></button></div><ul class="page-list-wrapper"><li class="page-list-item"><div class="page-list-group opened active">Getting Started</div><ul class="page-list-cat-group"><li class="page-list-item"><a href="./Welcome.html">Welcome</a></li>
 <li class="page-list-item active"><a href="./Creating_a_WaspHlsPlayer.html">Creating a WaspHlsPlayer</a></li></ul></li>
@@ -98,6 +110,7 @@ documentation page dedicated to it, here</a>.</p>
 <li class="page-list-item"><a href="../API/Player_Events.html">Player Events</a></li>
 <li class="page-list-item"><a href="../API/Configuration_Object.html">Configuration Object</a></li>
 <li class="page-list-item"><a href="../API/Player_Errors.html">Player Errors</a></li>
+<li class="page-list-item"><a href="../API/Audio_Volume_Management.html">Audio Volume Management</a></li>
 <li><div class="page-list-item page-list-group">Basic Methods</div><ul class="page-list-group-group"><li class="page-list-item"><a href="../API/Basic_Methods/initialize.html">initialize</a></li>
 <li class="page-list-item"><a href="../API/Basic_Methods/load.html">load</a></li>
 <li class="page-list-item"><a href="../API/Basic_Methods/updateConfig.html">updateConfig</a></li>

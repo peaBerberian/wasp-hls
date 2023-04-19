@@ -104,6 +104,7 @@ function initializePage() {
   const deInitSearchBar = initializeSearchBar();
   const deInitPageGroups = initializePageGroups();
   const deInitHamburgerMenu = initializeHamburgerMenu();
+  initializeHeaderLinks();
   const deInitSidebarLinks = initializeSideBarLinks();
   const deInitContentLinks = initializeContentLinks();
   performSearchInUrlIfOne();
@@ -670,6 +671,21 @@ function initializeHamburgerMenu() {
     isOverlayVisible = false;
     document.body.removeChild(overlay);
     hamburgerBarElt.classList.remove("opened");
+  }
+}
+
+/**
+ * Links in the navigation bar usually are relative URL.
+ *
+ * Because we may navigate through paths here, we force them to be absolute URLs
+ * only.
+ */
+function initializeHeaderLinks() {
+  const headerElt = document.getElementsByClassName("navbar-parent");
+  const headerLinks = headerElt?.getElementsByTagName("a") ?? [];
+  for (const link of headerLinks) {
+    // Transform from relative to absolute URL
+    link.href = link.href;
   }
 }
 
