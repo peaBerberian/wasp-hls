@@ -75,6 +75,9 @@ The `"paused"` event is sent when a loaded content (which is a content which
 currently is in the [`"Loaded"` state](./Basic_Methods/getPlayerState.md) was
 just paused, generally due to a previous call to the [`pause`
 method](./Basic_Methods/pause.md).
+It may also be triggered when we reach the end of the content (in which case,
+the [`isEnd` method](./Playback_Information/isEnded.md) will return `true` and
+you'll also receive an `ended` event).
 
 This event doesn't have a payload.
 
@@ -96,8 +99,6 @@ currently is in the [`"Loaded"` state](./Basic_Methods/getPlayerState.md) went
 out of a "paused" status, generally due to a previous call to the [`resume`
 method](./Basic_Methods/resume.md).
 
-XXX TODO what about when ended then calling play? To check
-
 This event doesn't have a payload.
 
 Example of usage:
@@ -117,8 +118,6 @@ The `"ended"` event is sent when playback reached the end of the content.
 
 Playback is now paused, generally at the last video frame visible of the
 content.
-
-XXX TODO is the "paused" event also sent? To check.
 
 This event doesn't have a payload.
 
