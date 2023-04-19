@@ -37,8 +37,13 @@ the issue encountered.
 All the following properties are common to all errors (sent through `"warning"` and
 `"error"` events, as well as returned by the `getError` method):
 
-- `name` (`string`): The type of error received. The `name` property allows
-  you to detect XXX TDOO
+- `name` (`string`): The type of error received. The `name` property basically
+  reflects the category of the error received (see below for the different
+  types).
+
+  When using TypeScript in your application, checking the `name` property first
+  also allows to provide much better type suggestions when using the `code`
+  prorperty of that same error.
 
 - `message` (`string`): A human-readable description of the Error,
   This `message` property might change from version to version.

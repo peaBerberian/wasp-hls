@@ -80,8 +80,3 @@ const maximumPosition = player.getMaximumPosition();
 
 `number|undefined`: The maximum position with playable content. in playlist time
 in seconds. `undefined` if no content is currently loaded.
-
-Also XXX TODO, `getMediaDuration`?
-Also XXX TODO, `getCurrentBufferGap`?
-XXX TODO event for minimumPosition + maximumPosition + isLive + isVod update?
-playlistInfoUpdate?

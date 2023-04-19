@@ -58,6 +58,3 @@ player.lockVariant(variantId);
   1. _variantId_ `number`: The wanted variant's `id` property (see
      [`getVariantList` method](./getVariantList.md) and `variantListUpdate`
      [event](../Player_Events.md).
-
-XXX TODO actually change audio track list when a variant is changed and the
-variants list when an audio track si changed?

@@ -26,5 +26,3 @@ const speed = player.getSpeed();
 - **return value**:
 
 `number`: The last applied playback speed on the currently loaded content.
-
-XXX TODO speed load option?
