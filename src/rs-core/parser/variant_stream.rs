@@ -319,7 +319,7 @@ impl VariantStream {
         &mut self,
         playlist: impl BufRead,
         url: Url,
-        context: Option<&MediaPlaylistContext>,
+        context: &MediaPlaylistContext,
     ) -> Result<&MediaPlaylist, MediaPlaylistParsingError> {
         let new_mp = MediaPlaylist::create(playlist, url, self.media_playlist.as_ref(), context)?;
         self.media_playlist = Some(new_mp);

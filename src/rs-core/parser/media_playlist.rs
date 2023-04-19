@@ -5,7 +5,8 @@ use super::{
     multi_variant_playlist::MediaPlaylistContext,
     utils::{
         parse_byte_range, parse_decimal_floating_point, parse_decimal_integer,
-        parse_enumerated_string, parse_iso_8601_date, parse_quoted_string,
+        parse_enumerated_string, parse_iso_8601_date, parse_quoted_string, parse_start_attribute,
+        StartAttribute,
     },
 };
 
@@ -160,22 +161,6 @@ pub enum PlaylistType {
     None,
 }
 
-/// Value of the "EXT-X-START" tag as specified by the HLS specification.
-///
-/// Indicates at which position a player should start this Media Playlist
-#[derive(Clone, Debug)]
-pub struct StartAttribute {
-    /// A positive number indicates a time offset in seconds from the beginning of the Playlist.
-    /// A negative number indicates a negative time offset in seconds from the end of the last
-    /// media segment in the Playlist.
-    time_offset: f64,
-    /// If `true`, we should start playing at exactly the calculated time offset.
-    ///
-    /// If `false`, we should start playing at the beginning of the segment which includes the
-    /// calculated time offset.
-    precise: bool,
-}
-
 // #[derive(Clone, Debug)]
 // pub struct ServerControl {
 //     can_skip_until: Option<f64>,
@@ -268,7 +253,7 @@ impl MediaPlaylist {
         playlist: impl BufRead,
         url: Url,
         prev_playlist: Option<&MediaPlaylist>,
-        context: Option<&MediaPlaylistContext>,
+        context: &MediaPlaylistContext,
     ) -> Result<Self, MediaPlaylistParsingError> {
         let mut version: Option<u32> = None;
         let mut independent_segments = false;
@@ -313,9 +298,14 @@ impl MediaPlaylist {
                     }
                     "-X-ENDLIST" => end_list = true,
                     "-X-INDEPENDENT-SEGMENTS" => independent_segments = true,
-                    "-X-START" =>
-                        /* TODO */
-                        {}
+                    "-X-START" => match parse_start_attribute(&str_line) {
+                        Ok(st) => {
+                            start = Some(st);
+                        }
+                        _ => {
+                            Logger::warn("Parser: Failed to parse `EXT-X-START` attribute");
+                        }
+                    },
                     "INF" => match parse_decimal_floating_point(&str_line, 4 + "INF:".len()).0 {
                         Ok(d) => next_segment_duration = Some(d),
                         Err(_) => return Err(MediaPlaylistParsingError::UnparsableExtInf),
@@ -457,14 +447,15 @@ impl MediaPlaylist {
             Some(target_duration) => target_duration,
             None => return Err(MediaPlaylistParsingError::MissingTargetDuration),
         };
-        if start.is_none() {
-            start = context.and_then(|x| x.start().cloned())
+
+        // Turns out that MultivariantPlaylist attibutes have priority here
+        if let Some(st) = context.start() {
+            start = Some(st.clone());
         }
-        if !independent_segments {
-            independent_segments = context
-                .and_then(|x| x.independent_segments())
-                .unwrap_or(false);
+        if let Some(indep) = context.independent_segments() {
+            independent_segments = indep;
         }
+
         Ok(MediaPlaylist {
             version,
             independent_segments,

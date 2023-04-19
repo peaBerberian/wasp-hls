@@ -1,9 +1,12 @@
 use super::audio_track_list::AudioTrackList;
-use super::media_playlist::{MediaPlaylist, MediaPlaylistParsingError, StartAttribute};
+use super::media_playlist::{MediaPlaylist, MediaPlaylistParsingError};
 use super::media_tag::{MediaTag, MediaTagParsingError};
+use super::utils::StartAttribute;
 use super::variant_stream::{VariantParsingError, VariantStream};
 use super::{AudioTrack, MediaTagType};
+use crate::parser::utils::parse_start_attribute;
 use crate::utils::url::Url;
+use crate::Logger;
 use std::{error, fmt, io};
 
 /// Represents a parsed HLS Multivariant Playlist (a.k.a. Master Playlist).
@@ -25,7 +28,7 @@ pub struct MultivariantPlaylist {
 
     /// Supplementary information that will need to be communicated to other Media Playlists
     /// once they are loaded and parsed.
-    context: Option<MediaPlaylistContext>,
+    context: MediaPlaylistContext,
 
     last_id: u32,
 
@@ -45,6 +48,8 @@ impl MultivariantPlaylist {
         let mut variants: Vec<VariantStream> = vec![];
         let mut audio_media: Vec<MediaTag> = vec![];
         let mut other_media: Vec<MediaTag> = vec![];
+        let mut start = None;
+        let mut independent_segments = None;
 
         let mut lines = playlist.lines();
         match lines.next() {
@@ -101,9 +106,15 @@ impl MultivariantPlaylist {
                             other_media.push(media);
                         }
                     }
-                    "-X-START" =>
-                        /* TODO */
-                        {}
+                    "-X-INDEPENDENT-SEGMENTS" => independent_segments = Some(true),
+                    "-X-START" => match parse_start_attribute(&str_line) {
+                        Ok(st) => {
+                            start = Some(st);
+                        }
+                        _ => {
+                            Logger::warn("Parser: Failed to parse `EXT-X-START` attribute");
+                        }
+                    },
                     _ => {}
                 }
             } else if str_line.starts_with('#') {
@@ -133,7 +144,10 @@ impl MultivariantPlaylist {
             variants,
             audio_tracks: AudioTrackList::new(audio_media),
             other_media,
-            context: None,
+            context: MediaPlaylistContext {
+                start,
+                independent_segments,
+            },
         })
     }
 
@@ -407,9 +421,7 @@ impl MultivariantPlaylist {
         url: Url,
     ) -> Result<&MediaPlaylist, MediaPlaylistUpdateError> {
         match self.variants.iter_mut().find(|v| v.id() == variant_id) {
-            Some(v) => {
-                Ok(v.update_media_playlist(media_playlist_data, url, self.context.as_ref())?)
-            }
+            Some(v) => Ok(v.update_media_playlist(media_playlist_data, url, &self.context)?),
             None => Err(MediaPlaylistUpdateError::NotFound),
         }
     }
@@ -421,7 +433,7 @@ impl MultivariantPlaylist {
         url: Url,
     ) -> Result<&MediaPlaylist, MediaPlaylistUpdateError> {
         match self.audio_tracks.media_tag_mut(id) {
-            Some(m) => Ok(m.update(media_playlist_data, url, self.context.as_ref())?),
+            Some(m) => Ok(m.update(media_playlist_data, url, &self.context)?),
             None => Err(MediaPlaylistUpdateError::NotFound),
         }
     }
@@ -433,7 +445,7 @@ impl MultivariantPlaylist {
         url: Url,
     ) -> Result<&MediaPlaylist, MediaPlaylistUpdateError> {
         match self.other_media.iter_mut().find(|v| v.id() == media_tag_id) {
-            Some(m) => Ok(m.update(media_playlist_data, url, self.context.as_ref())?),
+            Some(m) => Ok(m.update(media_playlist_data, url, &self.context)?),
             None => Err(MediaPlaylistUpdateError::NotFound),
         }
     }

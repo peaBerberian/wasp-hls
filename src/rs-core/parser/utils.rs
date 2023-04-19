@@ -1,5 +1,7 @@
 use std::num::{ParseFloatError, ParseIntError};
 
+use crate::Logger;
+
 /// Parse decimal integer value as defined by the HLS specification:
 /// From the `value_start_offset` (which is the byte offset in `line` at which
 /// the value starts), to either the next encountered comma, or the end of `line`,
@@ -631,5 +633,81 @@ mod tests {
         assert_eq!(parse_iso_8601_date("1968-03-2916:01:21.050Z", 0), None);
         assert_eq!(parse_iso_8601_date("1968-02-29R20:54:56.810Z", 0), None);
         assert_eq!(parse_iso_8601_date("1968-0229T16:01:21.050Z", 0), None);
+    }
+}
+
+/// Value of the "EXT-X-START" tag as specified by the HLS specification.
+///
+/// Indicates at which position a player should start this Media Playlist
+#[derive(Clone, Debug)]
+pub(crate) struct StartAttribute {
+    /// A positive number indicates a time offset in seconds from the beginning of the Playlist.
+    /// A negative number indicates a negative time offset in seconds from the end of the last
+    /// media segment in the Playlist.
+    pub(super) time_offset: f64,
+    /// If `true`, we should start playing at exactly the calculated time offset.
+    ///
+    /// If `false`, we should start playing at the beginning of the segment which includes the
+    /// calculated time offset.
+    pub(super) precise: bool,
+}
+
+pub(super) enum StartAttributeParsingError {
+    NoTimeOffset,
+    TimeOffsetParsingError(ParseFloatError),
+    InvalidPreciseValue,
+}
+
+pub(super) fn parse_start_attribute(
+    start_line: &str,
+) -> Result<StartAttribute, StartAttributeParsingError> {
+    let mut time_offset: Option<f64> = None;
+    let mut precise = false;
+
+    let mut offset = "#EXT-X-START:".len();
+    loop {
+        if offset >= start_line.len() {
+            break;
+        }
+        match start_line[offset..].find('=') {
+            None => {
+                Logger::warn("Attribute Name not followed by equal sign");
+                break;
+            }
+            Some(idx) => match &start_line[offset..offset + idx] {
+                "PRECISE" => {
+                    let (parsed, end_offset) =
+                        parse_enumerated_string(start_line, offset + idx + 1);
+                    offset = end_offset + 1;
+                    match parsed {
+                        "YES" => precise = true,
+                        "NO" => precise = false,
+                        _ => {
+                            return Err(StartAttributeParsingError::InvalidPreciseValue);
+                        }
+                    };
+                }
+                "TIME-OFFSET" => {
+                    let (parsed, end_offset) =
+                        parse_decimal_floating_point(start_line, offset + idx + 1);
+                    offset = end_offset + 1;
+                    match parsed {
+                        Err(x) => {
+                            return Err(StartAttributeParsingError::TimeOffsetParsingError(x));
+                        }
+                        Ok(x) => time_offset = Some(x),
+                    }
+                }
+                _ => offset = skip_attribute_list_value(start_line, offset + idx + 1) + 1,
+            },
+        }
+    }
+    if let Some(time_offset) = time_offset {
+        Ok(StartAttribute {
+            time_offset,
+            precise,
+        })
+    } else {
+        Err(StartAttributeParsingError::NoTimeOffset)
     }
 }
