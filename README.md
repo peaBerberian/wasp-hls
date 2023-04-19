@@ -40,15 +40,15 @@ behind HLS_
 
 This architecture allows to:
 
--   only load the wanted media data (thus not e.g. also loading all unwanted
-    audio tracks with it)
--   allows efficient seeking on the content, by allowing to load the content
-    non-sequentially (e.g. you can directly load the data corresponding to the end
-    of the content if you want to).
--   facilitate live streaming by continuously encoding those chunk and adding it
-    to the central file progressively
--   profit from all the goodies of relying on HTTP(S) for content distribution
-    (compatibility with the web, firewall traversal, lots of tools available etc.)
+- only load the wanted media data (thus not e.g. also loading all unwanted
+  audio tracks with it)
+- allows efficient seeking on the content, by allowing to load the content
+  non-sequentially (e.g. you can directly load the data corresponding to the end
+  of the content if you want to).
+- facilitate live streaming by continuously encoding those chunk and adding it
+  to the central file progressively
+- profit from all the goodies of relying on HTTP(S) for content distribution
+  (compatibility with the web, firewall traversal, lots of tools available etc.)
 
 For HLS specifically, this so-called central file is called the "Multivariant
 Playlist" (a.k.a. "Master Playlist") and is in the [`M3U8` file
@@ -123,21 +123,21 @@ low-latency for now)!
 Even without taking into account low-latency contents, I consider WebAssembly to
 be particularly adapted for an adaptive media player:
 
--   Such software generally handle large objects (not only talking about media
-    segments here). The relatively few controls JavaScript offers in terms of
-    memory management can be problematic (I've seen GC-pressure related issues
-    on another player I work on for example).
+- Such software generally handle large objects (not only talking about media
+  segments here). The relatively few controls JavaScript offers in terms of
+  memory management can be problematic (I've seen GC-pressure related issues
+  on another player I work on for example).
 
-    With WebAssembly and a source language with enough control over memory
-    management, GC-linked issues disappear (because no GC :p!) and the
-    application's memory usage is much more explicit and controlled, which is
-    usually what we want.
+  With WebAssembly and a source language with enough control over memory
+  management, GC-linked issues disappear (because no GC :p!) and the
+  application's memory usage is much more explicit and controlled, which is
+  usually what we want.
 
--   Even if there's a lot of input/output and thus the need to interact with
-    JavaScript, the performance profile is completely different than your usual
-    JS front-end application: very few DOM access here, a lot of time is spent
-    on parsing/transmuxing and other logic that can be completely implemented in
-    WebAssembly.
+- Even if there's a lot of input/output and thus the need to interact with
+  JavaScript, the performance profile is completely different than your usual
+  JS front-end application: very few DOM access here, a lot of time is spent
+  on parsing/transmuxing and other logic that can be completely implemented in
+  WebAssembly.
 
 ### Generating an HLS content
 
@@ -157,31 +157,31 @@ so this is not something totally out of the blue.
 
 The reasons why I started this project are mainly:
 
--   to see how IO-heavy logic (like we have here with many requests, media
-    segments streaming, playback observation, network metrics etc.) using web
-    APIs only exposed to JavaScript could be conjugated with WebAssembly and
-    Rust.
+- to see how IO-heavy logic (like we have here with many requests, media
+  segments streaming, playback observation, network metrics etc.) using web
+  APIs only exposed to JavaScript could be conjugated with WebAssembly and
+  Rust.
 
--   to experiment with a big-enough WebAssembly and Web Worker-based library:
-    how should it interact with applications written in JavaScript?
+- to experiment with a big-enough WebAssembly and Web Worker-based library:
+  how should it interact with applications written in JavaScript?
 
--   to learn more about the HLS streaming protocol, for which the RxPlayer does
-    not provide first class support (yet?)
+- to learn more about the HLS streaming protocol, for which the RxPlayer does
+  not provide first class support (yet?)
 
--   to see how I would write a complex beast like a Media player if restarting
-    from scratch (though the situation is very different here, due to the
-    difference in the language used).
+- to see how I would write a complex beast like a Media player if restarting
+  from scratch (though the situation is very different here, due to the
+  difference in the language used).
 
--   to see if there's any real performance and/or memory related advantage (or
-    disadvantage) in relying on WebAssembly for the core logic of a media
-    player, in various situations (multiple players on the same page, large 4k
-    segments, web workers, mse-in-worker).
+- to see if there's any real performance and/or memory related advantage (or
+  disadvantage) in relying on WebAssembly for the core logic of a media
+  player, in various situations (multiple players on the same page, large 4k
+  segments, web workers, mse-in-worker).
 
--   to play with a Web Worker-based media player, and find out its influence
-    in terms of API definition, synchronization difficulties, performance issues
-    etc.
+- to play with a Web Worker-based media player, and find out its influence
+  in terms of API definition, synchronization difficulties, performance issues
+  etc.
 
--   to work on and improve my Rust skills
+- to work on and improve my Rust skills
 
 ## What's done
 
@@ -189,211 +189,212 @@ It already has a lot of features but there's still some left work:
 
 Type of contents:
 
--   [x] Play HLS VoD contents
--   [x] Play HLS live contents _(for now require presence of
-        `EXT-X-PROGRAM-DATE-TIME` tag in media playlist)_
--   [ ] Proper support of HLS low-latency contents.
-        _Priority: average_
+- [x] Play HLS VoD contents
+- [x] Play HLS live contents _(for now require presence of
+      `EXT-X-PROGRAM-DATE-TIME` tag in media playlist)_
+- [ ] Proper support of HLS low-latency contents.
+      _Priority: average_
 
 Worker-related features:
 
--   [x] Load content-related resources and run main logic loop in worker
--   [x] Use MSE-in-Worker when available
--   [x] Rely on main thread for MSE when MSE-in-Worker is not available
+- [x] Load content-related resources and run main logic loop in worker
+- [x] Use MSE-in-Worker when available
+- [x] Rely on main thread for MSE when MSE-in-Worker is not available
 
 Adaptive BitRate:
 
--   [x] Choose variant based on throughtput-based estimates
--   [x] Allow application to list and select its own variant (quality) and know
-        the current one
--   [x] Automatically filter out codecs not supported by the current environment.
--   [x] Urgent/non-urgent quality switches (Some quality switches lead to request
-        for segments of the previous quality to be immediately interrupted, others
-        await them before actually switching).
--   [x] Fast-switching (Push on top of already-loaded segments if they prove to be
-        of higher quality - and are sufficiently far from playback to prevent
-        rebuffering).
--   [x] Smart-switching (I just made-up the name here :D, but basically it's for
-        the opposite situation than the one in which fast-switching is active:
-        don't re-load segments who're already loaded or being pushed with a higher
-        quality).
--   [ ] Also choose variant based on buffer-based estimates.
-        _Priority: average_
--   [ ] Logic to detect sudden large fall in bandwidth before the end of a current
-        request.
-        _Priority: average_
+- [x] Choose variant based on throughtput-based estimates
+- [x] Allow application to list and select its own variant (quality) and know
+      the current one
+- [x] Automatically filter out codecs not supported by the current environment.
+- [x] Urgent/non-urgent quality switches (Some quality switches lead to request
+      for segments of the previous quality to be immediately interrupted, others
+      await them before actually switching).
+- [x] Fast-switching (Push on top of already-loaded segments if they prove to be
+      of higher quality - and are sufficiently far from playback to prevent
+      rebuffering).
+- [x] Smart-switching (I just made-up the name here :D, but basically it's for
+      the opposite situation than the one in which fast-switching is active:
+      don't re-load segments who're already loaded or being pushed with a higher
+      quality).
+- [ ] Also choose variant based on buffer-based estimates.
+      _Priority: average_
+- [ ] Logic to detect sudden large fall in bandwidth before the end of a current
+      request.
+      _Priority: average_
 
 Request Scheduling:
 
--   [x] Lazy Media Playlist downloading (only fetch and refresh them once they are
-        needed)
--   [x] Media Playlist refreshing for live contents
--   [x] Buffer goal implementation (as in: stop loading segments once enough to
-        fill the buffer up to a certain - configurable - point are loaded)
--   [x] Parallel audio and video segment loading
--   [x] Priorization between audio and video segment requests (to e.g. stop
-        doing audio segment requests when video ones become urgent).
--   [x] Retry of failed requests with an exponential backoff.
--   [x] Perform range requests for segments if needed
--   [ ] Parallel initialization segment and first media segment loading.
-        _Priority: average_
+- [x] Lazy Media Playlist downloading (only fetch and refresh them once they are
+      needed)
+- [x] Media Playlist refreshing for live contents
+- [x] Buffer goal implementation (as in: stop loading segments once enough to
+      fill the buffer up to a certain - configurable - point are loaded)
+- [x] Parallel audio and video segment loading
+- [x] Priorization between audio and video segment requests (to e.g. stop
+      doing audio segment requests when video ones become urgent).
+- [x] Retry of failed requests with an exponential backoff.
+- [x] Perform range requests for segments if needed
+- [ ] Parallel initialization segment and first media segment loading.
+      _Priority: average_
 
 Media demuxing:
 
--   [x] Media Segment Format: MPEG-2 Transport Streams
--   [x] Media Segment Format: Fragmented MPEG-4
--   [x] Media Segment Format: Packed Audio AAC with ADTS framing
--   [x] Transmux MPEG-2 Transport Streams to fmp4 on platforms not supporting the
-        former like mostChrome or Firefox (through JS for now, Rust implementation
-        pending).
--   [ ] WebAssembly-based mpeg2-ts transmuxer.
-        _Priority: average_
--   [ ] Media Segment Format: Packed Audio MP3
-        _Priority: low_
--   [ ] Media Segment Format: Packed Audio AC-3
-        _Priority: low_
--   [ ] Media Segment Format: Packed Audio EAC-3
-        _Priority: low_
--   [ ] Media Segment Format: WebVTT (subtitles not handled for now)
-        _Priority: low_
--   [ ] Media Segment Format: IMSC Subtitles (subtitles not handled for now)
-        _Priority: low_
+- [x] Media Segment Format: MPEG-2 Transport Streams
+- [x] Media Segment Format: Fragmented MPEG-4
+- [x] Media Segment Format: Packed Audio AAC with ADTS framing
+- [x] Transmux MPEG-2 Transport Streams to fmp4 on platforms not supporting the
+      former like mostChrome or Firefox (through JS for now, Rust implementation
+      pending).
+- [ ] WebAssembly-based mpeg2-ts transmuxer.
+      _Priority: average_
+- [ ] Media Segment Format: Packed Audio MP3
+      _Priority: low_
+- [ ] Media Segment Format: Packed Audio AC-3
+      _Priority: low_
+- [ ] Media Segment Format: Packed Audio EAC-3
+      _Priority: low_
+- [ ] Media Segment Format: WebVTT (subtitles not handled for now)
+      _Priority: low_
+- [ ] Media Segment Format: IMSC Subtitles (subtitles not handled for now)
+      _Priority: low_
 
 MSE API and buffer handling:
 
--   [x] End of stream support (as in: actually end when playback reaches the end!)
--   [x] Multiple simultaneous type of buffers support (for now only audio and
-        video, through MSE `SourceBuffer`s)
--   [x] One and multiple initialization segments handling per rendition
--   [x] Lazy buffer memory management: Don't manually remove old buffers' media
-        data if the browser thinks it's fine. Many players clean it up
-        progressively as it also simplifies the logic (e.g. browser GC detection
-        might become unneeded) but I like the idea of keeping it to e.g. allow
-        seek-back without rebuffering if the current device allows it.
--   [x] Detect browser Garbage Collection of buffered media and re-load GCed
-        segments if they are needed again.
--   [x] Discontinuity handling: Automatically skip "holes" in the buffer where
-        it is known that no segment will be pushed to fill them.
--   [ ] Freezing handling: Detect when the browser is not making progress in the
-        content despite having media data to play and try to unstuck it.
-        _Priority: average_
--   [ ] Proper handling of `QuotaExceededError` after pushing segments (when low
-        on memory).
-        This is generally not needed as the browser should already handle some kind of
-        garbage collection but some platforms still may have issues when memory is
-        constrained.
-        _Priority: low_
+- [x] End of stream support (as in: actually end when playback reaches the end!)
+- [x] Multiple simultaneous type of buffers support (for now only audio and
+      video, through MSE `SourceBuffer`s)
+- [x] One and multiple initialization segments handling per rendition
+- [x] Lazy buffer memory management: Don't manually remove old buffers' media
+      data if the browser thinks it's fine. Many players clean it up
+      progressively as it also simplifies the logic (e.g. browser GC detection
+      might become unneeded) but I like the idea of keeping it to e.g. allow
+      seek-back without rebuffering if the current device allows it.
+- [x] Detect browser Garbage Collection of buffered media and re-load GCed
+      segments if they are needed again.
+- [x] Discontinuity handling: Automatically skip "holes" in the buffer where
+      it is known that no segment will be pushed to fill them.
+- [ ] Freezing handling: Detect when the browser is not making progress in the
+      content despite having media data to play and try to unstuck it.
+      _Priority: average_
+- [ ] Proper handling of `QuotaExceededError` after pushing segments (when low
+      on memory).
+      This is generally not needed as the browser should already handle some kind of
+      garbage collection but some platforms still may have issues when memory is
+      constrained.
+      _Priority: low_
 
 Tracks:
 
--   [x] Provide API to set an audio track
--   [ ] Provide API to set a video track
-        _Priority: low_
--   [ ] Allow text track selection and support at least one text track format
-        (TTML IMSC1 or webVTT) - through a JS library first?
-        _Priority: low_
+- [x] Provide API to set an audio track
+- [ ] Provide API to set a video track
+      _Priority: low_
+- [ ] Allow text track selection and support at least one text track format
+      (TTML IMSC1 or webVTT) - through a JS library first?
+      _Priority: low_
 
 Miscellaneous:
 
--   [x] Error API
--   [x] Export embedded versions of the WebAssembly and Worker files to facilitate
-        application's development code.
--   [x] Initial position API
--   [ ] Delta playlist handling.
-        _Priority: low_
--   [ ] Content Steering handling.
-        _Priority: low_
--   [ ] Support content decryption.
-        _Priority: very low_
+- [x] Error API
+- [x] Export embedded versions of the WebAssembly and Worker files to facilitate
+      application's development code.
+- [x] Initial position API
+- [ ] Delta playlist handling.
+      _Priority: low_
+- [ ] Content Steering handling.
+      _Priority: low_
+- [ ] Support content decryption.
+      _Priority: very low_
 
 Playlist tags specifically considered (unchecked ones are mainly just ignored,
 most of them are not needed for playback):
 
--   [x] EXT-X-ENDLIST: Parsed to know if a playlist needs to be refreshed or
-        not, but also to detect if we're playing an unfinished live content to
-        play close to the live edge by default.
--   [x] EXTINF: Only the indicated duration of a segment is considered, not
-        the title for which there's no use for now. Both integer and float
-        durations should be handled.
--   [x] EXT-X-PROGRAM-DATE-TIME: Used to determine the starting position of
-        segments as stored by the player - which may be different than the actual
-        media time once the corresponding segment is pushed.
-        The units/scale indicated by this tag will be preferred over the real
-        media time in the player APIs.
--   [x] EXT-X-BYTERANGE: Used for range requests
--   [x] EXT-X-PLAYLIST-TYPE: Used To know if a Playlist may be refreshed
--   [x] EXT-X-TARGETDURATION: Useful for heuristics for playlist refresh
--   [x] EXT-X-START: Used to determine a default start time in the content.
--   EXT-X-MAP:
-    -   [x] URI: Used to fetch the initialization segment if one is present
-    -   [x] BYTERANGE: To perform a range request for the initialization segment
--   EXT-X-MEDIA:
-    -   [x] TYPE: Both AUDIO and VIDEO are handled. SUBTITLES and CLOSED-CAPTIONS
-            are just ignored for now.
-    -   [x] URI
-    -   [x] GROUP-ID
-    -   [x] DEFAULT
-    -   [x] AUTOSELECT
-    -   [x] LANGUAGE: In audio track selection API
-    -   [x] ASSOC-LANGUAGE: In audio track selection API
-    -   [x] NAME: In audio track selection API
-    -   [ ] CHANNELS: Not so hard to implement, but I've been too lazy to parse that
-            specific format from the Multivariant Playlist for now
-    -   [ ] CHARACTERISTICS: Soon...
-    -   [ ] FORCED: As the SUBTITLES TYPE is not handled yet, we don't have to use
-            this one
-    -   [ ] INSTREAM-ID: As the CLOSED-CAPTIONS TYPE is not handled yet, we don't
-            have to use this one.
-    -   [ ] STABLE-RENDITION-ID: Not really needed for now (only for content steering?)
--   EXT-X-STREAM-INF:
-    -   [x] BANDWIDTH: Used to select the right variant in function of the
-            bandwidth
-    -   [x] CODECS: Used for checking support (and filtering out if that's not the
-            case, and for initializing buffers with the right info).
-    -   [x] AUDIO
-    -   [x] VIDEO: As no video track selection API exist yet, only the most
-            prioritized video media playlist is considered
-    -   [x] RESOLUTION: Used to describe variant in variant selection API
-    -   [x] FRAME-RATE: Used to describe variant in variant selection API
-    -   [x] SCORE: Considered both to select a variant and to determine if a quality
-            is better when "fast-switching".
-    -   [ ] STABLE-VARIANT-ID: Not really needed for now (only for content steering?)
-    -   [ ] AVERAGE-BANDWIDTH: Not used yet. I don't know if it's useful yet for us.
-    -   [ ] SUPPLEMENTAL-CODECS: In our web use case, I'm not sure if this is only
-            useful for track selection API or if filtering also needs to be done based
-            on this.
-    -   [ ] SUBTITLES: No subtitles support for now
-    -   [ ] CLOSED-CAPTIONS: that one is just ignored for now
-    -   [ ] PATHWAY-ID: Content Steering not handled yet
-    -   [ ] HDCP-LEVEL: DRM are not handled for now
-    -   [ ] ALLOWED-CPC: DRM are not handled for now
--   [ ] EXT-X-GAP
--   [ ] EXT-X-VERSION: Not specifically considered for now, most differences
-        handled until now had compatible behaviors from version to version
--   [ ] EXT-X-INDEPENDENT-SEGMENTS: Might needs to be considered once we're
-        doing some manual cleaning?
--   [ ] EXT-X-DEFINE: Seems rare enough, so may be supported if the time is
-        taken...
--   [ ] EXT-X-MEDIA-SEQUENCE: Not sure of what this allows. To check...
--   [ ] EXT-X-I-FRAMES-ONLY: To handle one day, perhaps (very low priority)
--   [ ] EXT-X-PART: low-latency related
--   [ ] EXT-X-PART-INF: low-latency related
--   [ ] EXT-X-SERVER-CONTROL: low-latency related?
--   [ ] EXT-X-BITRATE
--   [ ] EXT-X-DATERANGE: Might be used for an event emitting API?
--   [ ] EXT-X-SKIP
--   [ ] EXT-X-PRELOAD-HINT
--   [ ] EXT-X-RENDITION-REPORT
--   [ ] EXT-X-I-FRAME-STREAM-INF
--   [ ] EXT-X-SESSION-DATA
--   [ ] EXT-X-SESSION-KEY
--   [ ] EXT-X-CONTENT-STEERING
--   [ ] EXT-X-KEY: decryption and related tags are very low priority
--   [ ] EXT-X-DISCONTINUITY: I'm under the impression in our scenario that it
-        only is useful to increment discontinuity sequences, which we have no
-        need for...
--   [ ] EXT-X-DISCONTINUITY-SEQUENCE: I don't think we need this, at least I
-        didn't encounter a case for it now that isn't handled by other tags.
+- [x] EXT-X-ENDLIST: Parsed to know if a playlist needs to be refreshed or
+      not, but also to detect if we're playing an unfinished live content to
+      play close to the live edge by default.
+- [x] EXTINF: Only the indicated duration of a segment is considered, not
+      the title for which there's no use for now. Both integer and float
+      durations should be handled.
+- [x] EXT-X-PROGRAM-DATE-TIME: Used to determine the starting position of
+      segments as stored by the player - which may be different than the actual
+      media time once the corresponding segment is pushed.
+      The units/scale indicated by this tag will be preferred over the real
+      media time in the player APIs.
+- [x] EXT-X-BYTERANGE: Used for range requests
+- [x] EXT-X-PLAYLIST-TYPE: Used To know if a Playlist may be refreshed
+- [x] EXT-X-TARGETDURATION: Useful for heuristics for playlist refresh
+- [x] EXT-X-GAP: Those segments are just skipped, no variant switch or
+      anything like that.
+- [x] EXT-X-START: Used to determine a default start time in the content.
+- EXT-X-MAP:
+  - [x] URI: Used to fetch the initialization segment if one is present
+  - [x] BYTERANGE: To perform a range request for the initialization segment
+- EXT-X-MEDIA:
+  - [x] TYPE: Both AUDIO and VIDEO are handled. SUBTITLES and CLOSED-CAPTIONS
+        are just ignored for now.
+  - [x] URI
+  - [x] GROUP-ID
+  - [x] DEFAULT
+  - [x] AUTOSELECT
+  - [x] LANGUAGE: In audio track selection API
+  - [x] ASSOC-LANGUAGE: In audio track selection API
+  - [x] NAME: In audio track selection API
+  - [ ] CHANNELS: Not so hard to implement, but I've been too lazy to parse that
+        specific format from the Multivariant Playlist for now
+  - [ ] CHARACTERISTICS: Soon...
+  - [ ] FORCED: As the SUBTITLES TYPE is not handled yet, we don't have to use
+        this one
+  - [ ] INSTREAM-ID: As the CLOSED-CAPTIONS TYPE is not handled yet, we don't
+        have to use this one.
+  - [ ] STABLE-RENDITION-ID: Not really needed for now (only for content steering?)
+- EXT-X-STREAM-INF:
+  - [x] BANDWIDTH: Used to select the right variant in function of the
+        bandwidth
+  - [x] CODECS: Used for checking support (and filtering out if that's not the
+        case, and for initializing buffers with the right info).
+  - [x] AUDIO
+  - [x] VIDEO: As no video track selection API exist yet, only the most
+        prioritized video media playlist is considered
+  - [x] RESOLUTION: Used to describe variant in variant selection API
+  - [x] FRAME-RATE: Used to describe variant in variant selection API
+  - [x] SCORE: Considered both to select a variant and to determine if a quality
+        is better when "fast-switching".
+  - [ ] STABLE-VARIANT-ID: Not really needed for now (only for content steering?)
+  - [ ] AVERAGE-BANDWIDTH: Not used yet. I don't know if it's useful yet for us.
+  - [ ] SUPPLEMENTAL-CODECS: In our web use case, I'm not sure if this is only
+        useful for track selection API or if filtering also needs to be done based
+        on this.
+  - [ ] SUBTITLES: No subtitles support for now
+  - [ ] CLOSED-CAPTIONS: that one is just ignored for now
+  - [ ] PATHWAY-ID: Content Steering not handled yet
+  - [ ] HDCP-LEVEL: DRM are not handled for now
+  - [ ] ALLOWED-CPC: DRM are not handled for now
+- [ ] EXT-X-VERSION: Not specifically considered for now, most differences
+      handled until now had compatible behaviors from version to version
+- [ ] EXT-X-INDEPENDENT-SEGMENTS: Might needs to be considered once we're
+      doing some manual cleaning?
+- [ ] EXT-X-DEFINE: Seems rare enough, so may be supported if the time is
+      taken...
+- [ ] EXT-X-MEDIA-SEQUENCE: Not sure of what this allows. To check...
+- [ ] EXT-X-I-FRAMES-ONLY: To handle one day, perhaps (very low priority)
+- [ ] EXT-X-PART: low-latency related
+- [ ] EXT-X-PART-INF: low-latency related
+- [ ] EXT-X-SERVER-CONTROL: low-latency related?
+- [ ] EXT-X-BITRATE
+- [ ] EXT-X-DATERANGE: Might be used for an event emitting API?
+- [ ] EXT-X-SKIP
+- [ ] EXT-X-PRELOAD-HINT
+- [ ] EXT-X-RENDITION-REPORT
+- [ ] EXT-X-I-FRAME-STREAM-INF
+- [ ] EXT-X-SESSION-DATA
+- [ ] EXT-X-SESSION-KEY
+- [ ] EXT-X-CONTENT-STEERING
+- [ ] EXT-X-KEY: decryption and related tags are very low priority
+- [ ] EXT-X-DISCONTINUITY: I'm under the impression in our scenario that it
+      only is useful to increment discontinuity sequences, which we have no
+      need for...
+- [ ] EXT-X-DISCONTINUITY-SEQUENCE: I don't think we need this, at least I
+      didn't encounter a case for it now that isn't handled by other tags.
 
 ## Setup
 

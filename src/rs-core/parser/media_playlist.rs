@@ -265,6 +265,7 @@ impl MediaPlaylist {
         let mut last_incomplete_map = None;
         let mut maps_info: Vec<InitSegmentInfo> = vec![];
         let mut start = None;
+        let mut skip_next_segment = false;
 
         let playlist_base_url = url.pathname();
 
@@ -295,6 +296,9 @@ impl MediaPlaylist {
                             Ok(t) if t <= (u32::MAX as u64) => target_duration = Some(t as u32),
                             _ => Logger::warn("Unparsable TARGETDURATION value"),
                         }
+                    }
+                    "-X-GAP" => {
+                        skip_next_segment = true;
                     }
                     "-X-ENDLIST" => end_list = true,
                     "-X-INDEPENDENT-SEGMENTS" => independent_segments = true,
@@ -402,6 +406,15 @@ impl MediaPlaylist {
                 }
             } else if str_line.starts_with('#') {
                 continue;
+            } else if skip_next_segment {
+                skip_next_segment = false;
+                if let Some(duration) = next_segment_duration {
+                    curr_start_time += duration;
+                    next_segment_duration = None;
+                    next_segment_byte_range = None;
+                } else {
+                    return Err(MediaPlaylistParsingError::UriWithoutExtInf);
+                }
             } else {
                 // URI
                 let seg_url = Url::new(str_line);
