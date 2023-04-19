@@ -15,7 +15,7 @@ Each of those objects should contain the following keys:
 
 - `id` (`number`): The identifier for that variant. Might be useful for
   example when wanting to lock that variant in place through the
-  [`lockVariant`](./Variant_Selection/lockVariant.md) method.
+  [`lockVariant`](./lockVariant.md) method.
 
 - `width` (`number | undefined`): The optimal width at which the video media
   data linked to that variant is displayed, in pixel.

@@ -14,8 +14,9 @@ Once locked, it is possible to `unlock` the variant for the currently-loaded
 content by calling the [`unlockVariant`](./unlockVariant.md) method.
 
 `lockVariant` can only be called when the `WaspHlsPlayer` instance is [in the
-`"Loaded"` state](./getPlayerState.md) and thus when a content is currently
-loaded. Calling it in any other scenario leads to an error being thrown.
+`"Loaded"` state](../Basic_Methods/getPlayerState.md) and thus when a content is
+currently loaded. Calling it in any other scenario leads to an error being
+thrown.
 
 ## Influence on audio tracks
 

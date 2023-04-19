@@ -8,8 +8,9 @@ Once this method has been called, the `WaspHlsPlayer` will go back to choosing
 the most appropriate variant, e.g. by taking into account network conditions.
 
 `unlockVariant` can only be called when the `WaspHlsPlayer` instance is [in the
-`"Loaded"` state](./getPlayerState.md) and thus when a content is currently
-loaded. Calling it in any other scenario leads to an error being thrown.
+`"Loaded"` state](../Basic_Methods/getPlayerState.md) and thus when a content is
+currently loaded. Calling it in any other scenario leads to an error being
+thrown.
 
 ## Note about its asynchronicity
 

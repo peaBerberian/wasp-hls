@@ -15,8 +15,9 @@ You can also set the argument to `null` to let the `WaspHlsPlayer` set a
 default audio track.
 
 `setAudioTrack` can only be called when the `WaspHlsPlayer` instance is [in the
-`"Loaded"` state](./getPlayerState.md) and thus when a content is currently
-loaded. Calling it in any other scenario leads to an error being thrown.
+`"Loaded"` state](../Basic_Methods/getPlayerState.md) and thus when a content is
+currently loaded. Calling it in any other scenario leads to an error being
+thrown.
 
 ## Influence on variants
 
