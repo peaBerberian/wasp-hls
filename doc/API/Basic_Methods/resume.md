@@ -5,8 +5,9 @@
 Un-pause the currently-loaded content.
 Equivalent to a video element's `play` method.
 
-`play` can only be called when the `WaspHlsPlayer` instance is [in the
-`"Loaded"`](./getPlayerState.md) state.
+`resume` can only be called when the `WaspHlsPlayer` instance is [in the
+`"Loaded"` state](./getPlayerState.md) and thus when a content is currently
+loaded. Calling it in any other scenario leads to an error being thrown.
 
 Note that when initially loaded, the content will be in the paused state. If
 you want to begin playback, you will thus have to call `resume`.

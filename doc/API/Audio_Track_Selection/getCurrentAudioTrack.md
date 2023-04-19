@@ -33,7 +33,7 @@ When set, the returned object has the following properties (same than for a
   indicating the maximum number of independent and simultaneous audio channels
   present in any media data in that audio track.
 
-  For example, an AC-3 5.1 Rendition would have a CHANNELS="6" attribute.
+  For example, an AC-3 5.1 Rendition would have a `channels` attribute set to `6`.
 
 The current audio track should be known once the `audioTrackUpdate`
 [event](../Player_Events.md) is sent for the currently-loaded content, which

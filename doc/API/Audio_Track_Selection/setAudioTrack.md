@@ -14,9 +14,13 @@ are through the [`getAudioTrackList` method](./getAudioTrackList.md) and the
 You can also set the argument to `null` to let the `WaspHlsPlayer` set a
 default audio track.
 
+`setAudioTrack` can only be called when the `WaspHlsPlayer` instance is [in the
+`"Loaded"` state](./getPlayerState.md) and thus when a content is currently
+loaded. Calling it in any other scenario leads to an error being thrown.
+
 ## Influence on variants
 
-updating the audio track through `setAudioTrack` may also changes the
+updating the audio track through `setAudioTrack` may also change the
 list of available "variants" (groups of qualities) as returned for example by
 the [`getVariantList` method](../Variant_Selection/getVariantList.md), in which
 case you will also receive a corresponding `variantListUpdate`

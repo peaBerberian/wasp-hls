@@ -411,7 +411,7 @@ When set to an object, it should contain the following keys:
   indicating the maximum number of independent and simultaneous audio channels
   present in any media data in that audio track.
 
-  For example, an AC-3 5.1 Rendition would have a CHANNELS="6" attribute.
+  For example, an AC-3 5.1 Rendition would have a `channels` attribute set to `6`.
 
 You can also know at any time the same characteristics of the current audio
 track by calling the [`getCurrentAudioTrack`](./Audio_Track_Selection/getCurrentAudioTrack.md)
@@ -452,7 +452,7 @@ Each object should contain the following keys (same than for the
   indicating the maximum number of independent and simultaneous audio channels
   present in any media data in that audio track.
 
-  For example, an AC-3 5.1 Rendition would have a CHANNELS="6" attribute.
+  For example, an AC-3 5.1 Rendition would have a `channels` attribute set to `6`.
 
 You can also know at any time the list of available audio tracks by calling the
 [`getAudioTrackList`](./Audio_Track_Selection/getAudioTrackList.md) method.

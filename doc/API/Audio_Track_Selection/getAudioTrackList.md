@@ -38,7 +38,7 @@ Each of those objects should contain the following keys (same than for the
   indicating the maximum number of independent and simultaneous audio channels
   present in any media data in that audio track.
 
-  For example, an AC-3 5.1 Rendition would have a CHANNELS="6" attribute.
+  For example, an AC-3 5.1 Rendition would have a `channels` attribute set to `6`.
 
 That list of audio tracks is known once the `audioTrackListUpdate`
 [event](../Player_Events.md) is sent for the currently-loaded content, which

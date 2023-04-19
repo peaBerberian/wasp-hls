@@ -4,8 +4,8 @@
 
 Returns `true` when there's both:
 
-1.  a content loaded
-2.  playback is not paused.
+1.  A content loaded
+2.  Playback is not paused.
 
 Note that `isPlaying` returns true even if playback is stalled due to
 rebuffering (you can check [`isRebuffering`](./isRebuffering.md) for this).
