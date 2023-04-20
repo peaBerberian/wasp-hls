@@ -1,6 +1,12 @@
 <p align="center">
   <img height="100px" src="https://user-images.githubusercontent.com/8694124/231414483-eb38f21a-68bf-41b9-98f7-2c8012e2d52e.png#gh-light-mode-only" alt="Wasp-hls's logo"/>
   <img height="100px" src="https://user-images.githubusercontent.com/8694124/231414514-9742e81b-bc4f-4af2-99be-35154c0281cc.png#gh-dark-mode-only" alt="Wasp-hls's logo"/>
+  <br /><br />
+  <a href="https://peaberberian.github.io/wasp-hls/doc/Getting_Started/Welcome.html">🎓 <b>Getting Started</b></a>
+  -
+  <a href="https://peaberberian.github.io/wasp-hls/">⏯ <b>Demo</b></a>
+  -
+  <a href="https://peaberberian.github.io/wasp-hls/doc/API/Overview.html">📖 <b>API documentation</b></a>
 </p>
 
 Wasp-hls is an [HLS](https://en.wikipedia.org/wiki/HTTP_Live_Streaming) media
