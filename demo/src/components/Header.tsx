@@ -1,21 +1,30 @@
 import * as React from "react";
 
 export default function Header(): JSX.Element {
+  /* eslint-disable max-len */
   return (
     <div className="nav-header">
-      <div className="header-left" />
-      <a className="title-link" href="./">
+      <div className="header-left">
+        <a href="https://peaberberian.github.io/wasp-hls/doc/Getting_Started/Welcome.html">
+          Getting Started
+        </a>
+        <a href="https://peaberberian.github.io/wasp-hls/doc/API/Overview.html">
+          API
+        </a>
+      </div>
+      <span className="title-link">
         <img
           className="title-img"
           src="./logo-white.png"
           alt="wasp-hls-player"
         />
-      </a>
+      </span>
       <div className="header-right">
         <GithubLogo />
       </div>
     </div>
   );
+  /* eslint-enable max-len */
 }
 
 function GithubLogo(): JSX.Element {
