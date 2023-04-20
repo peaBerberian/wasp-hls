@@ -21,4 +21,4 @@ const isPlaying = player.isPlaying();
 
 - **return value**:
 
-`boolean`: Result `true` if playback is considered as not paused.
+`boolean`: Return `true` if playback is considered as not paused.

@@ -26,4 +26,4 @@ const isRebuffering = player.isRebuffering();
 
 - **return value**:
 
-`boolean`: Result `true` if playback is currently on hold due to rebuffering.
+`boolean`: Return `true` if playback is currently on hold due to rebuffering.

@@ -21,4 +21,4 @@ const isPaused = player.isPaused();
 
 - **return value**:
 
-`boolean`: Result `true` if playback is considered paused.
+`boolean`: Return `true` if playback is considered paused.
