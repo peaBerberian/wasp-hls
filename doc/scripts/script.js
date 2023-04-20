@@ -785,6 +785,7 @@ function loadSidebarLink(link, { display, updateURL }) {
   for (const cached of linksCache) {
     if (cached[0] === link.href) {
       if (display) {
+        currentlyWantedPage = link.href;
         setCurrentDisplayTimeout(link.href);
       }
       return cached[1].then(function (newContent) {
@@ -799,13 +800,13 @@ function loadSidebarLink(link, { display, updateURL }) {
     }
   }
   if (display) {
+    currentlyWantedPage = link.href;
     setCurrentDisplayTimeout(link.href);
   }
   return loadContentFrom(link, display, true);
 }
 
 function prepareNextPage(link) {
-  currentlyWantedPage = link.href;
   const sidebar = document.getElementsByClassName("sidebar-items")[0];
   const actives = sidebar.getElementsByClassName("active");
   for (let i = actives.length - 1; i >= 0; i--) {
@@ -871,7 +872,7 @@ function setCurrentDisplayTimeout(url) {
     const spinnerDiv = document.createElement("div");
     spinnerDiv.innerHTML = spinnerSvg;
     pageTextSpan.textContent =
-      "Loading the next documentation page takes time," +
+      "Loading the next documentation page takes time, " +
       "you can also try to force browser navigation by going to the following link: ";
     pageTextUrl.href = url;
     pageTextUrl.textContent = url;
