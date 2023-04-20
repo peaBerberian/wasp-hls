@@ -43,6 +43,11 @@ of the locked variant yet.
 You will receive a `variantLockUpdate` [event](../Player_Events.md) once the
 variant is known to be actively locked by the `WaspHlsPlayer`.
 
+If the locked variant was actually not found on the content, a `"warning"`
+[event](../Player_Events.md) will be triggered with a code set to
+`"UnfoundLockedVariant"`.
+
+
 ## Syntax
 
 ```js
