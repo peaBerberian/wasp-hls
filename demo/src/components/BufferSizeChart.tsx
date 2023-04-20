@@ -140,7 +140,7 @@ function BufferSizeChart({
           return;
         }
         canvasCtx.current.beginPath();
-        canvasCtx.current.strokeStyle = "rgb(200, 100, 200)";
+        canvasCtx.current.strokeStyle = "#006ca3";
         canvasCtx.current.lineWidth = 2;
         canvasCtx.current.moveTo(0, bufferValueToY(innerData[0].value));
         for (let i = 1; i < innerData.length; i++) {
