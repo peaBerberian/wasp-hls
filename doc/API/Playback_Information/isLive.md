@@ -25,7 +25,7 @@ Note that a content can stop being a live content, e.g. when the live is
 finished. In that case, `isLive` will return `false`.
 
 You can be warned when `isLive`'s value might have changed by listening to the
-`ContentInfoUpdate` [event](../Player_Events). You can also know when it is
+`ContentInfoUpdate` [event](../Player_Events.md). You can also know when it is
 first set after a [`load`](../Basic_Methods/load.md) call either by listening to
 this same `ContentInfoUpdate` event or by calling `isLive` when reaching the
 `"Loaded"` [state](../Basic_Methods/getPlayerState.md).

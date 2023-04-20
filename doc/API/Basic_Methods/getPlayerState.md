@@ -19,7 +19,7 @@ The various values that this state can be set to are:
   [`getError`](./getError.md) method.
 
 You can be directly notified of when this state change by listening to the
-`playerStateChange` [event](../Player_Events).
+`playerStateChange` [event](../Player_Events.md).
 
 ## Syntax
 

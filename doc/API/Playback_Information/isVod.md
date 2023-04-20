@@ -18,7 +18,7 @@ evolve since the content is loaded.
 Note that a content can start as a non-VOD content but may end as one.
 
 You can be warned when `isVod`'s value might have changed by listening to the
-`ContentInfoUpdate` [event](../Player_Events). You can also know when it is
+`ContentInfoUpdate` [event](../Player_Events.md). You can also know when it is
 first set after a [`load`](../Basic_Methods/load.md) call either by listening to
 this same `ContentInfoUpdate` event or by calling `isLive` when reaching the
 `"Loaded"` [state](../Basic_Methods/getPlayerState.md).
