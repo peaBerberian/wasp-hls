@@ -21,6 +21,18 @@ body {
   padding: 10px;
 }
 
+.header-left a {
+  color: white;
+  margin: 0px 10px;
+  font-weight: bold;
+  text-decoration: none;
+  font-size: 1.05em;
+}
+
+.header-left a:hover {
+  color: #fff900;
+}
+
 .header-right {
   margin-right: 30px;
 }
@@ -43,6 +55,7 @@ body {
   position: absolute;
   text-align: center;
   width: calc(100% - 10px);
+  z-index: -1;
 }
 
 .title-img {
