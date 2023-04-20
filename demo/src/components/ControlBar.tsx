@@ -43,6 +43,7 @@ export default React.memo(function ControlBar({
   const [position, setPosition] = React.useState<number | undefined>(undefined);
   const [minimumPosition, setMinimumPosition] = React.useState(0);
   const [maximumPosition, setMaximumPosition] = React.useState(Infinity);
+  const [duration, setDuration] = React.useState(NaN);
   const [bufferGap, setBufferGap] = React.useState(0);
   const [isPaused, setIsPaused] = React.useState(true);
   const [isControlBarDisplayed, setIsControlBarDisplayed] =
@@ -176,6 +177,7 @@ export default React.memo(function ControlBar({
       setPosition(undefined);
       setMinimumPosition(0);
       setMaximumPosition(Infinity);
+      setDuration(NaN);
       setBufferGap(0);
     }
 
@@ -186,16 +188,8 @@ export default React.memo(function ControlBar({
       setMinimumPosition(minPos ?? 0);
       const maxPos = player.getMaximumPosition();
       setMaximumPosition(maxPos ?? Infinity);
-      let newBufferGap = 0;
-      const buffered = player.videoElement.buffered;
-      if (buffered.length > 0) {
-        for (let i = 0; i < buffered.length; i++) {
-          if (pos >= buffered.start(i) && pos < buffered.end(i)) {
-            newBufferGap = buffered.end(i) - pos;
-          }
-        }
-      }
-      setBufferGap(newBufferGap);
+      setDuration(player.getMediaDuration());
+      setBufferGap(player.getCurrentBufferGap());
       if (!player.isPaused()) {
         if (minPos !== undefined && minPos > pos + 2) {
           console.warn("Behind minimum position, seeking...");
@@ -378,10 +372,7 @@ export default React.memo(function ControlBar({
               onClick={onStopButtonClick}
             />
             {areControlsDisabled || position === undefined ? null : (
-              <PositionIndicator
-                position={position}
-                duration={maximumPosition}
-              />
+              <PositionIndicator position={position} duration={duration} />
             )}
           </div>
           <div className="video-controls-right">

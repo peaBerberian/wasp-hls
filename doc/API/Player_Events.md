@@ -238,6 +238,31 @@ player.addEventListener("rebufferingEnded", () => {
 You can also know whether playback is currently rebuffering at any time by
 calling the [`isRebuffering`](./Playback_Information/isRebuffering.md) method.
 
+## Event: `contentInfoUpdate`
+
+The `"contentInfoUpdate"` event is sent when the following characteristics of
+the last loaded content are either known or updated:
+
+- The ["minimum position"](./Position_Control/getMinimumPosition.md) reachable
+  in the content.
+
+- The ["maximum position"](./Position_Control/getMaximumPosition.md) reachable
+  in the content.
+
+- Whether the current content is a ["live content"](./Playback_Information/isLive.md).
+
+- Whether the current content is a ["VOD content"](./Playback_Information/isVod.md).
+
+The payload of that event is an object with the following self-explanatory properties:
+
+- `minimumPosition` (`number | undefined`): the new minimum position.
+
+- `maximumPosition` (`number | undefined`): the new maximum position.
+
+- `isLive` (`boolean`): If `true`, the content is a live content.
+
+- `isVod` (`boolean`): If `true`, the content is a VoD content.
+
 ## Event: `variantUpdate`
 
 The `"variantUpdate` event is sent when the currently-loaded variant, which

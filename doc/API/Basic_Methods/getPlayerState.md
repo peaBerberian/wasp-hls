@@ -18,6 +18,9 @@ The various values that this state can be set to are:
   triggered. You can also know which error happened by calling the
   [`getError`](./getError.md) method.
 
+You can be directly notified of when this state change by listening to the
+`playerStateChange` [event](../Player_Events).
+
 ## Syntax
 
 ```js

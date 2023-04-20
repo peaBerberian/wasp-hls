@@ -17,6 +17,10 @@
       "displayName": "getMaximumPosition"
     },
     {
+      "path": "./getMediaDuration.md",
+      "displayName": "getMediaDuration"
+    },
+    {
       "path": "./getMediaOffset.md",
       "displayName": "getMediaOffset"
     }

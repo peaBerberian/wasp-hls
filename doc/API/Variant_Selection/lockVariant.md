@@ -20,17 +20,12 @@ thrown.
 
 ## Influence on audio tracks
 
-Locking a variant through `lockVariant` may also change the current list
-of available audio tracks as returned for example by the [`getAudioTrackList`
-method](../Variant_Selection/getVariantList.md), in which case you will also
-receive a corresponding `audioTrackListUpdate` [event](../Player_Events.md).
+Locking a variant through `lockVariant` may also trigger an automatic audio
+track change previously set through a `setAudioTrack` call, in which case you
+will receive the corresponding `audioTrackUpdate` [event](../Player_Events.md).
+
 This is because some audio tracks may only be compatible with some variants
 but not others.
-
-This also means that changing the audio track may also trigger an automatic
-audio track change previously set through a `setAudioTrack` call, in
-which case you will receive the corresponding `audioTrackUpdate`
-[event](../Player_Events.md).
 
 It should be noted however that such scenarios are rare and may only be seen in
 the few HLS contents which enforce such rules.

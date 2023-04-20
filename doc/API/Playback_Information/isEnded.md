@@ -19,4 +19,4 @@ const isEnded = player.isEnded();
 
 - **return value**:
 
-`boolean`: Result `true` if playback is considered ended.
+`boolean`: Return `true` if playback is considered ended.

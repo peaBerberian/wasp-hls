@@ -481,6 +481,41 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
   }
 
   /**
+   * Returns the time difference in seconds between the end of the current
+   * buffered range of data and the current position.
+   *
+   * That is, it is the amount of media data to play in seconds before we might
+   * enter rebuffering if no new segment is loaded (unless the range finishes at
+   * the content's end and unless a seek is performed since then).
+   *
+   * @returns {number}
+   */
+  public getCurrentBufferGap(): number {
+    const { buffered, currentTime } = this.videoElement;
+    for (let i = 0; i < buffered.length; i++) {
+      if (buffered.start(i) <= currentTime && buffered.end(i) > currentTime) {
+        return buffered.end(i) - currentTime;
+      }
+    }
+    return 0;
+  }
+
+  /**
+   * Returns the content's duration, in playlist time of the content.
+   *
+   * Returns `NaN` if no content is loaded.
+   *
+   * This value should only be considered if a content is currently loaded.
+   * That is, the current `PlayerState` is equal to `Loaded`.
+   *
+   * @returns {number}
+   */
+  public getMediaDuration(): number {
+    const duration = this.videoElement.duration;
+    return duration - (this.__contentMetadata__?.mediaOffset ?? 0);
+  }
+
+  /**
    * Move the position of playback to the given position.
    *
    * This method can only be called if a content is loaded (`Loaded`

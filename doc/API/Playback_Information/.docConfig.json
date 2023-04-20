@@ -15,6 +15,14 @@
     {
       "path": "./isEnded.md",
       "displayName": "isEnded"
+    },
+    {
+      "path": "./isLive.md",
+      "displayName": "isLive"
+    },
+    {
+      "path": "./isVod.md",
+      "displayName": "isVod"
     }
   ]
 }

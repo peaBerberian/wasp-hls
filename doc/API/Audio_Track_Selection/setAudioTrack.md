@@ -21,18 +21,12 @@ thrown.
 
 ## Influence on variants
 
-updating the audio track through `setAudioTrack` may also change the
-list of available "variants" (groups of qualities) as returned for example by
-the [`getVariantList` method](../Variant_Selection/getVariantList.md), in which
-case you will also receive a corresponding `variantListUpdate`
-[event](../Player_Events.md). This is because some audio tracks may only be
-compatible with some variants but not others.
+Changing the audio track may also trigger an automatic "unlocking" of a variant
+previously locked through a `lockVariant` call, in which case you will receive
+the corresponding `variantLockUpdate` [event](../Player_Events.md).
 
-This also means that changing the audio track may also trigger an automatic
-"unlocking" of a variant previously locked through a `lockVariant` call, in
-which case you will receive the corresponding `variantLockUpdate`
-[event](../Player_Events.md).
-
+This is because some audio tracks may only be compatible with some variants but
+not others.
 It should be noted however that such scenarios are rare and may only be seen in
 the few HLS contents which enforce such rules.
 

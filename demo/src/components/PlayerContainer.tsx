@@ -82,18 +82,7 @@ export default React.memo(function PlayerContainer({
           stopBufferGapInterval();
           return;
         }
-        const buffered = player.videoElement.buffered;
-        const currentTime = player.videoElement.currentTime;
-        let bufferGap = 0;
-        for (let i = 0; i < buffered.length; i++) {
-          if (
-            buffered.start(i) <= currentTime &&
-            buffered.end(i) > currentTime
-          ) {
-            bufferGap = buffered.end(i) - currentTime;
-            break;
-          }
-        }
+        const bufferGap = player.getCurrentBufferGap();
         setBufferGaps((oldBufferGaps) => {
           const newVal = { date: performance.now(), value: bufferGap };
           if (oldBufferGaps.length >= 500) {

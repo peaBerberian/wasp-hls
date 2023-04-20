@@ -15,8 +15,8 @@ use crate::{
         jsSendRemovedBufferError, jsSendSegmentParsingError, jsSendSegmentRequestError,
         jsSendSourceBufferCreationError, jsSetMediaSourceDuration, jsStartObservingPlayback,
         jsStopObservingPlayback, jsTimer, jsUpdateContentInfo, AddSourceBufferErrorCode, MediaType,
-        MultivariantPlaylistParsingErrorCode, OtherErrorCode, PushedSegmentErrorCode, RequestId,
-        SourceBufferId, TimerId, TimerReason,
+        MultivariantPlaylistParsingErrorCode, OtherErrorCode, PlaylistNature,
+        PushedSegmentErrorCode, RequestId, SourceBufferId, TimerId, TimerReason,
     },
     media_element::{SegmentQualityContext, SourceBufferCreationError},
     parser::{MultivariantPlaylist, SegmentTimeInfo},
@@ -440,7 +440,9 @@ impl Dispatcher {
             }
 
             self.ready_state = PlayerReadyState::AwaitingSegments;
-            if let Some(duration) = playlist_store.curr_duration() {
+            if playlist_store.playlist_type() != PlaylistNature::VoD {
+                jsSetMediaSourceDuration(u32::MAX as f64);
+            } else if let Some(duration) = playlist_store.curr_duration() {
                 jsSetMediaSourceDuration(duration);
             } else {
                 Logger::warn("Core: Unknown content duration");

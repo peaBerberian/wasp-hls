@@ -15,7 +15,7 @@ Its intended purpose is to indicate to you the range where you may be able to
 
 If no content is currently loaded, `getMinimumPosition` will return `undefined`.
 
-Note that this minimum position might evolve over time, depdending on the type
+Note that this minimum position might evolve over time, depending on the type
 of content being played. More information on this in this documentation page.
 
 ## About "playlist time"
@@ -59,23 +59,24 @@ getting `getMinimumPosition`).
 As a general rule, changes of the minimum position may be expected unless the
 content is a VoD content.
 You can know is you're playing a VoD content by calling the [`isVod`
-method](XXX TODO) after reaching the `"Loaded"` [state](../Basic_Methods/getPlayerState.md)
-for that content or by reading the `isVod` property from a `contentInfoUpdate`
-event (which is moreover first sent even before the `"Loaded"` state is
-reached).
+method](../Playback_Information/isVod.md) after reaching the `"Loaded"`
+[state](../Basic_Methods/getPlayerState.md) for that content or by reading the
+`isVod` property from a `contentInfoUpdate` event (which is moreover first sent
+even before the `"Loaded"` state is reached).
 
 On live contents, the minimum position increase can generally be approximated as
 a linear increase (such as 1 second every seconds) until the end of the content.
 You can know is you're playing a live content by calling the [`isLive`
-method](XXX TODO) after reaching the `"Loaded"` [state](../Basic_Methods/getPlayerState.md)
-for that content or by reading the `isLive` property from the `contentInfoUpdate`
-event. Once the live is ended, `isLive` should return `false`.
+method](../Playback_Information/isLive.md) after reaching the `"Loaded"`
+[state](../Basic_Methods/getPlayerState.md) for that content or by reading the
+`isLive` property from the `contentInfoUpdate` event. Once the live is ended,
+`isLive` should return `false`.
 
 Note that a content may also become a VoD once it is finished, at which point
 the minimum position will be guaranteed to be definitive.
 To react directly to this eventuality, you may want to listen to the
 `contentInfoUpdate` [event](../Player_Events.md) and read its `isVoD` property,
-or call the [`isVod` method](./XXX TODO).
+or call the [`isVod` method](../Playback_Information/isVod.md).
 
 ## Syntax
 

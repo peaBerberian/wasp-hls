@@ -57,18 +57,19 @@ progression yourself (you may still want to regularly re-synchronize it by
 getting `getMaximumPosition`).
 
 You can know is you're playing such type of content by calling the [`isVod`
-method](XXX TODO) after reaching the `"Loaded"` [state](../Basic_Methods/getPlayerState.md)
-for that content or by reading the `isVod` property from a `contentInfoUpdate`
-event (which is moreover first sent even before the `"Loaded"` state is
-reached).
+method](../Playback_Information/isVod.md) after reaching the `"Loaded"`
+[state](../Basic_Methods/getPlayerState.md) for that content or by reading
+the `isVod` property from a `contentInfoUpdate` event (which is moreover
+first sent even before the `"Loaded"` state is reached).
 If it returns `false`, the maximum position might increase.
 
 For live contents for example (you can know if you're playing a live content by
-calling the [`isLive` method](XXX TODO) after reaching the `"Loaded"`
-[state](../Basic_Methods/getPlayerState.md)) or by reading the `isLive` property
-from `ContentInfoUpdate` events, the maximum position increase can generally be
-approximated as a linear increase (such as 1 second every seconds) until the end
-of the content (at which point `isLive` will be set to `false`).
+calling the [`isLive` method](../Playback_Information/isLive.md) after reaching
+the `"Loaded"` [state](../Basic_Methods/getPlayerState.md)) or by reading the
+`isLive` property from `ContentInfoUpdate` events, the maximum position increase
+can generally be approximated as a linear increase (such as 1 second every
+seconds) until the end of the content (at which point `isLive` will be set to
+`false`).
 
 ## For VOD contents
 
@@ -77,10 +78,10 @@ When playing a VOD content, the maximum position will be set before the
 evolve as long as that content is loaded.
 
 You can know is you're playing a VOD content by calling the [`isVod`
-method](XXX TODO) after reaching the `"Loaded"` [state](../Basic_Methods/getPlayerState.md)
-for that content or by reading the `isVod` property from a `contentInfoUpdate`
-[event](../Player_Events.md) (which is moreover first sent even before the
-`"Loaded"` state is reached).
+method](../Playback_Information/isVod.md) after reaching the `"Loaded"`
+[state](../Basic_Methods/getPlayerState.md) for that content or by reading the
+`isVod` property from a `contentInfoUpdate` [event](../Player_Events.md) (which
+is moreover first sent even before the `"Loaded"` state is reached).
 
 ## Syntax
 
