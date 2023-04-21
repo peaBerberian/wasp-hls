@@ -1,5 +1,11 @@
 # Changelog
 
+# 0.3.0 (2023-04-21)
+
+## Features
+
+  - Add embedded wasm and worker
+
 # 0.2.0 (2023-04-21)
 
 ## Features
