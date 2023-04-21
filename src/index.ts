@@ -1,8 +1,9 @@
-import logger, {
-  LoggerLevel as innerLoggerLevel,
-} from "./ts-common/logger";
+import logger, { LoggerLevel as innerLoggerLevel } from "./ts-common/logger";
 import WaspHlsPlayer, { PlayerState as innerPlayerState } from "./ts-main";
+export { WaspHlsPlayerConfig } from "./ts-common/types";
 export {
+  AudioTrackInfo,
+  VariantInfo,
   WaspError,
   WaspErrorCode,
   WaspInitializationError,
