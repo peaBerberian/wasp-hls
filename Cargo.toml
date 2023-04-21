@@ -1,6 +1,6 @@
 [package]
 name = "wasp-hls"
-version = "0.0.1"
+version = "0.1.0"
 edition = "2021"
 
 [lib]
@@ -8,5 +8,5 @@ crate-type = ["cdylib"]
 path = "src/rs-core/lib.rs"
 
 [dependencies]
-wasm-bindgen = "0.2.80"
-thiserror = "1.0.37"
+wasm-bindgen = "0.2.84"
+thiserror = "1.0.40"
