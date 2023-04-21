@@ -1,15 +1,15 @@
 import * as React from "react";
 import * as ReactDOM from "react-dom/client";
-import { logger, LoggerLevels } from "../../src";
+import { logger, LoggerLevel } from "../../src";
 import Header from "./components/Header";
 import PlayerContainersWrapper from "./components/PlayerContainersWrapper";
 
-logger.setLevel(LoggerLevels.Debug);
+logger.setLevel(LoggerLevel.Debug);
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 (window as any).logger = logger;
-(window as any).LoggerLevels = LoggerLevels;
+(window as any).LoggerLevel = LoggerLevel;
 /* eslint-enable @typescript-eslint/no-unsafe-member-access */
 /* eslint-enable @typescript-eslint/no-explicit-any */
 

@@ -99,7 +99,7 @@ export default React.memo(function PlayerContainer({
         setBufferGaps([]);
       }
     }
-    function onPlayerStateChange(playerState: PlayerState): void {
+    function onPlayerStateChange(playerState: keyof typeof PlayerState): void {
       if (
         playerState === PlayerState.Stopped ||
         playerState === PlayerState.Error

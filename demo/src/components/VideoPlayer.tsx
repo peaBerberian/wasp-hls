@@ -69,7 +69,7 @@ export default React.memo(function VideoPlayer({
       player.removeEventListener("rebufferingEnded", disableSpinner);
     };
 
-    function onPlayerStateChange(playerState: PlayerState): void {
+    function onPlayerStateChange(playerState: keyof typeof PlayerState): void {
       switch (playerState) {
         case PlayerState.Stopped:
           disableSpinner();

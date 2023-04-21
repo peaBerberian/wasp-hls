@@ -2,6 +2,7 @@
   "name": "wasp-hls",
   "version": "0.1.0",
   "description": "WebAssembly HLS Player Proof Of Concept",
+  "main": "build/es6/index.js",
   "scripts": {
     "build:all": "npm run clean && npm run build:wasm && npm run build:worker && npm run build:main",
     "build:all:demo": "npm run clean && npm run build:wasm && npm run build:worker && npm run build:demo",
@@ -9,6 +10,7 @@
     "build:demo:release": "esbuild demo/src/index.tsx --bundle --outfile=build/demo.js --minify",
     "build:demo:watch": "esbuild demo/src/index.tsx --bundle --outfile=build/demo.js --watch",
     "build:main": "esbuild src/ts-main/index.ts --bundle --outfile=build/main.js",
+    "build:main:es6": "rm -rf build/es6 && tsc -p src/tsconfig.json --outDir \"./build/es6\" && mkdir build/es6/wasm && cp -r src/wasm/wasp_hls.js src/wasm/wasp_hls.d.ts build/es6/wasm/",
     "build:main:release": "esbuild src/ts-main/index.ts --bundle --outfile=build/main.js --minify",
     "build:release": "npm run clean && npm run build:wasm:release && npm run build:worker:release && npm run build:main:release",
     "build:wasm": "npm run compile:rs && npm run move:wasm",

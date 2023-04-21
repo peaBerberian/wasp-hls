@@ -68,7 +68,7 @@ function SettingsWindow({ player }: { player: WaspHlsPlayer }): JSX.Element {
       setAudioTrackList(vl);
     }
 
-    function onPlayerStateChange(playerState: PlayerState): void {
+    function onPlayerStateChange(playerState: keyof typeof PlayerState): void {
       switch (playerState) {
         case PlayerState.Loading:
         case PlayerState.Stopped:

@@ -233,7 +233,7 @@ export default function BufferContentGraph({
       clearPositionUpdateInterval();
     };
 
-    function onPlayerStateChange(playerState: PlayerState): void {
+    function onPlayerStateChange(playerState: keyof typeof PlayerState): void {
       switch (playerState) {
         case PlayerState.Loading:
         case PlayerState.Stopped:
