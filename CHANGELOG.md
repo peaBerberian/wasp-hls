@@ -1,5 +1,11 @@
 # Changelog
 
+# 0.2.0 (2023-04-21)
+
+## Features
+
+  - Emit TypeScript declaration files and add more types
+
 # 0.1.1 (2023-04-21)
 
 ## Bug fixes
