@@ -19,7 +19,6 @@
 ## Features
 
   - Emit TypeScript declaration files and add more types
-  - Add embedded wasm and worker
 
 # 0.1.1 (2023-04-21)
 
