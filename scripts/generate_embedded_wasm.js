@@ -40,7 +40,10 @@ const fs = require("fs");
 const path = require("path");
 
 const originalWasmFilePath = path.join(__dirname, "../build/wasp_hls_bg.wasm");
-const destinationPath = path.join(__dirname, "../wasm.js");
+const destinationJsPath = path.join(__dirname, "../wasm.js");
+const destinationDeclPath = path.join(__dirname, "../wasm.d.ts");
+const declarationFile = `declare const EmbeddedWasm: string;
+export default EmbeddedWasm;`;
 
 const codePrefix = "const blobURL = URL.createObjectURL(new Blob([";
 const codeSuffix = `], { type: "application/wasm" }));
@@ -53,9 +56,15 @@ fs.readFile(originalWasmFilePath, { encoding: null }, function (err, data) {
     const u8Arr = new Uint8Array(data);
     const jsDataStr = `new Uint8Array([${u8Arr.toString()}])`;
     const content = codePrefix + jsDataStr + codeSuffix;
-    fs.writeFile(destinationPath, content, (err) => {
+    fs.writeFile(destinationJsPath, content, (err) => {
       if (err) {
-        console.error(`Error while writing "${destinationPath}":`, err);
+        console.error(`Error while writing "${destinationJsPath}":`, err);
+      }
+      // file written successfully
+    });
+    fs.writeFile(destinationDeclPath, declarationFile, (err) => {
+      if (err) {
+        console.error(`Error while writing "${destinationDeclPath}":`, err);
       }
       // file written successfully
     });

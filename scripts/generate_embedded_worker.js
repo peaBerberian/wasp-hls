@@ -42,7 +42,10 @@ const fs = require("fs");
 const path = require("path");
 
 const originalWorkerFilePath = path.join(__dirname, "../build/worker.js");
-const destinationPath = path.join(__dirname, "../worker.js");
+const destinationJsPath = path.join(__dirname, "../worker.js");
+const destinationDeclPath = path.join(__dirname, "../worker.d.ts");
+const declarationFile = `declare const EmbeddedWorker: string;
+export default EmbeddedWorker;`;
 
 const codePrefix = `const blobURL = URL.createObjectURL(new Blob([ "(",
 function(){`;
@@ -58,9 +61,15 @@ fs.readFile(
       console.error(`Error while reading "${originalWorkerFilePath}":`, err);
     } else {
       const content = codePrefix + data + codeSuffix;
-      fs.writeFile(destinationPath, content, (err) => {
+      fs.writeFile(destinationJsPath, content, (err) => {
         if (err) {
-          console.error(`Error while writing "${destinationPath}":`, err);
+          console.error(`Error while writing "${destinationJsPath}":`, err);
+        }
+        // file written successfully
+      });
+      fs.writeFile(destinationDeclPath, declarationFile, (err) => {
+        if (err) {
+          console.error(`Error while writing "${destinationDeclPath}":`, err);
         }
         // file written successfully
       });
