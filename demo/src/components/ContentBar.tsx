@@ -1,5 +1,5 @@
 import * as React from "react";
-import WaspHlsPlayer from "../../../src";
+import WaspHlsPlayer from "wasp-hls";
 
 /**
  * @param {Object} props

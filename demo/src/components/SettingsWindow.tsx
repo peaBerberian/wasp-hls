@@ -1,6 +1,9 @@
 import * as React from "react";
-import WaspHlsPlayer, { PlayerState } from "../../../src";
-import { AudioTrackInfo, VariantInfo } from "../../../src/ts-main";
+import WaspHlsPlayer, {
+  PlayerState,
+  AudioTrackInfo,
+  VariantInfo,
+} from "wasp-hls";
 import AudioTrackSetting from "./AudioTrackSetting";
 import SpeedSetting from "./SpeedSetting";
 import VariantSetting from "./VariantSetting";

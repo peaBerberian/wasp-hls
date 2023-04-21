@@ -1,5 +1,5 @@
 import * as React from "react";
-import { VariantInfo } from "../../../src/ts-main";
+import { VariantInfo } from "wasp-hls";
 
 /**
  * @param {Object} props

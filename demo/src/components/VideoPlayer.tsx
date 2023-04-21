@@ -1,5 +1,5 @@
 import * as React from "react";
-import WaspHlsPlayer, { PlayerState, WaspError } from "../../../src";
+import WaspHlsPlayer, { PlayerState, WaspError } from "wasp-hls";
 import {
   exitFullscreen,
   isFullscreen,

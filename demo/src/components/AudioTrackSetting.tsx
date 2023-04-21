@@ -1,5 +1,5 @@
 import * as React from "react";
-import { AudioTrackInfo } from "../../../src/ts-main";
+import { AudioTrackInfo } from "wasp-hls";
 
 /**
  * @param {Object} props

@@ -1,5 +1,5 @@
 import * as React from "react";
-import WaspHlsPlayer, { PlayerState } from "../../../src";
+import WaspHlsPlayer, { PlayerState } from "wasp-hls";
 import FullScreenButton from "./FullScreenButton";
 import PlayButton from "./PlayButton";
 import PositionIndicator from "./PositionIndicator";

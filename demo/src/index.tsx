@@ -1,6 +1,6 @@
 import * as React from "react";
 import * as ReactDOM from "react-dom/client";
-import { logger, LoggerLevel } from "../../src";
+import { logger, LoggerLevel } from "wasp-hls";
 import Header from "./components/Header";
 import PlayerContainersWrapper from "./components/PlayerContainersWrapper";
 

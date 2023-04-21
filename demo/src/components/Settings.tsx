@@ -1,6 +1,7 @@
 import * as React from "react";
-import WaspHlsPlayer from "../../../src";
-import { WaspHlsPlayerConfig } from "../../../src/ts-common/types";
+import WaspHlsPlayer, {
+  WaspHlsPlayerConfig,
+} from "wasp-hls";
 
 /**
  * @param {Object} props

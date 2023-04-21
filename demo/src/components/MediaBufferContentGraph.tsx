@@ -1,5 +1,5 @@
 import * as React from "react";
-import WaspHlsPlayer, { PlayerState } from "../../../src";
+import WaspHlsPlayer, { PlayerState } from "wasp-hls";
 
 const { useEffect, useMemo, useRef, useState } = React;
 
