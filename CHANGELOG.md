@@ -1,5 +1,13 @@
 # Changelog
 
+# 0.4.0 (2023-04-21)
+
+(First public release)
+
+## Features
+
+  - Add TypeScript declaration files for embedded wasm and worker files
+
 # 0.3.0 (2023-04-21)
 
 ## Features
