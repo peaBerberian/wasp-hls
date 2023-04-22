@@ -445,7 +445,7 @@ export function doFetch(
   }
   const headers: Array<[string, string]> = [];
   if (rangeStart !== undefined) {
-    headers.push(["Range", `${rangeStart}-${rangeEnd ?? ""}`]);
+    headers.push(["Range", `bytes=${rangeStart}-${rangeEnd ?? ""}`]);
   }
   fetch(url, { signal: abortController.signal, headers })
     .then(async (res) => {
