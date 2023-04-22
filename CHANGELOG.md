@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.4.2 (Unreleased yet)
+
+- Better detect mimetype from segment's extension by stripping query and fragment components from its URL
+
 ## 0.4.1 (2023-04-22)
 
 ### Bug fixes
