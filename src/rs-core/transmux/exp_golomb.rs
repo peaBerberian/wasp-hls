@@ -11,7 +11,7 @@
 ///   1. Write down x+1 in binary
 ///   2. Count the bits written, subtract one, and write that number of starting zero bits preceding
 ///     the previous bit string.
-struct ExpGolomb<'a> {
+pub(super) struct ExpGolomb<'a> {
     /// The current data that is being read
     working_data: &'a [u8],
     /// The number of bytes left to examine in `working_data`
