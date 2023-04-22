@@ -36,6 +36,7 @@
     "lint:transmux": "cd src/ts-worker && eslint .",
     "lint:worker": "cd src/ts-worker && eslint .",
     "move:wasm": "cp src/wasm/wasp_hls_bg.wasm build/wasp_hls_bg.wasm",
+    "prepublishOnly": "npm install && npm run build:release && npm run build:main:es6 && node scripts/generate_embedded_wasm.js && node scripts/generate_embedded_worker.js",
     "serve": "http-server ./build",
     "types": "npm run types:main && npm run types:worker && npm run types:demo",
     "types:demo": "tsc --project ./demo --noEmit",
