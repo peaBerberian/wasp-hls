@@ -82,9 +82,9 @@ while doing the Multivariant Playlist HTTP(S) request.</p>
 example to catch when a fatal error was due to a failure to request the
 Multivariant Playlist, you can write:</p>
 <pre><code class="language-js">player.<span class="hljs-title function_">addEventlistener</span>(<span class="hljs-string">"error"</span>, <span class="hljs-function">(<span class="hljs-params">error</span>) =&gt;</span> {
-    <span class="hljs-keyword">if</span> (error.<span class="hljs-property">name</span> === <span class="hljs-string">"WaspMultivariantPlaylistRequestError"</span>) {
-        <span class="hljs-comment">// This error was due to a request failure of the Multivariant Playlist</span>
-    }
+  <span class="hljs-keyword">if</span> (error.<span class="hljs-property">name</span> === <span class="hljs-string">"WaspMultivariantPlaylistRequestError"</span>) {
+    <span class="hljs-comment">// This error was due to a request failure of the Multivariant Playlist</span>
+  }
 });
 </code></pre>
 <p><code>WaspMultivariantPlaylistRequestError</code> also may have the following property:</p>
@@ -130,9 +130,9 @@ arised while parsing the Multivariant Playlist.</p>
 example to catch when a fatal error was due to a failure to parse the
 Multivariant Playlist, you can write:</p>
 <pre><code class="language-js">player.<span class="hljs-title function_">addEventlistener</span>(<span class="hljs-string">"error"</span>, <span class="hljs-function">(<span class="hljs-params">error</span>) =&gt;</span> {
-    <span class="hljs-keyword">if</span> (error.<span class="hljs-property">name</span> === <span class="hljs-string">"WaspMultivariantPlaylistParsingError"</span>) {
-        <span class="hljs-comment">// This error was due to a parsing failure of the Multivariant Playlist</span>
-    }
+  <span class="hljs-keyword">if</span> (error.<span class="hljs-property">name</span> === <span class="hljs-string">"WaspMultivariantPlaylistParsingError"</span>) {
+    <span class="hljs-comment">// This error was due to a parsing failure of the Multivariant Playlist</span>
+  }
 });
 </code></pre>
 <p><a name="error_codes_(1)"></a></p>
@@ -197,9 +197,9 @@ while doing a Media Playlist HTTP(S) request.</p>
 example to catch when a fatal error was due to a failure to request a
 Media Playlist, you can write:</p>
 <pre><code class="language-js">player.<span class="hljs-title function_">addEventlistener</span>(<span class="hljs-string">"error"</span>, <span class="hljs-function">(<span class="hljs-params">error</span>) =&gt;</span> {
-    <span class="hljs-keyword">if</span> (error.<span class="hljs-property">name</span> === <span class="hljs-string">"WaspMediaPlaylistRequestError"</span>) {
-        <span class="hljs-comment">// This error was due to a request failure of a Media Playlist</span>
-    }
+  <span class="hljs-keyword">if</span> (error.<span class="hljs-property">name</span> === <span class="hljs-string">"WaspMediaPlaylistRequestError"</span>) {
+    <span class="hljs-comment">// This error was due to a request failure of a Media Playlist</span>
+  }
 });
 </code></pre>
 <p><code>WaspMediaPlaylistRequestError</code> also may have the following properties:</p>
@@ -252,9 +252,9 @@ arised while parsing a Media Playlist.</p>
 example to catch when a fatal error was due to a failure to parse a
 Media Playlist, you can write:</p>
 <pre><code class="language-js">player.<span class="hljs-title function_">addEventlistener</span>(<span class="hljs-string">"error"</span>, <span class="hljs-function">(<span class="hljs-params">error</span>) =&gt;</span> {
-    <span class="hljs-keyword">if</span> (error.<span class="hljs-property">name</span> === <span class="hljs-string">"WaspMediaPlaylistParsingError"</span>) {
-        <span class="hljs-comment">// This error was due to a parsing failure of a Media Playlist</span>
-    }
+  <span class="hljs-keyword">if</span> (error.<span class="hljs-property">name</span> === <span class="hljs-string">"WaspMediaPlaylistParsingError"</span>) {
+    <span class="hljs-comment">// This error was due to a parsing failure of a Media Playlist</span>
+  }
 });
 </code></pre>
 <p><code>WaspMediaPlaylistParsingError</code> also may have the following property:</p>
@@ -309,9 +309,9 @@ while doing a segment HTTP(S) request.</p>
 example to catch when a fatal error was due to a failure to request a
 segment, you can write:</p>
 <pre><code class="language-js">player.<span class="hljs-title function_">addEventlistener</span>(<span class="hljs-string">"error"</span>, <span class="hljs-function">(<span class="hljs-params">error</span>) =&gt;</span> {
-    <span class="hljs-keyword">if</span> (error.<span class="hljs-property">name</span> === <span class="hljs-string">"WaspSegmentRequestError"</span>) {
-        <span class="hljs-comment">// This error was due to a request failure of a segment</span>
-    }
+  <span class="hljs-keyword">if</span> (error.<span class="hljs-property">name</span> === <span class="hljs-string">"WaspSegmentRequestError"</span>) {
+    <span class="hljs-comment">// This error was due to a request failure of a segment</span>
+  }
 });
 </code></pre>
 <p><code>WaspSegmentRequestError</code> also may have the following property:</p>
@@ -358,9 +358,9 @@ reason for the segment.</p>
 arised while parsing a media or initialisation segment.</p>
 <p>Its <code>name</code> property is set to <code>"WaspSegmentParsingError"</code>:</p>
 <pre><code class="language-js">player.<span class="hljs-title function_">addEventlistener</span>(<span class="hljs-string">"error"</span>, <span class="hljs-function">(<span class="hljs-params">error</span>) =&gt;</span> {
-    <span class="hljs-keyword">if</span> (error.<span class="hljs-property">name</span> === <span class="hljs-string">"WaspSegmentParsingError"</span>) {
-        <span class="hljs-comment">// This error was due to a parsing failure of a segment</span>
-    }
+  <span class="hljs-keyword">if</span> (error.<span class="hljs-property">name</span> === <span class="hljs-string">"WaspSegmentParsingError"</span>) {
+    <span class="hljs-comment">// This error was due to a parsing failure of a segment</span>
+  }
 });
 </code></pre>
 <p><code>WaspSegmentParsingError</code> also may have the following property:</p>
@@ -395,9 +395,9 @@ encountered an issue while creating a <code>SourceBuffer</code>, which are media
 provided by the browser through its “MediaSource Extensions” API.</p>
 <p>Its <code>name</code> property is set to <code>"WaspSourceBufferCreationError"</code>:</p>
 <pre><code class="language-js">player.<span class="hljs-title function_">addEventlistener</span>(<span class="hljs-string">"error"</span>, <span class="hljs-function">(<span class="hljs-params">error</span>) =&gt;</span> {
-    <span class="hljs-keyword">if</span> (error.<span class="hljs-property">name</span> === <span class="hljs-string">"WaspSourceBufferCreationError"</span>) {
-        <span class="hljs-comment">// An error happened when creating a SourceBuffer</span>
-    }
+  <span class="hljs-keyword">if</span> (error.<span class="hljs-property">name</span> === <span class="hljs-string">"WaspSourceBufferCreationError"</span>) {
+    <span class="hljs-comment">// An error happened when creating a SourceBuffer</span>
+  }
 });
 </code></pre>
 <p><code>WaspSourceBufferCreationError</code> also may have the following property:</p>
@@ -432,9 +432,9 @@ encountered an issue while doing an operation on a successfully created
 “MediaSource Extensions” API.</p>
 <p>Its <code>name</code> property is set to <code>"WaspSourceBufferError"</code>:</p>
 <pre><code class="language-js">player.<span class="hljs-title function_">addEventlistener</span>(<span class="hljs-string">"error"</span>, <span class="hljs-function">(<span class="hljs-params">error</span>) =&gt;</span> {
-    <span class="hljs-keyword">if</span> (error.<span class="hljs-property">name</span> === <span class="hljs-string">"WaspSourceBufferError"</span>) {
-        <span class="hljs-comment">// An error happened when doing an operation on a SourceBuffer</span>
-    }
+  <span class="hljs-keyword">if</span> (error.<span class="hljs-property">name</span> === <span class="hljs-string">"WaspSourceBufferError"</span>) {
+    <span class="hljs-comment">// An error happened when doing an operation on a SourceBuffer</span>
+  }
 });
 </code></pre>
 <p><code>WaspSourceBufferError</code> also may have the following property:</p>
@@ -476,9 +476,9 @@ An uncategorized error arised when doing an operation on a <code>SourceBuffer</c
 other error types.</p>
 <p>Its <code>name</code> property is set to <code>"WaspOtherError"</code>:</p>
 <pre><code class="language-js">player.<span class="hljs-title function_">addEventlistener</span>(<span class="hljs-string">"error"</span>, <span class="hljs-function">(<span class="hljs-params">error</span>) =&gt;</span> {
-    <span class="hljs-keyword">if</span> (error.<span class="hljs-property">name</span> === <span class="hljs-string">"WaspSourceBufferCreationError"</span>) {
-        <span class="hljs-comment">// An uncategorized error happened</span>
-    }
+  <span class="hljs-keyword">if</span> (error.<span class="hljs-property">name</span> === <span class="hljs-string">"WaspSourceBufferCreationError"</span>) {
+    <span class="hljs-comment">// An uncategorized error happened</span>
+  }
 });
 </code></pre>
 <p><a name="error_codes_(8)"></a></p>
