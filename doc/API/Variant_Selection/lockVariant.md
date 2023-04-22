@@ -47,7 +47,6 @@ If the locked variant was actually not found on the content, a `"warning"`
 [event](../Player_Events.md) will be triggered with a code set to
 `"UnfoundLockedVariant"`.
 
-
 ## Syntax
 
 ```js
