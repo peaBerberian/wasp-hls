@@ -83,19 +83,19 @@ impl Url {
     }
 
     pub fn filename(&self) -> &str {
-        let last_slash = self.inner.rfind('/');
-        let filename = match last_slash {
-            Some(idx) => &self.inner[idx + 1..],
-            None => self.inner.as_str(),
-        };
-        let hash_idx = filename.find('#');
+        let hash_idx = self.inner.find('#');
         let parsed = match hash_idx {
-            Some(idx) => &filename[0..idx],
-            None => filename,
+            Some(idx) => &self.inner[0..idx],
+            None => &self.inner,
         };
         let query_idx = parsed.find('?');
-        match query_idx {
+        let parsed = match query_idx {
             Some(idx) => &parsed[0..idx],
+            None => parsed,
+        };
+        let last_slash = parsed.rfind('/');
+        match last_slash {
+            Some(idx) => &parsed[idx + 1..],
             None => parsed,
         }
     }
