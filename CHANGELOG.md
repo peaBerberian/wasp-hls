@@ -1,5 +1,11 @@
 # Changelog
 
+# 0.4.1 (2023-04-22)
+
+## Bug fixes
+
+  - Fix HTTP Range requests (by prepending the forgotten `bytes=` string)
+
 # 0.4.0 (2023-04-21)
 
 (First public release)
