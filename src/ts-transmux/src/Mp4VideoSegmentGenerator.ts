@@ -96,6 +96,7 @@ export default class Mp4VideoSegmentGenerator {
       nalUnit.nalUnitType === NalUnitType.SeqParamSetRbsp &&
       !this._hasParsedTrackInfo
     ) {
+      this._hasParsedTrackInfo = true;
       this._trackInfo.sps = [nalUnit.data];
       this._trackInfo.width = nalUnit.config.width;
       this._trackInfo.height = nalUnit.config.height;

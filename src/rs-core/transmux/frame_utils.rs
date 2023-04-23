@@ -74,6 +74,9 @@ impl GopsSet {
     pub(super) fn dts(&self) -> u32 {
         self.dts
     }
+    pub(super) fn duration(&self) -> u32 {
+        self.duration
+    }
     pub(super) fn gops(&self) -> &[GopData] {
         self.gops.as_slice()
     }

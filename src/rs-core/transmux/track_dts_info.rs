@@ -1,7 +1,7 @@
-use super::frame_utils::GopsSet;
+use super::nal_unit_producer::ParsedNalUnit;
 
 #[derive(Clone, Debug, Default)]
-struct TrackDtsInfo {
+pub(super) struct TrackDtsInfo {
     base_media_decode_time: Option<u32>,
     start_pts: Option<u32>,
     start_dts: Option<u32>,
@@ -15,7 +15,7 @@ impl TrackDtsInfo {
     /// Get information about the start and end of the track and the
     /// duration for each frame/sample we process in order to calculate
     /// the baseMediaDecodeTime.
-    pub(super) fn collect_info(&mut self, data: GopsSet) {
+    pub(super) fn collect_info(&mut self, data: ParsedNalUnit) {
         if self.start_pts.is_none() {
             self.start_pts = Some(data.pts());
         }
@@ -46,6 +46,14 @@ impl TrackDtsInfo {
         } else {
             self.max_segment_dts = Some(data.dts());
         }
+    }
+
+    pub(super) fn start_dts(&self) -> Option<u32> {
+        self.start_dts
+    }
+
+    pub(super) fn start_pts(&self) -> Option<u32> {
+        self.start_dts
     }
 
     /// Clear values used to calculate the baseMediaDecodeTime between

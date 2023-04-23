@@ -161,6 +161,33 @@ pub(super) enum ParsedNalUnit {
     Undefined(UnitTypeBase),
 }
 
+impl ParsedNalUnit {
+    pub(super) fn pts(&self) -> u32 {
+        match self {
+            ParsedNalUnit::SliceLayerWo(base) |
+            ParsedNalUnit::SeiRbsp(base, _) |
+            ParsedNalUnit::SeqParamSetRbsp(base, _, _) |
+            ParsedNalUnit::PicParamSet(base) |
+            ParsedNalUnit::AccessUnitDelim(base) |
+            ParsedNalUnit::Undefined(base) => {
+                base.pts()
+            }
+        }
+    }
+    pub(super) fn dts(&self) -> u32 {
+        match self {
+            ParsedNalUnit::SliceLayerWo(base) |
+            ParsedNalUnit::SeiRbsp(base, _) |
+            ParsedNalUnit::SeqParamSetRbsp(base, _, _) |
+            ParsedNalUnit::PicParamSet(base) |
+            ParsedNalUnit::AccessUnitDelim(base) |
+            ParsedNalUnit::Undefined(base) => {
+                base.dts()
+            }
+        }
+    }
+}
+
 pub(super) struct UnitTypeBase {
     track_id: Pid,
     pts: u32,

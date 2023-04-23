@@ -9,6 +9,7 @@ mod elementary_packet_parser;
 mod exp_golomb;
 mod fmp4;
 mod frame_utils;
+mod mp4_video_segment_generator;
 mod nal_unit_producer;
 mod track_dts_info;
 mod transport_packet_parser;
