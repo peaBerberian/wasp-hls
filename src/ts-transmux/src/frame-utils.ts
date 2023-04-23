@@ -87,7 +87,7 @@ function groupFramesIntoGops(frames: any[]): any {
   gops.dts = frames[0].dts;
 
   for (const currentFrame of frames) {
-    if (currentFrame.keyFrame !== true) {
+    if (currentFrame.keyFrame === true) {
       // Since the very first frame is expected to be an keyframe
       // only push to the gops array when currentGop is not empty
       if (currentGop.length > 0) {
