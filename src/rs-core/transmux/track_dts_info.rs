@@ -1,4 +1,4 @@
-use super::nal_unit_producer::ParsedNalUnit;
+use super::{nal_unit_producer::ParsedNalUnit, frame_utils::GopsSet};
 
 #[derive(Clone, Debug, Default)]
 pub(super) struct TrackDtsInfo {
@@ -15,7 +15,46 @@ impl TrackDtsInfo {
     /// Get information about the start and end of the track and the
     /// duration for each frame/sample we process in order to calculate
     /// the baseMediaDecodeTime.
-    pub(super) fn collect_info(&mut self, data: ParsedNalUnit) {
+    pub(super) fn collect_info_from_nal(&mut self, data: ParsedNalUnit) {
+        if self.start_pts.is_none() {
+            self.start_pts = Some(data.pts());
+        }
+        if self.start_dts.is_none() {
+            self.start_dts = Some(data.dts());
+        }
+
+        if let Some(old_min_pts) = self.min_segment_pts {
+            self.min_segment_pts = Some(u32::min(old_min_pts, data.pts()));
+        } else {
+            self.min_segment_pts = Some(data.pts());
+        }
+
+        if let Some(old_max_pts) = self.max_segment_pts {
+            self.max_segment_pts = Some(u32::max(old_max_pts, data.pts()));
+        } else {
+            self.max_segment_pts = Some(data.pts());
+        }
+
+        if let Some(old_min_dts) = self.min_segment_dts {
+            self.min_segment_dts = Some(u32::min(old_min_dts, data.dts()));
+        } else {
+            self.min_segment_dts = Some(data.dts());
+        }
+
+        if let Some(old_max_dts) = self.max_segment_dts {
+            self.max_segment_dts = Some(u32::max(old_max_dts, data.dts()));
+        } else {
+            self.max_segment_dts = Some(data.dts());
+        }
+    }
+
+    /// XXX TODO Defining a trait or common util at lease would be much cleaner but I'm just hacking
+    /// quickly for now.
+    ///
+    /// Get information about the start and end of the track and the
+    /// duration for each frame/sample we process in order to calculate
+    /// the baseMediaDecodeTime.
+    pub(super) fn collect_info_from_gops(&mut self, data: GopsSet) {
         if self.start_pts.is_none() {
             self.start_pts = Some(data.pts());
         }
@@ -73,7 +112,7 @@ impl TrackDtsInfo {
     /// DTS the transmuxer has ever seen and the minimum DTS for the
     /// current track
     pub (super) fn calculate_base_media_decode_time(
-        &mut self,
+        &self,
         keep_original_timestamps: bool,
         audio_sample_rate: Option<u32>
     ) -> u32 {

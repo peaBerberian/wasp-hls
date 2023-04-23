@@ -1,4 +1,4 @@
-use super::{nal_unit_producer::ParsedNalUnit, frame_utils::GopsSet, track_dts_info::TrackDtsInfo};
+use super::{nal_unit_producer::ParsedNalUnit, frame_utils::{GopsSet, extend_first_key_frame, group_nals_into_frames, group_frames_into_gops, concatenate_nal_data}, track_dts_info::TrackDtsInfo, fmp4::{generate_sample_table, create_mdat, create_moof}};
 
 /// Constructs a single-track, ISO BMFF media segment from H264 data.
 pub(super) struct Mp4VideoSegmentGenerator {
@@ -12,12 +12,6 @@ pub(super) struct Mp4VideoSegmentGenerator {
   dts_track_info: TrackDtsInfo,
   current_track_info: Option<TrackMetadata>,
 }
-
-// struct GopCacheInfo {
-//     pps: Vec<u8>,
-//     sps: Vec<u8>,
-//     gops: GopsSet,
-// }
 
 struct TrackMetadata {
     sps: Vec<u8>,
@@ -76,7 +70,7 @@ impl Mp4VideoSegmentGenerator {
   /// generate a video segment once `generateBoxes` is called (once all Nal
   /// Units) of a segment have been pushed.
   pub(super) fn push_nal_unit(&mut self, nal_unit: ParsedNalUnit) {
-      self.dts_track_info.collect_info(nal_unit);
+      self.dts_track_info.collect_info_from_nal(nal_unit);
 
 
       if self.current_track_info.is_none() {
@@ -104,69 +98,47 @@ impl Mp4VideoSegmentGenerator {
   /// Generate ISOBMFF data for the video segment from the Nal Unit pushed thus
   /// far.
   /// Returns `None` if no segment could have been generated.
-  pub(super) fn generate_boxes() -> Option<Mp4VideoSegmentData> {
-    // Throw away nalUnits at the start of the byte stream until
-    // we find the first AUD
-    while (self.nal_units.length > 0) {
-      if (self.nal_units[0].nalUnitType === NalUnitType.AccessUnitDelim) {
-        break;
+  pub(super) fn generate_boxes(&mut self) -> Option<Mp4VideoSegmentData> {
+      // Throw away nal_units at the start of the byte stream until
+      // we find the first AUD
+      while !self.nal_units.is_empty() {
+          if let ParsedNalUnit::AccessUnitDelim(_) = self.nal_units[0] {
+              break;
+          }
+          self.nal_units.remove(0);
       }
-      self.nal_units.shift();
-    }
 
-    // Return early if no video data has been observed
-    if (self.nal_units.length === 0) {
-      self.reset_stream();
-      return null;
-    }
+      // Return early if no video data has been observed
+      if self.nal_units.is_empty() {
+          self.reset_stream();
+          return None;
+      }
 
     // Organize the raw nal-units into arrays that represent
     // higher-level constructs such as frames and gops
     // (group-of-pictures)
-    let frames = groupNalsIntoFrames(self.nal_units);
-    let mut gops = groupFramesIntoGops(frames);
+    let nal_units = std::mem::replace(&mut self.nal_units, vec![]);
+    let frames = group_nals_into_frames(nal_units);
+    let mut gops = group_frames_into_gops(frames);
 
-    // If the first frame of self fragment is not a keyframe we have
-    // a problem since MSE (on Chrome) requires a leading keyframe.
+    // If the first frame of self fragment is not a keyframe we have a problem since MSE (on Chrome)
+    // requires a leading keyframe.
     //
-    // We have two approaches to repairing self situation:
-    // 1) GOP-FUSION:
-    //    self is where we keep track of the GOPS (group-of-pictures)
-    //    from previous fragments and attempt to find one that we can
-    //    prepend to the current fragment in order to create a valid
-    //    fragment.
-    // 2) KEYFRAME-PULLING:
-    //    Here we search for the first keyframe in the fragment and
-    //    throw away all the frames between the start of the fragment
-    //    and that keyframe. We then extend the duration and pull the
-    //    PTS of the keyframe forward so that it covers the time range
-    //    of the frames that were disposed of.
+    // Here we search for the first keyframe in the fragment and throw away all the frames between
+    // the start of the fragment and that keyframe.
+    // We then extend the duration and pull the PTS of the keyframe forward so that it covers the
+    // range of the frames that were disposed of.
     //
-    // #1 is far prefereable over #2 which can cause "stuttering" but
-    // requires more things to be just right.
-    if (!(gops[0][0].keyFrame as boolean)) {
-      // Search for a gop for fusion from our gopCache
-      let gopForFusion = self.gop_for_fusion(self.nal_units[0]);
-
-      if (gopForFusion !== null) {
-        gops.unshift(gopForFusion);
-        // Adjust Gops' metadata to account for the inclusion of the
-        // new gop at the beginning
-        gops.byteLength += gopForFusion.byteLength;
-        gops.nalCount += gopForFusion.nalCount;
-        gops.pts = gopForFusion.pts;
-        gops.dts = gopForFusion.dts;
-        gops.duration += gopForFusion.duration;
-      } else {
+    // It can create stuttering but those contents should be rare enough anyway
+    if gops.gops().first().and_then(|g| g.frames().first()).map(|f| f.key_frame()) == Some(false) {
         // If we didn't find a candidate gop fall back to keyframe-pulling
-        gops = extendFirstKeyFrame(gops);
-      }
+        gops = extend_first_key_frame(gops);
     }
 
     // Trim gops to align with gopsToAlignWith
-    if (self.gops_to_align_with.length) {
+    if !self.gops_to_align_with.is_empty() {
       let mut aligned_gops: any;
-      if (self.should_align_gops_at_end) {
+      if self.should_align_gops_at_end {
         aligned_gops = self._alignGopsAtEnd(gops);
       } else {
         aligned_gops = self._alignGopsAtStart(gops);
@@ -183,40 +155,36 @@ impl Mp4VideoSegmentGenerator {
 
       // Some gops were trimmed. clear dts info so minSegmentDts and pts are correct
       // when recalculated.
-      clearDtsInfo(self.dts_track_info);
+      self.dts_track_info.clear_info();
 
       gops = aligned_gops;
     }
 
-    collectDtsInfo(self.dts_track_info, gops);
+    self.dts_track_info.collect_info_from_gops(gops);
 
-    // First, we have to build the index from byte locations to
-    // samples (that is, frames) in the video data
-    self.dts_track_info.samples = generateSampleTable(gops);
+    //     XXX TODO needed?
+    // // First, we have to build the index from byte locations to
+    // // samples (that is, frames) in the video data
+    // self.dts_track_info.samples = generate_sample_table(gops, 0);
 
     // Concatenate the video data and construct the mdat
-    let mdat = createMdat(concatenateNalData(gops));
+    let mdat = create_mdat(concatenate_nal_data(gops));
 
-    self.dts_track_info.baseMediaDecodeTime = calculateTrackBaseMediaDecodeTime(
-      self.dts_track_info,
-      self.keep_original_timestamps
-    );
+    self.dts_track_info.set_base_media_decode_time(self.dts_track_info.calculate_base_media_decode_time(
+      self.keep_original_timestamps,
+      None
+    ));
 
-    // Clear nalUnits
-    self.nal_units = [];
-
-    let moof = createMoof(self.sequence_number, [self.dts_track_info]);
+    let moof = create_moof(self.sequence_number, [self.dts_track_info]);
 
     // it would be great to allocate self array up front instead of
     // throwing away hundreds of media segment fragments
-    let boxes = new Uint8Array(moof.byteLength + mdat.byteLength);
+    let boxes = Vec::with_capacity(moof.len() + mdat.len());
+    boxes.extend(moof);
+    boxes.extend(mdat);
 
     // Bump the sequence number for next time
-    self.sequence_number++;
-
-    boxes.set(moof);
-    boxes.set(mdat, moof.byteLength);
-
+    self.sequence_number += 1;
     let trackInfo = { ...self.dts_track_info };
     self.reset_stream();
     return { trackInfo, boxes };
@@ -236,58 +204,6 @@ impl Mp4VideoSegmentGenerator {
       self.has_parsed_track_info = false;
       self.pps = None;
   }
-
-//   /// Search for a candidate Gop for gop-fusion from the gop cache and
-//   /// return it or return None if no good candidate was found
-//   pub(super) fn gop_for_fusion(&mut self, nal_unit: ParsedNalUnit) -> Option<GopsSet> {
-//     let half_second = 45000; // Half-a-second in a 90khz clock
-//     let allowable_overlap = 10000; // About 3 frames @ 30fps
-//     let mut nearest_distance: Option<u32> = None;
-//     let mut nearest_go_obj: Option<GopCacheInfo> = None;
-
-//     // Search for the GOP nearest to the beginning of self nal unit
-//     self.gop_cache.iter().for_each(|current_gop_obj| {
-//       // Reject Gops with different SPS or PPS
-//       let Some(pps) = self.pps else {
-//           return ;
-//       };
-//       if !u8_equals(&pps, &current_gop_obj.pps) {
-//           return;
-//       }
-//       let Some(curr) = self.current_track_info else {
-//           return ;
-//       };
-//       if !u8_equals(&curr.sps, &current_gop_obj.sps) {
-//           return;
-//       }
-
-//       let current_gop = current_gop_obj.gops;
-
-//       // Reject Gops that would require a negative baseMediaDecodeTime
-//       let Some(start_dts) = self.dts_track_info.start_dts() else {
-//           return;
-//       };
-//       if current_gop.dts() < start_dts {
-//         return;
-//       }
-
-//       // The distance between the end of the gop and the start of the nal_unit
-//       let dts_distance = nal_unit.dts() - current_gop.dts() - current_gop.duration();
-
-//       // Only consider GOPS that start before the nal unit and end within
-//       // a half-second of the nal unit
-//       if dts_distance >= -allowable_overlap && dts_distance <= half_second {
-//         // Always use the closest GOP we found if there is more than
-//         // one candidate
-//         if (nearest_go_obj === undefined || nearest_distance > dts_distance) {
-//           nearest_go_obj = Some(current_gop_obj.clone());
-//           nearest_distance = Some(dts_distance);
-//         }
-//       }
-//     });
-
-//     nearest_go_obj.map(|n| n.gops)
-//   }
 
   // trim gop list to the first gop found that has a matching pts with a gop in the list
   // of gopsToAlignWith starting from the START of the list

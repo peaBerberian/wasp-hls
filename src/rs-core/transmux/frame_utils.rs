@@ -163,7 +163,7 @@ pub(super) fn group_nals_into_frames(nal_units: Vec<ParsedNalUnit>) -> FramesObj
 /// of the frames that make up that Gop
 /// Also keep track of cummulative data about the Gop from the frames such as the
 /// Gop duration, starting pts, etc.
-pub(super) fn group_frames_into_gops(frames: Vec<FrameObject>) -> GopsSet {
+pub(super) fn group_frames_into_gops(frames_obj: FramesObject) -> GopsSet {
     let mut gops = GopsSet {
         gops: vec![],
         nb_bytes: 0,
@@ -172,7 +172,7 @@ pub(super) fn group_frames_into_gops(frames: Vec<FrameObject>) -> GopsSet {
         pts: 0,
         dts: 0,
     };
-    if frames.is_empty() {
+    if frames_obj.frames.is_empty() {
         return gops;
     }
 
@@ -183,15 +183,15 @@ pub(super) fn group_frames_into_gops(frames: Vec<FrameObject>) -> GopsSet {
         nb_bytes: 0,
         nal_count: 0,
         duration: 0,
-        pts: frames[0].pts,
-        dts: frames[0].dts,
+        pts: frames_obj.frames[0].pts,
+        dts: frames_obj.frames[0].dts,
     };
 
     // store some metadata about all the Gops
-    gops.pts = frames[0].pts;
-    gops.dts = frames[0].dts;
+    gops.pts = frames_obj.frames[0].pts;
+    gops.dts = frames_obj.frames[0].dts;
 
-    frames.into_iter().for_each(|frame| {
+    frames_obj.frames.into_iter().for_each(|frame| {
         if !frame.key_frame {
             let new_gop = GopData {
                 nb_bytes: frame.nb_bytes,
