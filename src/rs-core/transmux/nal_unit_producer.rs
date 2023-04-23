@@ -380,7 +380,9 @@ impl NalUnitProducer {
         let mut emu_idx = 0;
         (0..new_len)
             .map(|_| {
-                if source_idx == emulation_prevention_bytes_positions[emu_idx] {
+                if emu_idx < emulation_prevention_bytes_positions.len()
+                    && source_idx == emulation_prevention_bytes_positions[emu_idx]
+                {
                     // Skip this byte
                     source_idx += 1;
                     emu_idx += 1;
