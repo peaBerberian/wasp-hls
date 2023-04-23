@@ -6,6 +6,7 @@
 
 mod elementary_packet_parser;
 mod exp_golomb;
+mod fmp4;
 mod nal_unit_producer;
 mod transport_packet_parser;
 mod transport_stream_splitter;

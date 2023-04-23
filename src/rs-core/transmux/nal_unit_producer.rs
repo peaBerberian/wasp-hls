@@ -178,7 +178,28 @@ pub(super) struct NalVideoProperties {
     profile_compatibility: u8,
     width: u32,
     height: u32,
-    sar_ratio: (u8, u8),
+    sar_ratio: (u16, u16),
+}
+
+impl NalVideoProperties {
+    pub(super) fn width(&self) -> u32 {
+        self.width
+    }
+    pub(super) fn height(&self) -> u32 {
+        self.height
+    }
+    pub(super) fn profile_idc(&self) -> u8 {
+        self.profile_idc
+    }
+    pub(super) fn level_idc(&self) -> u8 {
+        self.level_idc
+    }
+    pub(super) fn profile_compatibility(&self) -> u8 {
+        self.profile_compatibility
+    }
+    pub(super) fn sar_ratio(&self) -> (u16, u16) {
+        self.sar_ratio
+    }
 }
 
 /// Produces H.264 NAL unit data events.
@@ -337,20 +358,20 @@ impl NalUnitProducer {
 
         // Create a new array to hold the NAL unit data
         let new_len = length - emulation_prevention_bytes_positions.len();
-        let mut new_data = Vec::with_capacity(new_len);
         let mut source_idx = 0;
         let mut emu_idx = 0;
-
-        for i in 0..new_len {
-            if source_idx == emulation_prevention_bytes_positions[emu_idx] {
-                // Skip this byte
+        (0..new_len)
+            .map(|_| {
+                if source_idx == emulation_prevention_bytes_positions[emu_idx] {
+                    // Skip this byte
+                    source_idx += 1;
+                    emu_idx += 1;
+                }
+                let datum = data[source_idx];
                 source_idx += 1;
-                emu_idx += 1;
-            }
-            new_data[i] = data[source_idx];
-            source_idx += 1;
-        }
-        new_data
+                datum
+            })
+            .collect()
     }
 
     /// Read a sequence parameter set and return some interesting video
@@ -453,10 +474,10 @@ impl NalUnitProducer {
                     15 => (3, 2),
                     16 => (2, 1),
                     255 => (
-                        (exp_golomb_decoder.read_unsigned_byte() << 8)
-                            | exp_golomb_decoder.read_unsigned_byte(),
-                        (exp_golomb_decoder.read_unsigned_byte() << 8)
-                            | exp_golomb_decoder.read_unsigned_byte(),
+                        ((exp_golomb_decoder.read_unsigned_byte() as u16) << 8)
+                            | (exp_golomb_decoder.read_unsigned_byte() as u16),
+                        ((exp_golomb_decoder.read_unsigned_byte() as u16) << 8)
+                            | (exp_golomb_decoder.read_unsigned_byte() as u16),
                     ),
                     _ => (1, 1),
                 }
