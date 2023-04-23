@@ -3,6 +3,7 @@
 ## 0.4.2 (Unreleased yet)
 
 - Better detect mimetype from segment's extension by stripping query and fragment components from its URL
+- Fix issue in GOP (group of pictures) creation code in the mpeg-ts to fmp4 transmuxer. The real impact on playback in unclear (none was noticed).
 
 ## 0.4.1 (2023-04-22)
 
