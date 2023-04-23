@@ -380,13 +380,13 @@ export default class H264NalUnitProducer {
     const newLength = length - emulationPreventionBytesPositions.length;
     const newData = new Uint8Array(newLength);
     let sourceIndex = 0;
+    let emuIdx = 0;
 
     for (i = 0; i < newLength; sourceIndex++, i++) {
-      if (sourceIndex === emulationPreventionBytesPositions[0]) {
+      if (sourceIndex === emulationPreventionBytesPositions[emuIdx]) {
         // Skip this byte
         sourceIndex++;
-        // Remove this position index
-        emulationPreventionBytesPositions.shift();
+        emuIdx++;
       }
       newData[i] = data[sourceIndex];
     }
