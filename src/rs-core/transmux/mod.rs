@@ -10,5 +10,6 @@ mod exp_golomb;
 mod fmp4;
 mod frame_utils;
 mod nal_unit_producer;
+mod track_dts_info;
 mod transport_packet_parser;
 mod transport_stream_splitter;

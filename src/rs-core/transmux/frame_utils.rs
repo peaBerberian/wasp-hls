@@ -68,6 +68,12 @@ pub(super) struct GopsSet {
 }
 
 impl GopsSet {
+    pub(super) fn pts(&self) -> u32 {
+        self.pts
+    }
+    pub(super) fn dts(&self) -> u32 {
+        self.dts
+    }
     pub(super) fn gops(&self) -> &[GopData] {
         self.gops.as_slice()
     }
