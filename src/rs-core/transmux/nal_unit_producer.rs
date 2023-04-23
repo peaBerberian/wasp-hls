@@ -168,6 +168,24 @@ pub(super) struct UnitTypeBase {
     data: Vec<u8>,
 }
 
+impl UnitTypeBase {
+    pub(super) fn pts(&self) -> u32 {
+        self.pts
+    }
+    pub(super) fn dts(&self) -> u32 {
+        self.dts
+    }
+    pub(super) fn track_id(&self) -> Pid {
+        self.track_id
+    }
+    pub(super) fn data(&self) -> &[u8] {
+        self.data.as_slice()
+    }
+    pub(super) fn take_data(self) -> Vec<u8> {
+        self.data
+    }
+}
+
 pub(super) struct Rbsp {
     escaped_rbsp: Vec<u8>,
 }

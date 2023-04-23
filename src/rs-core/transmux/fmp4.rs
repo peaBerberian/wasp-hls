@@ -4,7 +4,10 @@
 // None of those files are ready, nor optimized, nor used for the moment. You're very welcome to
 // improve it.
 
-use super::nal_unit_producer::NalVideoProperties;
+use super::{
+    frame_utils::{FrameObject, GopsSet},
+    nal_unit_producer::NalVideoProperties,
+};
 
 static AVC1: [u8; 4] = [97, 118, 99, 49];
 static AVCC: [u8; 4] = [97, 118, 99, 67];
@@ -414,10 +417,8 @@ fn create_sdtp(samples: &[SampleInfo]) -> Vec<u8> {
 
     // write the sample table
     for i in 0..samples.len() {
-        if let Some(ref flags) = samples[i].flags {
-            bytes[i + 4] =
-                (flags.depends_on << 4) | (flags.is_depended_on << 2) | flags.has_redundancy;
-        }
+        let flags = &samples[i].flags;
+        bytes[i + 4] = (flags.depends_on << 4) | (flags.is_depended_on << 2) | flags.has_redundancy;
     }
 
     create_box(SDTP, &[bytes])
@@ -955,10 +956,69 @@ pub(super) struct SampleFlag {
 }
 
 pub(super) struct SampleInfo {
+    data_offset: u32,
     duration: u32,
     size: u32,
-    flags: Option<SampleFlag>,
+    flags: SampleFlag,
     composition_time_offset: Option<u32>,
+}
+
+/// Default sample object
+/// see ISO/IEC 14496-12:2012, section 8.6.4.3
+pub(super) fn create_default_sample() -> SampleInfo {
+    SampleInfo {
+        data_offset: 0,
+        size: 0,
+        duration: 0,
+        composition_time_offset: None,
+        flags: SampleFlag {
+            is_leading: 0,
+            depends_on: 1,
+            is_depended_on: 0,
+            has_redundancy: 0,
+            is_non_sync_sample: 1,
+        },
+    }
+}
+
+/// generate the track's sample table from an array of gops
+pub(super) fn generate_sample_table(gops: GopsSet, base_data_offset: u32) -> Vec<SampleInfo> {
+    let mut data_offset = base_data_offset;
+    gops.gops()
+        .iter()
+        .flat_map(|g| g.frames())
+        .map(|f| {
+            let sample = sample_for_frame(f, data_offset);
+            data_offset += sample.size;
+            sample
+        })
+        .collect()
+}
+
+/// Collates information from a video frame into an object for eventual
+/// entry into an MP4 sample table.
+pub(super) fn sample_for_frame(frame: &FrameObject, data_offset: u32) -> SampleInfo {
+    let mut sample = create_default_sample();
+
+    sample.data_offset = data_offset;
+    sample.composition_time_offset = Some(frame.pts() - frame.dts());
+    sample.duration = frame.duration();
+    sample.size = 4 * frame.data().len() as u32; // Space for nal unit size
+    sample.size += frame.nb_bytes();
+
+    if frame.key_frame() {
+        sample.flags.depends_on = 2;
+        sample.flags.is_non_sync_sample = 0;
+    }
+    sample
+}
+
+/// generate the track's sample table from a frame
+pub(super) fn generate_sample_table_for_frame(
+    frame: &FrameObject,
+    base_data_offset: u32,
+) -> Vec<SampleInfo> {
+    vec![sample_for_frame(frame, base_data_offset)]
 }
 
 /// Creates the header of a `trun` ISOBMFF box.
@@ -971,9 +1031,7 @@ fn create_trun_header(samples: &[SampleInfo], offset: u32) -> Vec<u8> {
     if !samples.is_empty() {
         presence_flags |= 0x1;
         presence_flags |= 0x2;
-        if samples[0].flags.is_some() {
-            presence_flags |= 0x4;
-        }
+        presence_flags |= 0x4;
         if samples[0].composition_time_offset.is_some() {
             presence_flags |= 0x8;
         }
@@ -1018,16 +1076,12 @@ fn create_video_trun(samples: &[SampleInfo], initial_offset: u32) -> Vec<u8> {
         bytes_offset += 1;
         bytes[bytes_offset] = (sample.size & 0xff) as u8; // sample_size
         bytes_offset += 1;
-        if let Some(ref flags) = sample.flags {
-            bytes[bytes_offset] = (flags.is_leading << 2) | flags.depends_on;
-            bytes_offset += 1;
-            bytes[bytes_offset] = (flags.is_depended_on << 6)
-                | (flags.has_redundancy << 4)
-                | flags.is_non_sync_sample;
-            bytes_offset += 3; // Skip degradation priority
-        } else {
-            bytes_offset += 4;
-        }
+        bytes[bytes_offset] = (sample.flags.is_leading << 2) | sample.flags.depends_on;
+        bytes_offset += 1;
+        bytes[bytes_offset] = (sample.flags.is_depended_on << 6)
+            | (sample.flags.has_redundancy << 4)
+            | sample.flags.is_non_sync_sample;
+        bytes_offset += 3; // Skip degradation priority
         let composition_time_offset = if let Some(offset) = sample.composition_time_offset {
             offset
         } else {
