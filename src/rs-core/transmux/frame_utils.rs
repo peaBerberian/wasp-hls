@@ -53,6 +53,21 @@ pub(super) struct GopData {
 }
 
 impl GopData {
+    pub(super) fn pts(&self) -> u32 {
+        self.pts
+    }
+    pub(super) fn dts(&self) -> u32 {
+        self.dts
+    }
+    pub(super) fn duration(&self) -> u32 {
+        self.duration
+    }
+    pub(super) fn nb_bytes(&self) -> u32 {
+        self.nb_bytes
+    }
+    pub(super) fn nal_count(&self) -> u32 {
+        self.nal_count
+    }
     pub(super) fn frames(&self) -> &[FrameObject] {
         self.frames.as_slice()
     }
@@ -79,6 +94,12 @@ impl GopsSet {
     }
     pub(super) fn gops(&self) -> &[GopData] {
         self.gops.as_slice()
+    }
+    pub(super) fn nb_bytes(&self) -> u32 {
+        self.nb_bytes
+    }
+    pub(super) fn nal_count(&self) -> u32 {
+        self.nal_count
     }
 }
 
