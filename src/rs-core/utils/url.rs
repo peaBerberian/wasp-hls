@@ -18,19 +18,25 @@ impl Url {
             if relative_url.inner.starts_with('/') {
                 let complete_url = match url_domain_name(base_url) {
                     Some(base_domain) => format!("{}{}", base_domain, relative_url),
-                    None => if base_url.as_bytes()[base_url.len() - 1] == b'/' {
-                        format!("{}{}", base_url, &relative_url.inner[1..])
-                    } else {
-                        format!("{}{}", base_url, relative_url)
+                    None => {
+                        if base_url.as_bytes()[base_url.len() - 1] == b'/' {
+                            format!("{}{}", base_url, &relative_url.inner[1..])
+                        } else {
+                            format!("{}{}", base_url, relative_url)
+                        }
                     }
                 };
                 Url {
                     inner: complete_url,
                 }
             } else if base_url.as_bytes()[base_url.len() - 1] == b'/' {
-                Url { inner: format!("{}{}", base_url, relative_url) }
+                Url {
+                    inner: format!("{}{}", base_url, relative_url),
+                }
             } else {
-                Url { inner: format!("{}/{}", base_url, relative_url) }
+                Url {
+                    inner: format!("{}/{}", base_url, relative_url),
+                }
             }
         }
     }
@@ -138,7 +144,10 @@ fn url_domain_name(url: &str) -> Option<&str> {
         None
     } else {
         let first_slash_idx = url.find('/')?;
-        if first_slash_idx == 0 || first_slash_idx >= bytes.len() - 2 || bytes[first_slash_idx + 1] != b'/' {
+        if first_slash_idx == 0
+            || first_slash_idx >= bytes.len() - 2
+            || bytes[first_slash_idx + 1] != b'/'
+        {
             None
         } else {
             match url[first_slash_idx + 2..].find('/') {
