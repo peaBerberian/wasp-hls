@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.4.2 (Unreleased yet)
+## 0.4.2 (2023-04-27)
 
 - Better detect mimetype from segment's extension by stripping query and fragment components from its URL
 - Relative Playlist URLs starting with a "/" now are relative from the Playlist's domain, not its path
