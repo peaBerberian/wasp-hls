@@ -258,9 +258,9 @@ pub(super) fn group_frames_into_gops(frames_obj: FramesObject) -> GopsSet {
 /// until that keyframe. Then extend the duration of the pulled keyframe
 /// and pull the PTS and DTS of the keyframe so that it covers the time
 /// range of the frames that were disposed.
-pub(super) fn extend_first_key_frame(mut gops: GopsSet) -> GopsSet {
+pub(super) fn extend_first_key_frame(gops: &mut GopsSet) {
     if gops.gops.is_empty() {
-        return gops;
+        return;
     }
     if !gops.gops[0].frames[0].key_frame && gops.gops.len() > 1 {
         // Remove until the first key frame (so basically, remove the first GOP)
@@ -275,7 +275,6 @@ pub(super) fn extend_first_key_frame(mut gops: GopsSet) -> GopsSet {
         gops.gops[0].frames[0].pts = first_gop.pts;
         gops.gops[0].frames[0].duration += first_gop.duration;
     }
-    gops
 }
 
 /// generate the track's raw mdat data from an array of gops

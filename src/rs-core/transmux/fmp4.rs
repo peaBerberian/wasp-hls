@@ -275,12 +275,12 @@ pub(super) fn create_moof(sequence_number: u32, tracks: &[TrackInfo]) -> Vec<u8>
 }
 
 pub(super) struct TrackInfo {
-    md: IsobmffMetadata,
-    track_id: u32,
-    base_media_decode_time: u32,
-    duration: Option<u32>,
-    samples: Vec<SampleInfo>,
-    sample_rate: Option<u32>,
+    pub(super) md: IsobmffMetadata,
+    pub(super) track_id: u32,
+    pub(super) base_media_decode_time: u32,
+    pub(super) duration: Option<u32>,
+    pub(super) samples: Vec<SampleInfo>,
+    pub(super) sample_rate: Option<u32>,
 }
 
 /// Creates a `moov` ISOBMFF box.
@@ -446,6 +446,20 @@ fn create_stbl(md: &IsobmffMetadata) -> Vec<u8> {
 pub(super) enum IsobmffMetadata {
     Video(VideoMetadata),
     Audio(AudioMetadata),
+}
+
+impl IsobmffMetadata {
+    pub(super) fn new_video(
+        nal_prop: NalVideoProperties,
+        ppss: Vec<Vec<u8>>,
+        spss: Vec<Vec<u8>>,
+    ) -> Self {
+        Self::Video(VideoMetadata {
+            nal_video_properties: nal_prop,
+            ppss,
+            spss,
+        })
+    }
 }
 
 impl IsobmffMetadata {
@@ -982,7 +996,7 @@ pub(super) fn create_default_sample() -> SampleInfo {
 }
 
 /// generate the track's sample table from an array of gops
-pub(super) fn generate_sample_table(gops: GopsSet, base_data_offset: u32) -> Vec<SampleInfo> {
+pub(super) fn generate_sample_table(gops: &GopsSet, base_data_offset: u32) -> Vec<SampleInfo> {
     let mut data_offset = base_data_offset;
     gops.gops()
         .iter()

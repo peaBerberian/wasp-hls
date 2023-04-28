@@ -164,26 +164,22 @@ pub(super) enum ParsedNalUnit {
 impl ParsedNalUnit {
     pub(super) fn pts(&self) -> u32 {
         match self {
-            ParsedNalUnit::SliceLayerWo(base) |
-            ParsedNalUnit::SeiRbsp(base, _) |
-            ParsedNalUnit::SeqParamSetRbsp(base, _, _) |
-            ParsedNalUnit::PicParamSet(base) |
-            ParsedNalUnit::AccessUnitDelim(base) |
-            ParsedNalUnit::Undefined(base) => {
-                base.pts()
-            }
+            ParsedNalUnit::SliceLayerWo(base)
+            | ParsedNalUnit::SeiRbsp(base, _)
+            | ParsedNalUnit::SeqParamSetRbsp(base, _, _)
+            | ParsedNalUnit::PicParamSet(base)
+            | ParsedNalUnit::AccessUnitDelim(base)
+            | ParsedNalUnit::Undefined(base) => base.pts(),
         }
     }
     pub(super) fn dts(&self) -> u32 {
         match self {
-            ParsedNalUnit::SliceLayerWo(base) |
-            ParsedNalUnit::SeiRbsp(base, _) |
-            ParsedNalUnit::SeqParamSetRbsp(base, _, _) |
-            ParsedNalUnit::PicParamSet(base) |
-            ParsedNalUnit::AccessUnitDelim(base) |
-            ParsedNalUnit::Undefined(base) => {
-                base.dts()
-            }
+            ParsedNalUnit::SliceLayerWo(base)
+            | ParsedNalUnit::SeiRbsp(base, _)
+            | ParsedNalUnit::SeqParamSetRbsp(base, _, _)
+            | ParsedNalUnit::PicParamSet(base)
+            | ParsedNalUnit::AccessUnitDelim(base)
+            | ParsedNalUnit::Undefined(base) => base.dts(),
         }
     }
 }
@@ -217,6 +213,7 @@ pub(super) struct Rbsp {
     escaped_rbsp: Vec<u8>,
 }
 
+#[derive(Clone, Debug)]
 pub(super) struct NalVideoProperties {
     profile_idc: u8,
     level_idc: u8,
