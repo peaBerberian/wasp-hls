@@ -557,7 +557,7 @@ And then requesting the `/doc` path.
 You're welcome to read the code which should be hopefully documented enough and
 readable enough to dive into. The source code of the player is in the `src`
 directory, if you would prefer to work on the demo, it's in the `demo`
-directory, as for the documentation, it's in the `demo` directory.
+directory, as for the documentation, it's in the `doc` directory.
 
 ## Check the code
 
