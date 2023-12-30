@@ -46,19 +46,19 @@
   "author": "peaberberian",
   "license": "MIT",
   "devDependencies": {
-    "@types/react": "^18.0.37",
-    "@types/react-dom": "^18.0.11",
-    "@typescript-eslint/eslint-plugin": "^5.59.0",
+    "@types/react": "^18.2.46",
+    "@types/react-dom": "^18.2.18",
+    "@typescript-eslint/eslint-plugin": "^6.16.0",
     "docgen.ico": "^0.2.3",
-    "esbuild": "^0.17.17",
-    "eslint": "^8.38.0",
-    "eslint-config-prettier": "^8.8.0",
-    "eslint-plugin-import": "^2.27.5",
-    "eslint-plugin-jsdoc": "^43.0.7",
+    "esbuild": "^0.19.11",
+    "eslint": "^8.56.0",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-import": "^2.29.1",
+    "eslint-plugin-jsdoc": "^46.10.1",
     "http-server": "^14.1.1",
-    "prettier": "^2.8.7",
+    "prettier": "^3.1.1",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "typescript": "^5.0.4"
+    "typescript": "^5.3.3"
   }
 }

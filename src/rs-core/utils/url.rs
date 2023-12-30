@@ -14,29 +14,27 @@ impl Url {
     pub fn from_relative(base_url: &str, relative_url: Url) -> Self {
         if base_url.is_empty() {
             relative_url
-        } else {
-            if relative_url.inner.starts_with('/') {
-                let complete_url = match url_domain_name(base_url) {
-                    Some(base_domain) => format!("{}{}", base_domain, relative_url),
-                    None => {
-                        if base_url.as_bytes()[base_url.len() - 1] == b'/' {
-                            format!("{}{}", base_url, &relative_url.inner[1..])
-                        } else {
-                            format!("{}{}", base_url, relative_url)
-                        }
+        } else if relative_url.inner.starts_with('/') {
+            let complete_url = match url_domain_name(base_url) {
+                Some(base_domain) => format!("{}{}", base_domain, relative_url),
+                None => {
+                    if base_url.as_bytes()[base_url.len() - 1] == b'/' {
+                        format!("{}{}", base_url, &relative_url.inner[1..])
+                    } else {
+                        format!("{}{}", base_url, relative_url)
                     }
-                };
-                Url {
-                    inner: complete_url,
                 }
-            } else if base_url.as_bytes()[base_url.len() - 1] == b'/' {
-                Url {
-                    inner: format!("{}{}", base_url, relative_url),
-                }
-            } else {
-                Url {
-                    inner: format!("{}/{}", base_url, relative_url),
-                }
+            };
+            Url {
+                inner: complete_url,
+            }
+        } else if base_url.as_bytes()[base_url.len() - 1] == b'/' {
+            Url {
+                inner: format!("{}{}", base_url, relative_url),
+            }
+        } else {
+            Url {
+                inner: format!("{}/{}", base_url, relative_url),
             }
         }
     }
@@ -152,7 +150,7 @@ fn url_domain_name(url: &str) -> Option<&str> {
         } else {
             match url[first_slash_idx + 2..].find('/') {
                 Some(last_slash_idx) => Some(&url[0..(last_slash_idx + first_slash_idx + 2)]),
-                None => Some(&url),
+                None => Some(url),
             }
         }
     }

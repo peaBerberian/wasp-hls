@@ -17,7 +17,6 @@ import {
   RemoveBufferWorkerMessage,
   SeekWorkerMessage,
   SetMediaSourceDurationWorkerMessage,
-  SourceBufferCreationErrorCode,
   StartPlaybackObservationWorkerMessage,
   StopPlaybackObservationWorkerMessage,
   UpdatePlaybackRateWorkerMessage,
@@ -35,7 +34,7 @@ import {
   VariantLockStatusChangeWorkerMessage,
   SourceBufferId,
 } from "../ts-common/types";
-import { MediaType, OtherErrorCode } from "../wasm/wasp_hls";
+import { AddSourceBufferErrorCode, MediaType, OtherErrorCode } from "../wasm/wasp_hls";
 import {
   WaspError,
   WaspMediaPlaylistParsingError,
@@ -340,7 +339,7 @@ export function onCreateSourceBufferMessage(
       value: {
         mediaSourceId: msg.value.mediaSourceId,
         sourceBufferId: msg.value.sourceBufferId,
-        code: SourceBufferCreationErrorCode.NoMediaSource,
+        code: AddSourceBufferErrorCode.NoMediaSourceAttached,
         message: "No MediaSource created on the main thread.",
         name: undefined,
       },
@@ -366,7 +365,7 @@ export function onCreateSourceBufferMessage(
       value: {
         mediaSourceId: msg.value.mediaSourceId,
         sourceBufferId: msg.value.sourceBufferId,
-        code: SourceBufferCreationErrorCode.AddSourceBufferError,
+        code: AddSourceBufferErrorCode.UnknownError,
         message,
         name,
       },

@@ -624,7 +624,7 @@ impl MediaPlaylist {
     ///
     /// Returns `None` if unknown.
     fn extension(&self) -> Option<&str> {
-        self.segment_list.media().get(0).map(|s| s.url.extension())
+        self.segment_list.media().first().map(|s| s.url.extension())
     }
 
     /// Returns information on the segment including the position given, in seconds.

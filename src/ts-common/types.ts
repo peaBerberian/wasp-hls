@@ -11,6 +11,7 @@ import {
   PushedSegmentErrorCode,
   StartingPositionType,
   PlaylistNature,
+  AddSourceBufferErrorCode,
 } from "../wasm/wasp_hls";
 import { LoggerLevel } from "./logger";
 import { SourceBufferOperation } from "./QueuedSourceBuffer";
@@ -1025,7 +1026,7 @@ export interface CreateSourceBufferErrorMainMessage {
     /** Identify the SourceBuffer in question. */
     sourceBufferId: SourceBufferId;
     /** Error code to better specify the error encountered. */
-    code: SourceBufferCreationErrorCode;
+    code: AddSourceBufferErrorCode;
     /** The error's message. */
     message: string;
     /** The error's name. */

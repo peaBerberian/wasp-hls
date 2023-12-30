@@ -147,7 +147,7 @@ impl PlaylistStore {
                 .any(|v| v.id() == self.curr_variant_id);
 
             if !curr_variant_still_here {
-                let new_variant_id = self.playlist.supported_variants().get(0).map(|v| v.id());
+                let new_variant_id = self.playlist.supported_variants().first().map(|v| v.id());
                 if let Some(variant_id) = new_variant_id {
                     self.set_curr_variant_and_media_id(variant_id);
                 } else {

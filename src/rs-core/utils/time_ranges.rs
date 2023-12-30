@@ -37,7 +37,7 @@ impl TimeRanges {
             let mut has_updated_start = false;
             let mut has_updated_end = false;
 
-            let mut initial_range = self.ranges.get_mut(first_overlapping_idx).unwrap();
+            let initial_range = self.ranges.get_mut(first_overlapping_idx).unwrap();
             if end < initial_range.start {
                 self.ranges
                     .insert(first_overlapping_idx, TimeRange { start, end });

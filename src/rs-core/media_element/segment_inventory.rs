@@ -390,7 +390,7 @@ impl SegmentInventory {
             }
         };
 
-        let mut seg = self.inventory.get_mut(seg_idx).unwrap();
+        let seg = self.inventory.get_mut(seg_idx).unwrap();
         seg.start += start_correction;
         seg.end += end_correction;
         seg.last_buffered_start = seg.start;
