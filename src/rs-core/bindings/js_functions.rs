@@ -308,7 +308,7 @@ extern "C" {
 
     /// Function to call to indicate that an error arised when removing data from a
     /// `SourceBuffer`.
-    pub fn jsSendRemovedBufferError(fatal: bool, media_type: MediaType, message: &str);
+    pub fn jsSendRemoveBufferError(fatal: bool, media_type: MediaType, message: &str);
 
     /// Function to call to indicate that an uncategorized error happened.
     pub fn jsSendOtherError(fatal: bool, code: OtherErrorCode, message: &str);
@@ -899,6 +899,7 @@ impl From<PushSegmentError> for SegmentParsingErrorCode {
 
 /// Errors that can arise after a SourceBuffer's `appendBuffer` call.
 #[wasm_bindgen]
+#[derive(Eq, PartialEq, Clone, Copy, Debug)]
 pub enum PushedSegmentErrorCode {
     /// We could not push the segment because the `SourceBuffer`'s buffer seems full.
     BufferFull,

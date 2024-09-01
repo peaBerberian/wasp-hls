@@ -961,12 +961,21 @@ export function appendBuffer(
         })
         .catch((err) => {
           try {
+            let buffered;
+            try {
+              const timeRange =
+                sourceBufferObj.sourceBuffer.getBufferedRanges();
+              buffered = new JsTimeRanges(timeRangesToFloat64Array(timeRange));
+            } catch (_) {
+              buffered = new JsTimeRanges(new Float64Array([]));
+            }
             if (err instanceof Error && err.name === "QuotaExceededError") {
               playerInstance
                 .getDispatcher()
                 ?.on_append_buffer_error(
                   sourceBufferId,
                   PushedSegmentErrorCode.BufferFull,
+                  buffered,
                 );
             } else {
               playerInstance
@@ -974,6 +983,7 @@ export function appendBuffer(
                 ?.on_append_buffer_error(
                   sourceBufferId,
                   PushedSegmentErrorCode.UnknownError,
+                  buffered,
                 );
             }
           } catch (err2) {
@@ -1048,10 +1058,17 @@ export function removeBuffer(
           }
         })
         .catch(() => {
+          let buffered;
+          try {
+            const timeRange = sourceBufferObj.sourceBuffer.getBufferedRanges();
+            buffered = new JsTimeRanges(timeRangesToFloat64Array(timeRange));
+          } catch (_) {
+            buffered = new JsTimeRanges(new Float64Array([]));
+          }
           try {
             playerInstance
               .getDispatcher()
-              ?.on_remove_buffer_error(sourceBufferId);
+              ?.on_remove_buffer_error(sourceBufferId, buffered);
           } catch (err) {
             const error = err instanceof Error ? err : "Unknown Error";
             logger.error("Error when calling `on_remove_buffer_error`", error);

@@ -227,6 +227,8 @@ export default class QueuedSourceBuffer {
     if (this._pendingTask !== null) {
       this._pendingTask.reject(error);
     }
+    this._pendingTask = null;
+    this._queue = [];
   }
 
   /**

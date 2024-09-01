@@ -280,15 +280,14 @@ MSE API and buffer handling:
       segments if they are needed again.
 - [x] Discontinuity handling: Automatically skip "holes" in the buffer where
       it is known that no segment will be pushed to fill them.
-- [ ] Freezing handling: Detect when the browser is not making progress in the
-      content despite having media data to play and try to unstuck it.
-      _Priority: average_
-- [ ] Proper handling of `QuotaExceededError` after pushing segments (when low
+- [x] Proper handling of `QuotaExceededError` after pushing segments (when low
       on memory).
       This is generally not needed as the browser should already handle some kind of
       garbage collection but some platforms still may have issues when memory is
       constrained.
-      _Priority: low_
+- [ ] Freezing handling: Detect when the browser is not making progress in the
+      content despite having media data to play and try to unstuck it.
+      _Priority: average_
 
 Tracks:
 
