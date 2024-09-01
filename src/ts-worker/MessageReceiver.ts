@@ -394,17 +394,23 @@ export default function MessageReceiver() {
           ) {
             return;
           }
+          const buffered = new JsTimeRanges(data.value.buffered);
           if (data.value.operation === SourceBufferOperation.Remove) {
-            dispatcher.on_remove_buffer_error(data.value.sourceBufferId);
+            dispatcher.on_remove_buffer_error(
+              data.value.sourceBufferId,
+              buffered,
+            );
           } else if (data.value.isBufferFull) {
             dispatcher.on_append_buffer_error(
               data.value.sourceBufferId,
               PushedSegmentErrorCode.BufferFull,
+              buffered,
             );
           } else {
             dispatcher.on_append_buffer_error(
               data.value.sourceBufferId,
               PushedSegmentErrorCode.UnknownError,
+              buffered,
             );
           }
         }

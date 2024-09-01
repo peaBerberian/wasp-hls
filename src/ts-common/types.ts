@@ -1121,6 +1121,10 @@ export interface SourceBufferOperationSuccessMainMessage {
      * `CreateSourceBufferWorkerMessage`.
      */
     sourceBufferId: SourceBufferId;
+    /**
+     * Buffered TimeRanges at the time of the error once that operation was
+     * validated.
+     */
     buffered: Float64Array;
   };
 }
@@ -1147,6 +1151,11 @@ export interface SourceBufferOperationErrorMainMessage {
     operation: SourceBufferOperation;
     /** If `true` the error is due to the fact that the buffer is full. */
     isBufferFull: boolean;
+    /**
+     * Buffered TimeRanges at the time of the error.
+     * Empty Float64Array if that data cannot be retrieved due to the error.
+     */
+    buffered: Float64Array;
   };
 }
 

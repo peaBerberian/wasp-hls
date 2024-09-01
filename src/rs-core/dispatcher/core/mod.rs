@@ -12,7 +12,7 @@ use crate::{
         jsAnnounceVariantUpdate, jsClearTimer, jsSendMediaPlaylistParsingError,
         jsSendMediaPlaylistRequestError, jsSendMultivariantPlaylistParsingError,
         jsSendMultivariantPlaylistRequestError, jsSendOtherError, jsSendPushedSegmentError,
-        jsSendRemovedBufferError, jsSendSegmentParsingError, jsSendSegmentRequestError,
+        jsSendRemoveBufferError, jsSendSegmentParsingError, jsSendSegmentRequestError,
         jsSendSourceBufferCreationError, jsSetMediaSourceDuration, jsStartObservingPlayback,
         jsStopObservingPlayback, jsTimer, jsUpdateContentInfo, AddSourceBufferErrorCode, MediaType,
         MultivariantPlaylistParsingErrorCode, OtherErrorCode, PlaylistNature,
@@ -303,7 +303,7 @@ impl Dispatcher {
         buffered: JsTimeRanges,
     ) {
         self.media_element_ref
-            .on_source_buffer_update(source_buffer_id, buffered);
+            .on_source_buffer_update(source_buffer_id, buffered, true);
     }
 
     /// Method to call when a `SourceBuffer`'s `appendBuffer` call led to an `error` event.
@@ -311,9 +311,47 @@ impl Dispatcher {
         &mut self,
         source_buffer_id: SourceBufferId,
         code: PushedSegmentErrorCode,
+        buffered: JsTimeRanges,
     ) {
+        self.media_element_ref
+            .on_source_buffer_update(source_buffer_id, buffered, false);
+
         match self.media_element_ref.media_type_for(source_buffer_id) {
             Some(mt) => {
+                if code == PushedSegmentErrorCode::BufferFull {
+                    let wanted_pos = self.media_element_ref.wanted_position();
+                    let min_pos = if wanted_pos < 10. {
+                        0.
+                    } else {
+                        wanted_pos - 10.
+                    };
+                    let max_pos = wanted_pos + self.buffer_goal + 10.;
+
+                    let has_segments_to_delete =
+                        self.media_element_ref.inventory(mt).iter().any(|x| {
+                            x.last_buffered_start() < min_pos || x.last_buffered_end() > max_pos
+                        });
+                    if has_segments_to_delete {
+                        Logger::warn(&format!(
+                            "BufferFull error received for {}. Cleaning < {}, > {}.",
+                            mt, min_pos, max_pos
+                        ));
+                        match (
+                            self.media_element_ref.remove_data(mt, 0., min_pos),
+                            self.media_element_ref.remove_data(mt, max_pos, f64::MAX),
+                        ) {
+                            (Ok(_), Ok(_)) => {
+                                self.segment_selectors
+                                    .restart_from_position(wanted_pos - 0.2);
+                                return;
+                            }
+                            _ => {}
+                        };
+                    }
+
+                    // TODO Reduce buffer goal instead of just failing here?
+                }
+
                 let message = match code {
                     PushedSegmentErrorCode::BufferFull => format!(
                         "The {mt} `SourceBuffer` was full and could not accept anymore segment"
@@ -334,12 +372,18 @@ impl Dispatcher {
     }
 
     /// Method to call when a `SourceBuffer`'s `remove` call led to an `error` event.
-    pub(super) fn on_remove_buffer_error_core(&mut self, source_buffer_id: SourceBufferId) {
+    pub(super) fn on_remove_buffer_error_core(
+        &mut self,
+        source_buffer_id: SourceBufferId,
+        buffered: JsTimeRanges,
+    ) {
+        self.media_element_ref
+            .on_source_buffer_update(source_buffer_id, buffered, false);
         match self.media_element_ref.media_type_for(source_buffer_id) {
             Some(mt) => {
                 let message =
                     &format!("An error happened while calling `remove` on the {mt} `SourceBuffer`");
-                jsSendRemovedBufferError(true, mt, message);
+                jsSendRemoveBufferError(true, mt, message);
             }
             None => jsSendOtherError(
                 true,

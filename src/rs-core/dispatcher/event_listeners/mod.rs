@@ -134,8 +134,9 @@ impl Dispatcher {
         &mut self,
         source_buffer_id: SourceBufferId,
         code: PushedSegmentErrorCode,
+        buffered: JsTimeRanges,
     ) {
-        self.on_append_buffer_error_core(source_buffer_id, code);
+        self.on_append_buffer_error_core(source_buffer_id, code, buffered);
     }
 
     /// The JS code should call this method when a SourceBuffer emits an `error`
@@ -146,8 +147,12 @@ impl Dispatcher {
     /// * `source_buffer_id` - The identifier given generated when the
     ///   SourceBuffer was created. This allows the `Dispatcher` to identify
     ///   which SourceBuffer actually emitted this event.
-    pub fn on_remove_buffer_error(&mut self, source_buffer_id: SourceBufferId) {
-        self.on_remove_buffer_error_core(source_buffer_id);
+    pub fn on_remove_buffer_error(
+        &mut self,
+        source_buffer_id: SourceBufferId,
+        buffered: JsTimeRanges,
+    ) {
+        self.on_remove_buffer_error_core(source_buffer_id, buffered);
     }
 
     /// The JS code should call this method once regular playback "tick" are enabled

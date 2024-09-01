@@ -186,6 +186,20 @@ impl SourceBuffer {
         jsRemoveBuffer(self.id, 0., f64::INFINITY);
     }
 
+    /// SourceBuffers maintain a queue of planned operations such as push and remove to media
+    /// buffers.
+    ///
+    /// In some rare scenarios, we could be left in a situation where all previously scheduled
+    /// operations are cancelled, such as when one of them fails.
+    /// This method allows to empty that SourceBuffer's queue in such situations.
+    pub(super) fn clear_queue(&mut self) {
+        Logger::info(&format!(
+            "Buffer {} ({}): clearing queue.",
+            self.id, self.typ
+        ));
+        self.queue.clear();
+    }
+
     /// Indicate to this `SourceBuffer` that the last chronological segment has been pushed.
     pub(super) fn announce_last_segment_pushed(&mut self) {
         self.last_segment_pushed = true;

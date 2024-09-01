@@ -424,6 +424,16 @@ export function onAppendBufferMessage(
         err,
         "Unknown error when appending data to the SourceBuffer",
       );
+      let buffered = new Float64Array([]);
+      try {
+        if (sbObject !== undefined) {
+          buffered = timeRangesToFloat64Array(
+            sbObject.queuedSourceBuffer.getBufferedRanges(),
+          );
+        }
+      } catch (_) {
+        /* ignore error here */
+      }
       postMessageToWorker(worker, {
         type: MainMessageType.SourceBufferOperationError,
         value: {
@@ -433,6 +443,7 @@ export function onAppendBufferMessage(
           operation: SourceBufferOperation.Push,
           isBufferFull:
             err instanceof Error && err.name === "QuotaExceededError",
+          buffered,
         },
       });
     }
@@ -487,6 +498,16 @@ export function onRemoveBufferMessage(
         err,
         "Unknown error when removing data to the SourceBuffer",
       );
+      let buffered = new Float64Array([]);
+      try {
+        if (sbObject !== undefined) {
+          buffered = timeRangesToFloat64Array(
+            sbObject.queuedSourceBuffer.getBufferedRanges(),
+          );
+        }
+      } catch (_) {
+        /* ignore error here */
+      }
       postMessageToWorker(worker, {
         type: MainMessageType.SourceBufferOperationError,
         value: {
@@ -495,6 +516,7 @@ export function onRemoveBufferMessage(
           message,
           operation: SourceBufferOperation.Remove,
           isBufferFull: false,
+          buffered,
         },
       });
     }

@@ -523,23 +523,30 @@ impl MediaElementReference {
         &mut self,
         source_buffer_id: SourceBufferId,
         buffered: JsTimeRanges,
+        success: bool,
     ) {
         if let Some(ref mut sb) = self.audio_buffer {
             if sb.id() == source_buffer_id {
+                if !success {
+                    sb.clear_queue();
+                }
                 if let Some(SourceBufferQueueElement::PushMedia((_, id))) = sb.on_operation_end() {
                     if let Some(media_offset) = self.media_offset {
                         self.audio_inventory
-                            .validate_segment(id, &buffered, media_offset);
+                            .validate_segment(id, &buffered, media_offset, success);
                     }
                 }
             }
         }
         if let Some(ref mut sb) = self.video_buffer {
             if sb.id() == source_buffer_id {
+                if !success {
+                    sb.clear_queue();
+                }
                 if let Some(SourceBufferQueueElement::PushMedia((_, id))) = sb.on_operation_end() {
                     if let Some(media_offset) = self.media_offset {
                         self.video_inventory
-                            .validate_segment(id, &buffered, media_offset);
+                            .validate_segment(id, &buffered, media_offset, success);
                     }
                 }
             }
