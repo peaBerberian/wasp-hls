@@ -1,0 +1,87 @@
+# This workflow will do a clean install of node dependencies, cache/restore them, build the source code and run tests across different versions of node
+# For more information see: https://help.github.com/actions/language-and-framework-guides/using-nodejs-with-github-actions
+
+name: Wasp-HLS PR check
+
+on:
+  push:
+    branches: [stable, dev, legacy-v3]
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  format_check:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        node-version: [20.x]
+        # See supported Node.js release schedule at https://nodejs.org/en/about/releases/
+
+    steps:
+      - uses: actions/checkout@v2
+      - name: Use Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v2
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: "npm"
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+
+      - run: npm install
+      - run: rustup component add rustfmt
+      - run: npm run fmt:check
+      - run: npm run fmt:check
+
+  typechecking_and_linting:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        node-version: [20.x]
+        # See supported Node.js release schedule at https://nodejs.org/en/about/releases/
+
+    steps:
+      - uses: actions/checkout@v2
+      - name: Use Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v2
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: "npm"
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+
+      - run: npm install
+      - run: rustup target add wasm32-unknown-unknown
+      - run: rustup component add clippy
+      - run: cargo install wasm-bindgen-cli@0.2.93
+      - run: npm run build:all
+      - run: npm run check
+      - run: npm run clippy
+
+  release_build:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        node-version: [20.x]
+        # See supported Node.js release schedule at https://nodejs.org/en/about/releases/
+
+    steps:
+      - uses: actions/checkout@v2
+      - name: Use Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v2
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: "npm"
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+
+      - run: npm install
+      - run: rustup target add wasm32-unknown-unknown
+      - run: rustup component add clippy
+      - run: cargo install wasm-bindgen-cli@0.2.93
+      - run: npm run build:release
