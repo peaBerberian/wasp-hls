@@ -27,13 +27,13 @@ export default class TransportStreamSplitter {
     // bytes that were pushed in
     if (this._bytesInIncompletePacketBuffer > 0) {
       const newInput = new Uint8Array(
-        bytes.byteLength + this._bytesInIncompletePacketBuffer
+        bytes.byteLength + this._bytesInIncompletePacketBuffer,
       );
       newInput.set(
         this._incompletePacketBuffer.subarray(
           0,
-          this._bytesInIncompletePacketBuffer
-        )
+          this._bytesInIncompletePacketBuffer,
+        ),
       );
       newInput.set(bytes, this._bytesInIncompletePacketBuffer);
       this._input = newInput;
@@ -78,7 +78,7 @@ export default class TransportStreamSplitter {
     if (this._startIndex < this._input.byteLength) {
       this._incompletePacketBuffer.set(
         this._input.subarray(this._startIndex),
-        0
+        0,
       );
       this._bytesInIncompletePacketBuffer =
         this._input.byteLength - this._startIndex;

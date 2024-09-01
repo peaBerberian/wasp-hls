@@ -148,12 +148,12 @@ export default class FullMp4SegmentConstructor {
           caption.startTime = clock.metadataTsToSeconds(
             caption.startPts,
             timelinePts,
-            this.keepOriginalTimestamps
+            this.keepOriginalTimestamps,
           );
           caption.endTime = clock.metadataTsToSeconds(
             caption.endPts,
             timelinePts,
-            this.keepOriginalTimestamps
+            this.keepOriginalTimestamps,
           );
 
           seg.captionStreams[caption.stream] = true;
@@ -166,7 +166,7 @@ export default class FullMp4SegmentConstructor {
           id3.cueTime = clock.metadataTsToSeconds(
             id3.pts,
             timelinePts,
-            this.keepOriginalTimestamps
+            this.keepOriginalTimestamps,
           );
           return id3;
         });

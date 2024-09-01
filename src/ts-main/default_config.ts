@@ -1,4 +1,4 @@
-import { WaspHlsPlayerConfig } from "../ts-common/types";
+import type { WaspHlsPlayerConfig } from "../ts-common/types";
 
 /**
  * Default configuration object relied on by the `WaspHlsPlayer`.

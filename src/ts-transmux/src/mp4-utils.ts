@@ -234,7 +234,7 @@ function createBox(
   const view = new DataView(
     result.buffer,
     result.byteOffset,
-    result.byteLength
+    result.byteLength,
   );
   view.setUint32(0, result.byteLength);
   result.set(boxName, 4);
@@ -308,7 +308,7 @@ function createEsds(trackInfo: TrackInfo): Uint8Array {
       0x06,
       0x01,
       0x02, // GASpecificConfig
-    ])
+    ]),
   );
 }
 
@@ -322,7 +322,7 @@ function createFtyp(): Uint8Array {
     MAJOR_BRAND,
     MINOR_VERSION,
     MAJOR_BRAND,
-    AVC1_BRAND
+    AVC1_BRAND,
   );
 }
 
@@ -401,7 +401,7 @@ function createMdia(trackInfo: TrackInfo): Uint8Array {
     BOXES_NAME.mdia,
     createMdhd(trackInfo),
     createHdlr(trackInfo.type),
-    createMinf(trackInfo)
+    createMinf(trackInfo),
   );
 }
 
@@ -422,7 +422,7 @@ function createMfhd(sequenceNumber: number): Uint8Array {
       (sequenceNumber & 0xff0000) >> 16,
       (sequenceNumber & 0xff00) >> 8,
       sequenceNumber & 0xff, // sequence_number
-    ])
+    ]),
   );
 }
 
@@ -438,7 +438,7 @@ function createMinf(trackInfo: TrackInfo): Uint8Array {
       ? createBox(BOXES_NAME.vmhd, VMHD)
       : createBox(BOXES_NAME.smhd, SMHD),
     createDinf(),
-    createStbl(trackInfo)
+    createStbl(trackInfo),
   );
 }
 
@@ -453,7 +453,7 @@ function createMoof(sequenceNumber: number, tracks: TrackInfo[]): Uint8Array {
   return createBox(
     BOXES_NAME.moof,
     createMfhd(sequenceNumber),
-    ...trackFragments
+    ...trackFragments,
   );
 }
 
@@ -468,7 +468,7 @@ function createMoov(tracks: TrackInfo[]): Uint8Array {
     BOXES_NAME.moov,
     createMvhd(0xffffffff),
     ...boxes,
-    createMvex(tracks)
+    createMvex(tracks),
   );
 }
 
@@ -630,7 +630,7 @@ function createStbl(trackInfo: TrackInfo): Uint8Array {
     createBox(BOXES_NAME.stts, STTS),
     createBox(BOXES_NAME.stsc, STSC),
     createBox(BOXES_NAME.stsz, STSZ),
-    createBox(BOXES_NAME.stco, STCO)
+    createBox(BOXES_NAME.stco, STCO),
   );
 }
 
@@ -652,7 +652,7 @@ function createStsd(trackInfo: TrackInfo): Uint8Array {
       0x00,
       0x01,
     ]),
-    trackInfo.type === "video" ? createAvc1(trackInfo) : createMp4a(trackInfo)
+    trackInfo.type === "video" ? createAvc1(trackInfo) : createMp4a(trackInfo),
   );
 }
 
@@ -672,7 +672,7 @@ function createAvc1(trackInfo: TrackInfo): Uint8Array {
     sequenceParameterSets.push((sps.byteLength & 0xff00) >>> 8);
     sequenceParameterSets.push(sps.byteLength & 0xff); // sequenceParameterSetLength
     sequenceParameterSets = sequenceParameterSets.concat(
-      Array.prototype.slice.call(sps)
+      Array.prototype.slice.call(sps),
     ); // SPS
   }
 
@@ -681,7 +681,7 @@ function createAvc1(trackInfo: TrackInfo): Uint8Array {
     pictureParameterSets.push((pps.byteLength & 0xff00) >>> 8);
     pictureParameterSets.push(pps.byteLength & 0xff);
     pictureParameterSets = pictureParameterSets.concat(
-      Array.prototype.slice.call(pps)
+      Array.prototype.slice.call(pps),
     );
   }
 
@@ -779,9 +779,9 @@ function createAvc1(trackInfo: TrackInfo): Uint8Array {
           [spss.length], // numOfSequenceParameterSets
           sequenceParameterSets, // "SPS"
           [ppss.length], // numOfPictureParameterSets
-          pictureParameterSets // "PPS"
-        )
-      )
+          pictureParameterSets, // "PPS"
+        ),
+      ),
     ),
     createBox(
       BOXES_NAME.btrt,
@@ -798,7 +798,7 @@ function createAvc1(trackInfo: TrackInfo): Uint8Array {
         0x2d,
         0xc6,
         0xc0, // avgBitrate
-      ])
+      ]),
     ),
   ];
 
@@ -818,8 +818,8 @@ function createAvc1(trackInfo: TrackInfo): Uint8Array {
           (vSpacing & 0xff0000) >> 16,
           (vSpacing & 0xff00) >> 8,
           vSpacing & 0xff,
-        ])
-      )
+        ]),
+      ),
     );
   }
 
@@ -870,7 +870,7 @@ function createMp4a(trackInfo: TrackInfo): Uint8Array {
 
       // MP4AudioSampleEntry, ISO/IEC 14496-14
     ]),
-    createEsds(trackInfo)
+    createEsds(trackInfo),
   );
 }
 
@@ -967,7 +967,7 @@ function createTkhd(trackInfo: TrackInfo): Uint8Array {
       trackInfo.height & 0xff,
       0x00,
       0x00, // height
-    ])
+    ]),
   );
 }
 
@@ -1004,14 +1004,14 @@ function createTraf(trackInfo: TrackInfo): Uint8Array {
       0x00,
       0x00,
       0x00, // default_sample_flags
-    ])
+    ]),
   );
 
   const upperWordBaseMediaDecodeTime = Math.floor(
-    trackInfo.baseMediaDecodeTime / MAX_UINT32
+    trackInfo.baseMediaDecodeTime / MAX_UINT32,
   );
   const lowerWordBaseMediaDecodeTime = Math.floor(
-    trackInfo.baseMediaDecodeTime % MAX_UINT32
+    trackInfo.baseMediaDecodeTime % MAX_UINT32,
   );
 
   const trackFragmentDecodeTime = createBox(
@@ -1030,7 +1030,7 @@ function createTraf(trackInfo: TrackInfo): Uint8Array {
       (lowerWordBaseMediaDecodeTime >>> 16) & 0xff,
       (lowerWordBaseMediaDecodeTime >>> 8) & 0xff,
       lowerWordBaseMediaDecodeTime & 0xff,
-    ])
+    ]),
   );
 
   // the data offset specifies the number of bytes from the start of
@@ -1051,7 +1051,7 @@ function createTraf(trackInfo: TrackInfo): Uint8Array {
       BOXES_NAME.traf,
       trackFragmentHeader,
       trackFragmentDecodeTime,
-      trackFragmentRun
+      trackFragmentRun,
     );
   }
 
@@ -1061,14 +1061,14 @@ function createTraf(trackInfo: TrackInfo): Uint8Array {
   const sampleDependencyTable = createSdtp(trackInfo);
   const trackFragmentRun = createTrun(
     trackInfo,
-    sampleDependencyTable.length + dataOffset
+    sampleDependencyTable.length + dataOffset,
   );
   return createBox(
     BOXES_NAME.traf,
     trackFragmentHeader,
     trackFragmentDecodeTime,
     trackFragmentRun,
-    sampleDependencyTable
+    sampleDependencyTable,
   );
 }
 
@@ -1082,7 +1082,7 @@ function createTrak(trackInfo: TrackInfo): Uint8Array {
   return createBox(
     BOXES_NAME.trak,
     createTkhd(trackInfo),
-    createMdia(trackInfo)
+    createMdia(trackInfo),
   );
 }
 
@@ -1185,7 +1185,7 @@ function createTrunHeader(samples: TrackSample[], offset: number): number[] {
  */
 function createVideoTrun(
   trackInfo: TrackInfo,
-  initialOffset: number
+  initialOffset: number,
 ): Uint8Array {
   const samples = trackInfo.samples ?? [];
   const offset = initialOffset + 8 + 12 + 16 * samples.length;
@@ -1235,7 +1235,7 @@ function createVideoTrun(
  */
 function createAudioTrun(
   trackInfo: TrackInfo,
-  initialOffset: number
+  initialOffset: number,
 ): Uint8Array {
   const samples = trackInfo.samples ?? [];
   const offset = initialOffset + 8 + 12 + 8 * samples.length;

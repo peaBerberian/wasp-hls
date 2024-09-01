@@ -1,5 +1,5 @@
 import logger from "../ts-common/logger";
-import { MainMessage } from "../ts-common/types";
+import type { MainMessage } from "../ts-common/types";
 
 /**
  * Post given `msg` message to the given `worker` with optional `Transferable`
@@ -14,7 +14,7 @@ import { MainMessage } from "../ts-common/types";
 export default function postMessageToWorker(
   worker: Worker,
   msg: MainMessage,
-  transferables?: Transferable[]
+  transferables?: Transferable[],
 ): void {
   logger.debug("--> sending to worker:", msg.type);
   // Written that way due to TypeScript shenanigans

@@ -1,4 +1,5 @@
-import { MediaType, RequestErrorReason } from "../../wasm/wasp_hls";
+import type { MediaType } from "../../wasm/wasp_hls";
+import { RequestErrorReason } from "../../wasm/wasp_hls";
 import { WaspErrorCode } from "./common";
 
 /**
@@ -58,7 +59,7 @@ export default class WaspMediaPlaylistRequestError extends Error {
     reason: RequestErrorReason,
     status: number | undefined,
     mediaType: MediaType | undefined,
-    message?: string | undefined
+    message?: string | undefined,
   ) {
     super();
     // @see https://stackoverflow.com/questions/41102060/typescript-extending-error-class

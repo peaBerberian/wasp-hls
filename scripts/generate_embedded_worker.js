@@ -74,5 +74,5 @@ fs.readFile(
         // file written successfully
       });
     }
-  }
+  },
 );

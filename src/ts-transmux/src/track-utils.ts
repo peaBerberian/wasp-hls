@@ -22,7 +22,7 @@ function collectDtsInfo<
     minSegmentPts?: number | undefined;
     maxSegmentDts?: number | undefined;
     maxSegmentPts?: number | undefined;
-  }
+  },
 >(trackInfo: T, data: Partial<TrackInfo>) {
   if (trackInfo.timelineStartInfo === undefined) {
     trackInfo.timelineStartInfo = {};
@@ -74,7 +74,7 @@ function clearDtsInfo<
     minSegmentPts: number | undefined;
     maxSegmentDts: number | undefined;
     maxSegmentPts: number | undefined;
-  }
+  },
 >(trackInfo: T): void {
   trackInfo.minSegmentDts = undefined;
   trackInfo.maxSegmentDts = undefined;
@@ -99,7 +99,7 @@ function calculateTrackBaseMediaDecodeTime<
       baseMediaDecodeTime?: number | undefined;
     };
     samplerate?: number;
-  }
+  },
 >(trackInfo: T, keepOriginalTimestamps: boolean): number {
   let minSegmentDts = trackInfo.minSegmentDts;
 

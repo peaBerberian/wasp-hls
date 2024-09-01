@@ -41,7 +41,7 @@ class ExpGolomb {
     }
 
     workingBytes.set(
-      this._workingData.subarray(position, position + availableBytes)
+      this._workingData.subarray(position, position + availableBytes),
     );
     this._workingWord = new DataView(workingBytes.buffer).getUint32(0);
 

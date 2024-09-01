@@ -38,7 +38,7 @@ player
     },
     (err) => {
       console.error("Could not initialize WaspHlsPlayer:", err);
-    }
+    },
   );
 
 // we can now use the player (we don't need to await the Promise here)
@@ -66,7 +66,7 @@ player
     },
     (err) => {
       console.error("Could not initialize WaspHlsPlayer:", err);
-    }
+    },
   );
 
 // we can now use the player (we don't need to await the Promise here)

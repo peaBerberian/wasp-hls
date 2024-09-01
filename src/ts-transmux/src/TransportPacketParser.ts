@@ -140,11 +140,11 @@ export default class TransportPacketParser {
   private _parsePsi(payload: Uint8Array, psi: PartialPatPacket): PatPacket;
   private _parsePsi(
     payload: Uint8Array,
-    psi: PartialPmtPacket
+    psi: PartialPmtPacket,
   ): PmtPacket | null;
   private _parsePsi(
     payload: Uint8Array,
-    psi: PartialPatPacket | PartialPmtPacket
+    psi: PartialPatPacket | PartialPmtPacket,
   ): PatPacket | PmtPacket | null {
     let offset = 0;
 
@@ -188,7 +188,7 @@ export default class TransportPacketParser {
    */
   private _parsePmt(
     payload: Uint8Array,
-    pmt: PartialPmtPacket
+    pmt: PartialPmtPacket,
   ): PmtPacket | null {
     // PMTs can be sent ahead of the time when they should actually
     // take effect. We don't believe this should ever be the case
@@ -253,7 +253,7 @@ export default class TransportPacketParser {
   private _processPes(
     packet: Uint8Array,
     offset: number,
-    result: PacketBase
+    result: PacketBase,
   ): PesPacket {
     // set the appropriate stream type
     let streamType: number | undefined;

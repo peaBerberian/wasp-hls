@@ -28,7 +28,7 @@ function SpeedSetting({
         }
       }
     },
-    []
+    [],
   );
 
   const selectedIndex = React.useMemo(() => {

@@ -234,7 +234,7 @@ export default class ElementaryPacketParser {
   private _flushStream(
     stream: ElementaryTrackInfo,
     type: "video" | "audio" | "timed-metadata",
-    forceFlush?: boolean
+    forceFlush?: boolean,
   ): ElementaryPacket | null {
     let offset = 0;
     let packetFlushable = false;

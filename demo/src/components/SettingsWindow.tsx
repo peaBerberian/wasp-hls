@@ -1,6 +1,7 @@
 import * as React from "react";
-import WaspHlsPlayer, { PlayerState } from "../../../src";
-import { AudioTrackInfo, VariantInfo } from "../../../src/ts-main";
+import type WaspHlsPlayer from "../../../src";
+import { PlayerState } from "../../../src";
+import type { AudioTrackInfo, VariantInfo } from "../../../src/ts-main";
 import AudioTrackSetting from "./AudioTrackSetting";
 import SpeedSetting from "./SpeedSetting";
 import VariantSetting from "./VariantSetting";
@@ -8,19 +9,19 @@ import VariantSetting from "./VariantSetting";
 function SettingsWindow({ player }: { player: WaspHlsPlayer }): JSX.Element {
   const [speed, setSpeed] = React.useState(player.getSpeed());
   const [isAutoVariant, setIsAutoVariant] = React.useState(
-    player.getLockedVariant() === null
+    player.getLockedVariant() === null,
   );
   const [variant, setVariant] = React.useState<VariantInfo | undefined>(
-    player.getCurrentVariant()
+    player.getCurrentVariant(),
   );
   const [variantList, setVariantList] = React.useState<VariantInfo[]>(
-    player.getVariantList()
+    player.getVariantList(),
   );
   const [audioTrack, setAudioTrack] = React.useState<
     AudioTrackInfo | undefined
   >(player.getCurrentAudioTrack());
   const [audioTrackList, setAudioTrackList] = React.useState<AudioTrackInfo[]>(
-    player.getAudioTrackList()
+    player.getAudioTrackList(),
   );
 
   React.useEffect(() => {
@@ -92,7 +93,7 @@ function SettingsWindow({ player }: { player: WaspHlsPlayer }): JSX.Element {
         setIsAutoVariant(false);
       }
     },
-    [player]
+    [player],
   );
 
   const updateAudioTrack = React.useCallback(
@@ -100,7 +101,7 @@ function SettingsWindow({ player }: { player: WaspHlsPlayer }): JSX.Element {
       player.setAudioTrack(t.id);
       setAudioTrack(t);
     },
-    [player]
+    [player],
   );
 
   return (

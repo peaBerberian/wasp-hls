@@ -34,6 +34,8 @@ module.exports = {
         objectLiteralTypeAssertions: "allow",
       },
     ],
+    "@typescript-eslint/prefer-promise-reject-errors": "error",
+    "@typescript-eslint/only-throw-error": "error",
     "@typescript-eslint/consistent-type-definitions": "error",
     "@typescript-eslint/dot-notation": "error",
     "@typescript-eslint/explicit-member-accessibility": [
@@ -42,6 +44,8 @@ module.exports = {
         accessibility: "explicit",
       },
     ],
+    "@typescript-eslint/consistent-type-imports": "error",
+    "@typescript-eslint/consistent-type-exports": "error",
     "@typescript-eslint/naming-convention": [
       "error",
       {
@@ -102,6 +106,8 @@ module.exports = {
     "@typescript-eslint/no-namespace": "error",
     "@typescript-eslint/no-non-null-assertion": "error",
     "@typescript-eslint/no-this-alias": "error",
+    // Might be enabled in the future, for now this is too much work:
+    "@typescript-eslint/no-unsafe-enum-comparison": ["off"],
     "@typescript-eslint/no-unnecessary-boolean-literal-compare": "error",
     "@typescript-eslint/no-unnecessary-qualifier": "error",
     "@typescript-eslint/no-unnecessary-type-arguments": "error",
@@ -117,12 +123,14 @@ module.exports = {
     "@typescript-eslint/no-unused-vars": [
       "error",
       {
+        args: "all",
         argsIgnorePattern: "^_",
+        caughtErrors: "none",
+        destructuredArrayIgnorePattern: "^_",
         varsIgnorePattern: "^_",
       },
     ],
     "@typescript-eslint/no-shadow": ["error"],
-    "@typescript-eslint/quotes": ["error", "double", { avoidEscape: true }],
     "@typescript-eslint/restrict-plus-operands": "error",
     "@typescript-eslint/strict-boolean-expressions": "error",
     "@typescript-eslint/triple-slash-reference": [
@@ -137,20 +145,16 @@ module.exports = {
     "@typescript-eslint/unified-signatures": "error",
     "arrow-body-style": "off",
     "arrow-parens": ["off", "always"],
-    // TODO?
-    // "class-methods-use-this": "error",
     complexity: [
       "off",
       {
         max: 20,
       },
     ],
-    // TODO?
-    // "consistent-return": "error",
     "constructor-super": "error",
     curly: "error",
     "default-case": "off",
-    eqeqeq: ["error", "smart"],
+    eqeqeq: "error",
     "guard-for-in": "warn",
     "id-blacklist": "off",
     "id-match": "off",
@@ -159,7 +163,7 @@ module.exports = {
     "import/no-extraneous-dependencies": [
       "error",
       {
-        devDependencies: true,
+        devDependencies: ["**/*.test.ts", "**/__tests__/**", "demo/**/*"],
       },
     ],
     "import/no-internal-modules": "off",
@@ -175,26 +179,20 @@ module.exports = {
     "jsdoc/check-alignment": "error",
     "jsdoc/no-types": "off",
     "max-classes-per-file": ["warn", 5],
-    "max-len": [
-      "warn",
-      {
-        code: 90,
-      },
-    ],
     "max-lines": ["off", 300],
     "newline-per-chained-call": "off",
     "no-bitwise": "off",
     "no-caller": "error",
-    // "no-console": "error",
+    "no-console": "error",
     "no-debugger": "error",
     "no-duplicate-case": "error",
-    "no-duplicate-imports": "error",
     "no-empty": "error",
     "no-eval": "error",
     "no-fallthrough": "error",
     "no-invalid-this": "error",
     "no-magic-numbers": "off",
     "no-new-wrappers": "error",
+    "no-nested-ternary": "error",
     "no-param-reassign": "error",
     "no-return-await": "error",
     "no-sequences": "error",

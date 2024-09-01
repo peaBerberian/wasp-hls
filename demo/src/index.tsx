@@ -24,6 +24,6 @@ window.onload = function (): void {
     <React.StrictMode>
       <Header />
       <PlayerContainersWrapper />
-    </React.StrictMode>
+    </React.StrictMode>,
   );
 };

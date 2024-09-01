@@ -152,7 +152,7 @@ export default class Transmuxer {
       }
       const [packet, remainingBuffer] = readNextAdtsOrId3(
         remainingInput,
-        pipeline.getAdtsTimestamp()
+        pipeline.getAdtsTimestamp(),
       );
       remainingInput = remainingBuffer;
       if (packet === null) {
@@ -179,7 +179,7 @@ export default class Transmuxer {
           };
           pipeline.mp4AudioSegmentGenerator = new Mp4AudioSegmentGenerator(
             this._audioTrack,
-            this._options.firstSequenceNumber
+            this._options.firstSequenceNumber,
           );
         }
         for (const aacFrame of aacFrames) {
@@ -195,7 +195,7 @@ export default class Transmuxer {
     const metadataParser = new TimedMetadataParser(null);
     const mp4SegmentConstructor = new FullMp4SegmentConstructor(
       this._options.keepOriginalTimestamps === true,
-      metadataParser.dispatchType
+      metadataParser.dispatchType,
     );
     const elementaryPacketParser = new ElementaryPacketParser();
     const transportStreamSplitter = new TransportStreamSplitter();
@@ -227,7 +227,7 @@ export default class Transmuxer {
     });
     const mp4SegmentConstructor = new FullMp4SegmentConstructor(
       this._options.keepOriginalTimestamps === true,
-      metadataParser.dispatchType
+      metadataParser.dispatchType,
     );
     this._currentPipeline = {
       name: "aac",
@@ -296,7 +296,7 @@ export default class Transmuxer {
       }
       const initSegmentLength = segmentInfo.initSegment?.byteLength ?? 0;
       const transmuxedSegment = new Uint8Array(
-        initSegmentLength + (segmentInfo.data?.length ?? 0)
+        initSegmentLength + (segmentInfo.data?.length ?? 0),
       );
       if (transmuxedSegment.byteLength === 0) {
         return null;
@@ -314,7 +314,7 @@ export default class Transmuxer {
 
   private _onElementaryStreamTsPacket(
     ePckt: ElementaryPacket,
-    pipeline: TsPipelineElements
+    pipeline: TsPipelineElements,
   ) {
     if (ePckt.type !== "metadata") {
       pipeline.timestampRolloverHandler.correctTimestamps(ePckt);
@@ -364,7 +364,7 @@ export default class Transmuxer {
       ) {
         pipeline.mp4VideoSegmentGenerator = new Mp4VideoSegmentGenerator(
           this._videoTrack,
-          this._options
+          this._options,
         );
       }
 
@@ -374,7 +374,7 @@ export default class Transmuxer {
       ) {
         pipeline.mp4AudioSegmentGenerator = new Mp4AudioSegmentGenerator(
           this._audioTrack,
-          this._options.firstSequenceNumber
+          this._options.firstSequenceNumber,
         );
       }
     }

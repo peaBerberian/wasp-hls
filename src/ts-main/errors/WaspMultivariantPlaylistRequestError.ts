@@ -50,7 +50,7 @@ export default class WaspMultivariantPlaylistRequestError extends Error {
     url: string | undefined,
     reason: RequestErrorReason,
     status: number | undefined,
-    message?: string | undefined
+    message?: string | undefined,
   ) {
     super();
     // @see https://stackoverflow.com/questions/41102060/typescript-extending-error-class

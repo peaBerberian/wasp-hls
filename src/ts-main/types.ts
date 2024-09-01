@@ -1,8 +1,8 @@
-import QueuedSourceBuffer from "../ts-common/QueuedSourceBuffer";
-import { AudioTrackInfo, VariantInfo } from "../ts-common/types";
-import { PlaylistNature } from "../wasm/wasp_hls";
-import { WaspError } from "./errors";
-import PlaybackObserver from "./observePlayback";
+import type QueuedSourceBuffer from "../ts-common/QueuedSourceBuffer";
+import type { AudioTrackInfo, VariantInfo } from "../ts-common/types";
+import type { PlaylistNature } from "../wasm/wasp_hls";
+import type { WaspError } from "./errors";
+import type PlaybackObserver from "./observePlayback";
 
 /**
  * Structure storing metadata associated to a content being played by a
@@ -178,4 +178,4 @@ export const enum PlayerState {
   Error = "Error",
 }
 
-export { AudioTrackInfo, VariantInfo };
+export type { AudioTrackInfo, VariantInfo };

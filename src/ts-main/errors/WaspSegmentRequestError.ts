@@ -1,3 +1,4 @@
+import assertNever from "../../ts-common/assertNever";
 import { MediaType, RequestErrorReason } from "../../wasm/wasp_hls";
 import { WaspErrorCode } from "./common";
 
@@ -50,7 +51,7 @@ export default class WaspSegmentRequestError extends Error {
    */
   constructor(
     args: WaspSegmentRequestErrorArgument,
-    message?: string | undefined
+    message?: string | undefined,
   ) {
     super();
     // @see https://stackoverflow.com/questions/41102060/typescript-extending-error-class
@@ -120,6 +121,7 @@ function mediaTypeAsArticle(mediaType: MediaType): string {
       return "An audio";
     case MediaType.Video:
       return "A video";
+    default:
+      assertNever(mediaType);
   }
-  throw new Error("Unknown MediaType");
 }

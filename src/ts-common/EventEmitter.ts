@@ -7,24 +7,24 @@ import logger from "./logger";
 export interface EventEmitterListenOnly<T> {
   addEventListener<TEventName extends keyof T>(
     evt: TEventName,
-    fn: EventListener<T, TEventName>
+    fn: EventListener<T, TEventName>,
   ): void;
   removeEventListener<TEventName extends keyof T>(
     evt: TEventName,
-    fn: EventListener<T, TEventName>
+    fn: EventListener<T, TEventName>,
   ): void;
 }
 
 /** Type of the argument in the listener's callback */
 export type EventPayload<
   TEventRecord,
-  TEventName extends keyof TEventRecord
+  TEventName extends keyof TEventRecord,
 > = TEventRecord[TEventName];
 
 /** Type of the listener function. */
 export type EventListener<
   TEventRecord,
-  TEventName extends keyof TEventRecord
+  TEventName extends keyof TEventRecord,
 > = (args: EventPayload<TEventRecord, TEventName>) => void;
 
 /** Type for the object storing all current listener functions. */
@@ -57,7 +57,7 @@ export default class EventEmitter<T> implements EventEmitterListenOnly<T> {
    */
   public addEventListener<TEventName extends keyof T>(
     evt: TEventName,
-    fn: EventListener<T, TEventName>
+    fn: EventListener<T, TEventName>,
   ): void {
     const listeners = this._listeners[evt];
     if (!Array.isArray(listeners)) {
@@ -78,7 +78,7 @@ export default class EventEmitter<T> implements EventEmitterListenOnly<T> {
    */
   public removeEventListener<TEventName extends keyof T>(
     evt?: TEventName | undefined,
-    fn?: EventListener<T, TEventName> | undefined
+    fn?: EventListener<T, TEventName> | undefined,
   ): void {
     if (evt === undefined) {
       this._listeners = {};
@@ -112,7 +112,7 @@ export default class EventEmitter<T> implements EventEmitterListenOnly<T> {
    */
   protected trigger<TEventName extends keyof T>(
     evt: TEventName,
-    arg: EventPayload<T, TEventName>
+    arg: EventPayload<T, TEventName>,
   ): void {
     const listeners = this._listeners[evt];
     if (!Array.isArray(listeners)) {
@@ -125,7 +125,7 @@ export default class EventEmitter<T> implements EventEmitterListenOnly<T> {
       } catch (e) {
         logger.error(
           "EventEmitter: listener error",
-          e instanceof Error ? e : null
+          e instanceof Error ? e : null,
         );
       }
     });

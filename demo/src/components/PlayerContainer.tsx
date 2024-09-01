@@ -39,6 +39,7 @@ export default React.memo(function PlayerContainer({
         initialBandwidth: 500000,
       })
       .catch((err) => {
+        // eslint-disable-next-line no-console
         console.error("Could not initialize WaspHlsPlayer:", err);
       });
 
@@ -115,14 +116,14 @@ export default React.memo(function PlayerContainer({
     (evt: React.ChangeEvent<HTMLInputElement>) => {
       setShouldShowBufferGaps(evt.target.checked);
     },
-    []
+    [],
   );
 
   const onBufferContentCheckBoxChange = React.useCallback(
     (evt: React.ChangeEvent<HTMLInputElement>) => {
       setShouldShowBufferContent(evt.target.checked);
     },
-    []
+    [],
   );
 
   const onSettingsClick = React.useCallback(() => {

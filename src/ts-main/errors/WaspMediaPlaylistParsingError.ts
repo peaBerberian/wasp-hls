@@ -1,5 +1,6 @@
-import { MediaPlaylistParsingErrorCode, MediaType } from "../../wasm/wasp_hls";
-import { WaspErrorCode } from "./common";
+import type { MediaType } from "../../wasm/wasp_hls";
+import { MediaPlaylistParsingErrorCode } from "../../wasm/wasp_hls";
+import type { WaspErrorCode } from "./common";
 
 /**
  * Error used to describe a problem when parsing a Media Playlist.
@@ -46,7 +47,7 @@ export default class WaspMediaPlaylistParsingError extends Error {
   constructor(
     mediaType: MediaType | undefined,
     code: MediaPlaylistParsingErrorCode,
-    message?: string | undefined
+    message?: string | undefined,
   ) {
     super();
     // @see https://stackoverflow.com/questions/41102060/typescript-extending-error-class

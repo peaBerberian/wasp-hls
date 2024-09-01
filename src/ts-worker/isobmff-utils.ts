@@ -18,11 +18,13 @@ function getTrackFragmentDecodeTime(buffer: Uint8Array): number | undefined {
     return undefined;
   }
   const version = tfdt[0];
-  return version === 1
-    ? be8toi(tfdt, 4)
-    : version === 0
-    ? be4toi(tfdt, 4)
-    : undefined;
+  if (version === 1) {
+    return be8toi(tfdt, 4);
+  }
+  if (version === 0) {
+    return be4toi(tfdt, 4);
+  }
+  return undefined;
 }
 
 /**
@@ -127,11 +129,13 @@ function getMDHDTimescale(buffer: Uint8Array): number | undefined {
   let cursor = 0;
   const version = mdhd[cursor];
   cursor += 4;
-  return version === 1
-    ? be4toi(mdhd, cursor + 16)
-    : version === 0
-    ? be4toi(mdhd, cursor + 8)
-    : undefined;
+  if (version === 1) {
+    return be4toi(mdhd, cursor + 16);
+  }
+  if (version === 0) {
+    return be4toi(mdhd, cursor + 8);
+  }
+  return undefined;
 }
 
 /**
@@ -143,7 +147,7 @@ function getMDHDTimescale(buffer: Uint8Array): number | undefined {
  * @returns {number|undefined}
  */
 function getDefaultDurationFromTFHDInTRAF(
-  traf: Uint8Array
+  traf: Uint8Array,
 ): number | undefined {
   const tfhd = getBoxContent(traf, 0x74666864 /* tfhd */);
   if (tfhd === null) {
@@ -289,12 +293,12 @@ function getBoxesContent(buf: Uint8Array, boxName: number): Uint8Array[] {
  */
 function getBoxOffsets(
   buf: Uint8Array,
-  boxName: number
+  boxName: number,
 ):
   | [
       number /* start byte */,
       number /* First byte after the size and name (where the content begins)*/,
-      number /* end byte, not included. */
+      number /* end byte, not included. */,
     ]
   | null {
   const len = buf.length;

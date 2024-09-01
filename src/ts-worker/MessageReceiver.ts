@@ -3,10 +3,9 @@ import logger from "../ts-common/logger";
 import noop from "../ts-common/noop";
 import { SourceBufferOperation } from "../ts-common/QueuedSourceBuffer";
 import timeRangesToFloat64Array from "../ts-common/timeRangesToFloat64Array";
+import type { MainMessage, WaspHlsPlayerConfig } from "../ts-common/types";
 import {
-  MainMessage,
   InitializationErrorCode,
-  WaspHlsPlayerConfig,
   MainMessageType,
   WorkerMessageType,
 } from "../ts-common/types";
@@ -19,12 +18,11 @@ import initializeWasm, {
   StartingPosition,
 } from "../wasm/wasp_hls";
 import { stopObservingPlayback } from "./bindings";
+import type { ContentInfo, WorkerInitializationOptions } from "./globals";
 import {
   cachedCodecsSupport,
-  ContentInfo,
   playerInstance,
   updateDispatcherConfig,
-  WorkerInitializationOptions,
 } from "./globals";
 import postMessageToMain from "./postMessage";
 
@@ -70,7 +68,7 @@ export default function MessageReceiver() {
         if (wasInitializedCalled) {
           return handleInitializationError(
             "Worker initialization already done",
-            InitializationErrorCode.AlreadyInitializedError
+            InitializationErrorCode.AlreadyInitializedError,
           );
         }
         logger.setLevel(data.value.logLevel);
@@ -89,7 +87,7 @@ export default function MessageReceiver() {
             initializationProm = undefined;
             handleInitializationError(
               err,
-              InitializationErrorCode.WasmRequestError
+              InitializationErrorCode.WasmRequestError,
             );
           });
         break;
@@ -113,7 +111,7 @@ export default function MessageReceiver() {
         if (data.value.startingPosition !== undefined) {
           startingPosition = new StartingPosition(
             data.value.startingPosition.startingType,
-            data.value.startingPosition.position
+            data.value.startingPosition.position,
           );
         }
         dispatcher.load_content(data.value.url, startingPosition);
@@ -231,7 +229,7 @@ export default function MessageReceiver() {
           data.value.ended,
           data.value.duration,
           audioSbBuffered,
-          videoSbBuffered
+          videoSbBuffered,
         );
         dispatcher.on_playback_tick(mediaObservation);
         break;
@@ -296,7 +294,7 @@ export default function MessageReceiver() {
         dispatcher.on_source_buffer_creation_error(
           data.value.sourceBufferId,
           data.value.code,
-          data.value.message
+          data.value.message,
         );
         break;
       }
@@ -401,12 +399,12 @@ export default function MessageReceiver() {
           } else if (data.value.isBufferFull) {
             dispatcher.on_append_buffer_error(
               data.value.sourceBufferId,
-              PushedSegmentErrorCode.BufferFull
+              PushedSegmentErrorCode.BufferFull,
             );
           } else {
             dispatcher.on_append_buffer_error(
               data.value.sourceBufferId,
-              PushedSegmentErrorCode.UnknownError
+              PushedSegmentErrorCode.UnknownError,
             );
           }
         }
@@ -420,7 +418,7 @@ export default function MessageReceiver() {
 
 function handleInitializationError(
   err: unknown,
-  code: InitializationErrorCode
+  code: InitializationErrorCode,
 ) {
   let message: string | undefined;
   if (typeof err === "string") {
@@ -454,7 +452,7 @@ function postUnitializedWorkerError(contentId: string): void {
 function initialize(
   wasmUrl: string,
   config: WaspHlsPlayerConfig,
-  opts: WorkerInitializationOptions
+  opts: WorkerInitializationOptions,
 ): Promise<void> {
   return initializeWasm(fetch(wasmUrl))
     .then((wasm) => {

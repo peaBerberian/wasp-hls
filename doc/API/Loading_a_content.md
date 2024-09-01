@@ -35,7 +35,7 @@ player.addEventlistener("playerStateChange", (playerState) => {
       break;
     case "Error":
       console.log(
-        "The last loaded content cannot play anymore due to an error."
+        "The last loaded content cannot play anymore due to an error.",
       );
       break;
     case "Stopped":

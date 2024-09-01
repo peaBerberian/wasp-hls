@@ -25,7 +25,7 @@ class NalUnitFinder {
       this._buffer = data;
     } else {
       const swapBuffer = new Uint8Array(
-        this._buffer.byteLength + data.byteLength
+        this._buffer.byteLength + data.byteLength,
       );
       swapBuffer.set(this._buffer);
       swapBuffer.set(data, this._buffer.byteLength);
@@ -259,7 +259,7 @@ export default class H264NalUnitProducer {
     data: Uint8Array,
     trackId: number,
     pts: number,
-    dts: number
+    dts: number,
   ): ParsedNalUnit {
     const parsed: ParsedNalUnitBase = {
       trackId,
@@ -280,7 +280,7 @@ export default class H264NalUnitProducer {
         } as const);
       case 0x07:
         const escapedRBSP = this._discardEmulationPreventionBytes(
-          data.subarray(1)
+          data.subarray(1),
         );
         return Object.assign(parsed, {
           nalUnitType: NalUnitType.SeqParamSetRbsp,
@@ -314,7 +314,7 @@ export default class H264NalUnitProducer {
         lastNalUnit,
         this._lastTrackId,
         this._lastPts,
-        this._lastDts
+        this._lastDts,
       );
     }
     return null;

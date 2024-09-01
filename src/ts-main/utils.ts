@@ -1,7 +1,8 @@
+import isNullOrUndefined from "../ts-common/isNullOrUndefined";
 import logger from "../ts-common/logger";
 import { MainMessageType } from "../ts-common/types";
 import postMessageToWorker from "./postMessageToWorker";
-import { ContentMetadata } from "./types";
+import type { ContentMetadata } from "./types";
 
 /**
  * Default mime-type used for checking support of mpeg2-ts media.
@@ -45,7 +46,7 @@ export function canDemuxMpeg2Ts(): boolean {
  */
 export function getErrorInformation(
   err: unknown,
-  defaultMsg: string
+  defaultMsg: string,
 ): {
   name: string | undefined;
   message: string;
@@ -66,7 +67,7 @@ export function getErrorInformation(
  */
 export function requestStopForContent(
   metadata: ContentMetadata,
-  worker: Worker | null
+  worker: Worker | null,
 ): void {
   // Preventively free some resource that should not impact the Worker much.
   if (metadata.playbackObserver !== null) {
@@ -97,7 +98,7 @@ export function requestStopForContent(
  */
 export function waitForLoad(
   videoElement: HTMLMediaElement,
-  abortSignal: AbortSignal
+  abortSignal: AbortSignal,
 ): Promise<void> {
   return new Promise<void>((res, rej) => {
     if (videoElement.readyState >= HTMLMediaElement.HAVE_ENOUGH_DATA) {
@@ -116,7 +117,7 @@ export function waitForLoad(
 
       // Typing needed because of a weird TypeScript issue
       if ((abortSignal as unknown as { reason: unknown }).reason !== null) {
-        rej((abortSignal as unknown as { reason: unknown }).reason);
+        rej((abortSignal as unknown as { reason: Error }).reason);
       } else {
         rej(new Error("The loading operation was aborted"));
       }
@@ -135,7 +136,7 @@ export function clearElementSrc(element: HTMLMediaElement): void {
   // issues.
   // Bug seen on Firefox (I forgot which version) and Chrome 96.
   const { textTracks } = element;
-  if (textTracks != null) {
+  if (!isNullOrUndefined(textTracks)) {
     for (let i = 0; i < textTracks.length; i++) {
       textTracks[i].mode = "disabled";
     }
@@ -150,7 +151,7 @@ export function clearElementSrc(element: HTMLMediaElement): void {
               err instanceof Error ? err.toString() : "Unknown Error";
             logger.warn(
               "Unable to remove track element from media element",
-              error
+              error,
             );
           }
         }

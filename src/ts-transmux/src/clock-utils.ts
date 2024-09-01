@@ -32,10 +32,10 @@ function videoTsToAudioTs(timestamp: number, sampleRate: number): number {
 function metadataTsToSeconds(
   timestamp: number,
   timelineStartPts: number,
-  keepOriginalTimestamps: boolean
+  keepOriginalTimestamps: boolean,
 ): number {
   return videoTsToSeconds(
-    keepOriginalTimestamps ? timestamp : timestamp - timelineStartPts
+    keepOriginalTimestamps ? timestamp : timestamp - timelineStartPts,
   );
 }
 

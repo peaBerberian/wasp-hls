@@ -32,7 +32,7 @@ class PlayerInstance {
   public start(
     wasm: InitOutput,
     config: WaspHlsPlayerConfig,
-    opts: WorkerInitializationOptions
+    opts: WorkerInitializationOptions,
   ) {
     const dispatcher = new Dispatcher(opts.initialBandwidth);
     updateDispatcherConfig(dispatcher, config);
@@ -54,7 +54,7 @@ class PlayerInstance {
   public changeContent(content: ContentInfo) {
     if (this._instanceInfo === null) {
       logger.error(
-        "Worker: Cannot call `changeContent`: `PlayerInstance` not started."
+        "Worker: Cannot call `changeContent`: `PlayerInstance` not started.",
       );
       return;
     }
@@ -156,7 +156,7 @@ const I32_MAX_VALUE = 2147483647;
 
 export function updateDispatcherConfig(
   dispatcher: Dispatcher,
-  config: Partial<WaspHlsPlayerConfig>
+  config: Partial<WaspHlsPlayerConfig>,
 ): void {
   if (config.bufferGoal !== undefined) {
     dispatcher.set_buffer_goal(config.bufferGoal);
@@ -182,17 +182,17 @@ export function updateDispatcherConfig(
   }
   if (config.multiVariantPlaylistRequestTimeout !== undefined) {
     dispatcher.set_multi_variant_playlist_request_timeout(
-      config.multiVariantPlaylistRequestTimeout
+      config.multiVariantPlaylistRequestTimeout,
     );
   }
   if (config.multiVariantPlaylistBackoffBase !== undefined) {
     dispatcher.set_multi_variant_playlist_backoff_base(
-      config.multiVariantPlaylistBackoffBase
+      config.multiVariantPlaylistBackoffBase,
     );
   }
   if (config.multiVariantPlaylistBackoffMax !== undefined) {
     dispatcher.set_multi_variant_playlist_backoff_max(
-      config.multiVariantPlaylistBackoffMax
+      config.multiVariantPlaylistBackoffMax,
     );
   }
   if (config.mediaPlaylistMaxRetry !== undefined) {
@@ -202,7 +202,7 @@ export function updateDispatcherConfig(
   }
   if (config.mediaPlaylistRequestTimeout !== undefined) {
     dispatcher.set_media_playlist_request_timeout(
-      config.mediaPlaylistRequestTimeout
+      config.mediaPlaylistRequestTimeout,
     );
   }
   if (config.mediaPlaylistBackoffBase !== undefined) {

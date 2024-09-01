@@ -83,19 +83,19 @@ class CaptionStream extends EventEmitter<CaptionStreamEvents> {
       cc.addEventListener("data", (data) => this.trigger("data", data));
       cc.addEventListener("done", (data) => this.trigger("done", data));
       cc.addEventListener("partialdone", (data) =>
-        this.trigger("partialdone", data)
+        this.trigger("partialdone", data),
       );
     }, this);
 
     if (this.cc708Stream_ !== null) {
       this.cc708Stream_.addEventListener("data", (data) =>
-        this.trigger("data", data)
+        this.trigger("data", data),
       );
       this.cc708Stream_.addEventListener("done", (data) =>
-        this.trigger("done", data)
+        this.trigger("done", data),
       );
       this.cc708Stream_.addEventListener("partialdone", (data) =>
-        this.trigger("partialdone", data)
+        this.trigger("partialdone", data),
       );
     }
   }
@@ -477,7 +477,7 @@ class Cea708Service {
     serviceNum: number,
     encoding: string | undefined,
     pts: number,
-    beforeRowOverflow: (pts: number) => void
+    beforeRowOverflow: (pts: number) => void,
   ) {
     this.serviceNum = serviceNum;
     this.text = "";
@@ -515,7 +515,7 @@ class Cea708Service {
   public createTextDecoder(encoding: string): void {
     if (typeof TextDecoder === "undefined") {
       logger.warn(
-        "Transmuxer: The `encoding` option is unsupported without TextDecoder support"
+        "Transmuxer: The `encoding` option is unsupported without TextDecoder support",
       );
     } else {
       try {
@@ -526,7 +526,7 @@ class Cea708Service {
           "Transmuxer: TextDecoder could not be created with " +
             encoding +
             " encoding. " +
-            err
+            err,
         );
       }
     }
@@ -659,7 +659,7 @@ class Cea708Stream extends EventEmitter<Cea708StreamEvents> {
   public pushServiceBlock(
     serviceNum: number,
     start: number,
-    size: number
+    size: number,
   ): void {
     let i = start;
     const packetData = this._current708Packet.data;
@@ -775,7 +775,7 @@ class Cea708Stream extends EventEmitter<Cea708StreamEvents> {
       this.getPts(i),
       (pts) => {
         this.flushDisplayed(pts, this._services[serviceNum]);
-      }
+      },
     );
 
     return this._services[serviceNum];
@@ -794,7 +794,7 @@ class Cea708Stream extends EventEmitter<Cea708StreamEvents> {
     options: {
       isExtended: boolean;
       isMultiByte: boolean;
-    } = { isExtended: false, isMultiByte: false }
+    } = { isExtended: false, isMultiByte: false },
   ): number {
     let i = currIndex;
     const isExtended = options.isExtended;
@@ -1521,7 +1521,7 @@ class Cea608Stream extends EventEmitter<Cea608StreamEvents> {
       if (this.mode_ === "popOn") {
         this.nonDisplayed_[this.row_] = this.nonDisplayed_[this.row_].slice(
           0,
-          -1
+          -1,
         );
       } else {
         this.displayed_[this.row_] = this.displayed_[this.row_].slice(0, -1);
@@ -1562,7 +1562,7 @@ class Cea608Stream extends EventEmitter<Cea608StreamEvents> {
       if (this.mode_ === "popOn") {
         this.nonDisplayed_[this.row_] = this.nonDisplayed_[this.row_].slice(
           0,
-          -1
+          -1,
         );
       } else {
         this.displayed_[this.row_] = this.displayed_[this.row_].slice(0, -1);

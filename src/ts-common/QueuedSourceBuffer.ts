@@ -162,7 +162,7 @@ export default class QueuedSourceBuffer {
     logger.debug(
       "QSB: receiving order to remove data from the SourceBuffer",
       start,
-      end
+      end,
     );
     return this._addToQueue({
       type: SourceBufferOperation.Remove,
@@ -221,10 +221,10 @@ export default class QueuedSourceBuffer {
         ? err
         : new Error(
             "An unknown error occured when doing operations " +
-              "on the SourceBuffer"
+              "on the SourceBuffer",
           );
 
-    if (this._pendingTask != null) {
+    if (this._pendingTask !== null) {
       this._pendingTask.reject(error);
     }
   }

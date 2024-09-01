@@ -25,7 +25,7 @@ export default class TimedMetadataParser {
 
   constructor(
     onTimestamp: ((val: any) => void) | null,
-    options?: { descriptor?: number[] | undefined } | undefined
+    options?: { descriptor?: number[] | undefined } | undefined,
   ) {
     this._onTimestamp = onTimestamp;
     this._descriptor = options?.descriptor;
@@ -122,12 +122,12 @@ export default class TimedMetadataParser {
     do {
       // determine the number of bytes in this frame
       frameSize = parseSyncSafeInteger(
-        tag.data.subarray(frameStart + 4, frameStart + 8)
+        tag.data.subarray(frameStart + 4, frameStart + 8),
       );
       if (frameSize < 1) {
         logger.warn(
           "Transmuxer: ",
-          "Malformed ID3 frame encountered. Skipping remaining metadata parsing."
+          "Malformed ID3 frame encountered. Skipping remaining metadata parsing.",
         );
         // If the frame is malformed, don't parse any further frames but allow
         // previous valid parsed frames to be sent along.
@@ -137,7 +137,7 @@ export default class TimedMetadataParser {
         tag.data[frameStart],
         tag.data[frameStart + 1],
         tag.data[frameStart + 2],
-        tag.data[frameStart + 3]
+        tag.data[frameStart + 3],
       );
 
       const frame: any = {

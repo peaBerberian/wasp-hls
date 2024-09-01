@@ -36,7 +36,7 @@ export interface UnprocessedAdtsPacketsData {
 function skipWarn(start: number, end: number, frameNum: number): void {
   logger.warn(
     `Transmux: adts skiping bytes ${start} to ${end} ` +
-      `in frame ${frameNum} outside syncword`
+      `in frame ${frameNum} outside syncword`,
   );
 }
 

@@ -7,7 +7,7 @@
  * @returns {Float64Array}
  */
 export default function timeRangesToFloat64Array(
-  timeRanges: TimeRanges
+  timeRanges: TimeRanges,
 ): Float64Array {
   const buffered = new Float64Array(timeRanges.length * 2);
   for (let i = 0; i < timeRanges.length; i++) {

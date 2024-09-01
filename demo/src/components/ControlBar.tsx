@@ -1,5 +1,6 @@
 import * as React from "react";
-import WaspHlsPlayer, { PlayerState } from "../../../src";
+import type WaspHlsPlayer from "../../../src";
+import { PlayerState } from "../../../src";
 import FullScreenButton from "./FullScreenButton";
 import PlayButton from "./PlayButton";
 import PositionIndicator from "./PositionIndicator";
@@ -66,7 +67,7 @@ export default React.memo(function ControlBar({
   // Clear Timeout on unmount
   React.useEffect(
     () => clearHideControlBarTimeout,
-    [clearHideControlBarTimeout]
+    [clearHideControlBarTimeout],
   );
   const startControlBarHideTimeout = React.useCallback(() => {
     clearHideControlBarTimeout();
@@ -94,7 +95,7 @@ export default React.memo(function ControlBar({
         startControlBarHideTimeout();
       }
     },
-    [clearHideControlBarTimeout, startControlBarHideTimeout]
+    [clearHideControlBarTimeout, startControlBarHideTimeout],
   );
 
   React.useEffect(() => {
@@ -117,17 +118,17 @@ export default React.memo(function ControlBar({
       player.removeEventListener("playing", onPlaying);
       player.videoElement.removeEventListener(
         "volumechange",
-        onVideoVolumeChange
+        onVideoVolumeChange,
       );
       clearPositionUpdateInterval();
       if (playerContainerRef.current !== null) {
         playerContainerRef.current.removeEventListener(
           "mouseover",
-          onMouseOver
+          onMouseOver,
         );
         playerContainerRef.current.removeEventListener(
           "mousemove",
-          onMouseMove
+          onMouseMove,
         );
         playerContainerRef.current.removeEventListener("mouseout", onMouseOut);
       }
@@ -149,7 +150,7 @@ export default React.memo(function ControlBar({
           clearPositionUpdateInterval();
           positionRefreshIntervalId = setInterval(
             onPositionUpdateInterval,
-            TIME_CHECK_INTERVAL
+            TIME_CHECK_INTERVAL,
           );
           break;
         case PlayerState.Stopped:
@@ -192,6 +193,7 @@ export default React.memo(function ControlBar({
       setBufferGap(player.getCurrentBufferGap());
       if (!player.isPaused()) {
         if (minPos !== undefined && minPos > pos + 2) {
+          // eslint-disable-next-line no-console
           console.warn("Behind minimum position, seeking...");
           player.seek(minPos + 2);
         }
@@ -264,7 +266,7 @@ export default React.memo(function ControlBar({
     (newVolume: number) => {
       player.videoElement.volume = newVolume;
     },
-    [player]
+    [player],
   );
 
   const onStopButtonClick = React.useCallback(() => {
@@ -275,7 +277,7 @@ export default React.memo(function ControlBar({
     (pos: number) => {
       player.seek(pos);
     },
-    [player]
+    [player],
   );
 
   // Handle controls on keypresses
@@ -306,7 +308,7 @@ export default React.memo(function ControlBar({
               evt.preventDefault();
               const newPosition = Math.min(
                 player.getPosition() + 10,
-                maxPosition
+                maxPosition,
               );
               displayControlBar(false);
               player.seek(newPosition);
@@ -320,7 +322,7 @@ export default React.memo(function ControlBar({
               evt.preventDefault();
               const newPosition = Math.max(
                 player.getPosition() - 10,
-                minPosition
+                minPosition,
               );
               displayControlBar(false);
               player.seek(newPosition);

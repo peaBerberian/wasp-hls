@@ -43,7 +43,7 @@ export default class WaspInitializationError extends Error {
   constructor(
     reason: InitializationErrorCode,
     wasmHttpStatus: number | undefined,
-    message: string
+    message: string,
   ) {
     super();
     // @see https://stackoverflow.com/questions/41102060/typescript-extending-error-class

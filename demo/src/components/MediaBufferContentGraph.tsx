@@ -1,5 +1,6 @@
 import * as React from "react";
-import WaspHlsPlayer, { PlayerState } from "../../../src";
+import type WaspHlsPlayer from "../../../src";
+import { PlayerState } from "../../../src";
 
 const { useEffect, useMemo, useRef, useState } = React;
 
@@ -30,7 +31,7 @@ function paintCurrentPosition(
   position: number | undefined,
   minimumPosition: number,
   maximumPosition: number,
-  canvasCtx: CanvasRenderingContext2D
+  canvasCtx: CanvasRenderingContext2D,
 ): void {
   if (
     typeof position === "number" &&
@@ -44,7 +45,7 @@ function paintCurrentPosition(
         1,
       0,
       3,
-      CANVAS_HEIGHT
+      CANVAS_HEIGHT,
     );
   }
 }
@@ -66,7 +67,7 @@ function scaleRanges(
   bufferedData: TimeRanges,
   minimumPosition: number,
   maximumPosition: number,
-  mediaOffset: number
+  mediaOffset: number,
 ): ScaledBufferedRange[] {
   const scaledRanges = [];
   const wholeDuration = maximumPosition - minimumPosition;
@@ -100,13 +101,13 @@ export default function BufferContentGraph({
 }): JSX.Element {
   const [position, setPosition] = useState<number | undefined>(undefined);
   const [minimumPosition, setMinimumPosition] = useState<number | undefined>(
-    undefined
+    undefined,
   );
   const [maximumPosition, setMaximumPosition] = useState<number | undefined>(
-    undefined
+    undefined,
   );
   const [bufferedData, setBufferedData] = useState<TimeRanges | undefined>(
-    undefined
+    undefined,
   );
 
   const canvasEl = useRef<HTMLCanvasElement>(null);
@@ -123,7 +124,7 @@ export default function BufferContentGraph({
   const paintRange = React.useCallback(
     (
       scaledRange: ScaledBufferedRange,
-      canvasCtx: CanvasRenderingContext2D
+      canvasCtx: CanvasRenderingContext2D,
     ): void => {
       const startX = scaledRange.scaledStart * CANVAS_WIDTH;
       const endX = scaledRange.scaledEnd * CANVAS_WIDTH;
@@ -132,10 +133,10 @@ export default function BufferContentGraph({
         Math.ceil(startX),
         0,
         Math.ceil(endX - startX),
-        CANVAS_HEIGHT
+        CANVAS_HEIGHT,
       );
     },
-    []
+    [],
   );
 
   const currentRangesScaled = useMemo<ScaledBufferedRange[] | null>(() => {
@@ -186,7 +187,7 @@ export default function BufferContentGraph({
       }
       return clickPosPx / endPointPx;
     },
-    []
+    [],
   );
 
   const getMousePosition = React.useCallback(
@@ -196,14 +197,14 @@ export default function BufferContentGraph({
         ? undefined
         : mousePercent * duration + usedMinimum;
     },
-    [getMousePositionInPercentage, duration, usedMinimum]
+    [getMousePositionInPercentage, duration, usedMinimum],
   );
 
   const seek = React.useCallback(
     (wantedPos: number) => {
       player.seek(wantedPos);
     },
-    [player]
+    [player],
   );
 
   const onCanvasClick = React.useCallback(
@@ -213,7 +214,7 @@ export default function BufferContentGraph({
         seek(mousePosition);
       }
     },
-    [getMousePosition, seek]
+    [getMousePosition, seek],
   );
 
   useEffect(() => {
@@ -222,7 +223,7 @@ export default function BufferContentGraph({
       onPositionUpdateInterval();
       positionRefreshIntervalId = setInterval(
         onPositionUpdateInterval,
-        TIME_CHECK_INTERVAL
+        TIME_CHECK_INTERVAL,
       );
     }
     player.addEventListener("playerStateChange", onPlayerStateChange);
@@ -245,7 +246,7 @@ export default function BufferContentGraph({
           clearPositionUpdateInterval();
           positionRefreshIntervalId = setInterval(
             onPositionUpdateInterval,
-            TIME_CHECK_INTERVAL
+            TIME_CHECK_INTERVAL,
           );
           break;
       }

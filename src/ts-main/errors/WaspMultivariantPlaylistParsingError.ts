@@ -1,5 +1,5 @@
 import { MultivariantPlaylistParsingErrorCode } from "../../wasm/wasp_hls.d";
-import { WaspErrorCode } from "./common";
+import type { WaspErrorCode } from "./common";
 
 /**
  * Error used to describe a problem when parsing a Multivariant Playlist.
@@ -40,7 +40,7 @@ export default class WaspMultivariantPlaylistParsingError extends Error {
    */
   constructor(
     code: MultivariantPlaylistParsingErrorCode,
-    message?: string | undefined
+    message?: string | undefined,
   ) {
     super();
     // @see https://stackoverflow.com/questions/41102060/typescript-extending-error-class

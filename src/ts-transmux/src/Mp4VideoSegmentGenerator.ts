@@ -226,7 +226,7 @@ export default class Mp4VideoSegmentGenerator {
 
     this._trackInfo.baseMediaDecodeTime = calculateTrackBaseMediaDecodeTime(
       this._trackInfo,
-      this._keepOriginalTimestamps
+      this._keepOriginalTimestamps,
     );
 
     // save all the nals in the last GOP into the gop cache
@@ -437,7 +437,7 @@ export default class Mp4VideoSegmentGenerator {
         total.nalCount += gop.nalCount;
         return total;
       },
-      { byteLength: 0, duration: 0, nalCount: 0 }
+      { byteLength: 0, duration: 0, nalCount: 0 },
     );
 
     alignedGops.byteLength = metadata.byteLength;

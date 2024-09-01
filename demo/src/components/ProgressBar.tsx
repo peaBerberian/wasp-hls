@@ -41,11 +41,9 @@ export default React.memo(function ProgressBar({
       }
       return (clickPosPx / endPointPx) * duration + minimumPosition;
     },
-    [minimumPosition, maximumPosition]
+    [minimumPosition, maximumPosition],
   );
 
-  // weird rx-player design decision. Should be fixed (or done in the
-  // module)
   const relativePosition = Math.max(position - minimumPosition, 0);
   const percentBuffered =
     Math.min((bufferGap + relativePosition) / duration, 1) * 100;

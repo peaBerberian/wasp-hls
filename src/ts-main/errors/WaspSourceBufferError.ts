@@ -1,6 +1,7 @@
-import { SourceBufferOperation } from "../../ts-common/QueuedSourceBuffer";
-import { MediaType, PushedSegmentErrorCode } from "../../wasm/wasp_hls";
-import { WaspErrorCode } from "./common";
+import type { SourceBufferOperation } from "../../ts-common/QueuedSourceBuffer";
+import type { MediaType } from "../../wasm/wasp_hls";
+import { PushedSegmentErrorCode } from "../../wasm/wasp_hls";
+import type { WaspErrorCode } from "./common";
 
 /**
  * Error used when a SourceBuffer operation failed.
@@ -47,19 +48,19 @@ export default class WaspSourceBufferError extends Error {
     operation: SourceBufferOperation.Push,
     reason: PushedSegmentErrorCode,
     mediaType: MediaType,
-    message?: string | undefined
+    message?: string | undefined,
   );
   constructor(
     operation: SourceBufferOperation.Remove,
     reason: null,
     mediaType: MediaType,
-    message?: string | undefined
+    message?: string | undefined,
   );
   constructor(
     _operation: SourceBufferOperation,
     reason: PushedSegmentErrorCode | null,
     mediaType: MediaType,
-    message?: string | undefined
+    message?: string | undefined,
   ) {
     super();
     // @see https://stackoverflow.com/questions/41102060/typescript-extending-error-class

@@ -3,7 +3,7 @@
 function typedArrayIndexOf(
   typedArray: Uint8Array | null,
   element: number,
-  fromIndex: number
+  fromIndex: number,
 ): number {
   if (typedArray === null) {
     return -1;
@@ -113,7 +113,7 @@ const frameParsers = {
     // frames that allow different types of encoding contain terminated text
     // [ID3v2.4.0 section 4.]
     frame.value = getNullTerminatedStr(
-      parseUtf8(frame.data, 1, frame.data.length)
+      parseUtf8(frame.data, 1, frame.data.length),
     );
     // text information frames supports multiple strings, stored as a terminator
     // separated list [ID3v2.4.0 section 4.2.]
@@ -137,7 +137,7 @@ const frameParsers = {
     // frames that allow different types of encoding contain terminated text
     // [ID3v2.4.0 section 4.]
     frame.value = getNullTerminatedStr(
-      parseUtf8(frame.data, descriptionEndIndex + 1, frame.data.length)
+      parseUtf8(frame.data, descriptionEndIndex + 1, frame.data.length),
     );
     frame.data = frame.value;
   },
@@ -147,7 +147,7 @@ const frameParsers = {
     // if the value is followed by a string termination all the following
     // information should be ignored [ID3v2.4.0 section 4.3]
     frame.url = getNullTerminatedStr(
-      parseIso88591(frame.data, 0, frame.data.length)
+      parseIso88591(frame.data, 0, frame.data.length),
     );
   },
   WXXX: function (frame: any): void {
@@ -168,7 +168,7 @@ const frameParsers = {
     // if the value is followed by a string termination all the following information
     // should be ignored [ID3v2.4.0 section 4.3]
     frame.url = getNullTerminatedStr(
-      parseIso88591(frame.data, descriptionEndIndex + 1, frame.data.length)
+      parseIso88591(frame.data, descriptionEndIndex + 1, frame.data.length),
     );
   },
   PRIV: function (frame: any): void {
@@ -230,7 +230,7 @@ function parseId3Frames(data: Uint8Array) {
   do {
     // determine the number of bytes in this frame
     frameSize = parseSyncSafeInteger(
-      data.subarray(frameStart + 4, frameStart + 8)
+      data.subarray(frameStart + 4, frameStart + 8),
     );
     if (frameSize < 1) {
       break;
@@ -239,7 +239,7 @@ function parseId3Frames(data: Uint8Array) {
       data[frameStart],
       data[frameStart + 1],
       data[frameStart + 2],
-      data[frameStart + 3]
+      data[frameStart + 3],
     );
 
     const frame = {

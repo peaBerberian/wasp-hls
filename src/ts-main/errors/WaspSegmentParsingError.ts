@@ -1,5 +1,6 @@
-import { SegmentParsingErrorCode, MediaType } from "../../wasm/wasp_hls";
-import { WaspErrorCode } from "./common";
+import type { MediaType } from "../../wasm/wasp_hls";
+import { SegmentParsingErrorCode } from "../../wasm/wasp_hls";
+import type { WaspErrorCode } from "./common";
 
 // TODO add `isInit` property?
 
@@ -42,7 +43,7 @@ export default class WaspSegmentParsingError extends Error {
   constructor(
     reason: SegmentParsingErrorCode,
     mediaType: MediaType | undefined,
-    message?: string | undefined
+    message?: string | undefined,
   ) {
     super();
     // @see https://stackoverflow.com/questions/41102060/typescript-extending-error-class

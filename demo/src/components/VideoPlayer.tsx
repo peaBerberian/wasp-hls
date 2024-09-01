@@ -1,5 +1,7 @@
 import * as React from "react";
-import WaspHlsPlayer, { PlayerState, WaspError } from "../../../src";
+import type WaspHlsPlayer from "../../../src";
+import type { WaspError } from "../../../src";
+import { PlayerState } from "../../../src";
 import {
   exitFullscreen,
   isFullscreen,
@@ -14,12 +16,11 @@ export default React.memo(function VideoPlayer({
   player: WaspHlsPlayer;
 }): JSX.Element {
   const playerContainerRef = React.useRef<HTMLDivElement | null>(null);
-  const [isInFullScreenMode, setIsInFullscreenMode] = React.useState(
-    isFullscreen()
-  );
+  const [isInFullScreenMode, setIsInFullscreenMode] =
+    React.useState(isFullscreen());
   const [isVideoClickable, setIsVideoClickable] = React.useState(false);
   const [shouldShowSpinner, setShouldShowSpinner] = React.useState(
-    player.getPlayerState() === PlayerState.Loading || player.isRebuffering()
+    player.getPlayerState() === PlayerState.Loading || player.isRebuffering(),
   );
   const [error, setError] = React.useState<WaspError | null>(null);
   const [wrapperStyle, setWrapperStyle] = React.useState({});

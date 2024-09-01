@@ -1,5 +1,6 @@
-import { MediaType, SourceBufferCreationErrorCode } from "../../wasm/wasp_hls";
-import { WaspErrorCode } from "./common";
+import type { MediaType } from "../../wasm/wasp_hls";
+import { SourceBufferCreationErrorCode } from "../../wasm/wasp_hls";
+import type { WaspErrorCode } from "./common";
 
 export default class WaspSourceBufferCreationError extends Error {
   public readonly name: "WaspSourceBufferCreationError";
@@ -37,7 +38,7 @@ export default class WaspSourceBufferCreationError extends Error {
   constructor(
     code: SourceBufferCreationErrorCode,
     mediaType: MediaType,
-    message?: string | undefined
+    message?: string | undefined,
   ) {
     super();
     // @see https://stackoverflow.com/questions/41102060/typescript-extending-error-class

@@ -4,6 +4,7 @@
   "description": "WebAssembly HLS Player Proof Of Concept",
   "main": "build/es6/index.js",
   "scripts": {
+    "build": "npm run build:all",
     "build:all": "npm run clean && npm run build:wasm && npm run build:worker && npm run build:main",
     "build:all:demo": "npm run clean && npm run build:wasm && npm run build:worker && npm run build:demo",
     "build:demo": "esbuild demo/src/index.tsx --bundle --outfile=build/demo.js",
@@ -35,6 +36,7 @@
     "lint:main": "cd src/ts-main && eslint .",
     "lint:transmux": "cd src/ts-worker && eslint .",
     "lint:worker": "cd src/ts-worker && eslint .",
+    "list": "node ./scripts/list-npm-scripts.mjs",
     "move:wasm": "cp src/wasm/wasp_hls_bg.wasm build/wasp_hls_bg.wasm",
     "prepublishOnly": "npm install && npm run build:release && npm run build:main:es6 && node scripts/generate_embedded_wasm.js && node scripts/generate_embedded_worker.js",
     "serve": "http-server ./build",
@@ -46,19 +48,19 @@
   "author": "peaberberian",
   "license": "MIT",
   "devDependencies": {
-    "@types/react": "^18.2.46",
-    "@types/react-dom": "^18.2.18",
-    "@typescript-eslint/eslint-plugin": "^6.16.0",
+    "@types/react": "^18.3.5",
+    "@types/react-dom": "^18.3.0",
+    "@typescript-eslint/eslint-plugin": "^8.3.0",
     "docgen.ico": "^0.2.3",
-    "esbuild": "^0.19.11",
-    "eslint": "^8.56.0",
+    "esbuild": "^0.23.1",
+    "eslint": "^8.57.0",
     "eslint-config-prettier": "^9.1.0",
     "eslint-plugin-import": "^2.29.1",
-    "eslint-plugin-jsdoc": "^46.10.1",
+    "eslint-plugin-jsdoc": "^50.2.2",
     "http-server": "^14.1.1",
-    "prettier": "^3.1.1",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "typescript": "^5.3.3"
+    "prettier": "^3.3.3",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "typescript": "^5.5.4"
   }
 }

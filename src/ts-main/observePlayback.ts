@@ -1,6 +1,7 @@
 import EventEmitter from "../ts-common/EventEmitter";
 import timeRangesToFloat64Array from "../ts-common/timeRangesToFloat64Array";
-import { MediaObservation, PlaybackTickReason } from "../ts-common/types";
+import type { MediaObservation } from "../ts-common/types";
+import { PlaybackTickReason } from "../ts-common/types";
 
 /** Items emitted by `observePlayback`. */
 export type PlaybackObserverObservation = Omit<
@@ -64,7 +65,7 @@ export default class PlaybackObserver extends EventEmitter<PlaybackObserverEvent
    */
   constructor(
     mediaElement: HTMLMediaElement,
-    minimumObservationInterval: number
+    minimumObservationInterval: number,
   ) {
     super();
     this._mediaElement = mediaElement;

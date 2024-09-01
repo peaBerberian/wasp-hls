@@ -66,12 +66,12 @@ export class Mp4AudioSegmentGenerator {
     const frames = trimAdtsFramesByEarliestDts(
       this._aacFrames,
       this._trackInfo,
-      earliestAllowedDts
+      earliestAllowedDts,
     );
 
     this._trackInfo.baseMediaDecodeTime = calculateTrackBaseMediaDecodeTime(
       this._trackInfo,
-      keepOriginalTimestamps
+      keepOriginalTimestamps,
     );
 
     if (videoBaseMediaDecodeTime !== undefined) {
@@ -80,7 +80,7 @@ export class Mp4AudioSegmentGenerator {
         this._trackInfo,
         frames,
         audioAppendStartTs,
-        videoBaseMediaDecodeTime
+        videoBaseMediaDecodeTime,
       );
     }
 

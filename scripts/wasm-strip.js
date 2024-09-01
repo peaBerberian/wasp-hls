@@ -109,7 +109,7 @@ async function run() {
 
   const nbBytesRemoved = result.removedSections.reduce(
     (acc, r) => acc + r.length,
-    0
+    0,
   );
 
   let initialFileSize;
@@ -131,7 +131,7 @@ async function run() {
     const expected = initialFileSize - nbBytesRemoved;
     const err = new Error(
       `Expected a file of ${expected} bytes, ` +
-        `actually got ${newFileSize} bytes.`
+        `actually got ${newFileSize} bytes.`,
     );
     onFatalError(err, tmpName);
   }
@@ -145,13 +145,13 @@ async function run() {
   if (nbBytesRemoved === 0) {
     console.log(
       "Nothing was removed, your wasm file was already devoid of the " +
-        "sections stripped by this tool."
+        "sections stripped by this tool.",
     );
   } else {
     console.log(
       `Success!\nRemoved ${nbBytesRemoved} bytes by stripping ` +
         `out ${result.removedSections.length} sections.\n` +
-        `Size went from ${initialFileSize}B to ${newFileSize}B.`
+        `Size went from ${initialFileSize}B to ${newFileSize}B.`,
     );
   }
   process.exit(0);
@@ -264,8 +264,8 @@ function readAndStripWasm(readStream, writeStream) {
             skipCurrentSection = false;
             writeStream.write(
               Buffer.from(
-                buff.slice(relativeOffset, currOffset - chunkBaseOffset)
-              )
+                buff.slice(relativeOffset, currOffset - chunkBaseOffset),
+              ),
             );
             result.keptSections.push(sectionInfo);
           }
@@ -277,9 +277,9 @@ function readAndStripWasm(readStream, writeStream) {
             Buffer.from(
               buff.slice(
                 currOffset - chunkBaseOffset,
-                newOffset - chunkBaseOffset
-              )
-            )
+                newOffset - chunkBaseOffset,
+              ),
+            ),
           );
         }
         currOffset = newOffset;
@@ -299,14 +299,14 @@ function checkMagicNumberAndVersion(buff) {
   if (dataView.getUint32(4, true) !== 1) {
     throw new Error(
       "Error: Unsupported WebAssembly version: ",
-      dataView.getUint32(4, true)
+      dataView.getUint32(4, true),
     );
   }
 }
 
 function concatArrayBuffers(...buffers) {
   const ret = new Uint8Array(
-    buffers.reduce((acc, buff) => acc + buff.byteLength, 0)
+    buffers.reduce((acc, buff) => acc + buff.byteLength, 0),
   );
   let currOffset = 0;
   for (let i = 0; i < buffers.length; i++) {
@@ -370,7 +370,7 @@ async function getTmpName(fileName) {
     if (i > 1000) {
       throw new Error(
         "Error: Too many temporary files, check if there's " +
-          "something wrong with this script."
+          "something wrong with this script.",
       );
     }
 

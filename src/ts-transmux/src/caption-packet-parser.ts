@@ -60,7 +60,7 @@ function parseSei(bytes: Uint8Array): ParsedSei {
         bytes[i + 3],
         bytes[i + 4],
         bytes[i + 5],
-        bytes[i + 6]
+        bytes[i + 6],
       );
 
       if (userIdentifier === "GA94") {
@@ -105,7 +105,7 @@ function parseUserData(sei: ParsedSei): Uint8Array | null {
       sei.payload[3],
       sei.payload[4],
       sei.payload[5],
-      sei.payload[6]
+      sei.payload[6],
     ) !== "GA94"
   ) {
     return null;
@@ -130,7 +130,7 @@ export interface CaptionPacket {
 // see CEA-708-D, section 4.4
 function parseCaptionPackets(
   pts: number,
-  userData: Uint8Array
+  userData: Uint8Array,
 ): CaptionPacket[] {
   const results: CaptionPacket[] = [];
 

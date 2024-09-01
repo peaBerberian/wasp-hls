@@ -1,5 +1,5 @@
 import * as React from "react";
-import WaspHlsPlayer from "../../../src";
+import type WaspHlsPlayer from "../../../src";
 
 /**
  * @param {Object} props
@@ -18,7 +18,7 @@ export default React.memo(function ContentBar({
 }): JSX.Element {
   const nameEltId = React.useId();
   const [url, setUrl] = React.useState<string>(
-    "https://storage.googleapis.com/shaka-demo-assets/angel-one-hls/hls.m3u8"
+    "https://storage.googleapis.com/shaka-demo-assets/angel-one-hls/hls.m3u8",
   );
   const [isContentListOpened, setIsContentListOpened] = React.useState(false);
   const loadContent = React.useCallback(() => {
@@ -30,14 +30,14 @@ export default React.memo(function ContentBar({
         loadContent();
       }
     },
-    [loadContent]
+    [loadContent],
   );
 
   const onUrlChange = React.useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       setUrl(e.target.value ?? "");
     },
-    []
+    [],
   );
 
   const onNewUrlChoice = React.useCallback((newUrl: string) => {

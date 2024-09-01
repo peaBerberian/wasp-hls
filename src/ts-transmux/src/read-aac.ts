@@ -15,7 +15,7 @@ export interface AudioPacket {
 
 export function readNextAdtsOrId3(
   input: Uint8Array,
-  timestamp: number
+  timestamp: number,
 ): [AudioPacket | TimedMetadataPacket | null, Uint8Array | null] {
   let frameSize = 0;
   let byteIndex = 0;

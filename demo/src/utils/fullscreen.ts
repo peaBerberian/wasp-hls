@@ -57,7 +57,7 @@ export function requestFullscreen(elt: HTMLElement): void {
       (elt as any).mozRequestFullScreen();
     } else if ((elt as any).webkitRequestFullscreen) {
       (elt as any).webkitRequestFullscreen(
-        (Element as any).ALLOW_KEYBOARD_INPUT
+        (Element as any).ALLOW_KEYBOARD_INPUT,
       );
     }
   }

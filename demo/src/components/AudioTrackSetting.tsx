@@ -1,5 +1,5 @@
 import * as React from "react";
-import { AudioTrackInfo } from "../../../src/ts-main";
+import type { AudioTrackInfo } from "../../../src/ts-main";
 
 /**
  * @param {Object} props
@@ -24,7 +24,7 @@ function AudioTrackSetting({
       const selected = audioTrackList[index];
       updateAudioTrack(selected);
     },
-    [audioTrackList]
+    [audioTrackList],
   );
 
   const selectedIndex =

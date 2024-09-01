@@ -236,7 +236,7 @@ function concatenateNalData(gops: any): Uint8Array {
 // generate the track's sample table from a frame
 function generateSampleTableForFrame(
   frame: any,
-  baseDataOffset: number
+  baseDataOffset: number,
 ): any[] {
   const dataOffset = baseDataOffset ?? 0;
   const samples: any[] = [];

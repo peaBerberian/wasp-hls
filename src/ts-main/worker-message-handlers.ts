@@ -4,14 +4,13 @@ import QueuedSourceBuffer, {
   SourceBufferOperation,
 } from "../ts-common/QueuedSourceBuffer";
 import timeRangesToFloat64Array from "../ts-common/timeRangesToFloat64Array";
-import {
+import type {
   AppendBufferWorkerMessage,
   AttachMediaSourceWorkerMessage,
   ClearMediaSourceWorkerMessage,
   CreateMediaSourceWorkerMessage,
   CreateSourceBufferWorkerMessage,
   EndOfStreamWorkerMessage,
-  MediaSourceReadyState,
   RebufferingEndedWorkerMessage,
   RebufferingStartedWorkerMessage,
   RemoveBufferWorkerMessage,
@@ -28,15 +27,19 @@ import {
   MultivariantPlaylistParsedWorkerMessage,
   VariantUpdateWorkerMessage,
   TrackUpdateWorkerMessage,
-  MainMessageType,
   FlushWorkerMessage,
   AreTypesSupportedWorkerMessage,
   VariantLockStatusChangeWorkerMessage,
   SourceBufferId,
 } from "../ts-common/types";
-import { AddSourceBufferErrorCode, MediaType, OtherErrorCode } from "../wasm/wasp_hls";
+import { MainMessageType, MediaSourceReadyState } from "../ts-common/types";
 import {
-  WaspError,
+  AddSourceBufferErrorCode,
+  MediaType,
+  OtherErrorCode,
+} from "../wasm/wasp_hls";
+import type { WaspError } from "./errors";
+import {
   WaspMediaPlaylistParsingError,
   WaspMediaPlaylistRequestError,
   WaspMultivariantPlaylistParsingError,
@@ -49,7 +52,7 @@ import {
 } from "./errors";
 import PlaybackObserver from "./observePlayback";
 import postMessageToWorker from "./postMessageToWorker";
-import { ContentMetadata } from "./types";
+import type { ContentMetadata } from "./types";
 import { clearElementSrc, getErrorInformation } from "./utils";
 
 /**
@@ -75,11 +78,11 @@ const PLAYBACK_OBSERVATION_INTERVAL_REGULAR = 1000;
 export function onAttachMediaSourceMessage(
   msg: AttachMediaSourceWorkerMessage,
   contentMetadata: ContentMetadata | null,
-  mediaElement: HTMLMediaElement
+  mediaElement: HTMLMediaElement,
 ): void {
   if (contentMetadata?.contentId !== msg.value.contentId) {
     logger.info(
-      "API: Ignoring MediaSource attachment due to wrong `contentId`"
+      "API: Ignoring MediaSource attachment due to wrong `contentId`",
     );
     return;
   }
@@ -118,7 +121,7 @@ export function onAttachMediaSourceMessage(
 export function onSeekMessage(
   msg: SeekWorkerMessage,
   contentMetadata: ContentMetadata | null,
-  mediaElement: HTMLMediaElement
+  mediaElement: HTMLMediaElement,
 ): void {
   if (contentMetadata?.mediaSourceId !== msg.value.mediaSourceId) {
     logger.info("API: Ignoring seek due to wrong `mediaSourceId`");
@@ -144,7 +147,7 @@ export function onSeekMessage(
 export function onFlushMessage(
   msg: FlushWorkerMessage,
   contentMetadata: ContentMetadata | null,
-  mediaElement: HTMLMediaElement
+  mediaElement: HTMLMediaElement,
 ): void {
   if (contentMetadata?.mediaSourceId !== msg.value.mediaSourceId) {
     logger.info("API: Ignoring flush due to wrong `mediaSourceId`");
@@ -170,11 +173,11 @@ export function onFlushMessage(
 export function onUpdatePlaybackRateMessage(
   msg: UpdatePlaybackRateWorkerMessage,
   contentMetadata: ContentMetadata | null,
-  mediaElement: HTMLMediaElement
+  mediaElement: HTMLMediaElement,
 ): void {
   if (contentMetadata?.mediaSourceId !== msg.value.mediaSourceId) {
     logger.info(
-      "API: Ignoring playback rate update due to wrong `mediaSourceId`"
+      "API: Ignoring playback rate update due to wrong `mediaSourceId`",
     );
     return;
   }
@@ -201,11 +204,11 @@ export function onCreateMediaSourceMessage(
   msg: CreateMediaSourceWorkerMessage,
   contentMetadata: ContentMetadata | null,
   mediaElement: HTMLMediaElement,
-  worker: Worker
+  worker: Worker,
 ): void {
   if (contentMetadata?.contentId !== msg.value.contentId) {
     logger.info(
-      "API: Ignoring MediaSource attachment due to wrong `contentId`"
+      "API: Ignoring MediaSource attachment due to wrong `contentId`",
     );
   } else {
     const { mediaSourceId } = msg.value;
@@ -225,7 +228,7 @@ export function onCreateMediaSourceMessage(
         worker,
         mediaSource,
         mediaElement,
-        mediaSourceId
+        mediaSourceId,
       );
       contentMetadata.mediaSourceId = msg.value.mediaSourceId;
       contentMetadata.mediaSource = mediaSource;
@@ -234,7 +237,7 @@ export function onCreateMediaSourceMessage(
     } catch (err) {
       const { name, message } = getErrorInformation(
         err,
-        "Unknown error when creating the MediaSource"
+        "Unknown error when creating the MediaSource",
       );
       postMessageToWorker(worker, {
         type: MainMessageType.CreateMediaSourceError,
@@ -256,7 +259,7 @@ export function onCreateMediaSourceMessage(
 export function onUpdateMediaSourceDurationMessage(
   msg: SetMediaSourceDurationWorkerMessage,
   contentMetadata: ContentMetadata | null,
-  worker: Worker
+  worker: Worker,
 ): void {
   if (contentMetadata?.mediaSourceId !== msg.value.mediaSourceId) {
     logger.info("API: Ignoring duration update due to wrong `mediaSourceId`");
@@ -271,7 +274,7 @@ export function onUpdateMediaSourceDurationMessage(
   } catch (err) {
     const { name, message } = getErrorInformation(
       err,
-      "Unknown error when updating the MediaSource's duration"
+      "Unknown error when updating the MediaSource's duration",
     );
     const { mediaSourceId } = msg.value;
     postMessageToWorker(worker, {
@@ -293,11 +296,11 @@ export function onUpdateMediaSourceDurationMessage(
 export function onClearMediaSourceMessage(
   msg: ClearMediaSourceWorkerMessage,
   contentMetadata: ContentMetadata | null,
-  mediaElement: HTMLMediaElement
+  mediaElement: HTMLMediaElement,
 ): void {
   if (contentMetadata?.mediaSourceId !== msg.value.mediaSourceId) {
     logger.info(
-      "API: Ignoring MediaSource clearing due to wrong `mediaSourceId`"
+      "API: Ignoring MediaSource clearing due to wrong `mediaSourceId`",
     );
     return;
   }
@@ -325,11 +328,11 @@ export function onClearMediaSourceMessage(
 export function onCreateSourceBufferMessage(
   msg: CreateSourceBufferWorkerMessage,
   contentMetadata: ContentMetadata | null,
-  worker: Worker
+  worker: Worker,
 ): void {
   if (contentMetadata?.mediaSourceId !== msg.value.mediaSourceId) {
     logger.info(
-      "API: Ignoring SourceBuffer creation due to wrong `mediaSourceId`"
+      "API: Ignoring SourceBuffer creation due to wrong `mediaSourceId`",
     );
     return;
   }
@@ -348,7 +351,7 @@ export function onCreateSourceBufferMessage(
   }
   try {
     const sourceBuffer = contentMetadata.mediaSource.addSourceBuffer(
-      msg.value.contentType
+      msg.value.contentType,
     );
     const queuedSourceBuffer = new QueuedSourceBuffer(sourceBuffer);
     contentMetadata.sourceBuffers.push({
@@ -358,7 +361,7 @@ export function onCreateSourceBufferMessage(
   } catch (err) {
     const { name, message } = getErrorInformation(
       err,
-      "Unknown error when adding the SourceBuffer to the MediaSource"
+      "Unknown error when adding the SourceBuffer to the MediaSource",
     );
     postMessageToWorker(worker, {
       type: MainMessageType.CreateSourceBufferError,
@@ -385,16 +388,16 @@ export function onCreateSourceBufferMessage(
 export function onAppendBufferMessage(
   msg: AppendBufferWorkerMessage,
   contentMetadata: ContentMetadata | null,
-  worker: Worker
+  worker: Worker,
 ): void {
   if (contentMetadata?.mediaSourceId !== msg.value.mediaSourceId) {
     logger.info(
-      "API: Ignoring appendBuffer operation due to wrong `mediaSourceId`"
+      "API: Ignoring appendBuffer operation due to wrong `mediaSourceId`",
     );
     return;
   }
   const sbObject = contentMetadata.sourceBuffers.find(
-    ({ sourceBufferId }) => sourceBufferId === msg.value.sourceBufferId
+    ({ sourceBufferId }) => sourceBufferId === msg.value.sourceBufferId,
   );
   if (sbObject !== undefined) {
     const { mediaSourceId, sourceBufferId } = msg.value;
@@ -419,7 +422,7 @@ export function onAppendBufferMessage(
     function handleAppendBufferError(err: unknown): void {
       const { message } = getErrorInformation(
         err,
-        "Unknown error when appending data to the SourceBuffer"
+        "Unknown error when appending data to the SourceBuffer",
       );
       postMessageToWorker(worker, {
         type: MainMessageType.SourceBufferOperationError,
@@ -448,16 +451,16 @@ export function onAppendBufferMessage(
 export function onRemoveBufferMessage(
   msg: RemoveBufferWorkerMessage,
   contentMetadata: ContentMetadata | null,
-  worker: Worker
+  worker: Worker,
 ): void {
   if (contentMetadata?.mediaSourceId !== msg.value.mediaSourceId) {
     logger.info(
-      "API: Ignoring removeBuffer operation due to wrong `mediaSourceId`"
+      "API: Ignoring removeBuffer operation due to wrong `mediaSourceId`",
     );
     return;
   }
   const sbObject = contentMetadata.sourceBuffers.find(
-    ({ sourceBufferId }) => sourceBufferId === msg.value.sourceBufferId
+    ({ sourceBufferId }) => sourceBufferId === msg.value.sourceBufferId,
   );
   if (sbObject !== undefined) {
     const { mediaSourceId, sourceBufferId } = msg.value;
@@ -482,7 +485,7 @@ export function onRemoveBufferMessage(
     function handleRemoveBufferError(err: unknown): void {
       const { message } = getErrorInformation(
         err,
-        "Unknown error when removing data to the SourceBuffer"
+        "Unknown error when removing data to the SourceBuffer",
       );
       postMessageToWorker(worker, {
         type: MainMessageType.SourceBufferOperationError,
@@ -513,11 +516,11 @@ export function onStartPlaybackObservationMessage(
   msg: StartPlaybackObservationWorkerMessage,
   contentMetadata: ContentMetadata | null,
   mediaElement: HTMLMediaElement,
-  worker: Worker
+  worker: Worker,
 ): void {
   if (contentMetadata?.mediaSourceId !== msg.value.mediaSourceId) {
     logger.info(
-      "API: Ignoring `start-playback-observation` due to wrong `mediaSourceId`"
+      "API: Ignoring `start-playback-observation` due to wrong `mediaSourceId`",
     );
     return;
   }
@@ -527,7 +530,7 @@ export function onStartPlaybackObservationMessage(
   }
   contentMetadata.playbackObserver = new PlaybackObserver(
     mediaElement,
-    PLAYBACK_OBSERVATION_INTERVAL_REBUFFERING
+    PLAYBACK_OBSERVATION_INTERVAL_REBUFFERING,
   );
   contentMetadata.playbackObserver.addEventListener(
     "newObservation",
@@ -548,7 +551,7 @@ export function onStartPlaybackObservationMessage(
           mediaSourceId: msg.value.mediaSourceId,
         }),
       });
-    }
+    },
   );
   contentMetadata.playbackObserver.start();
 }
@@ -562,11 +565,11 @@ export function onStartPlaybackObservationMessage(
  */
 export function onStopPlaybackObservationMessage(
   msg: StopPlaybackObservationWorkerMessage,
-  contentMetadata: ContentMetadata | null
+  contentMetadata: ContentMetadata | null,
 ): void {
   if (contentMetadata?.mediaSourceId !== msg.value.mediaSourceId) {
     logger.info(
-      "API: Ignoring `stop-playback-observation` due to wrong `mediaSourceId`"
+      "API: Ignoring `stop-playback-observation` due to wrong `mediaSourceId`",
     );
     return;
   }
@@ -585,7 +588,7 @@ export function onStopPlaybackObservationMessage(
  */
 export function onEndOfStreamMessage(
   msg: EndOfStreamWorkerMessage,
-  contentMetadata: ContentMetadata | null
+  contentMetadata: ContentMetadata | null,
 ): void {
   if (contentMetadata?.mediaSourceId !== msg.value.mediaSourceId) {
     logger.info("API: Ignoring `end-of-stream` due to wrong `mediaSourceId`");
@@ -602,7 +605,10 @@ export function onEndOfStreamMessage(
       // call `endOfStream` at the right time.
       contentMetadata.mediaSource.endOfStream();
     } catch (err) {
-      logger.error("Unknown error when calling MediaSource.endOfStream()");
+      logger.error(
+        "Error when calling MediaSource.endOfStream():",
+        err instanceof Error ? err.toString() : "Unknown Error",
+      );
     }
   }
 }
@@ -616,7 +622,7 @@ export function onEndOfStreamMessage(
  */
 export function onMediaOffsetUpdateMessage(
   msg: MediaOffsetUpdateWorkerMessage,
-  contentMetadata: ContentMetadata | null
+  contentMetadata: ContentMetadata | null,
 ): void {
   if (contentMetadata?.contentId !== msg.value.contentId) {
     logger.info("API: Ignoring media offset update due to wrong `contentId`");
@@ -641,14 +647,14 @@ export function onMediaOffsetUpdateMessage(
 export function onRebufferingStartedMessage(
   msg: RebufferingStartedWorkerMessage,
   contentMetadata: ContentMetadata | null,
-  mediaElement: HTMLMediaElement
+  mediaElement: HTMLMediaElement,
 ): boolean {
   if (contentMetadata?.mediaSourceId !== msg.value.mediaSourceId) {
     logger.info("API: Ignoring rebuffering start due to wrong `mediaSourceId`");
     return false;
   }
   contentMetadata.playbackObserver?.updateMinimumObservationInterval(
-    PLAYBACK_OBSERVATION_INTERVAL_REBUFFERING
+    PLAYBACK_OBSERVATION_INTERVAL_REBUFFERING,
   );
   if (msg.value.updatePlaybackRate) {
     mediaElement.playbackRate = 0;
@@ -676,14 +682,14 @@ export function onRebufferingStartedMessage(
 export function onRebufferingEndedMessage(
   msg: RebufferingEndedWorkerMessage,
   contentMetadata: ContentMetadata | null,
-  mediaElement: HTMLMediaElement
+  mediaElement: HTMLMediaElement,
 ): boolean {
   if (contentMetadata?.mediaSourceId !== msg.value.mediaSourceId) {
     logger.info("API: Ignoring rebuffering end due to wrong `mediaSourceId`");
     return false;
   }
   contentMetadata.playbackObserver?.updateMinimumObservationInterval(
-    PLAYBACK_OBSERVATION_INTERVAL_REGULAR
+    PLAYBACK_OBSERVATION_INTERVAL_REGULAR,
   );
   if (mediaElement.playbackRate === 0 && contentMetadata.wantedSpeed !== 0) {
     mediaElement.playbackRate = contentMetadata.wantedSpeed;
@@ -707,7 +713,7 @@ export function onRebufferingEndedMessage(
  */
 export function onErrorMessage(
   msg: ErrorWorkerMessage,
-  contentMetadata: ContentMetadata | null
+  contentMetadata: ContentMetadata | null,
 ): WaspError | null {
   if (contentMetadata?.contentId !== msg.value.contentId) {
     logger.info("API: Ignoring error due to wrong `contentId`");
@@ -715,7 +721,7 @@ export function onErrorMessage(
   }
   if (contentMetadata.loadingAborter !== undefined) {
     contentMetadata.loadingAborter.abort(
-      new Error("Could not load content due to an error")
+      new Error("Could not load content due to an error"),
     );
   }
 
@@ -736,20 +742,20 @@ export function onErrorMessage(
 }
 
 function formatError(
-  msg: ErrorWorkerMessage | WarningWorkerMessage
+  msg: ErrorWorkerMessage | WarningWorkerMessage,
 ): WaspError {
   switch (msg.value.errorInfo.type) {
     case "segment-request":
       return new WaspSegmentRequestError(
         msg.value.errorInfo.value,
-        msg.value.message
+        msg.value.message,
       );
     case "multi-var-playlist-request":
       return new WaspMultivariantPlaylistRequestError(
         msg.value.errorInfo.value.url,
         msg.value.errorInfo.value.reason,
         msg.value.errorInfo.value.status,
-        msg.value.message
+        msg.value.message,
       );
     case "media-playlist-request":
       return new WaspMediaPlaylistRequestError(
@@ -757,49 +763,49 @@ function formatError(
         msg.value.errorInfo.value.reason,
         msg.value.errorInfo.value.status,
         msg.value.errorInfo.value.mediaType,
-        msg.value.message
+        msg.value.message,
       );
     case "other-error":
       return new WaspOtherError(
         msg.value.errorInfo.value.code,
-        msg.value.message
+        msg.value.message,
       );
     case "sb-creation":
       return new WaspSourceBufferCreationError(
         msg.value.errorInfo.value.code,
         msg.value.errorInfo.value.mediaType,
-        msg.value.message
+        msg.value.message,
       );
     case "multi-var-playlist-parse":
       return new WaspMultivariantPlaylistParsingError(
         msg.value.errorInfo.value.code,
-        msg.value.message
+        msg.value.message,
       );
     case "media-playlist-parse":
       return new WaspMediaPlaylistParsingError(
         msg.value.errorInfo.value.mediaType,
         msg.value.errorInfo.value.code,
-        msg.value.message
+        msg.value.message,
       );
     case "segment-parse":
       return new WaspSegmentParsingError(
         msg.value.errorInfo.value.code,
         msg.value.errorInfo.value.mediaType,
-        msg.value.message
+        msg.value.message,
       );
     case "push-segment-error":
       return new WaspSourceBufferError(
         SourceBufferOperation.Push,
         msg.value.errorInfo.value.code,
         msg.value.errorInfo.value.mediaType,
-        msg.value.message
+        msg.value.message,
       );
     case "remove-buffer-error":
       return new WaspSourceBufferError(
         SourceBufferOperation.Remove,
         null,
         msg.value.errorInfo.value.mediaType,
-        msg.value.message
+        msg.value.message,
       );
     case "unitialized":
       return new WaspOtherError(OtherErrorCode.Unknown, msg.value.message);
@@ -820,7 +826,7 @@ function formatError(
  */
 export function onWarningMessage(
   msg: WarningWorkerMessage,
-  contentMetadata: ContentMetadata | null
+  contentMetadata: ContentMetadata | null,
 ): WaspError | null {
   if (contentMetadata?.contentId !== msg.value.contentId) {
     logger.info("API: Ignoring warning due to wrong `contentId`");
@@ -841,7 +847,7 @@ export function onWarningMessage(
  */
 export function onContentInfoUpdateMessage(
   msg: ContentInfoUpdateWorkerMessage,
-  contentMetadata: ContentMetadata | null
+  contentMetadata: ContentMetadata | null,
 ): boolean {
   if (contentMetadata?.contentId !== msg.value.contentId) {
     logger.info("API: Ignoring warning due to wrong `contentId`");
@@ -873,7 +879,7 @@ export function onContentInfoUpdateMessage(
  */
 export function onMultivariantPlaylistParsedMessage(
   msg: MultivariantPlaylistParsedWorkerMessage,
-  contentMetadata: ContentMetadata | null
+  contentMetadata: ContentMetadata | null,
 ): boolean {
   if (contentMetadata?.contentId !== msg.value.contentId) {
     logger.info("API: Ignoring warning due to wrong `contentId`");
@@ -894,7 +900,7 @@ export function onMultivariantPlaylistParsedMessage(
  */
 export function onTrackUpdateMessage(
   msg: TrackUpdateWorkerMessage,
-  contentMetadata: ContentMetadata | null
+  contentMetadata: ContentMetadata | null,
 ): boolean {
   if (contentMetadata?.contentId !== msg.value.contentId) {
     logger.info("API: Ignoring warning due to wrong `contentId`");
@@ -923,14 +929,14 @@ export function onTrackUpdateMessage(
  */
 export function onVariantUpdateMessage(
   msg: VariantUpdateWorkerMessage,
-  contentMetadata: ContentMetadata | null
+  contentMetadata: ContentMetadata | null,
 ): boolean {
   if (contentMetadata?.contentId !== msg.value.contentId) {
     logger.info("API: Ignoring warning due to wrong `contentId`");
     return false;
   }
   const variant = contentMetadata.variants.find(
-    (v) => v.id === msg.value.variantId
+    (v) => v.id === msg.value.variantId,
   );
   if (variant === undefined) {
     logger.warn("API: VariantUpdate for an unfound variant");
@@ -952,7 +958,7 @@ export function onVariantUpdateMessage(
  */
 export function onVariantLockStatusChangeMessage(
   msg: VariantLockStatusChangeWorkerMessage,
-  contentMetadata: ContentMetadata | null
+  contentMetadata: ContentMetadata | null,
 ): boolean {
   if (contentMetadata?.contentId !== msg.value.contentId) {
     logger.info("API: Ignoring warning due to wrong `contentId`");
@@ -967,7 +973,7 @@ export function onVariantLockStatusChangeMessage(
   }
 
   const variant = contentMetadata.variants.find(
-    (v) => v.id === msg.value.lockedVariant
+    (v) => v.id === msg.value.lockedVariant,
   );
   if (variant === undefined) {
     logger.warn("API: VariantLockStatusChange for an unfound variant");
@@ -994,7 +1000,7 @@ export function onVariantLockStatusChangeMessage(
  */
 export function onContentStoppedMessage(
   msg: ContentStoppedWorkerMessage,
-  contentMetadata: ContentMetadata | null
+  contentMetadata: ContentMetadata | null,
 ): boolean {
   if (contentMetadata?.contentId !== msg.value.contentId) {
     logger.info("API: Ignoring `content-stopped` due to wrong `contentId`");
@@ -1018,7 +1024,7 @@ function bindMediaSource(
   worker: Worker,
   mediaSource: MediaSource,
   videoElement: HTMLMediaElement,
-  mediaSourceId: string
+  mediaSourceId: string,
 ): () => void {
   mediaSource.addEventListener("sourceclose", onMediaSourceClose);
   mediaSource.addEventListener("sourceended", onMediaSourceEnded);
@@ -1090,7 +1096,7 @@ function bindMediaSource(
  */
 export function onAreTypesSupportedMessage(
   msg: AreTypesSupportedWorkerMessage,
-  worker: Worker
+  worker: Worker,
 ): void {
   const res: Partial<Record<string, boolean>> = {};
   for (const mimeType of msg.value.mimeTypes) {

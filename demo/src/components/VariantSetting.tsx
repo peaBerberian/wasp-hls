@@ -1,5 +1,5 @@
 import * as React from "react";
-import { VariantInfo } from "../../../src/ts-main";
+import type { VariantInfo } from "../../../src/ts-main";
 
 /**
  * @param {Object} props
@@ -29,7 +29,7 @@ function VariantSetting({
         updateVariant(selected);
       }
     },
-    [variantList]
+    [variantList],
   );
 
   const selectedIndex =

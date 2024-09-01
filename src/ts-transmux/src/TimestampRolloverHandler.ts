@@ -48,7 +48,7 @@ export default class TimestampRolloverHandler {
     T extends {
       dts?: number;
       pts?: number;
-    }
+    },
   >(data: T): void {
     if (data.dts === undefined) {
       return;

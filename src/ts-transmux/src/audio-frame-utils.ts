@@ -34,7 +34,7 @@ function prefixWithSilence(
   track: TrackInfo,
   frames: FrameData[],
   audioAppendStartTs: number,
-  videoBaseMediaDecodeTime: number
+  videoBaseMediaDecodeTime: number,
 ): number | undefined {
   let audioGapDuration = 0;
   let audioFillFrameCount = 0;
@@ -46,7 +46,7 @@ function prefixWithSilence(
 
   const baseMediaDecodeTimeTs = audioTsToVideoTs(
     track.baseMediaDecodeTime,
-    track.samplerate
+    track.samplerate,
   );
   // determine frame clock duration based on sample rate, round up to avoid overfills
   const frameDuration = Math.ceil(ONE_SECOND_IN_TS / (track.samplerate / 1024));
@@ -82,7 +82,7 @@ function prefixWithSilence(
   }
 
   track.baseMediaDecodeTime -= Math.floor(
-    videoTsToAudioTs(audioFillDuration, track.samplerate)
+    videoTsToAudioTs(audioFillDuration, track.samplerate),
   );
 
   return audioFillDuration;
@@ -101,7 +101,7 @@ function prefixWithSilence(
 function trimAdtsFramesByEarliestDts(
   adtsFrames: FrameData[],
   track: TrackInfo,
-  earliestAllowedDts: number
+  earliestAllowedDts: number,
 ): FrameData[] {
   if (track.minSegmentDts >= earliestAllowedDts) {
     return adtsFrames;

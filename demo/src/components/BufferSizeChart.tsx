@@ -73,7 +73,7 @@ function BufferSizeChart({
       innerData: Array<{
         date: number;
         value: number;
-      }>
+      }>,
     ) => {
       if (canvasCtx.current === null) {
         return;
@@ -146,7 +146,7 @@ function BufferSizeChart({
         for (let i = 1; i < innerData.length; i++) {
           canvasCtx.current.lineTo(
             dateToX(innerData[i].date),
-            bufferValueToY(innerData[i].value)
+            bufferValueToY(innerData[i].value),
           );
         }
         canvasCtx.current.stroke();
@@ -172,7 +172,7 @@ function BufferSizeChart({
         return (date - minDate) * gridWidth;
       }
     },
-    []
+    [],
   );
 
   React.useEffect((): void => {
