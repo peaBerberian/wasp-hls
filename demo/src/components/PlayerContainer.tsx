@@ -42,7 +42,6 @@ export default React.memo(function PlayerContainer({
         // eslint-disable-next-line no-console
         console.error("Could not initialize WaspHlsPlayer:", err);
       });
-
     setPlayer(waspHlsPlayer);
 
     return () => {
