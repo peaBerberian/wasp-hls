@@ -16,5 +16,11 @@
     "moduleResolution": "bundler",
     "typeRoots": ["./node_modules/@types", "./mse-in-worker.d.ts"]
   },
-  "include": ["./*.ts", "./**/*.ts", "../ts-common/**/*.ts"]
+  "include": [
+    "./*.ts",
+    "./**/*.ts",
+    "./*.js",
+    "./**/*.js",
+    "../ts-common/**/*.ts"
+  ]
 }

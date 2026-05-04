@@ -253,7 +253,7 @@ module.exports = [
     },
   },
   {
-    files: ["src/ts-worker/**/*.{ts,tsx}"],
+    files: ["src/ts-worker/**/*.{ts,tsx,js}"],
     languageOptions: {
       parser: tsParser,
       parserOptions: {

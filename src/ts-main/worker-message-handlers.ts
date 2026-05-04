@@ -38,7 +38,7 @@ import {
   AddSourceBufferErrorCode,
   MediaType,
   OtherErrorCode,
-} from "../wasm/wasp_hls";
+} from "../ts-common/wasmTypes";
 import type { WaspError } from "./errors";
 import {
   WaspMediaPlaylistParsingError,

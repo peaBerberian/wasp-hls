@@ -1,4 +1,4 @@
-import { RequestErrorReason } from "../../wasm/wasp_hls";
+import { RequestErrorReason } from "../../ts-common/wasmTypes";
 import { WaspErrorCode } from "./common";
 
 /**

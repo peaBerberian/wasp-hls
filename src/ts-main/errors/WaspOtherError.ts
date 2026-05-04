@@ -1,4 +1,4 @@
-import { OtherErrorCode } from "../../wasm/wasp_hls";
+import { OtherErrorCode } from "../../ts-common/wasmTypes";
 import { WaspErrorCode } from "./common";
 
 /**

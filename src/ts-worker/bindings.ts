@@ -18,28 +18,20 @@ import type {
   RequestErrorReason,
   SourceBufferCreationErrorCode,
   TimerReason,
-} from "../wasm/wasp_hls.js";
+} from "../ts-common/wasmTypes";
 import {
   AddSourceBufferErrorCode,
-  AddSourceBufferResult,
-  AppendBufferResult,
   AttachMediaSourceErrorCode,
-  AttachMediaSourceResult,
   EndOfStreamErrorCode,
-  EndOfStreamResult,
-  JsTimeRanges,
   LogLevel,
   MediaSourceDurationUpdateErrorCode,
-  MediaSourceDurationUpdateResult,
   MediaSourceReadyState,
   MediaType,
   PushedSegmentErrorCode,
   RemoveBufferErrorCode,
-  RemoveBufferResult,
   RemoveMediaSourceErrorCode,
-  RemoveMediaSourceResult,
   SegmentParsingErrorCode,
-} from "../wasm/wasp_hls.js";
+} from "../ts-common/wasmTypes";
 import type { RequestId, ResourceId, TimerId } from "./globals";
 import {
   cachedCodecsSupport,
@@ -56,6 +48,16 @@ import {
 import postMessageToMain from "./postMessage.js";
 import { getTransmuxedType, createTransmuxer } from "./transmux.js";
 import { formatErrMessage, shouldTransmux } from "./utils.js";
+import {
+  AddSourceBufferResult,
+  AppendBufferResult,
+  AttachMediaSourceResult,
+  EndOfStreamResult,
+  JsTimeRanges,
+  MediaSourceDurationUpdateResult,
+  RemoveBufferResult,
+  RemoveMediaSourceResult,
+} from "./wasmRuntime.js";
 
 // Some environments (such as Safari Desktop) weirdly do not support
 // `performance.now` inside a WebWorker
