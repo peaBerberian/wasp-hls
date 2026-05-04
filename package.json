@@ -3,6 +3,28 @@
   "version": "0.4.2",
   "description": "WebAssembly HLS Player Proof Of Concept",
   "main": "build/es6/index.js",
+  "types": "build/es6/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./build/es6/index.d.ts",
+      "default": "./build/es6/index.js"
+    },
+    "./wasm": {
+      "types": "./build/embedded/wasm.d.ts",
+      "default": "./build/embedded/wasm.js"
+    },
+    "./worker": {
+      "types": "./build/embedded/worker.d.ts",
+      "default": "./build/embedded/worker.js"
+    }
+  },
+  "files": [
+    "build/",
+    "doc/",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
   "scripts": {
     "build": "npm run build:all",
     "build:all": "npm run clean && npm run build:wasm && npm run build:worker && npm run build:main",
@@ -42,7 +64,7 @@
     "lint:worker": "cd src/ts-worker && eslint .",
     "list": "node ./scripts/list-npm-scripts.mjs",
     "move:wasm": "cp src/wasm/wasp_hls_bg.wasm build/wasp_hls_bg.wasm",
-    "prepublishOnly": "npm install && npm run build:release && npm run build:main:es6 && node scripts/generate_embedded_wasm.js && node scripts/generate_embedded_worker.js",
+    "prepublishOnly": "npm install && node ./scripts/check_package_exports.mjs && npm run build:release && npm run build:main:es6 && node scripts/generate_embedded_wasm.js && node scripts/generate_embedded_worker.js",
     "serve": "http-server ./build",
 		"test": "cargo test && npm run test:integration",
     "test:integration": "node ./scripts/run_tests.mjs",

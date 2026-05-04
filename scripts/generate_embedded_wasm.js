@@ -40,8 +40,9 @@ const fs = require("fs");
 const path = require("path");
 
 const originalWasmFilePath = path.join(__dirname, "../build/wasp_hls_bg.wasm");
-const destinationJsPath = path.join(__dirname, "../wasm.js");
-const destinationDeclPath = path.join(__dirname, "../wasm.d.ts");
+const destinationDirPath = path.join(__dirname, "../build/embedded");
+const destinationJsPath = path.join(destinationDirPath, "wasm.js");
+const destinationDeclPath = path.join(destinationDirPath, "wasm.d.ts");
 const declarationFile = `declare const EmbeddedWasm: string;
 export default EmbeddedWasm;`;
 
@@ -53,6 +54,7 @@ fs.readFile(originalWasmFilePath, { encoding: null }, function (err, data) {
   if (err) {
     console.error(`Error while reading "${originalWasmFilePath}":`, err);
   } else {
+    fs.mkdirSync(destinationDirPath, { recursive: true });
     const u8Arr = new Uint8Array(data);
     const jsDataStr = `new Uint8Array([${u8Arr.toString()}])`;
     const content = codePrefix + jsDataStr + codeSuffix;

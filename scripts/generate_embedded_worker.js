@@ -42,8 +42,9 @@ const fs = require("fs");
 const path = require("path");
 
 const originalWorkerFilePath = path.join(__dirname, "../build/worker.js");
-const destinationJsPath = path.join(__dirname, "../worker.js");
-const destinationDeclPath = path.join(__dirname, "../worker.d.ts");
+const destinationDirPath = path.join(__dirname, "../build/embedded");
+const destinationJsPath = path.join(destinationDirPath, "worker.js");
+const destinationDeclPath = path.join(destinationDirPath, "worker.d.ts");
 const declarationFile = `declare const EmbeddedWorker: string;
 export default EmbeddedWorker;`;
 
@@ -60,6 +61,7 @@ fs.readFile(
     if (err) {
       console.error(`Error while reading "${originalWorkerFilePath}":`, err);
     } else {
+      fs.mkdirSync(destinationDirPath, { recursive: true });
       const content = codePrefix + data + codeSuffix;
       fs.writeFile(destinationJsPath, content, (err) => {
         if (err) {

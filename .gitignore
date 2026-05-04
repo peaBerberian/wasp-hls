@@ -7,9 +7,4 @@
 !/build/logo-white.png
 !/build/favicon.png
 
-/wasm.js
-/wasm.d.ts
-/worker.js
-/worker.d.ts
-
 /tmp
