@@ -1,3 +1,9 @@
+/**
+ * Shared enum definitions consumed by the TS code and the handwritten wasm
+ * runtime declarations.
+ *
+ * Keep these values in sync with the Rust/wasm-bindgen interface.
+ */
 export enum AddSourceBufferErrorCode {
   NoMediaSourceAttached = 0,
   MediaSourceIsClosed = 1,
