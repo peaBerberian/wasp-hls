@@ -1,5 +1,5 @@
-import type { MediaType } from "../../wasm/wasp_hls";
-import { SegmentParsingErrorCode } from "../../wasm/wasp_hls";
+import type { MediaType } from "../../ts-common/wasmTypes";
+import { SegmentParsingErrorCode } from "../../ts-common/wasmTypes";
 import type { WaspErrorCode } from "./common";
 
 // TODO add `isInit` property?

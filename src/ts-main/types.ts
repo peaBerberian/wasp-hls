@@ -1,6 +1,6 @@
 import type QueuedSourceBuffer from "../ts-common/QueuedSourceBuffer";
 import type { AudioTrackInfo, VariantInfo } from "../ts-common/types";
-import type { PlaylistNature } from "../wasm/wasp_hls";
+import type { PlaylistNature } from "../ts-common/wasmTypes";
 import type { WaspError } from "./errors";
 import type PlaybackObserver from "./observePlayback";
 

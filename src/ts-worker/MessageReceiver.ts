@@ -9,14 +9,11 @@ import {
   MainMessageType,
   WorkerMessageType,
 } from "../ts-common/types";
-import initializeWasm, {
-  JsTimeRanges,
-  MediaObservation,
+import {
   MediaType,
   OtherErrorCode,
   PushedSegmentErrorCode,
-  StartingPosition,
-} from "../wasm/wasp_hls";
+} from "../ts-common/wasmTypes";
 import { stopObservingPlayback } from "./bindings";
 import type { ContentInfo, WorkerInitializationOptions } from "./globals";
 import {
@@ -25,6 +22,11 @@ import {
   updateDispatcherConfig,
 } from "./globals";
 import postMessageToMain from "./postMessage";
+import initializeWasm, {
+  JsTimeRanges,
+  MediaObservation,
+  StartingPosition,
+} from "./wasmRuntime.js";
 
 let wasInitializedCalled = false;
 

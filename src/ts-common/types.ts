@@ -1,19 +1,19 @@
-import type {
-  SegmentParsingErrorCode,
-  MediaPlaylistParsingErrorCode,
-  MultivariantPlaylistParsingErrorCode,
-  MediaType,
-  OtherErrorCode,
-  RequestErrorReason,
-  SourceBufferCreationErrorCode as WasmSourceBufferCreationErrorCode,
-  PushedSegmentErrorCode,
-  StartingPositionType,
-  PlaylistNature,
-  AddSourceBufferErrorCode,
-} from "../wasm/wasp_hls";
-import { MediaSourceReadyState, PlaybackTickReason } from "../wasm/wasp_hls";
 import type { LoggerLevel } from "./logger";
 import type { SourceBufferOperation } from "./QueuedSourceBuffer";
+import type {
+  AddSourceBufferErrorCode,
+  MediaPlaylistParsingErrorCode,
+  MediaType,
+  MultivariantPlaylistParsingErrorCode,
+  OtherErrorCode,
+  PlaylistNature,
+  PushedSegmentErrorCode,
+  RequestErrorReason,
+  SegmentParsingErrorCode,
+  SourceBufferCreationErrorCode as WasmSourceBufferCreationErrorCode,
+  StartingPositionType,
+} from "./wasmTypes";
+import { MediaSourceReadyState, PlaybackTickReason } from "./wasmTypes";
 
 export { MediaSourceReadyState, PlaybackTickReason };
 

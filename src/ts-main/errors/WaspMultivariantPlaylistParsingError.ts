@@ -1,4 +1,4 @@
-import { MultivariantPlaylistParsingErrorCode } from "../../wasm/wasp_hls.d";
+import { MultivariantPlaylistParsingErrorCode } from "../../ts-common/wasmTypes";
 import type { WaspErrorCode } from "./common";
 
 /**

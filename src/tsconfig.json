@@ -2,7 +2,7 @@
   "compilerOptions": {
     "allowJs": true,
     "declaration": true,
-    "target": "es2020",
+    "target": "es2017",
     "lib": ["es2017", "dom"],
     "exactOptionalPropertyTypes": true,
     "forceConsistentCasingInFileNames": true,
@@ -14,7 +14,7 @@
     "strictPropertyInitialization": true,
     "noUnusedParameters": true,
     "noUnusedLocals": true,
-    "moduleResolution": "node",
+    "moduleResolution": "bundler",
     "typeRoots": ["./node_modules/@types"]
   },
   "include": ["./index.ts"]

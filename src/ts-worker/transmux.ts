@@ -1,6 +1,6 @@
 import logger from "../ts-common/logger.js";
+import { MediaType } from "../ts-common/wasmTypes";
 import Transmuxer from "../ts-transmux";
-import { MediaType } from "../wasm/wasp_hls.js";
 import { canTransmux } from "./utils.js";
 
 export function getTransmuxedType(typ: string, mediaType: MediaType): string {

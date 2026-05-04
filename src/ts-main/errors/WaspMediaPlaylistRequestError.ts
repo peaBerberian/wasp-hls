@@ -1,5 +1,5 @@
-import type { MediaType } from "../../wasm/wasp_hls";
-import { RequestErrorReason } from "../../wasm/wasp_hls";
+import type { MediaType } from "../../ts-common/wasmTypes";
+import { RequestErrorReason } from "../../ts-common/wasmTypes";
 import { WaspErrorCode } from "./common";
 
 /**
