@@ -53,6 +53,11 @@ impl SegmentRequestContexts {
         self.contexts.remove(&request_id)
     }
 
+    /// Borrow the context associated to the given `SegmentRequestId`.
+    pub(crate) fn get(&self, request_id: SegmentRequestId) -> Option<&PendingSegmentRequest> {
+        self.contexts.get(&request_id)
+    }
+
     /// Check a predicate against all stored contexts, returning `true` if any of them matches.
     pub(crate) fn has<F>(&self, predicate: F) -> bool
     where
@@ -93,6 +98,8 @@ pub(crate) enum PendingSegmentRequest {
         time_info: SegmentTimeInfo,
         /// Additional context required for ABR
         quality_context: SegmentQualityContext,
+        /// Variant bandwidth associated to this request when it was scheduled.
+        variant_bandwidth: u64,
         // The media segment sequence number, as infered by the HLS playlist
         sequence_number: u32,
         // The media segment discontinuity sequence number, as infered by the HLS playlist
@@ -124,6 +131,35 @@ impl PendingSegmentRequest {
                 requested_media_type,
                 ..
             } => *requested_media_type,
+        }
+    }
+
+    pub(crate) fn media_type(&self) -> Option<MediaType> {
+        self.requested_media_type()
+    }
+
+    pub(crate) fn quality_context(&self) -> Option<&SegmentQualityContext> {
+        match self {
+            Self::Media {
+                quality_context, ..
+            } => Some(quality_context),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn variant_bandwidth(&self) -> Option<u64> {
+        match self {
+            Self::Media {
+                variant_bandwidth, ..
+            } => Some(*variant_bandwidth),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn time_info(&self) -> Option<&SegmentTimeInfo> {
+        match self {
+            Self::Media { time_info, .. } => Some(time_info),
+            _ => None,
         }
     }
 }
