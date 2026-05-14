@@ -47,9 +47,6 @@ pub(crate) struct PlaylistStore {
     /// If `true` a variant is being manually locked and as such, cannot change.
     is_variant_locked: bool,
 
-    /// Store the last communicated bandwidth
-    last_bandwidth: f64,
-
     /// Before actually playing a multivariant content, supported codecs need to be checked
     /// to avoid mistakenly choosing an unsupported variant.
     ///
@@ -66,51 +63,19 @@ pub(crate) struct PlaylistStore {
 }
 
 impl PlaylistStore {
-    /// Create a new `PlaylistStore` based on the given parsed `MultivariantPlaylist`.
-    ///
-    /// Automatically selects the variant with the highest quality (or score if defined) on call.
-    /// Please call `update_curr_bandwidth` to select a variant based on an actual criteria.
-    pub(crate) fn try_new(
-        playlist: TopLevelPlaylist,
-        initial_bandwidth: f64,
-    ) -> Result<Self, PlaylistStoreError> {
-        log_debug!("PS: Creating new PlaylistStore (bw: {initial_bandwidth})");
-        let (current_variant_id, current_audio_id, current_video_id) = match &playlist {
-            TopLevelPlaylist::Multivariant(playlist) => {
-                let variants = playlist.all_variants();
-
-                let initial_variant =
-                    if let Some(variant_id) = best_variant_id(variants.iter(), initial_bandwidth) {
-                        playlist.variant(variant_id).unwrap()
-                    } else if let Some(variant_id) = fallback_variant_id(variants.iter()) {
-                        log_info!("PS: Found no bandwidth-compatible variant amongst all variants");
-                        playlist.variant(variant_id).unwrap()
-                    } else {
-                        log_error!("PS: Found no variant in the given MultivariantPlaylist");
-                        return Err(PlaylistStoreError::NoInitialVariant);
-                    };
-
-                let (current_audio_id, current_video_id) = Self::normalize_current_media_ids(
-                    playlist.audio_media_playlist_id_for(initial_variant, None),
-                    playlist.video_media_playlist_id_for(initial_variant),
-                );
-                (
-                    Some(initial_variant.id()),
-                    current_audio_id,
-                    current_video_id,
-                )
-            }
-            TopLevelPlaylist::DirectMedia(_) => (None, None, None),
-        };
+    /// Create a `PlaylistStore`.
+    pub(crate) fn try_new(playlist: TopLevelPlaylist) -> Result<Self, PlaylistStoreError> {
+        if matches!(&playlist, TopLevelPlaylist::Multivariant(pl) if pl.all_variants().is_empty()) {
+            return Err(PlaylistStoreError::NoInitialVariant);
+        }
 
         Ok(Self {
             playlist,
-            current_variant_id,
-            current_audio_id,
-            current_video_id,
+            current_variant_id: None,
+            current_audio_id: None,
+            current_video_id: None,
             fixed_audio_track: None,
             is_variant_locked: false,
-            last_bandwidth: 0.,
             multivariant_support_resolved: false,
             variant_support: HashMap::new(),
             multivariant_media_info: HashMap::new(),
@@ -288,6 +253,12 @@ impl PlaylistStore {
                 }
             }
             TopLevelPlaylist::Multivariant(_) => {
+                if self.current_variant_id.is_none() {
+                    if self.compatible_variants().is_empty() {
+                        return Err(PlaylistStoreError::NoSupportedVariant);
+                    }
+                    return Ok(StartupStatus::VariantSelectionNeeded);
+                }
                 if [MediaType::Audio, MediaType::Video]
                     .into_iter()
                     .any(|media_type| {
@@ -329,8 +300,8 @@ impl PlaylistStore {
                 MultivariantStartupStatus::AwaitingSupportCheck => {
                     Ok(StartupStatus::AwaitingSupportCheck)
                 }
-                MultivariantStartupStatus::VariantSwitchNeeded { variant_id } => {
-                    Ok(StartupStatus::VariantSwitchNeeded { variant_id })
+                MultivariantStartupStatus::VariantSelectionNeeded => {
+                    Ok(StartupStatus::VariantSelectionNeeded)
                 }
             },
         }
@@ -380,6 +351,38 @@ impl PlaylistStore {
                 .iter()
                 .filter(|v| self.variant_support(v.id()) != Some(false))
                 .collect(),
+            TopLevelPlaylist::DirectMedia(_) => vec![],
+        }
+    }
+
+    /// Returns variants compatible with the current track choice, excluding known unsupported
+    /// variants. A variant lock does not change this pool.
+    pub(crate) fn compatible_variants(&self) -> Vec<&VariantStream> {
+        match &self.playlist {
+            TopLevelPlaylist::Multivariant(playlist) => {
+                if let Some(track_id) = self.fixed_audio_track {
+                    // There's an explicitly set audio track id, get variants linked to it
+                    playlist
+                        .variants_for_audio(track_id)
+                        .into_iter()
+                        .filter(|v| self.variant_support(v.id()) != Some(false))
+                        .collect()
+                } else if let Some(track_id) = self.current_audio_track_id() {
+                    // Else do in function of the current audio track
+                    playlist
+                        .variants_for_audio(track_id)
+                        .into_iter()
+                        .filter(|v| self.variant_support(v.id()) != Some(false))
+                        .collect()
+                } else {
+                    // No current audio track: choose from anything
+                    playlist
+                        .all_variants()
+                        .iter()
+                        .filter(|v| self.variant_support(v.id()) != Some(false))
+                        .collect()
+                }
+            }
             TopLevelPlaylist::DirectMedia(_) => vec![],
         }
     }
@@ -461,8 +464,7 @@ impl PlaylistStore {
             .any(|(_, playlist)| playlist.uses_program_date_time())
     }
 
-    /// Returns the `id` of the variant currently considered. You can influence the
-    /// variant currently selected by e.g. calling the `update_curr_bandwidth` method.
+    /// Returns the `id` of the variant currently considered.
     ///
     /// Returns `None` in cases where either no variant is selected or just in direct
     /// media playlist cases - where there's no variant.
@@ -472,18 +474,12 @@ impl PlaylistStore {
         self.current_variant().map(|v| v.id())
     }
 
-    /// Optionally update currently-selected variant by communicating the last bandwidth estimate.
-    ///
-    /// Returns a vec of `MediaType` corresponding to the MediaPlaylists that have been in
-    /// consequence updated.
-    /// Returns an empty vec if this new bandwidth estimate did not have any effect on any selected
-    /// MediaPlaylist.
-    pub(crate) fn update_estimated_bandwidth(&mut self, bandwidth: f64) -> VariantUpdateResult {
-        self.last_bandwidth = bandwidth;
-        if self.current_variant_id.is_none() || self.is_variant_locked() {
+    /// Apply an automatic variant choice unless a variant is manually locked.
+    pub(crate) fn update_adaptive_variant(&mut self, variant_id: u32) -> VariantUpdateResult {
+        if self.is_variant_locked() {
             VariantUpdateResult::Unchanged
         } else {
-            self.update_variant(None)
+            self.update_variant(variant_id)
         }
     }
 
@@ -499,7 +495,7 @@ impl PlaylistStore {
         if self.current_variant_id.is_none() {
             return LockVariantResponse::NoVariantWithId;
         }
-        let variants = self.selectable_variants_for_curr_track();
+        let variants = self.compatible_variants();
         let pos = variants.iter().find(|x| x.id() == variant_id);
 
         if pos.is_some() {
@@ -507,7 +503,7 @@ impl PlaylistStore {
             let prev_track_id = self
                 .fixed_audio_track
                 .or_else(|| self.current_audio_track_id());
-            let updates = self.update_variant(Some(variant_id));
+            let updates = self.update_variant(variant_id);
             let new_track_id = self
                 .fixed_audio_track
                 .or_else(|| self.current_audio_track_id());
@@ -534,13 +530,8 @@ impl PlaylistStore {
 
     /// Disable a variant lock, previously created through the `lock_variant` method, to
     /// let adaptive streaming choose the right one instead.
-    pub(crate) fn unlock_variant(&mut self) -> VariantUpdateResult {
-        if self.current_variant_id.is_none() {
-            self.is_variant_locked = false;
-            return VariantUpdateResult::Unchanged;
-        }
+    pub(crate) fn unlock_variant(&mut self) {
         self.is_variant_locked = false;
-        self.update_variant(None)
     }
 
     /// Returns `true` if a variant is currently locked, preventing adaptive streaming
@@ -637,6 +628,28 @@ impl PlaylistStore {
         } else {
             None
         }
+    }
+
+    /// Build the segment quality context that a variant would use for the given media type.
+    pub(crate) fn variant_segment_quality_context(
+        &self,
+        variant_id: u32,
+        media_type: MediaType,
+    ) -> Option<SegmentQualityContext> {
+        let TopLevelPlaylist::Multivariant(playlist) = &self.playlist else {
+            return None;
+        };
+        let variant = playlist.variant(variant_id)?;
+        let (audio_id, video_id) = Self::normalize_current_media_ids(
+            playlist.audio_media_playlist_id_for(variant, self.fixed_audio_track),
+            playlist.video_media_playlist_id_for(variant),
+        );
+        let media_id = match media_type {
+            MediaType::Audio => audio_id,
+            MediaType::Video => video_id,
+        }?;
+        let score = variant.score().unwrap_or(variant.bandwidth() as f64);
+        Some(SegmentQualityContext::new(score, media_id.as_u32()))
     }
 
     /// Gives an indication of which kind of playlist it is: VoD/live/Event?
@@ -748,13 +761,22 @@ impl PlaylistStore {
     /// Explicitely select an `AudioTrack` based on its `id` property or disable the explicit
     /// selection of one (by giving `None` as argument).
     ///
-    /// Returns `true` if this call led to a changement for the Audio Media Playlist.
+    /// Rejects a runtime selection with no linked variant without changing any state.
     /// TODO: The name of this method is poor, as it doesn't communicate well the place that it
     /// "locks-in" an audio track, e.g. unlike `set_variant`
     pub(crate) fn set_audio_track(&mut self, track_id: Option<u32>) -> SetAudioTrackResponse {
         if self.current_variant_id.is_none() {
             self.fixed_audio_track = track_id;
             return SetAudioTrackResponse::NoUpdate;
+        }
+        if let (TopLevelPlaylist::Multivariant(playlist), Some(track_id)) =
+            (&self.playlist, track_id)
+        {
+            // Support depends on the chosen track and will be checked again after a change.
+            // Here, only reject tracks for which the manifest provides no candidate at all.
+            if playlist.variants_for_audio(track_id).is_empty() {
+                return SetAudioTrackResponse::NoCompatibleVariant;
+            }
         }
         self.fixed_audio_track = track_id;
         self.clear_variant_supports();
@@ -772,12 +794,10 @@ impl PlaylistStore {
             if new_audio_id.is_none() && self.current_audio_id.is_some() {
                 // We may be in a case where the choosen track is not available in the
                 // current variant, re-check the best variant to have with the new track.
-                let old_variant_locked = self.is_variant_locked;
+                let variant_lock_removed = self.is_variant_locked;
                 self.is_variant_locked = false;
-                let variant_update = self.update_variant(None);
-                SetAudioTrackResponse::VariantUpdate {
-                    updates: variant_update,
-                    unlocked_variant: old_variant_locked,
+                SetAudioTrackResponse::VariantSelectionNeeded {
+                    variant_lock_removed,
                 }
             } else if new_audio_id != self.current_audio_id {
                 self.set_audio_id(new_audio_id);
@@ -811,8 +831,7 @@ impl PlaylistStore {
     // |                           private methods                           |
     // +---------------------------------------------------------------------+
 
-    /// Returns a reference to the `VariantStream` currently selected. You can influence the
-    /// variant currently selected by e.g. calling the `update_curr_bandwidth` method.
+    /// Returns a reference to the `VariantStream` currently selected.
     fn current_variant(&self) -> Option<&VariantStream> {
         match (&self.playlist, self.current_variant_id) {
             (TopLevelPlaylist::Multivariant(playlist), Some(current_variant_id)) => {
@@ -929,57 +948,11 @@ impl PlaylistStore {
         }
     }
 
-    /// Returns vec describing all non-rejected variants compatible with the current track choice.
-    fn selectable_variants_for_curr_track(&self) -> Vec<&VariantStream> {
-        match &self.playlist {
-            TopLevelPlaylist::Multivariant(playlist) => {
-                if let Some(track_id) = self.fixed_audio_track {
-                    // There's an explicitly set audio track id, get variants linked to it
-                    playlist
-                        .variants_for_audio(track_id)
-                        .into_iter()
-                        .filter(|v| self.variant_support(v.id()) != Some(false))
-                        .collect()
-                } else if let Some(track_id) = self.current_audio_track_id() {
-                    // Else do in function of the current audio track
-                    playlist
-                        .variants_for_audio(track_id)
-                        .into_iter()
-                        .filter(|v| self.variant_support(v.id()) != Some(false))
-                        .collect()
-                } else {
-                    // No current audio track: choose from anything
-                    playlist
-                        .all_variants()
-                        .iter()
-                        .filter(|v| self.variant_support(v.id()) != Some(false))
-                        .collect()
-                }
-            }
-            TopLevelPlaylist::DirectMedia(_) => vec![],
-        }
-    }
-
-    /// Select the best variant available according to your bandwidth and track choice
-    fn update_variant(&mut self, variant_id: Option<u32>) -> VariantUpdateResult {
+    /// Apply a chosen variant and describe the resulting playlist changes.
+    fn update_variant(&mut self, new_id: u32) -> VariantUpdateResult {
         let playlist = match &self.playlist {
             TopLevelPlaylist::Multivariant(playlist) => playlist,
             TopLevelPlaylist::DirectMedia(_) => return VariantUpdateResult::Unchanged,
-        };
-        let new_id = if let Some(id) = variant_id {
-            id
-        } else {
-            let wanted_variants = self.selectable_variants_for_curr_track();
-            if let Some(id) = best_variant_id(wanted_variants.into_iter(), self.last_bandwidth) {
-                id
-            } else if let Some(id) =
-                fallback_variant_id(self.selectable_variants_for_curr_track().into_iter())
-            {
-                log_info!("PS: Found no bandwidth-compatible variant amongst selectable variants");
-                id
-            } else {
-                panic!("No variant to choose from. This should be impossible.");
-            }
         };
         if Some(new_id) != self.current_variant_id {
             let prev_bandwidth = self.current_variant().map(|v| v.bandwidth());
@@ -1031,17 +1004,6 @@ impl PlaylistStore {
         };
         self.variant_support.clear();
         self.multivariant_support_resolved = false;
-    }
-
-    fn next_best_variant_id(&self) -> Option<u32> {
-        if let Some(id) = best_variant_id(
-            self.selectable_variants_for_curr_track().into_iter(),
-            self.last_bandwidth,
-        ) {
-            Some(id)
-        } else {
-            fallback_variant_id(self.selectable_variants_for_curr_track().into_iter())
-        }
     }
 
     fn variant_support(&self, variant_id: u32) -> Option<bool> {
@@ -1171,13 +1133,12 @@ impl PlaylistStore {
             .into_iter()
             .for_each(|(variant_id, supported)| self.set_variant_support(variant_id, supported));
 
-        let current_variant_id = self.current_variant_id.unwrap();
-        let curr_variant_support = self.variant_support(current_variant_id);
+        let curr_variant_support = current_variant_id.and_then(|id| self.variant_support(id));
 
         if curr_variant_support == Some(false) {
-            if let Some(variant_id) = self.next_best_variant_id() {
+            if !self.compatible_variants().is_empty() {
                 self.multivariant_support_resolved = false;
-                return Ok(MultivariantStartupStatus::VariantSwitchNeeded { variant_id });
+                return Ok(MultivariantStartupStatus::VariantSelectionNeeded);
             } else {
                 log_error!("PS: No supported variant in the given MultivariantPlaylist");
                 return Err(PlaylistStoreError::NoSupportedVariant);
@@ -1253,8 +1214,8 @@ pub(crate) enum ProbeSegmentContext {
 /// playlists are supported, which can necessitate a segment request and other async API
 /// calls.
 pub(crate) enum StartupStatus {
-    /// The currently selected startup variant is unsupported and another one should be selected.
-    VariantSwitchNeeded { variant_id: u32 },
+    /// An initial variant or a replacement for an unsupported variant must be chosen.
+    VariantSelectionNeeded,
     /// The currently-selected media playlists are not all loaded yet.
     /// TODO: Allow segment fetching for already loaded playlists even if the other one
     /// is still pending?
@@ -1284,42 +1245,8 @@ pub(crate) enum StartupStatus {
 
 enum MultivariantStartupStatus {
     AwaitingSupportCheck,
-    VariantSwitchNeeded { variant_id: u32 },
+    VariantSelectionNeeded,
     Ready,
-}
-
-/// From a `DoubleEndedIterator` of references to `VariantStream`s ordered first by `score` then
-/// `bandwidth` ascending, find the best `VariantStream` which is compatible with the given
-/// bandwidth and returns its `id` property.
-fn best_variant_id<'a>(
-    variants: impl DoubleEndedIterator<Item = &'a VariantStream>,
-    bandwidth: f64,
-) -> Option<u32> {
-    variants
-        .rev()
-        .find(|x| (x.bandwidth() as f64) <= bandwidth)
-        .map(|v| v.id())
-}
-
-/// From an `Iterator` of references to `VariantStream`s ordered first by `score` then
-/// `bandwidth` ascending, find the one we should fallback to if none is compatible with our
-/// current bandwidth.
-///
-/// That fallback value is the one of the lowest bandwidth with the highest score.
-fn fallback_variant_id<'a>(variants: impl Iterator<Item = &'a VariantStream>) -> Option<u32> {
-    variants
-        .fold(None, |acc, v| {
-            if let Some((bandwidth, _)) = acc {
-                if v.bandwidth() <= bandwidth {
-                    Some((v.bandwidth(), v.id()))
-                } else {
-                    acc
-                }
-            } else {
-                Some((v.bandwidth(), v.id()))
-            }
-        })
-        .map(|r| r.1)
 }
 
 /// Response returned by `PlaylistStore` method which may update the current
@@ -1354,26 +1281,18 @@ pub enum VariantUpdateResult {
 /// Result of calling the `set_audio_track` `PlaylistStore`'s method
 #[allow(clippy::enum_variant_names)]
 pub(crate) enum SetAudioTrackResponse {
+    /// No variant can provide the requested track. The store was left unchanged.
+    NoCompatibleVariant,
+
     /// The audio track change led to a change of the Media Playlist for the audio.
     ///
     /// Because variants may be or not be linked to a given audio track it is also possible that
     /// the list of currently adaptively switchable variants has changed.
     AudioMediaUpdate,
 
-    /// The audio track change led to a change for the currently-chosen variant due to the previous
-    /// one not being compatible with the new chosen audio track.
-    ///
-    /// Because variants may be or not be linked to a given audio track it is also possible that the
-    /// list of currently adaptively switchable variants has changed.
-    ///
-    /// The `updates` element of the associated struct is the result of such update, the
-    /// `unlocked_variant`
-    /// element is whether or not the previous variant was previously "locked" in place, in which
-    /// case the lock has been completely disabled.
-    VariantUpdate {
-        updates: VariantUpdateResult,
-        unlocked_variant: bool,
-    },
+    /// The current variant cannot provide the chosen track and needs reselection.
+    /// `variant_lock_removed` is true when this track change removed an existing variant lock.
+    VariantSelectionNeeded { variant_lock_removed: bool },
 
     /// No Media Playlist nor the current variant were changed due to this track change.
     ///
@@ -1413,8 +1332,12 @@ pub(crate) enum PlaylistStoreError {
 
 #[cfg(test)]
 mod tests {
-    use super::{PlaylistStore, PlaylistStoreError, SetAudioTrackResponse, StartupStatus};
+    use super::{
+        LockVariantResponse, MultivariantStartupStatus, PlaylistStore, PlaylistStoreError,
+        SetAudioTrackResponse, StartupStatus,
+    };
     use crate::{
+        adaptive::{AdaptiveQualitySelector, PlaybackConditions},
         bindings::MediaType,
         parser::{ExternalMediaInfo, TopLevelPlaylist},
         utils::url::Url,
@@ -1422,6 +1345,295 @@ mod tests {
 
     fn parse_url(url: &str) -> Url {
         Url::new(url.to_string())
+    }
+
+    #[test]
+    fn startup_rejects_an_initial_audio_track_without_compatible_variants() {
+        let playlist = TopLevelPlaylist::parse(
+            br#"#EXTM3U
+#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="unused",NAME="French",LANGUAGE="fr",URI="unused.m3u8"
+#EXT-X-STREAM-INF:BANDWIDTH=1000000,CODECS="avc1.42E01E"
+video.m3u8
+"#
+            .as_slice(),
+            parse_url("https://example.com/master.m3u8"),
+        )
+        .unwrap();
+        let mut store = PlaylistStore::try_new(playlist).unwrap();
+        let track_id = store.audio_tracks().first().unwrap().id();
+        store.set_audio_track(Some(track_id));
+
+        assert!(store.current_variant_id().is_none());
+        assert!(store.compatible_variants().is_empty());
+        assert!(matches!(
+            store.startup_status(0.),
+            Err(PlaylistStoreError::NoSupportedVariant)
+        ));
+    }
+
+    #[test]
+    fn startup_requests_initial_selection_when_compatible_variants_exist() {
+        let playlist = TopLevelPlaylist::parse(
+            b"#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1000000\nvideo.m3u8\n",
+            parse_url("https://example.com/master.m3u8"),
+        )
+        .unwrap();
+        let mut store = PlaylistStore::try_new(playlist).unwrap();
+
+        assert!(matches!(
+            store.startup_status(0.),
+            Ok(StartupStatus::VariantSelectionNeeded)
+        ));
+    }
+
+    fn playlist_store_with_variant(
+        playlist: TopLevelPlaylist,
+        initial_bandwidth: f64,
+    ) -> PlaylistStore {
+        let mut store = PlaylistStore::try_new(playlist).unwrap();
+        let selector = AdaptiveQualitySelector::new(initial_bandwidth);
+        if let Some(selection) = selector.select_variant(
+            &store.compatible_variants(),
+            store.current_variant_id(),
+            &PlaybackConditions {
+                buffer_level: Some(0.),
+                buffer_goal: 30.,
+                playback_speed: 1.,
+                max_target_segment_duration: store.segment_target_duration(),
+            },
+        ) {
+            store.update_adaptive_variant(selection.best_variant_id);
+        }
+        store
+    }
+
+    #[test]
+    fn adaptive_update_does_not_override_a_variant_lock() {
+        let multivariant = r#"#EXTM3U
+#EXT-X-STREAM-INF:BANDWIDTH=1000
+low.m3u8
+#EXT-X-STREAM-INF:BANDWIDTH=2000
+high.m3u8
+"#;
+        let playlist = TopLevelPlaylist::parse(
+            multivariant.as_bytes(),
+            parse_url("https://example.com/master.m3u8"),
+        )
+        .unwrap();
+        let mut store = playlist_store_with_variant(playlist, 1_500.);
+        let variants = store.available_variants();
+        let low_id = variants[0].id();
+        let high_id = variants[1].id();
+
+        assert!(matches!(
+            store.lock_variant(high_id),
+            LockVariantResponse::VariantLocked { .. }
+        ));
+        assert_eq!(store.compatible_variants().len(), 2);
+        store.update_adaptive_variant(low_id);
+
+        assert_eq!(store.current_variant_id(), Some(high_id));
+
+        store.unlock_variant();
+        assert!(!store.is_variant_locked());
+        assert_eq!(store.current_variant_id(), Some(high_id));
+        store.update_adaptive_variant(low_id);
+        assert_eq!(store.current_variant_id(), Some(low_id));
+    }
+
+    #[test]
+    fn unavailable_audio_track_changes_preserve_selection_lock_and_support() {
+        let playlist = TopLevelPlaylist::parse(
+            br#"#EXTM3U
+#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="en",NAME="English",LANGUAGE="en",DEFAULT=YES,URI="en.m3u8"
+#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="unused",NAME="French",LANGUAGE="fr",URI="unused.m3u8"
+#EXT-X-STREAM-INF:BANDWIDTH=1000,AUDIO="en"
+low.m3u8
+#EXT-X-STREAM-INF:BANDWIDTH=2000,AUDIO="en"
+high.m3u8
+"#
+            .as_slice(),
+            parse_url("https://example.com/master.m3u8"),
+        )
+        .unwrap();
+        let mut store = playlist_store_with_variant(playlist, 1_500.);
+        let english_id = store
+            .audio_tracks()
+            .iter()
+            .find(|track| track.name() == "English")
+            .unwrap()
+            .id();
+        let french_id = store
+            .audio_tracks()
+            .iter()
+            .find(|track| track.name() == "French")
+            .unwrap()
+            .id();
+        store.set_audio_track(Some(english_id));
+        let current_variant_id = store.current_variant_id().unwrap();
+        assert!(matches!(
+            store.lock_variant(current_variant_id),
+            LockVariantResponse::VariantLocked { .. }
+        ));
+        let variant_ids: Vec<_> = store.available_variants().iter().map(|v| v.id()).collect();
+        for variant_id in variant_ids {
+            store.set_variant_support(variant_id, variant_id == current_variant_id);
+        }
+        store.multivariant_support_resolved = true;
+        let previous_support = store.variant_support.clone();
+        let previous_audio_id = store.current_audio_id;
+        let previous_video_id = store.current_video_id;
+
+        for rejected_id in [french_id, u32::MAX - 1] {
+            assert!(matches!(
+                store.set_audio_track(Some(rejected_id)),
+                SetAudioTrackResponse::NoCompatibleVariant
+            ));
+            assert_eq!(store.fixed_audio_track_id(), Some(english_id));
+            assert_eq!(store.current_audio_track_id(), Some(english_id));
+            assert_eq!(store.current_variant_id(), Some(current_variant_id));
+            assert_eq!(store.current_audio_id, previous_audio_id);
+            assert_eq!(store.current_video_id, previous_video_id);
+            assert!(store.is_variant_locked());
+            assert_eq!(store.variant_support, previous_support);
+            assert!(store.multivariant_support_resolved);
+            assert_eq!(store.compatible_variants().len(), 1);
+        }
+    }
+
+    #[test]
+    fn incompatible_audio_track_requests_selection_without_choosing_a_variant() {
+        let playlist = TopLevelPlaylist::parse(
+            br#"#EXTM3U
+#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="en",NAME="English",LANGUAGE="en",DEFAULT=YES,AUTOSELECT=YES,URI="en.m3u8"
+#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="fr",NAME="French",LANGUAGE="fr",DEFAULT=YES,AUTOSELECT=YES,URI="fr.m3u8"
+#EXT-X-STREAM-INF:BANDWIDTH=1000,AUDIO="en"
+en-video.m3u8
+#EXT-X-STREAM-INF:BANDWIDTH=2000,AUDIO="fr"
+fr-low.m3u8
+#EXT-X-STREAM-INF:BANDWIDTH=4000,AUDIO="fr"
+fr-high.m3u8
+"#.as_slice(),
+            parse_url("https://example.com/master.m3u8"),
+        ).unwrap();
+        let mut store = playlist_store_with_variant(playlist, 1_500.);
+        let current_id = store.current_variant_id().unwrap();
+        let current_audio_id = *store.media_playlist_id_for(MediaType::Audio).unwrap();
+        assert!(matches!(
+            store.lock_variant(current_id),
+            LockVariantResponse::VariantLocked { .. }
+        ));
+        let french_id = store
+            .audio_tracks()
+            .iter()
+            .find(|track| track.name() == "French")
+            .unwrap()
+            .id();
+
+        // Results cached for the previous track must not reject a structurally valid change.
+        let other_variant_ids: Vec<_> = store
+            .available_variants()
+            .iter()
+            .filter(|variant| variant.id() != current_id)
+            .map(|variant| variant.id())
+            .collect();
+        for variant_id in other_variant_ids {
+            store.set_variant_support(variant_id, false);
+        }
+
+        assert!(matches!(
+            store.set_audio_track(Some(french_id)),
+            SetAudioTrackResponse::VariantSelectionNeeded {
+                variant_lock_removed: true
+            }
+        ));
+        assert_eq!(store.current_variant_id(), Some(current_id));
+        assert_eq!(
+            store.media_playlist_id_for(MediaType::Audio),
+            Some(&current_audio_id)
+        );
+        assert!(!store.is_variant_locked());
+
+        let compatible_variants = store.compatible_variants();
+        assert_eq!(compatible_variants.len(), 2);
+        assert!(compatible_variants
+            .iter()
+            .all(|variant| variant.id() != current_id));
+        let selection = AdaptiveQualitySelector::new(3_125.)
+            .select_variant(
+                &compatible_variants,
+                store.current_variant_id(),
+                &PlaybackConditions {
+                    buffer_level: Some(0.),
+                    buffer_goal: 30.,
+                    playback_speed: 1.,
+                    max_target_segment_duration: store.segment_target_duration(),
+                },
+            )
+            .unwrap();
+        store.update_adaptive_variant(selection.best_variant_id);
+        assert_eq!(store.current_variant().unwrap().bandwidth(), 2000);
+        assert_eq!(store.current_audio_track_id(), Some(french_id));
+        assert_ne!(
+            store.media_playlist_id_for(MediaType::Audio),
+            Some(&current_audio_id)
+        );
+    }
+
+    #[test]
+    fn unsupported_variant_requests_selection_from_remaining_candidates() {
+        let playlist = TopLevelPlaylist::parse(
+            b"#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1000\nlow.m3u8\n#EXT-X-STREAM-INF:BANDWIDTH=2000\nmedium.m3u8\n#EXT-X-STREAM-INF:BANDWIDTH=4000\nhigh.m3u8\n",
+            parse_url("https://example.com/master.m3u8"),
+        ).unwrap();
+        let mut store = playlist_store_with_variant(playlist, 10_000.);
+        let unsupported_id = store.current_variant_id().unwrap();
+        assert!(matches!(
+            store.lock_variant(unsupported_id),
+            LockVariantResponse::VariantLocked { .. }
+        ));
+        let ids: Vec<u32> = store
+            .available_variants()
+            .iter()
+            .map(|variant| variant.id())
+            .collect();
+        for id in ids {
+            store.set_variant_support(id, id != unsupported_id);
+        }
+        assert!(matches!(
+            store.resolve_multivariant_support(),
+            Ok(MultivariantStartupStatus::VariantSelectionNeeded)
+        ));
+        assert_eq!(store.current_variant_id(), Some(unsupported_id));
+
+        let compatible_variants = store.compatible_variants();
+        assert_eq!(compatible_variants.len(), 2);
+        assert!(compatible_variants
+            .iter()
+            .all(|variant| variant.id() != unsupported_id));
+        let selection = AdaptiveQualitySelector::new(3_125.)
+            .select_variant(
+                &compatible_variants,
+                store.current_variant_id(),
+                &PlaybackConditions {
+                    buffer_level: Some(0.),
+                    buffer_goal: 30.,
+                    playback_speed: 1.,
+                    max_target_segment_duration: store.segment_target_duration(),
+                },
+            )
+            .unwrap();
+        store.set_variant(selection.best_variant_id);
+        assert_eq!(store.current_variant().unwrap().bandwidth(), 2000);
+        assert!(store.is_variant_locked());
+
+        store.set_variant_support(selection.best_variant_id, false);
+        let last_id = store.compatible_variants()[0].id();
+        store.set_variant_support(last_id, false);
+        assert!(matches!(
+            store.resolve_multivariant_support(),
+            Err(PlaylistStoreError::NoSupportedVariant)
+        ));
     }
 
     #[test]
@@ -1442,7 +1654,7 @@ seg.ts
             parse_url("https://example.com/master.m3u8"),
         )
         .unwrap();
-        let mut store = PlaylistStore::try_new(playlist, 10_000.).unwrap();
+        let mut store = playlist_store_with_variant(playlist, 10_000.);
         assert_eq!(store.media_playlist_id_for(MediaType::Audio), None);
         let shared_id = *store.media_playlist_id_for(MediaType::Video).unwrap();
         store
@@ -1483,7 +1695,7 @@ video.m3u8
             parse_url("https://example.com/master.m3u8"),
         )
         .unwrap();
-        let mut store = PlaylistStore::try_new(playlist, 10_000.).unwrap();
+        let mut store = playlist_store_with_variant(playlist, 10_000.);
 
         assert!(store.media_playlist_id_for(MediaType::Audio).is_some());
         assert!(store.media_playlist_id_for(MediaType::Video).is_some());
@@ -1508,7 +1720,7 @@ video.m3u8
             parse_url("https://example.com/master.m3u8"),
         )
         .unwrap();
-        let mut store = PlaylistStore::try_new(playlist, 10_000.).unwrap();
+        let mut store = playlist_store_with_variant(playlist, 10_000.);
         let video_id = *store.media_playlist_id_for(MediaType::Video).unwrap();
         store
             .update_media_playlist(
@@ -1543,7 +1755,7 @@ seg.ts
             parse_url("https://example.com/master.m3u8"),
         )
         .unwrap();
-        let mut store = PlaylistStore::try_new(playlist, 10_000.).unwrap();
+        let mut store = playlist_store_with_variant(playlist, 10_000.);
 
         let video_id = *store.media_playlist_id_for(MediaType::Video).unwrap();
         let english_track_id = store
@@ -1624,7 +1836,7 @@ seg.ts
             parse_url("https://example.com/master.m3u8"),
         )
         .unwrap();
-        let mut store = PlaylistStore::try_new(playlist, 10_000.).unwrap();
+        let mut store = playlist_store_with_variant(playlist, 10_000.);
 
         let video_id = *store.media_playlist_id_for(MediaType::Video).unwrap();
         let english_track_id = store
@@ -1703,7 +1915,7 @@ seg-5.ts
         let playlist =
             TopLevelPlaylist::parse(media.as_bytes(), parse_url("https://example.com/live.m3u8"))
                 .unwrap();
-        let store = PlaylistStore::try_new(playlist, 10_000.).unwrap();
+        let store = playlist_store_with_variant(playlist, 10_000.);
 
         assert_eq!(store.expected_start_time(), 8.);
     }
@@ -1730,7 +1942,7 @@ seg-5.ts
             parse_url("https://example.com/live-start.m3u8"),
         )
         .unwrap();
-        let store = PlaylistStore::try_new(playlist, 10_000.).unwrap();
+        let store = playlist_store_with_variant(playlist, 10_000.);
 
         assert_eq!(store.expected_start_time(), 8.);
     }
@@ -1752,7 +1964,7 @@ seg-2.ts
             parse_url("https://example.com/event.m3u8"),
         )
         .unwrap();
-        let mut store = PlaylistStore::try_new(playlist, 10_000.).unwrap();
+        let mut store = playlist_store_with_variant(playlist, 10_000.);
         store.set_external_media_info(
             ExternalMediaInfo {
                 mime_type: "video/mp4".to_string(),
@@ -1808,7 +2020,7 @@ audio-6.ts
             parse_url("https://example.com/master.m3u8"),
         )
         .unwrap();
-        let mut store = PlaylistStore::try_new(playlist, 10_000.).unwrap();
+        let mut store = playlist_store_with_variant(playlist, 10_000.);
 
         let video_id = *store.media_playlist_id_for(MediaType::Video).unwrap();
         let audio_id = *store.media_playlist_id_for(MediaType::Audio).unwrap();
@@ -1845,7 +2057,7 @@ seg-2.ts
         let playlist =
             TopLevelPlaylist::parse(media.as_bytes(), parse_url("https://example.com/vod.m3u8"))
                 .unwrap();
-        let store = PlaylistStore::try_new(playlist, 10_000.).unwrap();
+        let store = playlist_store_with_variant(playlist, 10_000.);
 
         assert_eq!(store.expected_start_time(), 1_704_164_645.,);
     }
