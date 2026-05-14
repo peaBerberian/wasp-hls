@@ -63,21 +63,38 @@ impl Dispatcher {
     /// If it changed, handle the consequences (such as requesting new media playlists, loading
     /// and pushing segments etc.).
     pub(super) fn check_best_variant(&mut self) {
-        if let Some(pl_store) = self.playlist_store.as_mut() {
-            let bandwidth = self.adaptive_selector.get_estimate();
-            log_debug!("Core: New bandwidth estimate: {}", bandwidth);
-            let speed = self.media_element_ref.wanted_speed();
-            let actually_used_bandwidth = if speed.is_finite() && speed > 0.0 {
-                bandwidth / speed
-            } else {
-                // TODO: Revisit ABR behavior for non-positive playback rates if reverse playback
-                // becomes a first-class use case. The current pipeline remains forward-oriented,
-                // so negative rates should not currently alter bandwidth scaling. Non-finite
-                // rates are also ignored here defensively to avoid poisoning ABR decisions.
-                bandwidth
+        let bandwidth = self.adaptive_selector.get_estimate();
+        log_debug!("Core: New bandwidth estimate: {}", bandwidth);
+        let speed = self.media_element_ref.wanted_speed();
+        let buffer_level = self.media_element_ref.last_buffer_gap();
+        let actually_used_bandwidth = if speed.is_finite() && speed > 0.0 {
+            bandwidth / speed
+        } else {
+            bandwidth
+        };
+
+        let variant_id = {
+            let Some(pl_store) = self.playlist_store.as_ref() else {
+                return;
             };
-            let update = pl_store.update_estimated_bandwidth(actually_used_bandwidth);
-            self.handle_variant_update(update, false);
+            let segment_duration = pl_store.segment_target_duration();
+            let variants = pl_store.variants_for_curr_track();
+            self.adaptive_selector.select_variant(
+                &variants,
+                pl_store.curr_variant().map(|v| v.id()),
+                actually_used_bandwidth,
+                buffer_level,
+                self.buffer_goal,
+                segment_duration,
+            )
+        };
+
+        if let Some(pl_store) = self.playlist_store.as_mut() {
+            let _ = pl_store.update_curr_bandwidth(actually_used_bandwidth);
+            if let Some(variant_id) = variant_id {
+                let update = pl_store.update_curr_variant(variant_id);
+                self.handle_variant_update(update, false);
+            }
         }
     }
 
@@ -118,6 +135,7 @@ impl Dispatcher {
         if let Some(pl_store) = self.playlist_store.as_mut() {
             let update = pl_store.unlock_variant();
             self.handle_variant_update(update, false);
+            self.check_best_variant();
         }
     }
 
@@ -181,8 +199,10 @@ impl Dispatcher {
             if unlocked_variant {
                 jsAnnounceVariantLockStatusChange(None);
             }
+            self.check_best_variant();
         } else if should_announce_track {
             self.handle_media_playlist_update(&[MediaType::Audio], true, true);
+            self.check_best_variant();
         }
     }
 
@@ -747,6 +767,8 @@ impl Dispatcher {
         self.requester.update_base_position(Some(wanted_pos));
         self.segment_selectors.advance_position(wanted_pos - 0.2);
 
+        self.check_best_variant();
+        self.maybe_abandon_pending_segment_request();
         self.check_segments_to_request();
         if !was_already_locked {
             self.requester.unlock_segment_requests();
@@ -886,6 +908,10 @@ impl Dispatcher {
                                 time_info: seg.time_info().clone(),
                                 init_segment_id,
                                 quality_context: seg_info.1,
+                                variant_bandwidth: pl_store
+                                    .curr_variant()
+                                    .map(|variant| variant.bandwidth())
+                                    .unwrap_or(0),
                                 sequence_number: seg.sequence(),
                                 discontinuity_sequence: seg.discontinuity_sequence(),
                             });
@@ -1122,6 +1148,53 @@ impl Dispatcher {
             {
                 self.ready_probe_segments.clear_media_type(media_type);
             }
+        }
+    }
+
+    fn maybe_abandon_pending_segment_request(&mut self) {
+        let Some(pl_store) = self.playlist_store.as_ref() else {
+            return;
+        };
+
+        let buffer_level = self.media_element_ref.last_buffer_gap();
+        let Some(pending_request) = self.requester.pending_segment_request(MediaType::Video) else {
+            return;
+        };
+        let Some(pending_context) = self.segment_request_contexts.get(pending_request.id()) else {
+            return;
+        };
+        if pending_context.media_type() != Some(MediaType::Video) {
+            return;
+        }
+
+        let Some((_, desired_quality_context)) =
+            pl_store.curr_media_playlist_segment_info(MediaType::Video)
+        else {
+            return;
+        };
+        let Some(desired_variant_bandwidth) =
+            pl_store.curr_variant().map(|variant| variant.bandwidth())
+        else {
+            return;
+        };
+        let (Some(pending_quality_context), Some(pending_variant_bandwidth), Some(time_info)) = (
+            pending_context.quality_context(),
+            pending_context.variant_bandwidth(),
+            pending_context.time_info(),
+        ) else {
+            return;
+        };
+
+        if self.adaptive_selector.should_abandon_media_request(
+            pending_quality_context,
+            &desired_quality_context,
+            pending_variant_bandwidth,
+            desired_variant_bandwidth,
+            time_info.duration(),
+            buffer_level,
+        ) {
+            log_info!("Core: Abandoning pending higher-quality video segment request");
+            self.abort_segment_requests_with_type(MediaType::Video);
         }
     }
 

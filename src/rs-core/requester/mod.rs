@@ -468,6 +468,17 @@ impl Requester {
             })
     }
 
+    /// Returns the currently in-flight segment request for the given media type, if any.
+    pub(crate) fn pending_segment_request(
+        &self,
+        media_type: MediaType,
+    ) -> Option<&SegmentRequestInfo> {
+        let lane_tag = RequestLaneTag::from_media_type(media_type);
+        self.pending_segment_requests
+            .iter()
+            .find(|request| request.lane_tag == lane_tag && !request.is_waiting_for_retry)
+    }
+
     /// Fetch a segment in the right format through the given `url`.
     ///
     /// Depending on the estimated request priority (based on the `base_position`

@@ -384,6 +384,11 @@ impl PlaylistStore {
         }
     }
 
+    /// Returns variants compatible with the current track choice.
+    pub(crate) fn variants_for_curr_track(&self) -> Vec<&VariantStream> {
+        self.selectable_variants_for_curr_track()
+    }
+
     /// Estimates the duration of the current content based on the currently selected audio and
     /// video media playlists.
     ///
@@ -472,6 +477,11 @@ impl PlaylistStore {
         self.current_variant().map(|v| v.id())
     }
 
+    /// Returns the currently selected variant, if any.
+    pub(crate) fn curr_variant(&self) -> Option<&VariantStream> {
+        self.current_variant()
+    }
+
     /// Optionally update currently-selected variant by communicating the last bandwidth estimate.
     ///
     /// Returns a vec of `MediaType` corresponding to the MediaPlaylists that have been in
@@ -484,6 +494,20 @@ impl PlaylistStore {
             VariantUpdateResult::Unchanged
         } else {
             self.update_variant(None)
+        }
+    }
+
+    /// Optionally update currently-selected variant by communicating the last bandwidth estimate.
+    pub(crate) fn update_curr_bandwidth(&mut self, bandwidth: f64) -> VariantUpdateResult {
+        self.update_estimated_bandwidth(bandwidth)
+    }
+
+    /// Apply an externally selected adaptive variant.
+    pub(crate) fn update_curr_variant(&mut self, variant_id: u32) -> VariantUpdateResult {
+        if self.current_variant_id.is_none() || self.is_variant_locked() {
+            VariantUpdateResult::Unchanged
+        } else {
+            self.update_variant(Some(variant_id))
         }
     }
 
@@ -637,6 +661,14 @@ impl PlaylistStore {
         } else {
             None
         }
+    }
+
+    /// Get segment metadata linked to the current media playlist of the given type.
+    pub(crate) fn curr_media_playlist_segment_info(
+        &self,
+        media_type: MediaType,
+    ) -> Option<(&SegmentList, SegmentQualityContext)> {
+        self.loaded_media_playlist_segment_info(media_type)
     }
 
     /// Gives an indication of which kind of playlist it is: VoD/live/Event?

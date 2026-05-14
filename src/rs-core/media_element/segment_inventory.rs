@@ -49,6 +49,14 @@ impl SegmentQualityContext {
     pub(crate) fn media_id(&self) -> u32 {
         self.media_id
     }
+
+    pub(crate) fn is_better_than(&self, other: &SegmentQualityContext) -> bool {
+        self.variant_score > other.variant_score && self.media_id != other.media_id
+    }
+
+    pub(crate) fn is_worse_than(&self, other: &SegmentQualityContext) -> bool {
+        self.variant_score < other.variant_score && self.media_id != other.media_id
+    }
 }
 
 /// Information on a single chunk, present in the buffer at least partially.
