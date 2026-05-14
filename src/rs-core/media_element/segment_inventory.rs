@@ -137,6 +137,21 @@ impl BufferedChunk {
         }
     }
 
+    #[cfg(test)]
+    pub(crate) fn new_for_test(start: f64, end: f64, context: SegmentQualityContext) -> Self {
+        Self::new(
+            BufferedSegmentMetadata {
+                playlist_start: start,
+                playlist_end: end,
+                discontinuity_sequence: 0,
+                start,
+                end,
+                context,
+            },
+            0,
+        )
+    }
+
     /// Returns media start of the segment, in seconds, according to its `MediaPlaylist`.
     pub(crate) fn playlist_start(&self) -> f64 {
         self.playlist_start

@@ -96,7 +96,7 @@ impl Dispatcher {
     /// Set the wanted playback rate, at which we will play when not rebuffering.
     pub fn set_wanted_speed(&mut self, speed: f64) {
         self.media_element_ref.update_wanted_speed(speed);
-        self.check_best_variant();
+        self.check_best_variant(false);
     }
 
     /// Update the buffer goal to the given value.
@@ -109,6 +109,7 @@ impl Dispatcher {
     pub fn set_buffer_goal(&mut self, buffer_goal: f64) {
         self.buffer_goal = buffer_goal;
         self.segment_selectors.update_buffer_goal(buffer_goal);
+        self.check_best_variant(false);
         self.check_segments_to_request();
     }
 

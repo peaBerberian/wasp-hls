@@ -210,21 +210,19 @@ Worker-related features:
 Adaptive BitRate:
 
 - [x] Choose variant based on throughtput-based estimates
+- [x] Also choose variant based on buffer-based estimates.
 - [x] Allow application to list and select its own variant (quality) and know
       the current one
 - [x] Automatically filter out codecs not supported by the current environment.
 - [x] Urgent/non-urgent quality switches (Some quality switches lead to request
       for segments of the previous quality to be immediately interrupted, others
       await them before actually switching).
-- [x] Fast-switching (Push on top of already-loaded segments if they prove to be
-      of higher quality - and are sufficiently far from playback to prevent
-      rebuffering).
-- [x] Smart-switching (I just made-up the name here :D, but basically it's for
-      the opposite situation than the one in which fast-switching is active:
-      don't re-load segments who're already loaded or being pushed with a higher
-      quality).
-- [ ] Also choose variant based on buffer-based estimates.
-      _Priority: average_
+- [x] Fast quality switching (Replace already-loaded lower-quality segments
+      with higher-quality ones when they are sufficiently far from playback to
+      prevent rebuffering).
+- [x] Smart quality switching (Project-specific term for skipping a segment
+      request when equal- or higher-quality media is already buffered or being
+      pushed for that range).
 - [ ] Logic to detect sudden large fall in bandwidth before the end of a current
       request.
       _Priority: average_
@@ -366,7 +364,7 @@ most of them are not needed for playback):
   - [x] RESOLUTION: Used to describe variant in variant selection API
   - [x] FRAME-RATE: Used to describe variant in variant selection API
   - [x] SCORE: Considered both to select a variant and to determine if a quality
-        is better when "fast-switching".
+        is better when applying fast quality switching.
   - [x] VIDEO-RANGE
   - [ ] REQ-VIDEO-LAYOUT
   - [ ] STABLE-VARIANT-ID: Not really needed for now (only for content steering?)

@@ -189,16 +189,21 @@ impl MediaElementReference {
             .find(|range| range.0 > wanted_pos)
     }
 
-    /// Returns the difference between the last position of the last known
-    /// buffered range and the currently wanted position, in seconds.
+    /// Contiguous duration buffered ahead of the wanted position for this SourceBuffer.
+    /// Returns media seconds, or zero when the corresponding ranges are unavailable.
     ///
-    /// Basically, it's the amount left to play before rebuffering (or ending
-    /// if no further data is pushed to the buffer.
-    pub(crate) fn last_buffer_gap(&self) -> f64 {
-        self.last_observation
-            .as_ref()
-            .and_then(|o| o.buffered().buffer_gap(self.wanted_position()))
-            .unwrap_or(0.)
+    /// `None` if unknown.
+    pub(crate) fn buffer_ahead_for(&self, media_type: MediaType) -> Option<f64> {
+        let observation = self.last_observation.as_ref()?;
+        let position = match self.queued_seek {
+            Some(position) => self.playlist_pos_to_media_pos(position)?,
+            None => observation.current_time(),
+        };
+        let buffered = match media_type {
+            MediaType::Audio => observation.audio_buffered(),
+            MediaType::Video => observation.video_buffered(),
+        };
+        buffered.map(|ranges| ranges.buffer_gap(position).unwrap_or(0.))
     }
 
     /// Perform a seek, that is, move the current position to another one.
@@ -881,6 +886,140 @@ mod tests {
         let hint_after_insert =
             media_element.infer_probable_base_dts(MediaType::Video, &time_info, 0);
         assert!(hint_after_insert.is_none());
+    }
+
+    fn buffer_observation(
+        position: f64,
+        combined: Vec<f64>,
+        audio: Option<Vec<f64>>,
+        video: Option<Vec<f64>>,
+    ) -> MediaObservation {
+        MediaObservation::new(
+            PlaybackTickReason::RegularInterval,
+            position,
+            4,
+            JsTimeRanges::new(combined),
+            false,
+            false,
+            false,
+            f64::MAX,
+            audio.map(JsTimeRanges::new),
+            video.map(JsTimeRanges::new),
+        )
+    }
+
+    #[test]
+    fn buffer_ahead_ignores_combined_buffer() {
+        let mut media_element = MediaElementReference::new();
+        media_element.last_observation = Some(buffer_observation(
+            10.,
+            vec![],
+            Some(vec![]),
+            Some(vec![0., 40.]),
+        ));
+
+        assert_eq!(media_element.buffer_ahead_for(MediaType::Video), Some(30.));
+        assert_eq!(media_element.buffer_ahead_for(MediaType::Audio), Some(0.));
+    }
+
+    #[test]
+    fn buffer_ahead_distinguishes_audio_and_video() {
+        let mut media_element = MediaElementReference::new();
+        media_element.last_observation = Some(buffer_observation(
+            10.,
+            vec![0., 15.],
+            Some(vec![0., 15.]),
+            Some(vec![0., 40.]),
+        ));
+
+        assert_eq!(media_element.buffer_ahead_for(MediaType::Video), Some(30.));
+        assert_eq!(media_element.buffer_ahead_for(MediaType::Audio), Some(5.));
+        assert_eq!(
+            super::get_buffer_gap(media_element.last_observation.as_ref().unwrap()),
+            Some(5.)
+        );
+    }
+
+    #[test]
+    fn buffer_ahead_distinguishes_unavailable_information_from_an_empty_buffer() {
+        let mut media_element = MediaElementReference::new();
+        for media_type in [MediaType::Audio, MediaType::Video] {
+            assert_eq!(media_element.buffer_ahead_for(media_type), None);
+        }
+        for ranges in [None, Some(vec![]), Some(vec![0., 5., 15., 40.])] {
+            let expected = ranges.as_ref().map(|_| 0.);
+            media_element.last_observation = Some(buffer_observation(
+                10.,
+                vec![0., 40.],
+                ranges.clone(),
+                ranges,
+            ));
+            for media_type in [MediaType::Audio, MediaType::Video] {
+                assert_eq!(media_element.buffer_ahead_for(media_type), expected);
+            }
+        }
+    }
+
+    #[test]
+    fn buffer_ahead_only_counts_current_range() {
+        let mut media_element = MediaElementReference::new();
+        media_element.last_observation = Some(buffer_observation(
+            10.,
+            vec![0., 20., 30., 60.],
+            None,
+            Some(vec![0., 20., 30., 60.]),
+        ));
+
+        assert_eq!(media_element.buffer_ahead_for(MediaType::Video), Some(10.));
+    }
+
+    #[test]
+    fn buffer_ahead_uses_media_time_with_nonzero_offset() {
+        let mut media_element = MediaElementReference::new();
+        media_element.media_offset = Some(100.);
+        media_element.last_observation = Some(buffer_observation(
+            110.,
+            vec![100., 130.],
+            Some(vec![100., 130.]),
+            Some(vec![100., 130.]),
+        ));
+
+        for media_type in [MediaType::Audio, MediaType::Video] {
+            assert_eq!(media_element.buffer_ahead_for(media_type), Some(20.));
+        }
+    }
+
+    #[test]
+    fn buffer_ahead_uses_queued_seek_target() {
+        let mut media_element = MediaElementReference::new();
+        media_element.media_offset = Some(100.);
+        media_element.queued_seek = Some(20.);
+        media_element.last_observation = Some(buffer_observation(
+            110.,
+            vec![100., 115., 120., 150.],
+            Some(vec![100., 115., 120., 150.]),
+            Some(vec![100., 115., 120., 150.]),
+        ));
+
+        for media_type in [MediaType::Audio, MediaType::Video] {
+            assert_eq!(media_element.buffer_ahead_for(media_type), Some(30.));
+        }
+    }
+
+    #[test]
+    fn buffer_ahead_is_unavailable_for_seek_without_known_offset() {
+        let mut media_element = MediaElementReference::new();
+        media_element.queued_seek = Some(20.);
+        media_element.last_observation = Some(buffer_observation(
+            10.,
+            vec![0., 40.],
+            Some(vec![0., 40.]),
+            Some(vec![0., 40.]),
+        ));
+
+        for media_type in [MediaType::Audio, MediaType::Video] {
+            assert_eq!(media_element.buffer_ahead_for(media_type), None);
+        }
     }
 
     #[test]
