@@ -123,6 +123,8 @@ impl InitialAudioTrackSelection {
     }
 }
 
+pub(crate) const UNKNOWN_REQUEST_SIZE: u32 = u32::MAX;
+
 /// Identify the playback-related state the `Dispatcher` is in.
 #[derive(Clone, Debug)]
 enum PlayerReadyState {

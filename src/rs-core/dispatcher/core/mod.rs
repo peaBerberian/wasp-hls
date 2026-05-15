@@ -64,7 +64,7 @@ impl Dispatcher {
     /// and pushing segments etc.).
     pub(super) fn check_best_variant(&mut self) {
         let bandwidth = self.adaptive_selector.get_estimate();
-        log_debug!("Core: New bandwidth estimate: {}", bandwidth);
+        log_debug!("Core: received bandwidth estimate: {}", bandwidth);
         let speed = self.media_element_ref.wanted_speed();
         let buffer_level = self.media_element_ref.last_buffer_gap();
         let actually_used_bandwidth = if speed.is_finite() && speed > 0.0 {
@@ -353,6 +353,22 @@ impl Dispatcher {
                 log_warn!("Core: Request failed not found on the current Requester")
             }
         }
+    }
+
+    pub(super) fn on_request_progress_core(
+        &mut self,
+        request_id: RequestId,
+        bytes_loaded: u32,
+        bytes_total: Option<u32>,
+        duration_ms: f64,
+    ) {
+        self.requester.on_segment_request_progress(
+            request_id,
+            bytes_loaded,
+            bytes_total,
+            duration_ms,
+        );
+        self.maybe_abandon_pending_segment_request();
     }
 
     /// Method to call when the `readyState` JS attribute of the linked `MediaSource` object
@@ -1073,12 +1089,13 @@ impl Dispatcher {
             .media_element_ref
             .announce_incoming_media_segment(push_md);
 
+        self.check_best_variant();
+
         // Check next segment BEFORE actually pushing, as the pushing operation could take in the
         // tens of ms or even in the hundreds depending on segment size and platform performance.
         //
         // We still announce the incoming segment first to ensure the `MediaElementReference`'s
         // inventory is up-to-date.
-        self.check_best_variant();
         self.segment_selectors
             .get_mut(media_type)
             .validate_media_until(segment_end);
@@ -1163,7 +1180,7 @@ impl Dispatcher {
         let Some(pending_context) = self.segment_request_contexts.get(pending_request.id()) else {
             return;
         };
-        if pending_context.media_type() != Some(MediaType::Video) {
+        if pending_context.requested_media_type() != Some(MediaType::Video) {
             return;
         }
 
@@ -1177,10 +1194,9 @@ impl Dispatcher {
         else {
             return;
         };
-        let (Some(pending_quality_context), Some(pending_variant_bandwidth), Some(time_info)) = (
+        let (Some(pending_quality_context), Some(pending_variant_bandwidth)) = (
             pending_context.quality_context(),
             pending_context.variant_bandwidth(),
-            pending_context.time_info(),
         ) else {
             return;
         };
@@ -1190,7 +1206,10 @@ impl Dispatcher {
             &desired_quality_context,
             pending_variant_bandwidth,
             desired_variant_bandwidth,
-            time_info.duration(),
+            pending_request.bytes_loaded(),
+            pending_request.bytes_total(),
+            pending_request.progress_duration_ms(),
+            pending_request.progress_samples(),
             buffer_level,
         ) {
             log_info!("Core: Abandoning pending higher-quality video segment request");
