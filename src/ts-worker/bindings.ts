@@ -68,6 +68,68 @@ import {
 } from "./transmux.js";
 import { formatErrMessage, shouldTransmux } from "./utils.js";
 
+function parseContentLength(headers: Headers): number | undefined {
+  const rawLength = headers.get("Content-Length");
+  if (rawLength === null) {
+    return undefined;
+  }
+  const parsedLength = Number(rawLength);
+  return Number.isFinite(parsedLength) && parsedLength > 0
+    ? parsedLength
+    : undefined;
+}
+
+async function readResponseWithProgress(
+  res: Response,
+  currentRequestId: RequestId,
+  timestampBef: number,
+): Promise<Uint8Array> {
+  const dispatcher = playerInstance.getDispatcher();
+  const body = res.body;
+  const totalBytes = parseContentLength(res.headers);
+
+  if (body === null || typeof body.getReader !== "function") {
+    const arrRes = new Uint8Array(await res.arrayBuffer());
+    dispatcher?.on_request_progress(
+      currentRequestId,
+      arrRes.byteLength,
+      totalBytes ?? arrRes.byteLength,
+      monotonicNow() - timestampBef,
+    );
+    return arrRes;
+  }
+
+  const reader = body.getReader();
+  const chunks: Uint8Array[] = [];
+  let bytesLoaded = 0;
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) {
+      break;
+    }
+    if (value === undefined) {
+      continue;
+    }
+    chunks.push(value);
+    bytesLoaded += value.byteLength;
+    dispatcher?.on_request_progress(
+      currentRequestId,
+      bytesLoaded,
+      totalBytes,
+      monotonicNow() - timestampBef,
+    );
+  }
+
+  const fullData = new Uint8Array(bytesLoaded);
+  let offset = 0;
+  for (const chunk of chunks) {
+    fullData.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return fullData;
+}
+
 const generateMediaSourceId = idGenerator();
 const cachedTextDecoder = new TextDecoder("utf-8", {
   ignoreBOM: true,
@@ -493,11 +555,14 @@ export function doFetch(
         return;
       }
 
-      const arrRes = await res.arrayBuffer();
+      const segmentArray = await readResponseWithProgress(
+        res,
+        currentRequestId,
+        timestampBef,
+      );
       const elapsedMs = monotonicNow() - timestampBef;
       requestsStore.delete(currentRequestId);
       if (dispatcher !== null) {
-        const segmentArray = new Uint8Array(arrRes);
         const currentResourceId = jsMemoryResources.create(segmentArray);
         dispatcher.on_request_finished(
           currentRequestId,

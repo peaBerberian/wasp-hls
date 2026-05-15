@@ -241,6 +241,21 @@ export class Dispatcher {
     });
   }
 
+  /** Notifies wasm that a network request made progress. */
+  public on_request_progress(
+    request_id: number,
+    bytes_loaded: number,
+    bytes_total: number | undefined,
+    duration_ms: number,
+  ): void {
+    getWasmExports().__web_event__request_progress(
+      this.__ptr,
+      request_id,
+      bytes_loaded,
+      optionalIdToRaw(bytes_total),
+      duration_ms,
+    );
+  }
   /** Notifies wasm that a network request failed. */
   public on_request_failed(
     request_id: number,

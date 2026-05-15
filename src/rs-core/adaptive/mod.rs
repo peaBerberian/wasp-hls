@@ -15,6 +15,8 @@ pub(crate) struct AdaptiveQualitySelector {
 const ADAPTIVE_FACTOR: f64 = 0.8;
 const BOLA_MIN_LOW_BUFFER: f64 = 3.0;
 const BOLA_MAX_LOW_BUFFER: f64 = 10.0;
+const ABANDON_MIN_PROGRESS_DURATION_MS: f64 = 500.0;
+const ABANDON_MIN_PROGRESS_SAMPLES: u32 = 3;
 
 impl AdaptiveQualitySelector {
     /// Creates new `AdaptiveQualitySelector`.
@@ -107,28 +109,44 @@ impl AdaptiveQualitySelector {
         desired_quality: &SegmentQualityContext,
         pending_variant_bandwidth: u64,
         desired_variant_bandwidth: u64,
-        pending_segment_duration: f64,
+        pending_bytes_loaded: u32,
+        pending_bytes_total: Option<u32>,
+        progress_duration_ms: f64,
+        progress_samples: u32,
         buffer_level: f64,
     ) -> bool {
         if !pending_quality.is_better_than(desired_quality)
             || desired_variant_bandwidth >= pending_variant_bandwidth
-            || pending_segment_duration <= 0.
+            || progress_duration_ms < ABANDON_MIN_PROGRESS_DURATION_MS
+            || progress_samples < ABANDON_MIN_PROGRESS_SAMPLES
         {
             return false;
         }
 
-        let bandwidth = self.get_estimate();
-        if bandwidth <= 0. {
+        let Some(pending_bytes_total) = pending_bytes_total
+            .filter(|total| *total > pending_bytes_loaded && pending_bytes_loaded > 0)
+        else {
+            return false;
+        };
+
+        let measured_bandwidth = (pending_bytes_loaded as f64) * 8000. / progress_duration_ms;
+        if measured_bandwidth <= 0. {
             return false;
         }
 
-        let pending_download_time =
-            (pending_segment_duration * pending_variant_bandwidth as f64) / bandwidth;
-        let replacement_download_time =
-            (pending_segment_duration * desired_variant_bandwidth as f64) / bandwidth;
+        let remaining_bytes = pending_bytes_total - pending_bytes_loaded;
+        let replacement_total_bytes = ((pending_bytes_total as f64)
+            * (desired_variant_bandwidth as f64 / pending_variant_bandwidth as f64))
+            .ceil();
+        if replacement_total_bytes <= 0. || remaining_bytes as f64 <= replacement_total_bytes {
+            return false;
+        }
 
-        pending_download_time > buffer_level
-            && replacement_download_time + (pending_segment_duration * 0.25) < pending_download_time
+        let remaining_download_time = (remaining_bytes as f64) * 8. / measured_bandwidth;
+        let replacement_download_time = replacement_total_bytes * 8. / measured_bandwidth;
+
+        remaining_download_time > buffer_level
+            && replacement_download_time + 0.25 < remaining_download_time
     }
 
     pub(crate) fn reset(&mut self) {
