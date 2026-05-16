@@ -1132,6 +1132,21 @@
       },
     },
     {
+      "wasmSymbol": "__web_event__request_progress",
+      "doc": ["Forward in-flight network request progress to wasm."],
+      "wasm": {
+        "kind": "method",
+        "args": [
+          { "name": "ptr", "type": "number" },
+          { "name": "requestId", "type": "number" },
+          { "name": "bytesLoaded", "type": "number" },
+          { "name": "bytesTotal", "type": "number" },
+          { "name": "durationMs", "type": "number" },
+        ],
+        "returnType": "void",
+      },
+    },
+    {
       "wasmSymbol": "__web_event__request_failed",
       "doc": ["Forward a failed network request completion to wasm."],
       "wasm": {

@@ -201,6 +201,27 @@ impl MediaElementReference {
             .unwrap_or(0.)
     }
 
+    /// Returns whether current playback conditions make an ABR abandon decision meaningful.
+    pub(crate) fn can_monitor_abr_requests(&self) -> bool {
+        let Some(observation) = self.last_observation.as_ref() else {
+            return false;
+        };
+        observation.ready_state() >= 1
+            && !observation.paused()
+            && !observation.seeking()
+            && !observation.ended()
+            && self.wanted_speed.is_finite()
+            && self.wanted_speed > 0.
+    }
+
+    /// Returns the effective time left before starvation at the current playback rate.
+    pub(crate) fn starvation_delay(&self) -> Option<f64> {
+        if !self.can_monitor_abr_requests() {
+            return None;
+        }
+        Some(self.last_buffer_gap() / self.wanted_speed)
+    }
+
     /// Perform a seek, that is, move the current position to another one.
     ///
     /// Note that depending on that `MediaElementReference`'s state, seeks might

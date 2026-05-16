@@ -17,6 +17,7 @@ const BOLA_MIN_LOW_BUFFER: f64 = 3.0;
 const BOLA_MAX_LOW_BUFFER: f64 = 10.0;
 const ABANDON_MIN_PROGRESS_DURATION_MS: f64 = 500.0;
 const ABANDON_MIN_PROGRESS_SAMPLES: u32 = 3;
+const ABANDON_MIN_REPLACEMENT_GAIN_S: f64 = 0.25;
 
 impl AdaptiveQualitySelector {
     /// Creates new `AdaptiveQualitySelector`.
@@ -113,11 +114,24 @@ impl AdaptiveQualitySelector {
         pending_bytes_total: Option<u32>,
         progress_duration_ms: f64,
         progress_samples: u32,
-        buffer_level: f64,
+        playback_rate: f64,
+        segment_duration: Option<f64>,
+        buffer_starvation_delay: f64,
     ) -> bool {
+        if !playback_rate.is_finite() || playback_rate <= 0. || buffer_starvation_delay <= 0. {
+            return false;
+        }
+
+        let min_progress_duration_ms = segment_duration
+            .filter(|duration| duration.is_finite() && *duration > 0.)
+            .map(|duration| 1000. * (duration / (playback_rate * 2.)))
+            .filter(|duration| duration.is_finite() && *duration > 0.)
+            .map(|duration| duration.max(ABANDON_MIN_PROGRESS_DURATION_MS))
+            .unwrap_or(ABANDON_MIN_PROGRESS_DURATION_MS);
+
         if !pending_quality.is_better_than(desired_quality)
             || desired_variant_bandwidth >= pending_variant_bandwidth
-            || progress_duration_ms < ABANDON_MIN_PROGRESS_DURATION_MS
+            || progress_duration_ms < min_progress_duration_ms
             || progress_samples < ABANDON_MIN_PROGRESS_SAMPLES
         {
             return false;
@@ -145,8 +159,9 @@ impl AdaptiveQualitySelector {
         let remaining_download_time = (remaining_bytes as f64) * 8. / measured_bandwidth;
         let replacement_download_time = replacement_total_bytes * 8. / measured_bandwidth;
 
-        remaining_download_time > buffer_level
-            && replacement_download_time + 0.25 < remaining_download_time
+        remaining_download_time > buffer_starvation_delay
+            && replacement_download_time < buffer_starvation_delay
+            && replacement_download_time + ABANDON_MIN_REPLACEMENT_GAIN_S < remaining_download_time
     }
 
     pub(crate) fn reset(&mut self) {
@@ -231,4 +246,73 @@ fn compute_bola_variant_id(
                 .unwrap_or(Ordering::Equal)
         })
         .map(|(variant, _)| variant.id())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::AdaptiveQualitySelector;
+    use crate::media_element::SegmentQualityContext;
+
+    #[test]
+    fn does_not_abandon_before_half_a_segment_elapsed() {
+        let selector = AdaptiveQualitySelector::new(5_000_000.);
+        let pending_quality = SegmentQualityContext::new(2., 10);
+        let desired_quality = SegmentQualityContext::new(1., 11);
+
+        assert!(!selector.should_abandon_media_request(
+            &pending_quality,
+            &desired_quality,
+            4_000_000,
+            2_000_000,
+            400_000,
+            Some(1_000_000),
+            1_900.,
+            4,
+            1.,
+            Some(4.),
+            3.,
+        ));
+    }
+
+    #[test]
+    fn abandons_when_replacement_beats_starvation_and_remaining_time() {
+        let selector = AdaptiveQualitySelector::new(5_000_000.);
+        let pending_quality = SegmentQualityContext::new(2., 10);
+        let desired_quality = SegmentQualityContext::new(1., 11);
+
+        assert!(selector.should_abandon_media_request(
+            &pending_quality,
+            &desired_quality,
+            4_000_000,
+            1_000_000,
+            250_000,
+            Some(1_000_000),
+            2_100.,
+            4,
+            1.,
+            Some(4.),
+            3.,
+        ));
+    }
+
+    #[test]
+    fn does_not_abandon_when_replacement_would_miss_starvation_deadline() {
+        let selector = AdaptiveQualitySelector::new(5_000_000.);
+        let pending_quality = SegmentQualityContext::new(2., 10);
+        let desired_quality = SegmentQualityContext::new(1., 11);
+
+        assert!(!selector.should_abandon_media_request(
+            &pending_quality,
+            &desired_quality,
+            4_000_000,
+            2_000_000,
+            250_000,
+            Some(1_000_000),
+            2_100.,
+            4,
+            1.,
+            Some(4.),
+            1.8,
+        ));
+    }
 }
