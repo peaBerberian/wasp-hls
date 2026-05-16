@@ -1172,8 +1172,12 @@ impl Dispatcher {
         let Some(pl_store) = self.playlist_store.as_ref() else {
             return;
         };
-
-        let buffer_level = self.media_element_ref.last_buffer_gap();
+        if pl_store.is_variant_locked() || !self.media_element_ref.can_monitor_abr_requests() {
+            return;
+        }
+        let Some(buffer_starvation_delay) = self.media_element_ref.starvation_delay() else {
+            return;
+        };
         let Some(pending_request) = self.requester.pending_segment_request(MediaType::Video) else {
             return;
         };
@@ -1200,6 +1204,9 @@ impl Dispatcher {
         ) else {
             return;
         };
+        let segment_duration = pending_context
+            .time_info()
+            .map(|time_info| time_info.duration());
 
         if self.adaptive_selector.should_abandon_media_request(
             pending_quality_context,
@@ -1210,7 +1217,9 @@ impl Dispatcher {
             pending_request.bytes_total(),
             pending_request.progress_duration_ms(),
             pending_request.progress_samples(),
-            buffer_level,
+            self.media_element_ref.wanted_speed(),
+            segment_duration,
+            buffer_starvation_delay,
         ) {
             log_info!("Core: Abandoning pending higher-quality video segment request");
             self.abort_segment_requests_with_type(MediaType::Video);

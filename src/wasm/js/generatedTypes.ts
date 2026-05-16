@@ -452,6 +452,16 @@ export interface WaspWasmExports {
     durationMs: number,
   ): void;
   /**
+   * Forward in-flight network request progress to wasm.
+   */
+  __web_event__request_progress(
+    ptr: number,
+    requestId: number,
+    bytesLoaded: number,
+    bytesTotal: number,
+    durationMs: number,
+  ): void;
+  /**
    * Forward a failed network request completion to wasm.
    */
   __web_event__request_failed(
