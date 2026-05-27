@@ -339,6 +339,13 @@ body {
   font-family: Arial,Helvetica,sans-serif;
   margin: 0px 5px;
 }
+.position-date,
+.position-window-date {
+  color: #aab3ba;
+  font-size: 11px;
+  line-height: 1.3;
+  white-space: nowrap;
+}
 
 .spinner-wrapper {
   transform-origin: center;
