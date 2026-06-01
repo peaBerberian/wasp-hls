@@ -288,10 +288,40 @@ body {
   margin-bottom: 0px;
   position: absolute;
   bottom: 44px;
+  overflow: visible;
 }
 
 .progress-bar-wrapper:hover {
   transform: scaleY(2.5);
+}
+
+.progress-bar-hover-hint {
+  background-color: rgba(16, 16, 16, 0.92);
+  border-radius: 4px;
+  color: #fff;
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 12px;
+  left: 0;
+  line-height: 1;
+  padding: 4px 6px;
+  pointer-events: none;
+  position: absolute;
+  top: -24px;
+  transform: translateX(-50%) scaleY(0.4);
+  transform-origin: bottom center;
+  white-space: nowrap;
+  z-index: 4;
+}
+
+.progress-bar-hover-hint::after {
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 4px solid rgba(16, 16, 16, 0.92);
+  content: "";
+  left: 50%;
+  position: absolute;
+  top: 100%;
+  transform: translateX(-50%);
 }
 
 .progress-bar-current {

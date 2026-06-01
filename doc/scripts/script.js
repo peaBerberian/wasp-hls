@@ -4,6 +4,10 @@ let rootUrl = window.rootUrl;
   const a = document.createElement("a");
   a.href = rootUrl;
   rootUrl = a.href;
+
+  if (rootUrl[rootUrl.length - 1] === "/") {
+    rootUrl = rootUrl.substring(0, rootUrl.length - 1);
+  }
 }
 
 /** Information on the initialization of the search feature. */
@@ -41,9 +45,11 @@ const searchState = {
  */
 let currentlyWantedPage = null;
 
+let fuse = null;
+
 /**
  * Contains the links to search results.
- * The elements of this array are in this same order than `elasticlunr`'s index.
+ * The elements of this array are in this same order than `Fuse.js`'s index.
  * @type {Array.<Object>}
  */
 let searchIndexLinks = [];
@@ -84,15 +90,7 @@ const spinnerSvg = `<svg
   />
 </svg>`;
 
-/** Pre-initialize our search engine library with the right fields. */
-const searchEngine = elasticlunr(function () {
-  this.addField("h1");
-  this.addField("h2");
-  this.addField("h3");
-  this.addField("body");
-  this.setRef("id");
-});
-
+const pageIndex = [];
 /**
  * Perform all actions and register all event handlers that should be done in
  * the page.
@@ -115,7 +113,7 @@ function initializePage() {
 
   // Work-arounds to make sure the header doesn't go on top
   // of a link
-  if (window.location.hash !== "") {
+  if (window.location.hash !== "" && window.scrollY > 0) {
     hideHeader();
   }
 
@@ -166,7 +164,9 @@ function initializeScrollBehavior() {
   }
 
   function onHashChange() {
-    hideHeader();
+    if (window.scrollY !== 0) {
+      hideHeader();
+    }
     prevScroll = window.scrollY;
   }
 }
@@ -423,7 +423,7 @@ function initializeSearchEngine() {
     .then((res) => {
       if (!Array.isArray(res)) {
         console.error(
-          "Failed to initialize search: index has an invalid format."
+          "Failed to initialize search: index has an invalid format.",
         );
         return;
       }
@@ -438,7 +438,8 @@ function initializeSearchEngine() {
             anchorH2: elt.anchorH2,
             anchorH3: elt.anchorH3,
           });
-          searchEngine.addDoc({
+          pageIndex.push({
+            file: res[i].file,
             h1: elt.h1,
             h2: elt.h2,
             h3: elt.h3,
@@ -448,6 +449,27 @@ function initializeSearchEngine() {
           id++;
         }
       }
+      fuse = new Fuse(pageIndex, {
+        // includeScore: true,
+        keys: [
+          {
+            name: "h1",
+            weight: 100,
+          },
+          {
+            name: "h2",
+            weight: 80,
+          },
+          {
+            name: "h3",
+            weight: 10,
+          },
+          {
+            name: "body",
+            weight: 1,
+          },
+        ],
+      });
       searchState.initStatus = "loaded";
     })
     .catch((err) => {
@@ -456,6 +478,11 @@ function initializeSearchEngine() {
     });
   return searchState.promise;
 }
+
+// Symbol are guaranteed to be unique.
+// So there will be no overlap between this symbol or any string
+// when it's used as a key to access an object property.
+const __DEFAULT_SYMBOL__ = Symbol("__DEFAULT__");
 
 /**
  * Update search result in the search result HTMLElement according to the given
@@ -492,86 +519,160 @@ function updateSearchResults(value) {
   }
   searchState.lastSearch = value;
 
-  const searchResults = searchEngine.search(value, {
-    fields: {
-      h1: { boost: 5, bool: "AND" },
-      h2: { boost: 4, bool: "AND" },
-      h3: { boost: 3, bool: "AND" },
-      body: { boost: 1 },
-    },
-    expand: true,
-  });
+  const searchResults = fuse.search(value);
   if (searchResults.length === 0) {
     searchResultsElt.innerHTML =
       '<div class="message">' + "No result for that search." + "</div>";
     return;
   }
+
+  // only consider the first 30 results
+  const searchResultsSliced = searchResults.slice(0, 29);
+  const searchResultSorted = reorderSearchResults(searchResultsSliced);
   searchResultsElt.innerHTML = "";
-  for (let resIdx = 0; resIdx < searchResults.length && resIdx < 30; resIdx++) {
-    const res = searchResults[resIdx];
-    const links = searchIndexLinks[+res.ref];
-    const contentDiv = document.createElement("div");
-    contentDiv.className = "search-result-item";
 
-    const locationDiv = document.createElement("div");
-    locationDiv.className = "search-result-location";
-    if (res.doc.h1 !== undefined && res.doc.h1 !== "") {
-      let linkH1;
-      if (links.anchorH1 !== undefined) {
-        const href = rootUrl + "/" + links.file + "#" + links.anchorH1;
-        linkH1 = document.createElement("a");
-        linkH1.href = href;
-      } else {
-        linkH1 = document.createElement("span");
-      }
-      linkH1.className = "h1";
-      linkH1.textContent = res.doc.h1;
-      locationDiv.appendChild(linkH1);
-      if (res.doc.h2 !== undefined && res.doc.h2 !== "") {
-        const separatorSpan = document.createElement("span");
-        separatorSpan.textContent = " > ";
-        locationDiv.appendChild(separatorSpan);
-        let linkH2;
-        if (links.anchorH2 !== undefined) {
-          const href = rootUrl + "/" + links.file + "#" + links.anchorH2;
-          linkH2 = document.createElement("a");
-          linkH2.href = href;
-        } else {
-          linkH2 = document.createElement("span");
-        }
-        linkH2.className = "h2";
-        linkH2.textContent = res.doc.h2;
-        locationDiv.appendChild(linkH2);
-        if (res.doc.h3 !== undefined && res.doc.h3 !== "") {
-          const separatorSpan = document.createElement("span");
-          separatorSpan.textContent = " > ";
-          locationDiv.appendChild(separatorSpan);
-          let linkH3;
-          if (links.anchorH3 !== undefined) {
-            const href = rootUrl + "/" + links.file + "#" + links.anchorH3;
-            linkH3 = document.createElement("a");
-            linkH3.href = href;
-          } else {
-            linkH3 = document.createElement("span");
-          }
-          linkH3.className = "h3";
-          linkH3.textContent = res.doc.h3;
-          locationDiv.appendChild(linkH3);
-        }
-      }
-    }
-    const bodyDiv = document.createElement("div");
-    bodyDiv.className = "search-result-body";
-    let body = res.doc.body ?? "";
-    if (body.length > 300) {
-      body = body.substring(0, 300) + "...";
-    }
-    bodyDiv.textContent = body;
-
-    contentDiv.appendChild(locationDiv);
-    contentDiv.appendChild(bodyDiv);
-    searchResultsElt.appendChild(contentDiv);
+  let previousItem = null;
+  for (const searchResult of searchResultSorted) {
+    let displayFromLevel =
+      previousItem === null
+        ? 0
+        : getCommonAncestorLevel(searchResult, previousItem);
+    previousItem = searchResult;
+    const elems = createHeadingElements(searchResult, displayFromLevel);
+    elems.forEach((elem) => searchResultsElt.appendChild(elem));
   }
+}
+
+/**
+ * Compares two search result items to determine the deepest common ancestor level.
+ *
+ * @param {Object} itemA - The first search result item.
+ * @param {Object} itemB - The second search result item.
+ * @returns {number} - Returns 0 if items does not share same file, 1 if h1 is different, etc...
+ */
+function getCommonAncestorLevel(searchResultItemA, searchResultItemB) {
+  if (searchResultItemA.file !== searchResultItemB.file) {
+    return 0;
+  }
+
+  if (searchResultItemA.h1 !== searchResultItemB.h1) {
+    return 1;
+  }
+
+  if (searchResultItemA.h2 !== searchResultItemB.h2) {
+    return 2;
+  }
+
+  return 3;
+}
+
+/**
+ * Re-orders search results by grouping them according
+ * to their shared section headings (h1, h2, h3).
+ * @param {array} searchResults The array of search results to be re-ordered.
+ * @returns An array re-ordered based on section headings.
+ *
+ * @example
+ */
+function reorderSearchResults(searchResults) {
+  const groupedSearchResult = groupItems(searchResults);
+  return flattenGroupedItems(groupedSearchResult);
+}
+/**
+ * Groups items from the provided `results` array by their file, h1, h2, and h3 properties.
+ * If a property is missing at any level, it defaults to using the `__DEFAULT__` symbol.
+ * Items are nested based on their structure, creating keys for each
+ * unique combination of `file`, `h1`, `h2`, and `h3`.
+ *
+ * @param {array} array The array to group.
+ * @returns An object containing items grouped.
+ */
+function groupItems(results) {
+  const groupedByFileAndHeader = {};
+
+  results.forEach((res) => {
+    let item = res.item;
+
+    if (item.file === undefined || item.h1 === undefined) {
+      // item.file and item.h1 is required, if it's missing let's skip the search result.
+      return;
+    }
+    if (!groupedByFileAndHeader[item.file]) {
+      groupedByFileAndHeader[item.file] = {};
+    }
+
+    if (!groupedByFileAndHeader[item.file][item.h1]) {
+      groupedByFileAndHeader[item.file][item.h1] = {};
+    }
+
+    // Create the h2 key, if exists
+    if (item.h2) {
+      if (!groupedByFileAndHeader[item.file][item.h1][item.h2]) {
+        groupedByFileAndHeader[item.file][item.h1][item.h2] = {};
+      }
+
+      // Create the h3 key, if exists
+      if (item.h3) {
+        if (!groupedByFileAndHeader[item.file][item.h1][item.h2][item.h3]) {
+          groupedByFileAndHeader[item.file][item.h1][item.h2][item.h3] = [];
+        }
+        groupedByFileAndHeader[item.file][item.h1][item.h2][item.h3].push(item);
+      } else {
+        // If no h3, use the default symbol
+        if (
+          !groupedByFileAndHeader[item.file][item.h1][item.h2][
+            __DEFAULT_SYMBOL__
+          ]
+        ) {
+          groupedByFileAndHeader[item.file][item.h1][item.h2][
+            __DEFAULT_SYMBOL__
+          ] = [];
+        }
+        groupedByFileAndHeader[item.file][item.h1][item.h2][
+          __DEFAULT_SYMBOL__
+        ].push(item);
+      }
+    } else {
+      // If no h2, use the default symbol under h1
+      if (!groupedByFileAndHeader[item.file][item.h1][__DEFAULT_SYMBOL__]) {
+        groupedByFileAndHeader[item.file][item.h1][__DEFAULT_SYMBOL__] = [];
+      }
+      groupedByFileAndHeader[item.file][item.h1][__DEFAULT_SYMBOL__].push(item);
+    }
+  });
+  return groupedByFileAndHeader;
+}
+/**
+ * From a nested object contain search results returns an array with all
+ * the search items.
+ */
+function flattenGroupedItems(groupedByFileAndHeader) {
+  const flattenedItems = [];
+
+  // Helper function to recursively traverse the nested structure
+  function traverse(group) {
+    // If the group is an array, it means there is no deeper level.
+    if (Array.isArray(group)) {
+      flattenedItems.push(...group);
+    } else if (group !== null && typeof group === "object") {
+      if (group[__DEFAULT_SYMBOL__] !== undefined) {
+        traverse(group[__DEFAULT_SYMBOL__]);
+      }
+
+      // Object.keys() does not iterate through Symbol, so the __DEFAULT_SYMBOL__
+      // key will not be handled here.
+      for (const key of Object.keys(group)) {
+        traverse(group[key]);
+      }
+    }
+  }
+  // Start traversing from the top-level grouping
+  for (const file in groupedByFileAndHeader) {
+    for (const h1 in groupedByFileAndHeader[file]) {
+      traverse(groupedByFileAndHeader[file][h1]);
+    }
+  }
+  return flattenedItems;
 }
 
 /**
@@ -631,7 +732,7 @@ function initializeHamburgerMenu() {
     document.getElementsByClassName("hamburger-opener")[0];
   const hamburgerBarElt = document.getElementsByClassName("hamburger-bar")[0];
   const hamburgerCloserElt = document.getElementsByClassName(
-    "hamburger-bar-closer"
+    "hamburger-bar-closer",
   )[0];
 
   hamburgerOpenerElt.addEventListener("click", openMenu);
@@ -1005,4 +1106,88 @@ function getSearchIconElements() {
  */
 function getSearchWrapperElement() {
   return document.getElementById("search-wrapper");
+}
+/**
+ * Creates an array of rendered elements based on the specified display level and item data.
+ *
+ * @param {Object} item - The item containing heading properties (h1, h2, h3).
+ * @param {number} displayFromLevel - The level from which to start rendering headings (1 to 3).
+ * @returns {Array} An array of elements created for the relevant heading levels.
+ */
+function createHeadingElements(item, displayFromLevel) {
+  const headingElements = [];
+  const headingLevelToRender = [];
+
+  if (displayFromLevel <= 1 && item.h1) {
+    headingLevelToRender.push("h1");
+  }
+
+  if (displayFromLevel <= 2 && item.h2) {
+    headingLevelToRender.push("h2");
+  }
+
+  if (displayFromLevel <= 3 && item.h3) {
+    headingLevelToRender.push("h3");
+  }
+
+  for (const headingLevel of headingLevelToRender) {
+    const element = createResultElement(item, headingLevel);
+    headingElements.push(element);
+  }
+  return headingElements;
+}
+
+function createResultElement(item, itemLevel) {
+  const links = searchIndexLinks[+item.id];
+  const contentDiv = document.createElement("div");
+  contentDiv.className = "search-result-item";
+  const locationDiv = document.createElement("div");
+  locationDiv.className = "search-result-location";
+
+  let href;
+  let textContent;
+  if (itemLevel === "h3") {
+    contentDiv.classList.add("search-result-item-is-h3");
+    if (links.anchorH3 !== undefined) {
+      href = rootUrl + "/" + links.file + "#" + links.anchorH3;
+    }
+    textContent = item.h3;
+  } else if (itemLevel === "h2") {
+    contentDiv.classList.add("search-result-item-is-h2");
+    if (links.anchorH2 !== undefined) {
+      href = rootUrl + "/" + links.file + "#" + links.anchorH2;
+    }
+    textContent = item.h2;
+  } else if (itemLevel === "h1") {
+    contentDiv.classList.add("search-result-item-is-h1");
+    if (links.anchorH1 !== undefined) {
+      href = rootUrl + "/" + links.file + "#" + links.anchorH1;
+    }
+    textContent = item.h1;
+  }
+
+  let anchorElement;
+  if (href) {
+    anchorElement = document.createElement("a");
+    anchorElement.href = href;
+  } else {
+    anchorElement = document.createElement("span");
+  }
+
+  anchorElement.textContent = textContent;
+  anchorElement.className = itemLevel;
+  locationDiv.appendChild(anchorElement);
+
+  const bodyDiv = document.createElement("div");
+  bodyDiv.className = "search-result-body";
+  let body = item.body ?? "";
+  if (body.length > 300) {
+    body = body.substring(0, 300) + "...";
+  }
+  bodyDiv.textContent = body;
+
+  contentDiv.appendChild(locationDiv);
+  contentDiv.appendChild(bodyDiv);
+
+  return contentDiv;
 }

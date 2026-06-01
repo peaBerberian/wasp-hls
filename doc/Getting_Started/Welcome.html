@@ -5,8 +5,7 @@
 <a aria-label="Link to repository" class="navbar-item first-right github-link hideable" href="https://github.com/peaBerberian/wasp-hls"><svg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'><path d='M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12'/></svg></a></div></div> </nav><aside class="sidebar-parent"><div class="sidebar-header"><a href="https://github.com/peaBerberian/wasp-hls"><img alt="logo" class="sidebar-header-logo" src="../images/logo_big.png" /></a></div><div class="sidebar-wrapper"><div class="sidebar-items"><li class="sidebar-item"><a class="sidebar-link active" href="./Welcome.html">Welcome</a></li><li class="sidebar-item"><a class="sidebar-link" href="./Creating_a_WaspHlsPlayer.html">Creating a WaspHlsPlayer</a></li></div></div></aside><div class="content-wrapper"><div class="content"><div id="search-wrapper"><input type="search" name="search" id="searchbar" placeholder="Search in this documentation" class="active" /><div id="search-results"></div></div><html><head></head><body><p align="center">
   <img style="max-width: 250px;" src="../images/logo.png">
 </p>
-<p><a name="wasphlsplayer_overview"></a></p>
-<h2>WaspHlsPlayer overview</h2>
+<a name="wasphlsplayer-overview"></a><h2>WaspHlsPlayer overview</h2>
 <p>The <code>WaspHlsPlayer</code> is a media player library allowing to play HLS contents on
 the web efficiently by exploiting a <a href="https://en.wikipedia.org/wiki/Web_worker">WebWorker</a>,
 allowing to run concurrently to the user interface and <a href="https://webassembly.org/">WebAssembly</a>,
@@ -15,11 +14,10 @@ allowing to do so in an optimized way.</p>
 runs. It also support more advanced features, such as <a href="https://chromestatus.com/feature/5177263249162240">MSE-in-Workers</a>
 on browsers that support them, though it can also run efficiently on
 environments without those.
-All of those features should ensure that an heavy UI won’t have a huge influence
+All of those features should ensure that an heavy UI won't have a huge influence
 on media buffering, as well as ensuring that the media loading, parsing and
-buffering operations won’t be felt when interacting with the page.</p>
-<p><a name="very_quick_start"></a></p>
-<h2>Very quick start</h2>
+buffering operations won't be felt when interacting with the page.</p>
+<a name="very-quick-start"></a><h2>Very quick start</h2>
 <p>To let you quickly test the project, the <code>WaspHlsPlayer</code> provides embedded
 versions of its WebAssembly and Worker files, even if I recommend to store
 and serve those as separate files on production (more details in the rest of the
@@ -45,18 +43,18 @@ player
   .<span class="hljs-title function_">catch</span>(<span class="hljs-function">(<span class="hljs-params">err</span>) =&gt;</span> {
     <span class="hljs-variable language_">console</span>.<span class="hljs-title function_">error</span>(<span class="hljs-string">"Could not initialize WaspHlsPlayer:"</span>, err);
   });
-player.<span class="hljs-title function_">load</span>(<span class="hljs-variable constant_">HLS_MULTIVARIANT_PLAYLIST_URL</span>);
+player.<span class="hljs-title function_">load</span>(<span class="hljs-variable constant_">HLS_PLAYLIST_URL</span>);
 </code></pre>
-<p>Where <code>HLS_MULTIVARIANT_PLAYLIST_URL</code> is the URL to the main playlist (called
-either the Multivariant Playlist or the Master Playlist) of your HLS content.</p>
+<p>Where <code>HLS_PLAYLIST_URL</code> is the URL to the top-level playlist of your HLS
+content, whether that is a Multivariant Playlist (also called Master Playlist)
+or a Media Playlist directly.</p>
 <p>Of course, once <code>initialize</code> has succeeded, you can play any HLS content you
 want on that <code>WaspHlsPlayer</code> instance.</p>
-<p><a name="the_documentation_pages"></a></p>
-<h2>The documentation pages</h2>
+<a name="the-documentation-pages"></a><h2>The documentation pages</h2>
 <p>Those documentation pages are splitted into multiple categories:</p>
 <ul>
 <li>
-<p>You’re here in the “Getting Started” category which provides tutorials and
+<p>You're here in the "Getting Started" category which provides tutorials and
 other resources allowing to help you with basic usage of the <code>WaspHlsPlayer</code>.</p>
 </li>
 <li>
@@ -65,9 +63,9 @@ behavior of everything that is possible with the <code>WaspHlsPlayer</code>.</p>
 </li>
 </ul>
 </body></html><nav class="next-previous-page-wrapper" aria-label="Navigate between pages"><div class="next-or-previous-page"></div><div class="next-or-previous-page next-page"><a class="next-or-previous-page-link" href="./Creating_a_WaspHlsPlayer.html"><div class="next-or-previous-page-link-label">Next</div><div class="next-or-previous-page-link-name">Creating a WaspHlsPlayer</div></a></div></nav></div><div class="tocbar-wrapper"><div class="tocbar"><ul>
-<li><a href="#wasphlsplayer_overview">WaspHlsPlayer overview</a></li>
-<li><a href="#very_quick_start">Very quick start</a></li>
-<li><a href="#the_documentation_pages">The documentation pages</a></li>
+<li><a href="#wasphlsplayer-overview">WaspHlsPlayer overview</a></li>
+<li><a href="#very-quick-start">Very quick start</a></li>
+<li><a href="#the-documentation-pages">The documentation pages</a></li>
 </ul>
 </div></div></div></div><div class="hamburger-bar"><div class="hamburger-header"><span class="hamburger-title">Page List</span><button aria-label="Close website index" type="button" class="hamburger-bar-closer"><svg viewBox="0 0 15 15" width="21" height="21"><g stroke="black" stroke-width="1.2"><path d="M.75.75l13.5 13.5M14.25.75L.75 14.25"></path></g></svg></button></div><ul class="page-list-wrapper"><li class="page-list-item"><div class="page-list-group opened active">Getting Started</div><ul class="page-list-cat-group"><li class="page-list-item active"><a href="./Welcome.html">Welcome</a></li>
 <li class="page-list-item"><a href="./Creating_a_WaspHlsPlayer.html">Creating a WaspHlsPlayer</a></li></ul></li>
@@ -96,13 +94,17 @@ behavior of everything that is possible with the <code>WaspHlsPlayer</code>.</p>
 <li class="page-list-item"><a href="../API/Playback_Information/isRebuffering.html">isRebuffering</a></li>
 <li class="page-list-item"><a href="../API/Playback_Information/isEnded.html">isEnded</a></li>
 <li class="page-list-item"><a href="../API/Playback_Information/isLive.html">isLive</a></li>
-<li class="page-list-item"><a href="../API/Playback_Information/isVod.html">isVod</a></li></ul></li>
+<li class="page-list-item"><a href="../API/Playback_Information/isVod.html">isVod</a></li>
+<li class="page-list-item"><a href="../API/Playback_Information/usesProgramDateTime.html">usesProgramDateTime</a></li></ul></li>
 <li><div class="page-list-item page-list-group">Position Control</div><ul class="page-list-group-group"><li class="page-list-item"><a href="../API/Position_Control/getPosition.html">getPosition</a></li>
 <li class="page-list-item"><a href="../API/Position_Control/seek.html">seek</a></li>
 <li class="page-list-item"><a href="../API/Position_Control/getMinimumPosition.html">getMinimumPosition</a></li>
 <li class="page-list-item"><a href="../API/Position_Control/getMaximumPosition.html">getMaximumPosition</a></li>
 <li class="page-list-item"><a href="../API/Position_Control/getMediaDuration.html">getMediaDuration</a></li>
-<li class="page-list-item"><a href="../API/Position_Control/getMediaOffset.html">getMediaOffset</a></li></ul></li>
+<li class="page-list-item"><a href="../API/Position_Control/getMediaOffset.html">getMediaOffset</a></li>
+<li class="page-list-item"><a href="../API/Position_Control/getSeekableMinimumPosition.html">getSeekableMinimumPosition</a></li>
+<li class="page-list-item"><a href="../API/Position_Control/getSeekableMaximumPosition.html">getSeekableMaximumPosition</a></li>
+<li class="page-list-item"><a href="../API/Position_Control/positionToDate.html">positionToDate</a></li></ul></li>
 <li><div class="page-list-item page-list-group">Speed Control</div><ul class="page-list-group-group"><li class="page-list-item"><a href="../API/Speed_Control/setSpeed.html">setSpeed</a></li>
 <li class="page-list-item"><a href="../API/Speed_Control/getSpeed.html">getSpeed</a></li></ul></li>
 <li><div class="page-list-item page-list-group">Variant Selection</div><ul class="page-list-group-group"><li class="page-list-item"><a href="../API/Variant_Selection/getCurrentVariant.html">getCurrentVariant</a></li>
@@ -115,4 +117,4 @@ behavior of everything that is possible with the <code>WaspHlsPlayer</code>.</p>
 <li class="page-list-item"><a href="../API/Audio_Track_Selection/setAudioTrack.html">setAudioTrack</a></li></ul></li></ul></li>
 <li class="page-list-item"><a href="https://peaberberian.github.io/wasp-hls/index.html">Demo</a></li>
 
-<li class="page-list-item"><a aria-label="Link to repository" href="https://github.com/peaBerberian/wasp-hls"><svg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'><path d='M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12'/></svg></a></li></ul></div><script type="text/javascript" src="../scripts/lunr.js" charset="utf-8"></script><script type="text/javascript" src="../scripts/script.js" charset="utf-8"></script></body></html>
+<li class="page-list-item"><a aria-label="Link to repository" href="https://github.com/peaBerberian/wasp-hls"><svg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'><path d='M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12'/></svg></a></li></ul></div><script type="text/javascript" src="../scripts/fuse.js" charset="utf-8"></script><script type="text/javascript" src="../scripts/script.js" charset="utf-8"></script></body></html>

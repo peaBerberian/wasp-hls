@@ -164,6 +164,7 @@ table tr td {
   display: flex;
   /* overflow: hidden; */
   max-width: 1650px;
+  margin: auto;
 }
 
 .loading-wrapper {
@@ -221,6 +222,25 @@ table tr td {
   margin: 17px 0px;
 }
 
+.search-result-item-is-h2 {
+  padding-left: 40px;
+}
+
+.search-result-item-is-h3 {
+  padding-left: 80px;
+}
+
+.search-result-item-is-h1 .search-result-location::before {
+  content: "📄";
+  padding-right: 8px;
+}
+
+.search-result-item-is-h2 .search-result-location::before,
+.search-result-item-is-h3 .search-result-location::before {
+  content: "#️";
+  padding-right: 8px;
+}
+
 #search-results {
   margin-top: 20px;
   padding-bottom: 20px;
@@ -263,8 +283,10 @@ table tr td {
   width: 100%;
   z-index: 4;
   transition: transform 200ms ease;
-  box-shadow: rgba(0, 0, 0, 0.05) 0px 1px 2px 0px,
-    rgba(0, 0, 0, 0.05) 0px 1px 4px 0px, rgba(0, 0, 0, 0.05) 0px 2px 8px 0px;
+  box-shadow:
+    rgba(0, 0, 0, 0.05) 0px 1px 2px 0px,
+    rgba(0, 0, 0, 0.05) 0px 1px 4px 0px,
+    rgba(0, 0, 0, 0.05) 0px 2px 8px 0px;
 }
 
 .no-js .navbar-parent {
@@ -295,6 +317,9 @@ table tr td {
 .navbar-items .version-item {
   font-style: italic;
   font-size: 0.94rem;
+}
+
+a .version-item {
   text-decoration: underline;
 }
 
@@ -410,7 +435,9 @@ a.navbar-active {
 
 .content {
   margin: 25px 15px;
-  max-width: 920px;
+  /* max-width: 920px; */
+  width: 100%;
+  min-width: 350px;
 }
 
 .content img {
@@ -478,7 +505,8 @@ a.navbar-active {
   top: 0;
   left: 0;
   padding: 0px 5px;
-  box-shadow: rgba(60, 64, 67, 0.3) 0px 1px 2px 0px,
+  box-shadow:
+    rgba(60, 64, 67, 0.3) 0px 1px 2px 0px,
     rgba(60, 64, 67, 0.15) 0px 2px 6px 2px;
 }
 

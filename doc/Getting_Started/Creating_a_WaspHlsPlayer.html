@@ -2,24 +2,21 @@
 <a class="navbar-item hideable"href="../API/Overview.html">API</a>
 <a class="navbar-item hideable"href="https://peaberberian.github.io/wasp-hls/index.html">Demo</a>
 <span class="navbar-item search-icon last-left"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20"><title>search</title><path d="M19 17l-5.15-5.15a7 7 0 1 0-2 2L17 19zM3.5 8A4.5 4.5 0 1 1 8 12.5 4.5 4.5 0 0 1 3.5 8z"/><script xmlns=""/></svg></span>
-<a aria-label="Link to repository" class="navbar-item first-right github-link hideable" href="https://github.com/peaBerberian/wasp-hls"><svg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'><path d='M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12'/></svg></a></div></div> </nav><aside class="sidebar-parent"><div class="sidebar-header"><a href="https://github.com/peaBerberian/wasp-hls"><img alt="logo" class="sidebar-header-logo" src="../images/logo_big.png" /></a></div><div class="sidebar-wrapper"><div class="sidebar-items"><li class="sidebar-item"><a class="sidebar-link" href="./Welcome.html">Welcome</a></li><li class="sidebar-item"><a class="sidebar-link active" href="./Creating_a_WaspHlsPlayer.html">Creating a WaspHlsPlayer</a></li></div></div></aside><div class="content-wrapper"><div class="content"><div id="search-wrapper"><input type="search" name="search" id="searchbar" placeholder="Search in this documentation" class="active" /><div id="search-results"></div></div><html><head></head><body><p><a name="creating_a_new_wasphlsplayer"></a></p>
-<h1>Creating a new WaspHlsPlayer</h1>
-<p><a name="instantiation"></a></p>
-<h2>Instantiation</h2>
+<a aria-label="Link to repository" class="navbar-item first-right github-link hideable" href="https://github.com/peaBerberian/wasp-hls"><svg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'><path d='M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12'/></svg></a></div></div> </nav><aside class="sidebar-parent"><div class="sidebar-header"><a href="https://github.com/peaBerberian/wasp-hls"><img alt="logo" class="sidebar-header-logo" src="../images/logo_big.png" /></a></div><div class="sidebar-wrapper"><div class="sidebar-items"><li class="sidebar-item"><a class="sidebar-link" href="./Welcome.html">Welcome</a></li><li class="sidebar-item"><a class="sidebar-link active" href="./Creating_a_WaspHlsPlayer.html">Creating a WaspHlsPlayer</a></li></div></div></aside><div class="content-wrapper"><div class="content"><div id="search-wrapper"><input type="search" name="search" id="searchbar" placeholder="Search in this documentation" class="active" /><div id="search-results"></div></div><html><head></head><body><a name="creating-a-new-wasphlsplayer"></a><h1>Creating a new WaspHlsPlayer</h1>
+<a name="instantiation"></a><h2>Instantiation</h2>
 <p>Each <code>WaspHlsPlayer</code> allows to play HLS content on a single video element.</p>
 <p>That video element has to be provided on instanciation like this:</p>
 <pre><code class="language-js"><span class="hljs-keyword">const</span> player = <span class="hljs-keyword">new</span> <span class="hljs-title class_">WaspHlsPlayer</span>(videoElement);
 </code></pre>
-<p>More information on the WaspHlsPlayer’s constructor can be found <a href="../API/Instantiation.html">in the
+<p>More information on the WaspHlsPlayer's constructor can be found <a href="../API/Instantiation.html">in the
 API documentation page presenting the instantiation step</a>.</p>
-<p>Note that the <code>WaspHlsPlayer</code>’s constructor optionally can take a second
+<p>Note that the <code>WaspHlsPlayer</code>'s constructor optionally can take a second
 argument, which allows to overwrite its initial configuration.
 More information on this object is available <a href="../API/Configuration_Object.html">in the API
 documentation</a>.</p>
 <p>Before being ready to load contents on that new instance, we now have to
-“initialize” it, which is an operation described in the next chapter.</p>
-<p><a name="wasphlsplayer_initialization"></a></p>
-<h2>WaspHlsPlayer initialization</h2>
+"initialize" it, which is an operation described in the next chapter.</p>
+<a name="wasphlsplayer-initialization"></a><h2>WaspHlsPlayer initialization</h2>
 <p>Before it can actually load a content, the <code>WaspHlsPlayer</code> needs to let it have
 access to two files:</p>
 <ol>
@@ -33,7 +30,7 @@ internal logic.</p>
 </li>
 </ol>
 <p>Both of those files can be retrieved <a href="https://github.com/peaBerberian/wasp-hls/releases">in the release page</a>
-(you should choose the one linked to your actual <code>WaspHlsPlayer</code>’s version).
+(you should choose the one linked to your actual <code>WaspHlsPlayer</code>'s version).
 They then have to be served via HTTP(S) (through a solution of your choosing),
 and can be communicated to the <code>WaspHlsPlayer</code> through its <code>initialize</code> method:</p>
 <pre><code class="language-js">player
@@ -47,12 +44,12 @@ and can be communicated to the <code>WaspHlsPlayer</code> through its <code>init
     },
     <span class="hljs-function">(<span class="hljs-params">err</span>) =&gt;</span> {
       <span class="hljs-variable language_">console</span>.<span class="hljs-title function_">error</span>(<span class="hljs-string">"Could not initialize WaspHlsPlayer:"</span>, err);
-    }
+    },
   );
 
 <span class="hljs-comment">// we can now use the player (we don't need to await the Promise here)</span>
 </code></pre>
-<p>Alternatively, if you don’t want the hassle of having to serve those files
+<p>Alternatively, if you don't want the hassle of having to serve those files
 separately when developping, the <code>WaspHlsPlayer</code> also provide both the
 WebAssembly and Worker files through JavaScript-embedded versions, respectively
 through the <code>"wasp-hls/wasm"</code> and the <code>"wasp-hls/worker"</code> path:</p>
@@ -70,7 +67,7 @@ player
     },
     <span class="hljs-function">(<span class="hljs-params">err</span>) =&gt;</span> {
       <span class="hljs-variable language_">console</span>.<span class="hljs-title function_">error</span>(<span class="hljs-string">"Could not initialize WaspHlsPlayer:"</span>, err);
-    }
+    },
   );
 
 <span class="hljs-comment">// we can now use the player (we don't need to await the Promise here)</span>
@@ -79,27 +76,26 @@ player
 reduced when compressed) and to some small inefficencies on initialization (as
 those JavaScript files have to first be interpreted in the main thread), which
 is why I recommend serving both those files separately for production.</p>
-<p>It’s also possible to communicate an initial bandwidth estimate through the
-<code>initialize</code> method to improve the <code>WaspHlsPlayer</code>’s accuracy regarding its
+<p>It's also possible to communicate an initial bandwidth estimate through the
+<code>initialize</code> method to improve the <code>WaspHlsPlayer</code>'s accuracy regarding its
 initially loaded quality.
-For more information on this “initialization” step, you can consult <a href="../API/Initialization.html">the API
+For more information on this "initialization" step, you can consult <a href="../API/Initialization.html">the API
 documentation page dedicated to it, here</a>.</p>
-<p><a name="what_if_one_of_my_targeted_browser_don't_support_webassembly?"></a></p>
-<h2>What if one of my targeted browser don’t support WebAssembly?</h2>
+<a name="what-if-one-of-my-targeted-browser-dont-support-webassembly"></a><h2>What if one of my targeted browser don't support WebAssembly?</h2>
 <p>For now, the files exposed by the <code>WaspHlsPlayer</code> requires the compatibility
 with WebAssembly.</p>
 <p>Note however that tools exist to convert WebAssembly to JavaScript, the
-reference as of now being <a href="https://github.com/WebAssembly/binaryen">binaryen</a>’s
+reference as of now being <a href="https://github.com/WebAssembly/binaryen">binaryen</a>'s
 <code>wasm2js</code> tool.</p>
-<p>With it, you may convert the <code>WaspHlsPlayer</code>’s WebAssembly file to JavaScript
-and provide some bindings yourself (it shouldn’t be too hard, though automating
+<p>With it, you may convert the <code>WaspHlsPlayer</code>'s WebAssembly file to JavaScript
+and provide some bindings yourself (it shouldn't be too hard, though automating
 it to facilitate migration to new <code>WaspHlsPlayer</code> versions might take some more
 work), to also support environments not compatible with WebAssembly.</p>
-</body></html><nav class="next-previous-page-wrapper" aria-label="Navigate between pages"><div class="next-or-previous-page"><a class="next-or-previous-page-link" href="./Welcome.html"><div class="next-or-previous-page-link-label">Previous</div><div class="next-or-previous-page-link-name">Welcome</div></a></div><div class="next-or-previous-page next-page"></div></nav></div><div class="tocbar-wrapper"><div class="tocbar"><p><a href="#creating_a_new_wasphlsplayer">Creating a new WaspHlsPlayer</a></p>
+</body></html><nav class="next-previous-page-wrapper" aria-label="Navigate between pages"><div class="next-or-previous-page"><a class="next-or-previous-page-link" href="./Welcome.html"><div class="next-or-previous-page-link-label">Previous</div><div class="next-or-previous-page-link-name">Welcome</div></a></div><div class="next-or-previous-page next-page"></div></nav></div><div class="tocbar-wrapper"><div class="tocbar"><p><a href="#creating-a-new-wasphlsplayer">Creating a new WaspHlsPlayer</a></p>
 <ul>
 <li><a href="#instantiation">Instantiation</a></li>
-<li><a href="#wasphlsplayer_initialization">WaspHlsPlayer initialization</a></li>
-<li><a href="#what_if_one_of_my_targeted_browser_don't_support_webassembly?">What if one of my targeted browser don’t support WebAssembly?</a></li>
+<li><a href="#wasphlsplayer-initialization">WaspHlsPlayer initialization</a></li>
+<li><a href="#what-if-one-of-my-targeted-browser-dont-support-webassembly">What if one of my targeted browser don't support WebAssembly?</a></li>
 </ul>
 </div></div></div></div><div class="hamburger-bar"><div class="hamburger-header"><span class="hamburger-title">Page List</span><button aria-label="Close website index" type="button" class="hamburger-bar-closer"><svg viewBox="0 0 15 15" width="21" height="21"><g stroke="black" stroke-width="1.2"><path d="M.75.75l13.5 13.5M14.25.75L.75 14.25"></path></g></svg></button></div><ul class="page-list-wrapper"><li class="page-list-item"><div class="page-list-group opened active">Getting Started</div><ul class="page-list-cat-group"><li class="page-list-item"><a href="./Welcome.html">Welcome</a></li>
 <li class="page-list-item active"><a href="./Creating_a_WaspHlsPlayer.html">Creating a WaspHlsPlayer</a></li></ul></li>
@@ -128,13 +124,17 @@ work), to also support environments not compatible with WebAssembly.</p>
 <li class="page-list-item"><a href="../API/Playback_Information/isRebuffering.html">isRebuffering</a></li>
 <li class="page-list-item"><a href="../API/Playback_Information/isEnded.html">isEnded</a></li>
 <li class="page-list-item"><a href="../API/Playback_Information/isLive.html">isLive</a></li>
-<li class="page-list-item"><a href="../API/Playback_Information/isVod.html">isVod</a></li></ul></li>
+<li class="page-list-item"><a href="../API/Playback_Information/isVod.html">isVod</a></li>
+<li class="page-list-item"><a href="../API/Playback_Information/usesProgramDateTime.html">usesProgramDateTime</a></li></ul></li>
 <li><div class="page-list-item page-list-group">Position Control</div><ul class="page-list-group-group"><li class="page-list-item"><a href="../API/Position_Control/getPosition.html">getPosition</a></li>
 <li class="page-list-item"><a href="../API/Position_Control/seek.html">seek</a></li>
 <li class="page-list-item"><a href="../API/Position_Control/getMinimumPosition.html">getMinimumPosition</a></li>
 <li class="page-list-item"><a href="../API/Position_Control/getMaximumPosition.html">getMaximumPosition</a></li>
 <li class="page-list-item"><a href="../API/Position_Control/getMediaDuration.html">getMediaDuration</a></li>
-<li class="page-list-item"><a href="../API/Position_Control/getMediaOffset.html">getMediaOffset</a></li></ul></li>
+<li class="page-list-item"><a href="../API/Position_Control/getMediaOffset.html">getMediaOffset</a></li>
+<li class="page-list-item"><a href="../API/Position_Control/getSeekableMinimumPosition.html">getSeekableMinimumPosition</a></li>
+<li class="page-list-item"><a href="../API/Position_Control/getSeekableMaximumPosition.html">getSeekableMaximumPosition</a></li>
+<li class="page-list-item"><a href="../API/Position_Control/positionToDate.html">positionToDate</a></li></ul></li>
 <li><div class="page-list-item page-list-group">Speed Control</div><ul class="page-list-group-group"><li class="page-list-item"><a href="../API/Speed_Control/setSpeed.html">setSpeed</a></li>
 <li class="page-list-item"><a href="../API/Speed_Control/getSpeed.html">getSpeed</a></li></ul></li>
 <li><div class="page-list-item page-list-group">Variant Selection</div><ul class="page-list-group-group"><li class="page-list-item"><a href="../API/Variant_Selection/getCurrentVariant.html">getCurrentVariant</a></li>
@@ -147,4 +147,4 @@ work), to also support environments not compatible with WebAssembly.</p>
 <li class="page-list-item"><a href="../API/Audio_Track_Selection/setAudioTrack.html">setAudioTrack</a></li></ul></li></ul></li>
 <li class="page-list-item"><a href="https://peaberberian.github.io/wasp-hls/index.html">Demo</a></li>
 
-<li class="page-list-item"><a aria-label="Link to repository" href="https://github.com/peaBerberian/wasp-hls"><svg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'><path d='M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12'/></svg></a></li></ul></div><script type="text/javascript" src="../scripts/lunr.js" charset="utf-8"></script><script type="text/javascript" src="../scripts/script.js" charset="utf-8"></script></body></html>
+<li class="page-list-item"><a aria-label="Link to repository" href="https://github.com/peaBerberian/wasp-hls"><svg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'><path d='M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12'/></svg></a></li></ul></div><script type="text/javascript" src="../scripts/fuse.js" charset="utf-8"></script><script type="text/javascript" src="../scripts/script.js" charset="utf-8"></script></body></html>
