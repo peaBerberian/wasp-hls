@@ -61,6 +61,7 @@ import {
   getIsobmfTimeInfo,
 } from "./isobmff-utils.js";
 import postMessageToMain from "./postMessage.js";
+import { recordTransmuxProfile } from "./transmux-profiling.js";
 import {
   createTransmuxer,
   getFmp4Type,
@@ -825,11 +826,12 @@ export function addSourceBuffer(
       if (shouldTransmux(typ)) {
         mimeType = getTransmuxedType(typ, mediaType);
       }
+      const transmuxer = mimeType === typ ? null : createTransmuxer();
       const sourceBufferId = nextSourceBufferId;
       sourceBuffers.push({
         lastInitTrackInfoByTrackId: undefined,
         id: sourceBufferId,
-        transmuxer: mimeType === typ ? null : createTransmuxer(),
+        transmuxer,
         sourceBuffer: null,
         mediaType,
       });
@@ -872,13 +874,14 @@ export function addSourceBuffer(
         mimeType = getTransmuxedType(typ, mediaType);
       }
       const sourceBuffer = mediaSource.addSourceBuffer(mimeType);
+      const transmuxer = mimeType === typ ? null : createTransmuxer();
       const sourceBufferId = nextSourceBufferId;
       const queuedSourceBuffer = new QueuedSourceBuffer(sourceBuffer);
       sourceBuffers.push({
         lastInitTrackInfoByTrackId: undefined,
         id: sourceBufferId,
         sourceBuffer: queuedSourceBuffer,
-        transmuxer: mimeType === typ ? null : createTransmuxer(),
+        transmuxer,
         mediaType,
       });
       contentInfo.mediaSourceObj.nextSourceBufferId++;
@@ -964,6 +967,8 @@ export function appendBuffer(
   const sourceBufferObj = mediaSourceObj.sourceBuffers[sourceBufferObjIdx];
   if (sourceBufferObj.transmuxer !== null) {
     try {
+      const inputBytes = segment.byteLength;
+      const startTime = monotonicNow();
       const dtsHint = combineSafeTimeValue(
         segmentHints.baseDecodeTimeStartHi,
         segmentHints.baseDecodeTimeStartLo,
@@ -978,8 +983,15 @@ export function appendBuffer(
           },
         },
       );
+      const durationMs = monotonicNow() - startTime;
       if (transmuxedData !== null) {
         segment = transmuxedData.data;
+        recordTransmuxProfile({
+          durationMs,
+          inputBytes,
+          outputBytes: transmuxedData.data.byteLength,
+          mediaType: sourceBufferObj.mediaType,
+        });
         if (transmuxedData.timingInfo !== undefined) {
           if (logger.hasLevel(LogLevel.Debug)) {
             const startString = (
