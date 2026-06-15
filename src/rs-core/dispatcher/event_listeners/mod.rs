@@ -6,7 +6,7 @@ use crate::{
         MediaSourceReadyState, PlaybackTickReason, PushedSegmentErrorCode, RequestId, ResourceId,
         SourceBufferId, TimerId, TimerReason,
     },
-    dispatcher::Dispatcher,
+    dispatcher::{Dispatcher, UNKNOWN_REQUEST_SIZE},
     utils::{logger::*, url::Url},
 };
 
@@ -70,6 +70,18 @@ impl Dispatcher {
         status: Option<u32>,
     ) {
         self.on_request_failed_core(request_id, has_timeouted, status);
+    }
+
+    /// The JS code should call this method whenever progress is made on an HTTP(S) request
+    /// started with `jsFetch`.
+    pub fn on_request_progress(
+        &mut self,
+        request_id: RequestId,
+        bytes_loaded: u32,
+        bytes_total: Option<u32>,
+        duration_ms: f64,
+    ) {
+        self.on_request_progress_core(request_id, bytes_loaded, bytes_total, duration_ms);
     }
 
     /// The JS code should call this method when the MediaSource's readyState changed.
@@ -451,6 +463,26 @@ pub extern "C" fn __web_event__request_failed(
         } else {
             Some(status)
         },
+    );
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn __web_event__request_progress(
+    dispatcher_ptr: u32,
+    request_id: RequestId,
+    bytes_loaded: u32,
+    bytes_total: u32,
+    duration_ms: f64,
+) {
+    dispatcher_mut(dispatcher_ptr).on_request_progress(
+        request_id,
+        bytes_loaded,
+        if bytes_total == UNKNOWN_REQUEST_SIZE {
+            None
+        } else {
+            Some(bytes_total)
+        },
+        duration_ms,
     );
 }
 

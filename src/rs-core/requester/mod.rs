@@ -291,6 +291,18 @@ pub(crate) struct SegmentRequestInfo {
     /// In that case, the `host_id` corresponds to the one of the previous request
     /// and should not be relied on.
     is_waiting_for_retry: bool,
+
+    /// Number of bytes received so far for this request, based on progress callbacks.
+    bytes_loaded: u32,
+
+    /// Total number of bytes expected for this request when known.
+    bytes_total: Option<u32>,
+
+    /// Milliseconds elapsed since the request started for the latest progress callback.
+    progress_duration_ms: f64,
+
+    /// Number of progress samples that advanced the request.
+    progress_samples: u32,
 }
 
 impl SegmentRequestInfo {
@@ -324,6 +336,22 @@ impl SegmentRequestInfo {
 
     pub(crate) fn is_waiting_for_retry(&self) -> bool {
         self.is_waiting_for_retry
+    }
+
+    pub(crate) fn bytes_loaded(&self) -> u32 {
+        self.bytes_loaded
+    }
+
+    pub(crate) fn bytes_total(&self) -> Option<u32> {
+        self.bytes_total
+    }
+
+    pub(crate) fn progress_duration_ms(&self) -> f64 {
+        self.progress_duration_ms
+    }
+
+    pub(crate) fn progress_samples(&self) -> u32 {
+        self.progress_samples
     }
 }
 
@@ -466,6 +494,39 @@ impl Requester {
             || self.segment_waiting_queue.iter().any(|s| {
                 s.lane_tag == lane_tag && &s.url == url && s.byte_range.as_ref() == byte_range
             })
+    }
+
+    /// Returns the currently in-flight segment request for the given media type, if any.
+    pub(crate) fn pending_segment_request(
+        &self,
+        media_type: MediaType,
+    ) -> Option<&SegmentRequestInfo> {
+        let lane_tag = RequestLaneTag::from_media_type(media_type);
+        self.pending_segment_requests
+            .iter()
+            .find(|request| request.lane_tag == lane_tag && !request.is_waiting_for_retry)
+    }
+
+    /// Update the progress information of a currently in-flight request.
+    pub(crate) fn on_segment_request_progress(
+        &mut self,
+        host_id: RequestId,
+        bytes_loaded: u32,
+        bytes_total: Option<u32>,
+        duration_ms: f64,
+    ) {
+        if let Some(request) = self
+            .pending_segment_requests
+            .iter_mut()
+            .find(|request| request.host_id == host_id && !request.is_waiting_for_retry)
+        {
+            if bytes_loaded > request.bytes_loaded {
+                request.progress_samples = request.progress_samples.saturating_add(1);
+            }
+            request.bytes_loaded = bytes_loaded;
+            request.bytes_total = bytes_total.filter(|total| *total > 0);
+            request.progress_duration_ms = duration_ms.max(0.);
+        }
     }
 
     /// Fetch a segment in the right format through the given `url`.
@@ -993,6 +1054,10 @@ impl Requester {
             caller_id,
             attempts_failed: 0,
             is_waiting_for_retry: false,
+            bytes_loaded: 0,
+            bytes_total: None,
+            progress_duration_ms: 0.,
+            progress_samples: 0,
         });
     }
 
