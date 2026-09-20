@@ -264,9 +264,20 @@ impl JsTimeRanges {
 impl Index<usize> for JsTimeRanges {
     type Output = [f64; 2];
     fn index(&self, index: usize) -> &Self::Output {
-        self.buffered.as_slice()[index..index + 1]
-            .try_into()
-            .unwrap()
+        &self.buffered.as_slice().as_chunks::<2>().0[index]
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::JsTimeRanges;
+
+    #[test]
+    fn indexes_start_end_pairs() {
+        let ranges = JsTimeRanges::new(vec![1.0, 2.0, 3.0, 4.0]);
+
+        assert_eq!(ranges[0], [1.0, 2.0]);
+        assert_eq!(ranges[1], [3.0, 4.0]);
     }
 }
 
