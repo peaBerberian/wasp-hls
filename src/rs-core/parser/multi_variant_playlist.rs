@@ -75,12 +75,9 @@ impl MultivariantPlaylist {
                 return Err(MultivariantPlaylistParsingError::Unknown);
             }
         }
-        loop {
-            let Some(str_line) = read_playlist_line(&mut playlist, &mut line_bytes)
-                .map_err(|_| MultivariantPlaylistParsingError::UnableToReadLine)?
-            else {
-                break;
-            };
+        while let Some(str_line) = read_playlist_line(&mut playlist, &mut line_bytes)
+            .map_err(|_| MultivariantPlaylistParsingError::UnableToReadLine)?
+        {
             if str_line.is_empty() {
                 continue;
             } else if let Some(stripped) = str_line.strip_prefix("#EXT") {

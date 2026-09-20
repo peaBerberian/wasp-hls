@@ -180,12 +180,9 @@ impl MediaPlaylist {
         let mut seen_singleton_tags = HashSet::new();
 
         let mut line_bytes = Vec::new();
-        loop {
-            let Some(str_line) = read_playlist_line(&mut playlist, &mut line_bytes)
-                .map_err(|_| MediaPlaylistParsingError::UnableToReadLine)?
-            else {
-                break;
-            };
+        while let Some(str_line) = read_playlist_line(&mut playlist, &mut line_bytes)
+            .map_err(|_| MediaPlaylistParsingError::UnableToReadLine)?
+        {
             if str_line.is_empty() {
                 continue;
             } else if let Some(stripped) = str_line.strip_prefix("#EXT") {
