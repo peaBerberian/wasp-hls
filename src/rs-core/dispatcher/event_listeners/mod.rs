@@ -1,4 +1,4 @@
-use std::{iter::Map, ops::Index, slice::Chunks, vec};
+use std::{iter::Map, ops::Index, slice::Chunks};
 
 use crate::{
     bindings::{
@@ -214,9 +214,9 @@ impl JsMemoryBlob {
         self.id
     }
 
-    /// Actually obtain the data behind this `JsMemoryBlob`, as a Vec of bytes.
-    pub fn obtain(self) -> Vec<u8> {
-        jsGetResourceData(self.id).unwrap_or(vec![])
+    /// Obtain the data behind this `JsMemoryBlob`, if the resource still exists.
+    pub fn obtain(self) -> Option<Vec<u8>> {
+        jsGetResourceData(self.id)
     }
 }
 

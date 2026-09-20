@@ -200,7 +200,16 @@ impl Dispatcher {
                 self.on_segment_fetch_success(seg_info, data, resource_size, duration_ms)
             }
             Some(FinishedRequestType::Playlist(pl_info)) => {
-                self.on_playlist_fetch_success(pl_info, data.obtain(), final_url)
+                if let Some(playlist_data) = data.obtain() {
+                    self.on_playlist_fetch_success(pl_info, playlist_data, final_url);
+                } else {
+                    jsSendOtherError(
+                        true,
+                        OtherErrorCode::Unknown,
+                        "Playlist response data was missing from JS memory",
+                    );
+                    self.stop_current_content();
+                }
             }
             None => log_warn!("Core: Unknown request finished"),
         }
