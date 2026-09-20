@@ -22,11 +22,9 @@
  *
  * == How?
  *
- * The exact way may seem pretty ugly: We're here converting the whole
- * WebAssembly binary file into a `Uint8Array` construction, then creating a
- * local URL through the `Object.createObjectURL` Web API to make it point to
- * that Uint8Array with the right `"application/wasm"` Content-Type, and then
- * export the URL.
+ * We encode the WebAssembly file as base64, decode it into a `Uint8Array` at
+ * module evaluation, and create a local Blob URL with the right
+ * `"application/wasm"` Content-Type.
  *
  * This leads to a gigantic multi-megas file size, though it should compress
  * pretty well.
@@ -36,7 +34,7 @@
  * URL (it basically still is).
  */
 
-import fs from "fs";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "path";
 
 if (process.argv.includes("--help") || process.argv.includes("-h")) {
@@ -57,29 +55,18 @@ const destinationDeclPath = path.join(destinationDirPath, "wasm.d.ts");
 const declarationFile = `declare const EmbeddedWasm: string;
 export default EmbeddedWasm;`;
 
-const codePrefix = "const blobURL = URL.createObjectURL(new Blob([";
-const codeSuffix = `], { type: "application/wasm" }));
+const wasmData = await readFile(originalWasmFilePath);
+const base64 = JSON.stringify(wasmData.toString("base64"));
+const content = `const binary = atob(${base64});
+const bytes = new Uint8Array(binary.length);
+for (let i = 0; i < binary.length; i++) {
+  bytes[i] = binary.charCodeAt(i);
+}
+const blobURL = URL.createObjectURL(new Blob([bytes], { type: "application/wasm" }));
 export default blobURL;`;
 
-fs.readFile(originalWasmFilePath, { encoding: null }, function (err, data) {
-  if (err) {
-    console.error(`Error while reading "${originalWasmFilePath}":`, err);
-  } else {
-    fs.mkdirSync(destinationDirPath, { recursive: true });
-    const u8Arr = new Uint8Array(data);
-    const jsDataStr = `new Uint8Array([${u8Arr.toString()}])`;
-    const content = codePrefix + jsDataStr + codeSuffix;
-    fs.writeFile(destinationJsPath, content, (err) => {
-      if (err) {
-        console.error(`Error while writing "${destinationJsPath}":`, err);
-      }
-      // file written successfully
-    });
-    fs.writeFile(destinationDeclPath, declarationFile, (err) => {
-      if (err) {
-        console.error(`Error while writing "${destinationDeclPath}":`, err);
-      }
-      // file written successfully
-    });
-  }
-});
+await mkdir(destinationDirPath, { recursive: true });
+await Promise.all([
+  writeFile(destinationJsPath, content),
+  writeFile(destinationDeclPath, declarationFile),
+]);
