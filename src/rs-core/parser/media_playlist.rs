@@ -748,6 +748,48 @@ mod tests {
     }
 
     #[test]
+    fn parses_large_media_playlist_without_losing_segment_sequence_or_timeline() {
+        let mut playlist =
+            String::from("#EXTM3U\n#EXT-X-TARGETDURATION:4\n#EXT-X-MEDIA-SEQUENCE:5000\n");
+        for index in 0..2048 {
+            playlist.push_str(&format!("#EXTINF:4,\nseg-{index}.ts\n"));
+        }
+        playlist.push_str("#EXT-X-ENDLIST\n");
+
+        let parsed = parse_media_playlist(&playlist).unwrap();
+        let segments = parsed.segment_list().media();
+        assert_eq!(segments.len(), 2048);
+        for index in [0, 1, 1024, 2047] {
+            let segment = &segments[index];
+            assert_eq!(segment.sequence(), 5000 + index as u32);
+            assert_eq!(segment.start(), (index * 4) as f64);
+            assert_eq!(segment.end(), ((index + 1) * 4) as f64);
+            assert_eq!(
+                segment.url().get_ref(),
+                format!("https://example.com/seg-{index}.ts")
+            );
+        }
+        assert!(!parsed.may_be_refreshed());
+    }
+
+    #[test]
+    fn keeps_explicit_and_implicit_byte_range_offsets() {
+        let parsed = parse_media_playlist(
+            "#EXTM3U\n#EXT-X-TARGETDURATION:4\n\
+             #EXTINF:4,\n#EXT-X-BYTERANGE:100@25\nsegment.ts\n\
+             #EXTINF:4,\n#EXT-X-BYTERANGE:75\nsegment.ts\n",
+        )
+        .unwrap();
+
+        let segments = parsed.segment_list().media();
+        assert_eq!(segments.len(), 2);
+        let first = segments[0].byte_range().unwrap();
+        let second = segments[1].byte_range().unwrap();
+        assert_eq!((first.first_byte, first.last_byte), (25, 124));
+        assert_eq!((second.first_byte, second.last_byte), (125, 199));
+    }
+
+    #[test]
     fn rejects_duplicate_singleton_tags() {
         let err = parse_media_playlist(
             r#"#EXTM3U
