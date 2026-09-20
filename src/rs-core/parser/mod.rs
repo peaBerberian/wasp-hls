@@ -3,6 +3,7 @@ mod audio_track_list;
 mod media_playlist;
 mod media_tag;
 mod multi_variant_playlist;
+mod playlist_lines;
 mod segment_list;
 mod timeline_sync;
 mod top_level_playlist;

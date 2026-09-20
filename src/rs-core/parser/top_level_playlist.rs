@@ -246,10 +246,8 @@ pub fn classify_playlist(data: &[u8]) -> PlaylistKind {
     let mut first_non_empty_line = true;
 
     for line in data.split(|b| *b == b'\n') {
-        let line = match std::str::from_utf8(line) {
-            Ok(l) => l.trim(),
-            Err(_) => continue,
-        };
+        let decoded = String::from_utf8_lossy(line);
+        let line = decoded.trim();
 
         if line.is_empty() {
             continue;
@@ -303,6 +301,14 @@ mod tests {
     fn classifies_media_playlist_input() {
         assert_eq!(
             classify_playlist(b"#EXTM3U\n#EXT-X-TARGETDURATION:4\n#EXTINF:4,\nseg.ts\n"),
+            PlaylistKind::Media
+        );
+    }
+
+    #[test]
+    fn classifies_media_playlist_with_invalid_utf8_in_tag_value() {
+        assert_eq!(
+            classify_playlist(b"#EXTM3U\n#EXT-X-TARGETDURATION:4\xff\n#EXTINF:4,\nseg.ts\n"),
             PlaylistKind::Media
         );
     }

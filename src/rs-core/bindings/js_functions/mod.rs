@@ -839,6 +839,9 @@ impl From<MediaPlaylistUpdateError> for MediaPlaylistParsingErrorCode {
             MediaPlaylistUpdateError::ParsingError(
                 MediaPlaylistParsingError::VariableDefinition(_),
             ) => MediaPlaylistParsingErrorCode::VariableDefinitionError,
+            MediaPlaylistUpdateError::ParsingError(MediaPlaylistParsingError::UnableToReadLine) => {
+                MediaPlaylistParsingErrorCode::Unknown
+            }
             MediaPlaylistUpdateError::NotFound => MediaPlaylistParsingErrorCode::Unknown,
         }
     }

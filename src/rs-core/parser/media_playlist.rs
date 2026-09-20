@@ -1,6 +1,7 @@
 use super::{
     attribute_list::{parse_enumerated_string, AttributeListIter},
     multi_variant_playlist::MediaPlaylistContext,
+    playlist_lines::read_playlist_line,
     segment_list::{InitSegmentInfo, MediaSegmentInfo, SegmentList, SegmentTimeInfo},
     timeline_sync::TimelineReference,
     top_level_playlist::ExternalMediaInfo,
@@ -45,6 +46,7 @@ pub(crate) enum MediaPlaylistParsingError {
     UriWithoutExtInf,
     DuplicateTag,
     ConflictingPlaylistTagTypes,
+    UnableToReadLine,
     VariableDefinition(VariableDefinitionError),
 }
 
@@ -81,6 +83,9 @@ impl fmt::Display for MediaPlaylistParsingError {
                     f,
                     "The Media Playlist contains Multivariant Playlist tags and must fail to parse"
                 )
+            }
+            MediaPlaylistParsingError::UnableToReadLine => {
+                write!(f, "Unable to read a line in the Media Playlist")
             }
         }
     }
@@ -142,7 +147,7 @@ impl MediaPlaylist {
     /// Create a new `MediaPlaylist` object, by giving it a `BufRead` reading into its
     /// corresponding Media Playlist file from its very beginning.
     pub(super) fn create(
-        playlist: impl BufRead,
+        mut playlist: impl BufRead,
         url: Url,
         prev_playlist: Option<&MediaPlaylist>,
         timeline_reference: Option<&TimelineReference>,
@@ -174,10 +179,12 @@ impl MediaPlaylist {
         let mut variable_store = VariableStore::from_url(&url);
         let mut seen_singleton_tags = HashSet::new();
 
-        let lines = playlist.lines();
-        for line in lines {
-            let Ok(str_line) = line else {
-                continue;
+        let mut line_bytes = Vec::new();
+        loop {
+            let Some(str_line) = read_playlist_line(&mut playlist, &mut line_bytes)
+                .map_err(|_| MediaPlaylistParsingError::UnableToReadLine)?
+            else {
+                break;
             };
             if str_line.is_empty() {
                 continue;
@@ -773,6 +780,43 @@ seg.ts
             err,
             Err(MediaPlaylistParsingError::ConflictingPlaylistTagTypes)
         ));
+    }
+
+    #[test]
+    fn keeps_segments_after_invalid_utf8_in_a_comment() {
+        let playlist =
+            b"#EXTM3U\n#EXT-X-TARGETDURATION:4\n# malformed \xff comment\n#EXTINF:4,\nseg.ts\n";
+        let parsed = MediaPlaylist::create(
+            Cursor::new(playlist),
+            Url::new("https://example.com/media.m3u8".to_owned()),
+            None,
+            None,
+            &MediaPlaylistContext::default(),
+        )
+        .unwrap();
+
+        let segments = parsed.segment_list().media();
+        assert_eq!(segments.len(), 1);
+        assert_eq!(segments[0].url().get_ref(), "https://example.com/seg.ts");
+    }
+
+    #[test]
+    fn keeps_invalid_utf8_in_its_segment_uri() {
+        let playlist =
+            b"#EXTM3U\n#EXT-X-TARGETDURATION:4\n#EXTINF:4,\nseg-\xff.ts\n#EXTINF:4,\nnext.ts\n";
+        let parsed = MediaPlaylist::create(
+            Cursor::new(playlist),
+            Url::new("https://example.com/media.m3u8".to_owned()),
+            None,
+            None,
+            &MediaPlaylistContext::default(),
+        )
+        .unwrap();
+
+        let segments = parsed.segment_list().media();
+        assert_eq!(segments.len(), 2);
+        assert!(segments[0].url().get_ref().contains('�'));
+        assert_eq!(segments[1].url().get_ref(), "https://example.com/next.ts");
     }
 
     #[test]

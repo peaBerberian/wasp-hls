@@ -2,6 +2,7 @@ use super::{
     audio_track_list::AudioTrackList,
     media_playlist::{MediaPlaylist, MediaPlaylistParsingError},
     media_tag::{MediaTag, MediaTagParsingError},
+    playlist_lines::read_playlist_line,
     timeline_sync::TimelineReference,
     top_level_playlist::{
         is_media_playlist_tag_name, is_media_segment_tag_name, is_multivariant_playlist_tag_name,
@@ -51,7 +52,7 @@ impl MultivariantPlaylist {
     /// Creates a new `MultivariantPlaylist` object by giving its entire content through a
     /// `BufRead` Abstraction.
     pub fn parse(
-        playlist: impl io::BufRead,
+        mut playlist: impl io::BufRead,
         url: Url,
     ) -> Result<Self, MultivariantPlaylistParsingError> {
         let mut last_id = 0u32;
@@ -64,18 +65,21 @@ impl MultivariantPlaylist {
         let mut variable_store = VariableStore::from_url(&url);
         let mut seen_singleton_tags = HashSet::new();
 
-        let mut lines = playlist.lines();
-        match lines.next() {
-            Some(Ok(x)) if x == "#EXTM3U" => {
+        let mut line_bytes = Vec::new();
+        let mut variant_line_bytes = Vec::new();
+        match read_playlist_line(&mut playlist, &mut line_bytes) {
+            Ok(Some(x)) if x == "#EXTM3U" => {
                 // Fine
             }
             _ => {
                 return Err(MultivariantPlaylistParsingError::Unknown);
             }
         }
-        while let Some(line) = lines.next() {
-            let Ok(str_line) = line else {
-                return Err(MultivariantPlaylistParsingError::UnableToReadLine);
+        loop {
+            let Some(str_line) = read_playlist_line(&mut playlist, &mut line_bytes)
+                .map_err(|_| MultivariantPlaylistParsingError::UnableToReadLine)?
+            else {
+                break;
             };
             if str_line.is_empty() {
                 continue;
@@ -125,18 +129,21 @@ impl MultivariantPlaylist {
                         Err(err) => return Err(err.into()),
                     },
                     "-X-STREAM-INF" => {
-                        let variant_url = match lines.next() {
-                            None => {
+                        let variant_url = match read_playlist_line(
+                            &mut playlist,
+                            &mut variant_line_bytes,
+                        ) {
+                            Ok(None) => {
                                 return Err(
                                     MultivariantPlaylistParsingError::MissingUriLineAfterVariant,
                                 )
                             }
-                            Some(Err(_)) => {
+                            Err(_) => {
                                 return Err(
                                     MultivariantPlaylistParsingError::UnableToReadVariantUri,
                                 )
                             }
-                            Some(Ok(l)) => {
+                            Ok(Some(l)) => {
                                 let trimmed = l.trim();
                                 if trimmed.is_empty() || trimmed.starts_with('#') {
                                     return Err(
@@ -792,6 +799,19 @@ pub(crate) enum MediaPlaylistUrlLocation {
 mod tests {
     use super::*;
     use std::io::Cursor;
+
+    #[test]
+    fn keeps_invalid_utf8_in_variant_uri() {
+        let playlist = b"#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1000\nvariant-\xff.m3u8\n";
+        let parsed = MultivariantPlaylist::parse(
+            Cursor::new(playlist),
+            Url::new("https://example.com/master.m3u8".to_owned()),
+        )
+        .unwrap();
+
+        assert_eq!(parsed.variants.len(), 1);
+        assert!(parsed.variants[0].url().get_ref().contains('�'));
+    }
 
     #[test]
     fn substitutes_multivariant_variables_in_variant_and_media_tags() {
