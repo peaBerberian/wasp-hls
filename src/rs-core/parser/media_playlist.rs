@@ -176,7 +176,9 @@ impl MediaPlaylist {
 
         let lines = playlist.lines();
         for line in lines {
-            let str_line = line.unwrap();
+            let Ok(str_line) = line else {
+                continue;
+            };
             if str_line.is_empty() {
                 continue;
             } else if let Some(stripped) = str_line.strip_prefix("#EXT") {

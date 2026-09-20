@@ -229,13 +229,12 @@ pub fn parse_byte_range(
     }
 
     if i + 1 >= value.len() {
-        if let Some(base) = prev_byte_base {
+        {
+            let base = prev_byte_base?;
             return Some(ByteRange {
                 first_byte: base,
                 last_byte: base + range_size - 1,
             });
-        } else {
-            return None;
         }
     }
     i += 1;

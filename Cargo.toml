@@ -9,3 +9,10 @@ path = "src/rs-core/lib.rs"
 
 [dependencies]
 thiserror = "2.0.18"
+
+[lints.clippy]
+# unwrap_used      = "warn"
+# expect_used      = "warn"
+# panic            = "warn"
+# indexing_slicing = "warn"
+# arithmetic_side_effects = "warn"
