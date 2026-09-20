@@ -57,7 +57,9 @@ jobs:
 
       - name: Set up Rust
         run: |
-          rustup target add wasm32-unknown-unknown
+          rustup toolchain install nightly --profile minimal --component rust-src
+          rustup target add --toolchain nightly wasm32-unknown-unknown
+          bash ./scripts/install_binaryen.sh
           rustup component add clippy
 
       - name: Cache cargo registry
@@ -111,7 +113,10 @@ jobs:
           cache: npm
 
       - name: Set up Rust
-        run: rustup target add wasm32-unknown-unknown
+        run: |
+          rustup toolchain install nightly --profile minimal --component rust-src
+          rustup target add --toolchain nightly wasm32-unknown-unknown
+          bash ./scripts/install_binaryen.sh
 
       - name: Cache cargo registry
         uses: actions/cache@v4
@@ -161,7 +166,10 @@ jobs:
           cache: npm
 
       - name: Set up Rust
-        run: rustup target add wasm32-unknown-unknown
+        run: |
+          rustup toolchain install nightly --profile minimal --component rust-src
+          rustup target add --toolchain nightly wasm32-unknown-unknown
+          bash ./scripts/install_binaryen.sh
 
       - name: Cache cargo registry
         uses: actions/cache@v4
@@ -243,7 +251,10 @@ jobs:
           cache: npm
 
       - name: Set up Rust
-        run: rustup target add wasm32-unknown-unknown
+        run: |
+          rustup toolchain install nightly --profile minimal --component rust-src
+          rustup target add --toolchain nightly wasm32-unknown-unknown
+          bash ./scripts/install_binaryen.sh
 
       - name: Cache cargo registry
         uses: actions/cache@v4
@@ -384,7 +395,10 @@ jobs:
           cache: npm
 
       - name: Set up Rust
-        run: rustup target add wasm32-unknown-unknown
+        run: |
+          rustup toolchain install nightly --profile minimal --component rust-src
+          rustup target add --toolchain nightly wasm32-unknown-unknown
+          bash ./scripts/install_binaryen.sh
 
       - name: Cache cargo registry
         uses: actions/cache@v4

@@ -26,11 +26,21 @@ export async function buildWasm(root, { release, skipGenerate = false }) {
   await exec(
     "cargo",
     [
+      "+nightly",
       "build",
+      "-Zbuild-std=std,panic_abort",
       ...(release ? ["--release"] : []),
       "--target=wasm32-unknown-unknown",
     ],
-    { cwd: root },
+    {
+      cwd: root,
+      env: {
+        ...process.env,
+        RUSTFLAGS: [process.env.RUSTFLAGS, "-Ctarget-cpu=mvp"]
+          .filter(Boolean)
+          .join(" "),
+      },
+    },
   );
   const mode = release ? "release" : "debug";
   const source = join(
@@ -57,6 +67,14 @@ export async function buildWasm(root, { release, skipGenerate = false }) {
       cwd: root,
     });
   }
+  reportStep("BUILD", "Validating WebAssembly MVP features...");
+  await exec(
+    NODE,
+    ["./scripts/check_wasm_features.mjs", "build/wasp_hls_bg.wasm"],
+    {
+      cwd: root,
+    },
+  );
 }
 
 /**

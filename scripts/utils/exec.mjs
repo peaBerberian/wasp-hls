@@ -7,7 +7,7 @@ import { spawn } from "child_process";
 /**
  * @param {string} commandName
  * @param {string[]} args
- * @param {{ cwd?: string, stdio?: "inherit" | "pipe" | "ignore" }} [options]
+ * @param {{ cwd?: string, stdio?: "inherit" | "pipe" | "ignore", env?: NodeJS.ProcessEnv }} [options]
  */
 export function exec(commandName, args, options = {}) {
   return /** @type {Promise<void>} */ (
@@ -15,6 +15,7 @@ export function exec(commandName, args, options = {}) {
       const child = spawn(commandName, args, {
         cwd: options.cwd,
         stdio: options.stdio ?? "inherit",
+        env: options.env,
       });
       child.on("error", reject);
       child.on("exit", (code, signal) => {

@@ -78,7 +78,9 @@ jobs:
 
       - name: Set up Rust
         run: |
-          rustup target add wasm32-unknown-unknown
+          rustup toolchain install nightly --profile minimal --component rust-src
+          rustup target add --toolchain nightly wasm32-unknown-unknown
+          bash ./scripts/install_binaryen.sh
           rustup component add rustfmt
           rustup component add clippy
 
@@ -112,7 +114,10 @@ jobs:
           cache: npm
 
       - name: Set up Rust
-        run: rustup target add wasm32-unknown-unknown
+        run: |
+          rustup toolchain install nightly --profile minimal --component rust-src
+          rustup target add --toolchain nightly wasm32-unknown-unknown
+          bash ./scripts/install_binaryen.sh
 
       - name: Install wasm-bindgen-cli
         run: cargo install wasm-bindgen-cli --version ${{ env.WASM_BINDGEN_CLI_VERSION }} --locked --force
@@ -151,7 +156,10 @@ jobs:
           cache: npm
 
       - name: Set up Rust
-        run: rustup target add wasm32-unknown-unknown
+        run: |
+          rustup toolchain install nightly --profile minimal --component rust-src
+          rustup target add --toolchain nightly wasm32-unknown-unknown
+          bash ./scripts/install_binaryen.sh
 
       - name: Install wasm-bindgen-cli
         run: cargo install wasm-bindgen-cli --version ${{ env.WASM_BINDGEN_CLI_VERSION }} --locked --force
@@ -220,7 +228,9 @@ jobs:
 
       - name: Set up Rust
         run: |
-          rustup target add wasm32-unknown-unknown
+          rustup toolchain install nightly --profile minimal --component rust-src
+          rustup target add --toolchain nightly wasm32-unknown-unknown
+          bash ./scripts/install_binaryen.sh
           rustup component add rustfmt
           rustup component add clippy
 
@@ -269,7 +279,9 @@ jobs:
 
       - name: Set up Rust
         run: |
-          rustup target add wasm32-unknown-unknown
+          rustup toolchain install nightly --profile minimal --component rust-src
+          rustup target add --toolchain nightly wasm32-unknown-unknown
+          bash ./scripts/install_binaryen.sh
           rustup component add rustfmt
           rustup component add clippy
 
