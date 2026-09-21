@@ -19,5 +19,5 @@
     "rewriteRelativeImportExtensions": true
   },
   "files": ["../mse-in-worker.d.ts"],
-  "include": ["./*.ts", "./**/*.ts", "../ts-common/**/*.ts"]
+  "include": ["./*.ts", "./**/*.ts", "../ts-common/**/*.ts", "../wasm/**/*.ts"]
 }
