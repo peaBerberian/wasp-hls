@@ -277,6 +277,7 @@ export function runTestWorkerBootstrap(config) {
             status: action.status ?? 200,
             headers: action.headers,
           });
+          Object.defineProperty(response, "url", { value: url });
           postTelemetry({
             type: "fetch-resolve",
             requestId,

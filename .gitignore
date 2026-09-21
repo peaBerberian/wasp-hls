@@ -9,6 +9,10 @@
 !/build/favicon.png
 
 /tests/testing-lib/simple-test-bundle.js
+/tests/performance/current.js
+/tests/performance/previous.js
+/tests/performance/control-current.js
+/tests/performance/node_modules
 
 /localhost.crt
 /localhost.key

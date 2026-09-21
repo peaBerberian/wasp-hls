@@ -1,0 +1,97 @@
+name: Performance tests
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  workflow_dispatch:
+    inputs:
+      browser:
+        description: Browser used for the comparison
+        required: true
+        default: chrome
+        type: choice
+        options:
+          - chrome
+          - firefox
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+
+env:
+  PERF_BASE_BRANCH: ${{ github.base_ref || 'main' }}
+  PERF_BROWSER: ${{ inputs.browser || 'chrome' }}
+
+jobs:
+  performance:
+    if: ${{ github.event_name != 'pull_request' || !contains(github.event.pull_request.labels.*.name, 'skip-performance-checks') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      WASP_HLS_PERF_CONTROL_ITERATIONS: 40
+      WASP_HLS_PERF_TREATMENT_ITERATIONS: 40
+      WASP_HLS_PERF_INNER_ITERATIONS: 8
+
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Set up Rust
+        run: |
+          rustup toolchain install nightly --profile minimal --component rust-src
+          rustup target add --toolchain nightly wasm32-unknown-unknown
+          bash ./scripts/install_binaryen.sh
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg xvfb
+
+      - name: Install JavaScript dependencies
+        run: npm ci
+
+      - name: Run performance tests
+        run: |
+          export DISPLAY=:99
+          Xvfb -ac :99 -screen 0 1280x1024x24 > /dev/null 2>&1 &
+          npm run test -- performance \
+            --branch "$PERF_BASE_BRANCH" \
+            --remote-git-url https://github.com/peaBerberian/wasp-hls.git \
+            --browser "$PERF_BROWSER" \
+            --report perf-report.md
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: performance-report-${{ env.PERF_BROWSER }}
+          path: perf-report.md
+          if-no-files-found: ignore
+
+      - name: Post pull request report
+        # Fork and Dependabot PR tokens cannot write comments; reports remain available as artifacts.
+        if: always() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]'
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const { existsSync, readFileSync } = require("fs");
+            if (!existsSync("perf-report.md")) {
+              return;
+            }
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: readFileSync("perf-report.md", "utf8"),
+            });

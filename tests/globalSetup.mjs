@@ -7,6 +7,7 @@ let started = false;
 
 /**
  * Peform actions we want to setup before tests.
+ * TODO Share with performance tests?
  */
 export async function setup() {
   if (started) {

@@ -23,6 +23,7 @@ import {
   checkMain,
   checkRust,
   checkScripts,
+  checkTests,
   checkWorker,
 } from "./check.mjs";
 import { exec } from "../utils/exec.mjs";
@@ -32,6 +33,7 @@ import {
   testAll,
   testIntegration,
   testMemory,
+  testPerformance,
   testRust as runRustTests,
   testTransmux,
 } from "./test.mjs";
@@ -141,6 +143,10 @@ async function run() {
           await checkScripts(ROOT);
           reportSuccess("scripts checks");
           return;
+        case "tests":
+          await checkTests(ROOT);
+          reportSuccess("tests checks");
+          return;
         case "rust":
           await checkRust(ROOT);
           reportSuccess("Rust checks");
@@ -174,6 +180,11 @@ async function run() {
       return;
     }
     case "test": {
+      if (rest[0] === "performance") {
+        await testPerformance(ROOT, rest.slice(1));
+        reportSuccess("Performance tests");
+        return;
+      }
       const options = parseTestArgs(rest);
       switch (options.scope ?? "all") {
         case "all":
@@ -345,7 +356,7 @@ function parseTestArgs(args) {
       case "--browser":
         index++;
         browser = args[index];
-        if (browser == null) {
+        if (browser == null || browser.startsWith("--")) {
           throw new Error(`Missing value for "${arg}".\n\n${helpText()}`);
         }
         break;
@@ -353,7 +364,7 @@ function parseTestArgs(args) {
         index++;
         {
           const filter = args[index];
-          if (filter == null) {
+          if (filter == null || filter.startsWith("--")) {
             throw new Error(`Missing value for "${arg}".\n\n${helpText()}`);
           }
           filters.push(filter);
@@ -449,6 +460,7 @@ Commands
     common      Check common TypeScript
     demo        Check demo TypeScript
     scripts     Check JSDoc-checked Node scripts with TypeScript
+    tests       Check tests with TypeScript
     rust        Run cargo clippy
 
   test [scope] [--filter <value>] [--watch] [--browser <name>]
@@ -457,9 +469,11 @@ Commands
     transmux    Run Node-based transmux tests
     integration Run browser integration tests
     memory      Run browser memory-leak tests on Chrome
+    performance Compare browser performance (excluded from the default run)
+               --branch, --report, --remote-git-url and port options are performance-only
                --filter is repeatable for scoped test runs
                --watch is supported for integration and transmux
-               --browser is supported for integration and memory
+               --browser is supported for integration, memory and performance
 
   fmt [--check]   Format Rust and JS/TS/Markdown
   generate        Regenerate wasm ABI enums
