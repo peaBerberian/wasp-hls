@@ -21,8 +21,9 @@ version of WebAssembly, to maximize compatibility.`);
 
 const root = join(import.meta.dirname, "..");
 const wasmFile = process.argv[2] ?? "build/wasp_hls_bg.wasm";
-const localWasmOpt = join(root, "tmp", "binaryen", "bin", "wasm-opt");
-const wasmOpt = existsSync(localWasmOpt) ? localWasmOpt : "wasm-opt";
+const wasmOptName = process.platform === "win32" ? "wasm-opt.exe" : "wasm-opt";
+const localWasmOpt = join(root, "tmp", "binaryen", "bin", wasmOptName);
+const wasmOpt = existsSync(localWasmOpt) ? localWasmOpt : wasmOptName;
 
 if (!existsSync(join(root, wasmFile))) {
   throw new Error(`WebAssembly file not found: ${wasmFile}`);

@@ -129,16 +129,16 @@ ensure tar xzf binaryen.tar.gz
 
 ensure mv binaryen-version_116 binaryen
 
-# TODO I don't know my windows, does that still work as an executable or is it just dumb?
+wasm_opt=wasm-opt
 if [ "${ostype}" = Windows ]; then
-  ensure cp binaryen/bin/wasm-opt.exe binaryen/bin/wasm-opt
+  wasm_opt=wasm-opt.exe
 fi
 
 rm binaryen.tar.gz
 cd ..
 
-if ! [ -f tmp/binaryen/bin/wasm-opt ]; then
-  err "Error after installing binaryen: wasm-opt not available in ./tmp/binaryen/bin/wasm-opt"
+if ! [ -f "tmp/binaryen/bin/$wasm_opt" ]; then
+  err "Error after installing binaryen: wasm-opt not available in ./tmp/binaryen/bin/$wasm_opt"
 fi
 
 log "Binaryen has been installed in $pwd/tmp/binaryen"
