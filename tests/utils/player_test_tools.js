@@ -14,10 +14,81 @@ export function getPlayerStateSnapshot(player, videoElement, lastPlayerError) {
     seekableMaximumPosition: player.getSeekableMaximumPosition(),
     usesProgramDateTime: player.usesProgramDateTime(),
     currentTime: videoElement.currentTime,
+    mediaPosition:
+      player.getMediaOffset() === undefined
+        ? undefined
+        : videoElement.currentTime - player.getMediaOffset(),
+    seeking: videoElement.seeking,
+    buffered: getTimeRanges(videoElement.buffered),
+    seekable: getTimeRanges(videoElement.seekable),
+    mediaError: videoElement.error && {
+      code: videoElement.error.code,
+      message: videoElement.error.message,
+    },
     readyState: videoElement.readyState,
     networkState: videoElement.networkState,
     paused: videoElement.paused,
     ended: videoElement.ended,
+  };
+}
+
+function getTimeRanges(ranges) {
+  return Array.from({ length: ranges?.length ?? 0 }, (_, index) => [
+    ranges.start(index),
+    ranges.end(index),
+  ]);
+}
+
+export function trackPlayerDiagnostics(
+  player,
+  videoElement,
+  lastPlayerErrorRef,
+) {
+  const startedAt = performance.now();
+  const firstEvents = [];
+  const recentEvents = [];
+  let eventCount = 0;
+  function record(event) {
+    const entry = {
+      event,
+      elapsedMs: performance.now() - startedAt,
+      ...getPlayerStateSnapshot(player, videoElement, lastPlayerErrorRef()),
+    };
+    eventCount++;
+    if (firstEvents.length < 16) firstEvents.push(entry);
+    else {
+      recentEvents.push(entry);
+      if (recentEvents.length > 16) recentEvents.shift();
+    }
+  }
+  const eventNames = [
+    "loadedmetadata",
+    "loadeddata",
+    "seeking",
+    "seeked",
+    "canplay",
+    "playing",
+    "waiting",
+    "stalled",
+    "error",
+  ];
+  const listeners = eventNames.map((name) => {
+    const listener = () => record(name);
+    videoElement.addEventListener(name, listener);
+    return [name, listener];
+  });
+  const onStateChange = (state) => record(`playerState:${state}`);
+  player.addEventListener("playerStateChange", onStateChange);
+  record("setup");
+  return {
+    finish() {
+      record("beforeDispose");
+      for (const [name, listener] of listeners) {
+        videoElement.removeEventListener(name, listener);
+      }
+      player.removeEventListener("playerStateChange", onStateChange);
+      return { eventCount, events: [...firstEvents, ...recentEvents] };
+    },
   };
 }
 
@@ -50,7 +121,10 @@ export async function waitForLoadedState(
     throw new Error(
       "Player failed before reaching Loaded: " +
         JSON.stringify({
-          error,
+          error:
+            error instanceof Error
+              ? { name: error.name, message: error.message, stack: error.stack }
+              : String(error),
           snapshot: getPlayerStateSnapshot(
             player,
             videoElement,

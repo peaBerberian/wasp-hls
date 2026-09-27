@@ -72,10 +72,10 @@ liveDescribe("Live packaged content", function () {
       expectInitialSeek: true,
       assertLoadedSnapshot(snapshot) {
         expect(snapshot.position).toBeGreaterThanOrEqual(
-          snapshot.minimumPosition + 4 - LIVE_POSITION_TOLERANCE_S,
+          4 - LIVE_POSITION_TOLERANCE_S,
         );
         expect(snapshot.position).toBeLessThanOrEqual(
-          snapshot.minimumPosition + 4 + LIVE_POSITION_TOLERANCE_S,
+          4 + LIVE_POSITION_TOLERANCE_S,
         );
       },
     },

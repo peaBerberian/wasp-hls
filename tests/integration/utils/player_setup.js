@@ -4,6 +4,7 @@ import EmbeddedWorker from "../../../build/embedded/worker.js";
 import EmbeddedWasm from "../../../build/embedded/wasm.js";
 import { createLivePackagerClient } from "../../utils/live_packager.js";
 import sleep from "../../utils/sleep.js";
+import { trackPlayerDiagnostics } from "../../utils/player_test_tools.js";
 
 /**
  * Registers standard beforeAll/afterAll/beforeEach/afterEach hooks for tests
@@ -77,11 +78,31 @@ export default function setupPlayer(
     target.player.addEventListener("error", (error) => {
       target.lastPlayerError = error;
     });
+    const diagnostics = trackPlayerDiagnostics(
+      target.player,
+      target.videoElement,
+      () => target.lastPlayerError,
+    );
+    let report;
+    target.saveDiagnostics = () => {
+      report = diagnostics.finish();
+    };
+    testContext.onTestFailed(() => {
+      console.error(
+        "Player diagnostics: " +
+          JSON.stringify({
+            test: testContext.task.name,
+            liveInfo: target.liveInfo,
+            ...report,
+          }),
+      );
+    });
   });
 
   afterEach((testContext) => {
     const target = contexts.get(testContext);
     if (!target) return;
+    target.saveDiagnostics();
     target.player.dispose();
     target.videoElement.removeAttribute("src");
     target.workerHandle?.dispose?.();
