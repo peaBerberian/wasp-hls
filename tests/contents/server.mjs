@@ -64,9 +64,6 @@ const EVENT_ENDLIST_SCENARIO_FINAL_SEGMENT_COUNT = 6;
 // the manifest.
 const EVENT_ENDLIST_SCENARIO_PREFIX = "/live/scenario/event-endlist";
 
-/** @type {PackagingProcessInfo | null} Content packaging process. */
-let packagingProcessInfo = null;
-let eventEndlistScenarioState = createEventEndlistScenarioState();
 // Slow Windows CI machines can briefly make newly written live files
 // unavailable. Retry opening them a few times before surfacing a 404.
 const LIVE_FILE_OPEN_RETRY_COUNT = 20;
@@ -88,12 +85,179 @@ const LIVE_FILE_OPEN_RETRY_DELAY_MS = 25;
  * Route ordering matters: more specific synthetic scenario endpoints need to be
  * checked before generic prefixes like `/live/`.
  *
- * @param {{port?: number}} [params]
+ * @param {{port?: number, liveOutputDir?: string, packagerBasePort?: number}} [params]
  * @returns {{listeningPromise: Promise<void>, close: () => Promise<void>}}
  */
 export default function createContentServer({
   port = DEFAULT_CONTENT_SERVER_PORT,
+  liveOutputDir = DEFAULT_PACKAGED_LIVE_OS_PATH,
+  packagerBasePort = 35951,
 } = {}) {
+  /** @type {PackagingProcessInfo | null} */
+  let packagingProcessInfo = null;
+  /** @type {EventScenarioState} */
+  let eventEndlistScenarioState = createEventEndlistScenarioState();
+  /**
+   * @param {import("http").ServerResponse} res
+   * @param {URL} requestUrl
+   */
+  async function handleStartPackager(res, requestUrl) {
+    try {
+      if (packagingProcessInfo && !packagingProcessInfo.process.killed) {
+        await stopPackagingProcess();
+      }
+
+      const emitProgramDateTime =
+        requestUrl.searchParams.get("emitProgramDateTime") === "1";
+      const scriptPath = path.join(
+        __dirname,
+        "..",
+        "..",
+        "scripts",
+        "packager",
+        "main.mjs",
+      );
+      const packagerArgs = [
+        scriptPath,
+        "--no-confirmation",
+        "--segment-duration",
+        "2",
+        "--timeshift-buffer-depth",
+        "40",
+        "--base-port",
+        String(packagerBasePort),
+        "--output-dir",
+        liveOutputDir,
+      ];
+      if (emitProgramDateTime) {
+        packagerArgs.push("--program-date-time");
+      }
+      const proc = spawn(process.execPath, packagerArgs, {
+        stdio: ["ignore", "pipe", "pipe"], // Don't inherit stdio, capture output
+        cwd: __dirname,
+      });
+
+      packagingProcessInfo = {
+        process: proc,
+        timeShiftBufferDepth: 40,
+        segmentDuration: 2,
+        playlistPath: "/live/master.m3u8",
+        emitProgramDateTime,
+      };
+      attachPackagerLogDrain(packagingProcessInfo.process);
+
+      packagingProcessInfo.process.on("error", (error) => {
+        console.error("ERROR: Content packaging script error:", error);
+        packagingProcessInfo = null;
+      });
+
+      packagingProcessInfo.process.on("exit", () => {
+        packagingProcessInfo = null;
+      });
+
+      res.setHeader("Content-Type", "application/json");
+      answerWithCORS(
+        res,
+        200,
+        JSON.stringify({
+          success: true,
+          message: "Content packaging script started",
+          info: {
+            playlistPath: packagingProcessInfo.playlistPath,
+            timeShiftBufferDepth: packagingProcessInfo.timeShiftBufferDepth,
+            segmentDuration: packagingProcessInfo.segmentDuration,
+            emitProgramDateTime,
+          },
+        }),
+      );
+    } catch (error) {
+      console.error("ERROR: Failed to start content packaging script:", error);
+      res.setHeader("Content-Type", "application/json");
+      answerWithCORS(
+        res,
+        500,
+        JSON.stringify({
+          success: false,
+          message: "Failed to start content packaging script",
+          error: error instanceof Error ? error.message : String(error),
+        }),
+      );
+    }
+  }
+
+  /** @param {import("http").ServerResponse} res */
+  async function handleStopPackager(res) {
+    try {
+      if (packagingProcessInfo && !packagingProcessInfo.process.killed) {
+        await stopPackagingProcess();
+
+        res.setHeader("Content-Type", "application/json");
+        answerWithCORS(
+          res,
+          200,
+          JSON.stringify({
+            success: true,
+            message: "content packaging script stopped",
+          }),
+        );
+      } else {
+        res.setHeader("Content-Type", "application/json");
+        answerWithCORS(
+          res,
+          200,
+          JSON.stringify({
+            success: true,
+            message: "No content packaging script running",
+          }),
+        );
+      }
+    } catch (error) {
+      console.error("ERROR: Failed to stop content packaging script:", error);
+      res.setHeader("Content-Type", "application/json");
+      answerWithCORS(
+        res,
+        500,
+        JSON.stringify({
+          success: false,
+          message: "Failed to stop content packaging script",
+          error: error instanceof Error ? error.message : String(error),
+        }),
+      );
+    }
+  }
+
+  async function stopPackagingProcess() {
+    const processInfo = packagingProcessInfo;
+    if (!processInfo || processInfo.process.killed) {
+      packagingProcessInfo = null;
+      return false;
+    }
+
+    const proc = processInfo.process;
+    const exitPromise = new Promise((resolve) => {
+      proc.once("exit", () => resolve(true));
+      proc.once("error", () => resolve(true));
+    });
+
+    try {
+      proc.kill("SIGINT");
+    } catch (_err) {
+      forceKillProcessTree(proc);
+    }
+
+    const forceKillTimer = setTimeout(() => {
+      forceKillProcessTree(proc);
+    }, 5000);
+    forceKillTimer.unref?.();
+
+    await Promise.race([exitPromise, sleep(6500)]);
+    clearTimeout(forceKillTimer);
+    if (packagingProcessInfo?.process === proc) {
+      packagingProcessInfo = null;
+    }
+    return true;
+  }
+
   /** @type {Set<import("net").Socket>} */
   const activeSockets = new Set();
   const contentServerBaseUrl = "http://127.0.0.1:" + String(port);
@@ -180,12 +344,12 @@ export default function createContentServer({
     }
 
     if (req.url.startsWith("/live/")) {
-      handlePackagedLiveRequest(res, req, "/live/");
+      handlePackagedLiveRequest(res, req, "/live/", liveOutputDir);
       return;
     }
 
     if (req.url.startsWith("/live-alt/")) {
-      handlePackagedLiveRequest(res, req, "/live-alt/");
+      handlePackagedLiveRequest(res, req, "/live-alt/", liveOutputDir);
       return;
     }
 
@@ -386,11 +550,12 @@ export default function createContentServer({
 }
 
 /**
- * @param {ServerResponse} res
- * @param {IncomingMessage} req
+ * @param {import("http").ServerResponse} res
+ * @param {import("http").IncomingMessage} req
  * @param {string} basePath
+ * @param {string} baseDir
  */
-function handlePackagedLiveRequest(res, req, basePath) {
+function handlePackagedLiveRequest(res, req, basePath, baseDir) {
   if (req.method?.toUpperCase() === "OPTIONS") {
     answerWithCORS(res, 200);
     res.end();
@@ -402,7 +567,6 @@ function handlePackagedLiveRequest(res, req, basePath) {
     return;
   }
 
-  const baseDir = DEFAULT_PACKAGED_LIVE_OS_PATH;
   const relativeUrl = (req.url ?? "").substring(basePath.length);
   prepareStaticFile(baseDir, relativeUrl).then(
     (file) => {
@@ -661,139 +825,6 @@ function handleVodScenarioRequest(
       );
     },
   );
-}
-
-/**
- * Handle the /start_packager endpoint
- * @param {ServerResponse} res
- * @param {URL} requestUrl
- */
-async function handleStartPackager(res, requestUrl) {
-  try {
-    if (packagingProcessInfo && !packagingProcessInfo.process.killed) {
-      await stopPackagingProcess();
-    }
-
-    const emitProgramDateTime =
-      requestUrl.searchParams.get("emitProgramDateTime") === "1";
-    const scriptPath = path.join(
-      __dirname,
-      "..",
-      "..",
-      "scripts",
-      "packager",
-      "main.mjs",
-    );
-    const packagerArgs = [
-      scriptPath,
-      "--no-confirmation",
-      "--segment-duration",
-      "2",
-      "--timeshift-buffer-depth",
-      "40",
-      "--base-port",
-      "35951",
-      "--output-dir",
-      DEFAULT_PACKAGED_LIVE_OS_PATH,
-    ];
-    if (emitProgramDateTime) {
-      packagerArgs.push("--program-date-time");
-    }
-    const proc = spawn(process.execPath, packagerArgs, {
-      stdio: ["ignore", "pipe", "pipe"], // Don't inherit stdio, capture output
-      cwd: __dirname,
-    });
-
-    packagingProcessInfo = {
-      process: proc,
-      timeShiftBufferDepth: 40,
-      segmentDuration: 2,
-      playlistPath: "/live/master.m3u8",
-      emitProgramDateTime,
-    };
-    attachPackagerLogDrain(packagingProcessInfo.process);
-
-    packagingProcessInfo.process.on("error", (error) => {
-      console.error("ERROR: Content packaging script error:", error);
-      packagingProcessInfo = null;
-    });
-
-    packagingProcessInfo.process.on("exit", () => {
-      packagingProcessInfo = null;
-    });
-
-    res.setHeader("Content-Type", "application/json");
-    answerWithCORS(
-      res,
-      200,
-      JSON.stringify({
-        success: true,
-        message: "Content packaging script started",
-        info: {
-          playlistPath: packagingProcessInfo.playlistPath,
-          timeShiftBufferDepth: packagingProcessInfo.timeShiftBufferDepth,
-          segmentDuration: packagingProcessInfo.segmentDuration,
-          emitProgramDateTime,
-        },
-      }),
-    );
-  } catch (error) {
-    console.error("ERROR: Failed to start content packaging script:", error);
-    res.setHeader("Content-Type", "application/json");
-    answerWithCORS(
-      res,
-      500,
-      JSON.stringify({
-        success: false,
-        message: "Failed to start content packaging script",
-        error: error instanceof Error ? error.message : String(error),
-      }),
-    );
-  }
-}
-
-/**
- * Handle the /stop_packager endpoint
- * @param {ServerResponse} res
- */
-async function handleStopPackager(res) {
-  try {
-    if (packagingProcessInfo && !packagingProcessInfo.process.killed) {
-      await stopPackagingProcess();
-
-      res.setHeader("Content-Type", "application/json");
-      answerWithCORS(
-        res,
-        200,
-        JSON.stringify({
-          success: true,
-          message: "content packaging script stopped",
-        }),
-      );
-    } else {
-      res.setHeader("Content-Type", "application/json");
-      answerWithCORS(
-        res,
-        200,
-        JSON.stringify({
-          success: true,
-          message: "No content packaging script running",
-        }),
-      );
-    }
-  } catch (error) {
-    console.error("ERROR: Failed to stop content packaging script:", error);
-    res.setHeader("Content-Type", "application/json");
-    answerWithCORS(
-      res,
-      500,
-      JSON.stringify({
-        success: false,
-        message: "Failed to stop content packaging script",
-        error: error instanceof Error ? error.message : String(error),
-      }),
-    );
-  }
 }
 
 /**
@@ -1185,38 +1216,6 @@ function forceKillProcessTree(proc) {
       /* process already exited */
     }
   }
-}
-
-async function stopPackagingProcess() {
-  const processInfo = packagingProcessInfo;
-  if (!processInfo || processInfo.process.killed) {
-    packagingProcessInfo = null;
-    return false;
-  }
-
-  const proc = processInfo.process;
-  const exitPromise = new Promise((resolve) => {
-    proc.once("exit", () => resolve(true));
-    proc.once("error", () => resolve(true));
-  });
-
-  try {
-    proc.kill("SIGINT");
-  } catch (_err) {
-    forceKillProcessTree(proc);
-  }
-
-  const forceKillTimer = setTimeout(() => {
-    forceKillProcessTree(proc);
-  }, 5000);
-  forceKillTimer.unref?.();
-
-  await Promise.race([exitPromise, sleep(6500)]);
-  clearTimeout(forceKillTimer);
-  if (packagingProcessInfo?.process === proc) {
-    packagingProcessInfo = null;
-  }
-  return true;
 }
 
 /**

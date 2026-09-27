@@ -2,12 +2,7 @@ import { afterAll, afterEach, beforeAll, beforeEach } from "vitest";
 import WaspHlsPlayer from "../../../build/es6/ts-main/index.js";
 import EmbeddedWorker from "../../../build/embedded/worker.js";
 import EmbeddedWasm from "../../../build/embedded/wasm.js";
-import {
-  startLivePackager,
-  startLivePackagerWithOptions,
-  stopLivePackager,
-  waitForPackagerReady,
-} from "../../utils/live_packager.js";
+import { createLivePackagerClient } from "../../utils/live_packager.js";
 import sleep from "../../utils/sleep.js";
 
 /**
@@ -20,12 +15,20 @@ import sleep from "../../utils/sleep.js";
  *   it("my test", () => { ctx.player.load(...) });
  */
 export default function setupPlayer(
-  { packageLiveContent, playerConfig, createWorker } = {
+  { packageLiveContent, playerConfig, createWorker, concurrent = false } = {
     packageLiveContent: false,
     playerConfig: undefined,
     createWorker: undefined,
   },
 ) {
+  const liveClient = createLivePackagerClient(
+    concurrent
+      ? packageLiveContent?.emitProgramDateTime
+        ? 3002
+        : 3001
+      : undefined,
+  );
+  const contexts = new WeakMap();
   const ctx = {
     player: /** @type {WaspHlsPlayer} */ (null),
     videoElement: document.createElement("video"),
@@ -36,14 +39,14 @@ export default function setupPlayer(
 
   beforeAll(
     async () => {
-      document.body.appendChild(ctx.videoElement);
+      if (!concurrent) document.body.appendChild(ctx.videoElement);
       if (packageLiveContent) {
         if (packageLiveContent === true) {
-          await startLivePackager();
+          await liveClient.startLivePackager();
         } else {
-          await startLivePackagerWithOptions(packageLiveContent);
+          await liveClient.startLivePackagerWithOptions(packageLiveContent);
         }
-        const readyInfos = await waitForPackagerReady();
+        const readyInfos = await liveClient.waitForPackagerReady();
         ctx.liveInfo = { ...readyInfos };
         await sleep(10000);
       }
@@ -52,31 +55,42 @@ export default function setupPlayer(
   );
 
   afterAll(async () => {
-    document.body.removeChild(ctx.videoElement);
+    if (!concurrent) document.body.removeChild(ctx.videoElement);
     if (packageLiveContent) {
-      await stopLivePackager();
+      await liveClient.stopLivePackager();
     }
   });
 
-  beforeEach(() => {
-    ctx.lastPlayerError = null;
-    ctx.player = new WaspHlsPlayer(ctx.videoElement, playerConfig);
-    ctx.workerHandle = createWorker?.() ?? { url: EmbeddedWorker };
-    ctx.player.initialize({
-      workerUrl: ctx.workerHandle.url,
+  beforeEach((testContext) => {
+    const target = concurrent
+      ? { ...ctx, videoElement: document.createElement("video") }
+      : ctx;
+    contexts.set(testContext, target);
+    if (concurrent) document.body.appendChild(target.videoElement);
+    target.lastPlayerError = null;
+    target.player = new WaspHlsPlayer(target.videoElement, playerConfig);
+    target.workerHandle = createWorker?.() ?? { url: EmbeddedWorker };
+    target.player.initialize({
+      workerUrl: target.workerHandle.url,
       wasmUrl: EmbeddedWasm,
     });
-    ctx.player.addEventListener("error", (error) => {
-      ctx.lastPlayerError = error;
+    target.player.addEventListener("error", (error) => {
+      target.lastPlayerError = error;
     });
   });
 
-  afterEach(() => {
-    ctx.player.dispose();
-    ctx.videoElement.removeAttribute("src");
-    ctx.workerHandle?.dispose?.();
-    ctx.workerHandle = null;
+  afterEach((testContext) => {
+    const target = contexts.get(testContext);
+    if (!target) return;
+    target.player.dispose();
+    target.videoElement.removeAttribute("src");
+    target.workerHandle?.dispose?.();
+    target.workerHandle = null;
+    if (concurrent) target.videoElement.remove();
+    contexts.delete(testContext);
   });
 
-  return ctx;
+  return Object.assign(ctx, {
+    forTest: (testContext) => contexts.get(testContext) ?? ctx,
+  });
 }

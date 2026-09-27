@@ -1,4 +1,3 @@
-import sleep from "./sleep.js";
 import { waitForLoadedStateAfterLoad } from "./waitForPlayerState.js";
 
 const PLAYER_LOAD_TIMEOUT_MS = 90_000;
@@ -27,13 +26,22 @@ export async function waitForLoadedState(
   videoElement,
   lastPlayerErrorRef,
 ) {
-  const timeoutPromise = sleep(PLAYER_LOAD_TIMEOUT_MS).then(() => {
-    throw new Error(
-      "Player did not reach Loaded in time: " +
-        JSON.stringify(
-          getPlayerStateSnapshot(player, videoElement, lastPlayerErrorRef()),
+  let timeoutId;
+  const timeoutPromise = new Promise((_, reject) => {
+    timeoutId = setTimeout(() => {
+      reject(
+        new Error(
+          "Player did not reach Loaded in time: " +
+            JSON.stringify(
+              getPlayerStateSnapshot(
+                player,
+                videoElement,
+                lastPlayerErrorRef(),
+              ),
+            ),
         ),
-    );
+      );
+    }, PLAYER_LOAD_TIMEOUT_MS);
   });
 
   try {
@@ -50,6 +58,8 @@ export async function waitForLoadedState(
           ),
         }),
     );
+  } finally {
+    clearTimeout(timeoutId);
   }
 
   if (player.getPlayerState() !== "Loaded") {

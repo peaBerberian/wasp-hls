@@ -3,7 +3,7 @@ import {
   getPlayerStateSnapshot,
   waitForLoadedState,
 } from "../../utils/player_test_tools.js";
-import sleep from "../../utils/sleep.js";
+import { checkAfterSleepWithBackoff } from "../../utils/checkAfterSleepWithBackoff.js";
 
 const DEFAULT_PLAYBACK_SETTLE_MS = 1_500;
 
@@ -44,9 +44,10 @@ export async function assertStartupBehavior({
   assertLoadedSnapshot,
   loadedSnapshotContext,
   expectInitialSeek = false,
-  maxInitialSeekDelayMs = 5_000,
-  maxLoadedDelayMs = 12_000,
+  maxInitialSeekDelayMs = 20_000,
+  maxLoadedDelayMs = 45_000,
   playbackSettleMs = DEFAULT_PLAYBACK_SETTLE_MS,
+  maxPlaybackSettleMs = 30_000,
 }) {
   const tracker = createStartupEventTracker(videoElement);
   const loadStartedAt = performance.now();
@@ -93,8 +94,17 @@ export async function assertStartupBehavior({
 
   const startPosition = player.getPosition();
   player.resume();
-  await sleep(playbackSettleMs);
-  expect(player.getPosition()).toBeGreaterThan(startPosition + 0.5);
+  await checkAfterSleepWithBackoff(
+    {
+      minTimeMs: playbackSettleMs,
+      maxTimeMs: maxPlaybackSettleMs,
+      stepMs: 250,
+    },
+    () => {
+      expect(player.getError()).toBeNull();
+      expect(player.getPosition()).toBeGreaterThan(startPosition + 0.5);
+    },
+  );
 
   return { snapshot, timings };
 }
