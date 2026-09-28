@@ -340,12 +340,6 @@ function generateTestConfig({ browser, suite }) {
     throw new Error('Memory tests are only supported on the "chrome" browser.');
   }
 
-  const parallelLive =
-    process.platform === "win32" &&
-    browser === "firefox" &&
-    suite === "integration";
-  process.env.WASP_HLS_PARALLEL_LIVE = parallelLive ? "1" : "0";
-
   const includedFiles =
     suite === "memory" ? MEMORY_TEST_FILES : INTEGRATION_TEST_FILES;
   return {
@@ -354,12 +348,10 @@ function generateTestConfig({ browser, suite }) {
       browser: getBrowserConfig(browser),
       include: includedFiles,
       globals: false,
-      ...(parallelLive ? { maxConcurrency: 10 } : {}),
     },
     define: {
       ...baseGlobals,
       __BROWSER_NAME__: JSON.stringify(browser),
-      __PARALLEL_LIVE_TESTS__: JSON.stringify(parallelLive),
     },
   };
 }

@@ -9,43 +9,48 @@ const LIVE_PLAYBACK_TEST_TIMEOUT_MS = 240_000;
 const LIVE_MAX_INITIAL_SEEK_DELAY_MS = 20_000;
 const LIVE_MAX_LOADED_DELAY_MS = 45_000;
 const LIVE_POSITION_TOLERANCE_S = 2.5;
+const LIVE_WINDOW_DRIFT_TOLERANCE_S = 4;
 const LIVE_PROGRAM_DATE_TIME_TOLERANCE_S = 6;
 
-const liveDescribe = __PARALLEL_LIVE_TESTS__ ? describe.concurrent : describe;
-
-function getInitialSeekSnapshot(timings) {
-  const initialSeek = timings.initialSeekSnapshot;
-  expect(initialSeek).toBeDefined();
-  expect(initialSeek.mediaPosition).toBeDefined();
-  return initialSeek;
-}
-
-liveDescribe("Live packaged content", function () {
-  const players = setupPlayer({
-    packageLiveContent: true,
-    concurrent: __PARALLEL_LIVE_TESTS__,
-  });
+describe("Live packaged content", function () {
+  const ctx = setupPlayer({ packageLiveContent: true });
 
   const LIVE_STARTING_POSITION_CASES = [
     {
       name: "defaults to a safe distance from the live edge without `startingPosition`",
       options: undefined,
       expectInitialSeek: true,
-      assertLoadedSnapshot(_snapshot, timings, context) {
-        const initialSeek = getInitialSeekSnapshot(timings);
+      assertLoadedSnapshot(snapshot, timings, context) {
+        const initialSeek = assertInitialSeekSurvivesLoad(snapshot, timings);
         const gap = initialSeek.maximumPosition - initialSeek.mediaPosition;
-        expect(gap).toBeGreaterThanOrEqual(context.segmentDuration * 2 - 0.5);
-        expect(gap).toBeLessThanOrEqual(context.segmentDuration * 5 + 1);
+        expect(gap).toBeGreaterThanOrEqual(context.segmentDuration * 3 - 0.5);
+        expect(gap).toBeLessThanOrEqual(context.segmentDuration * 4 + 1);
+        const loadedGap = snapshot.maximumPosition - snapshot.position;
+        expect(loadedGap).toBeGreaterThanOrEqual(
+          context.segmentDuration * 3 - 0.5,
+        );
+        expect(loadedGap).toBeLessThanOrEqual(
+          context.segmentDuration * 4 + 1 + LIVE_WINDOW_DRIFT_TOLERANCE_S,
+        );
       },
     },
     {
       name: "honors numeric absolute `startingPosition` on live",
       options: { startingPosition: 6 },
       expectInitialSeek: true,
-      assertLoadedSnapshot(_snapshot, timings) {
-        const position = getInitialSeekSnapshot(timings).mediaPosition;
+      assertLoadedSnapshot(snapshot, timings) {
+        const position = assertInitialSeekSurvivesLoad(
+          snapshot,
+          timings,
+        ).mediaPosition;
         expect(position).toBeGreaterThanOrEqual(6 - LIVE_POSITION_TOLERANCE_S);
         expect(position).toBeLessThanOrEqual(6 + LIVE_POSITION_TOLERANCE_S);
+        expect(snapshot.position).toBeGreaterThanOrEqual(
+          6 - LIVE_POSITION_TOLERANCE_S,
+        );
+        expect(snapshot.position).toBeLessThanOrEqual(
+          6 + LIVE_POSITION_TOLERANCE_S,
+        );
       },
     },
     {
@@ -57,10 +62,19 @@ liveDescribe("Live packaged content", function () {
         },
       },
       expectInitialSeek: true,
-      assertLoadedSnapshot(_snapshot, timings) {
-        const position = getInitialSeekSnapshot(timings).mediaPosition;
+      assertLoadedSnapshot(snapshot, timings) {
+        const position = assertInitialSeekSurvivesLoad(
+          snapshot,
+          timings,
+        ).mediaPosition;
         expect(position).toBeGreaterThanOrEqual(8 - LIVE_POSITION_TOLERANCE_S);
         expect(position).toBeLessThanOrEqual(8 + LIVE_POSITION_TOLERANCE_S);
+        expect(snapshot.position).toBeGreaterThanOrEqual(
+          8 - LIVE_POSITION_TOLERANCE_S,
+        );
+        expect(snapshot.position).toBeLessThanOrEqual(
+          8 + LIVE_POSITION_TOLERANCE_S,
+        );
       },
     },
     {
@@ -72,14 +86,20 @@ liveDescribe("Live packaged content", function () {
         },
       },
       expectInitialSeek: true,
-      assertLoadedSnapshot(_snapshot, timings) {
-        const initialSeek = getInitialSeekSnapshot(timings);
+      assertLoadedSnapshot(snapshot, timings) {
+        const initialSeek = assertInitialSeekSurvivesLoad(snapshot, timings);
         const expectedPosition = initialSeek.minimumPosition + 4;
         expect(initialSeek.mediaPosition).toBeGreaterThanOrEqual(
           expectedPosition - LIVE_POSITION_TOLERANCE_S,
         );
         expect(initialSeek.mediaPosition).toBeLessThanOrEqual(
           expectedPosition + LIVE_POSITION_TOLERANCE_S,
+        );
+        expect(snapshot.position).toBeGreaterThanOrEqual(
+          4 - LIVE_POSITION_TOLERANCE_S,
+        );
+        expect(snapshot.position).toBeLessThanOrEqual(
+          4 + LIVE_POSITION_TOLERANCE_S + LIVE_WINDOW_DRIFT_TOLERANCE_S,
         );
       },
     },
@@ -93,14 +113,15 @@ liveDescribe("Live packaged content", function () {
       },
       expectInitialSeek: true,
       assertLoadedSnapshot(snapshot, timings) {
-        const initialSeek = getInitialSeekSnapshot(timings);
+        const initialSeek = assertInitialSeekSurvivesLoad(snapshot, timings);
         const gap = initialSeek.maximumPosition - initialSeek.mediaPosition;
         expect(gap).toBeGreaterThanOrEqual(8 - LIVE_POSITION_TOLERANCE_S);
         expect(gap).toBeLessThanOrEqual(8 + LIVE_POSITION_TOLERANCE_S);
-        expect(snapshot.position).toBeGreaterThanOrEqual(
-          snapshot.minimumPosition,
+        const loadedGap = snapshot.maximumPosition - snapshot.position;
+        expect(loadedGap).toBeGreaterThanOrEqual(8 - LIVE_POSITION_TOLERANCE_S);
+        expect(loadedGap).toBeLessThanOrEqual(
+          8 + LIVE_POSITION_TOLERANCE_S + LIVE_WINDOW_DRIFT_TOLERANCE_S,
         );
-        expect(snapshot.position).toBeLessThanOrEqual(snapshot.maximumPosition);
       },
     },
   ];
@@ -108,8 +129,7 @@ liveDescribe("Live packaged content", function () {
   it(
     "should fetch, update and play the Manifest",
     { timeout: LIVE_PLAYBACK_TEST_TIMEOUT_MS },
-    async function (testContext) {
-      const ctx = players.forTest(testContext);
+    async function () {
       ctx.player.addEventListener("playerStateChange", (state) => {
         if (state === "Loaded") {
           ctx.player.resume();
@@ -179,53 +199,46 @@ liveDescribe("Live packaged content", function () {
   );
 
   for (const testCase of LIVE_STARTING_POSITION_CASES) {
-    it(
-      testCase.name,
-      { timeout: LIVE_PLAYBACK_TEST_TIMEOUT_MS },
-      async (testContext) => {
-        const ctx = players.forTest(testContext);
-        await assertStartupBehavior({
-          player: ctx.player,
-          videoElement: ctx.videoElement,
-          lastPlayerErrorRef: () => ctx.lastPlayerError,
-          loadContent() {
-            ctx.player.load(ctx.liveInfo.playlistUrl, testCase.options);
-          },
-          expectInitialSeek: testCase.expectInitialSeek,
-          maxInitialSeekDelayMs: LIVE_MAX_INITIAL_SEEK_DELAY_MS,
-          maxLoadedDelayMs: LIVE_MAX_LOADED_DELAY_MS,
-          loadedSnapshotContext: {
+    it(testCase.name, { timeout: LIVE_PLAYBACK_TEST_TIMEOUT_MS }, async () => {
+      await assertStartupBehavior({
+        player: ctx.player,
+        videoElement: ctx.videoElement,
+        lastPlayerErrorRef: () => ctx.lastPlayerError,
+        loadContent() {
+          ctx.player.load(ctx.liveInfo.playlistUrl, testCase.options);
+        },
+        expectInitialSeek: testCase.expectInitialSeek,
+        maxInitialSeekDelayMs: LIVE_MAX_INITIAL_SEEK_DELAY_MS,
+        maxLoadedDelayMs: LIVE_MAX_LOADED_DELAY_MS,
+        loadedSnapshotContext: {
+          segmentDuration: ctx.liveInfo.segmentDuration,
+          timeShiftBufferDepth: ctx.liveInfo.timeShiftBufferDepth,
+        },
+        assertLoadedSnapshot(snapshot, timings) {
+          expect(snapshot.playerState).toEqual("Loaded");
+          expect(snapshot.playerError).toBeNull();
+          expect(snapshot.maximumPosition).toBeGreaterThan(
+            snapshot.minimumPosition,
+          );
+          testCase.assertLoadedSnapshot(snapshot, timings, {
             segmentDuration: ctx.liveInfo.segmentDuration,
             timeShiftBufferDepth: ctx.liveInfo.timeShiftBufferDepth,
-          },
-          assertLoadedSnapshot(snapshot, timings) {
-            expect(snapshot.playerState).toEqual("Loaded");
-            expect(snapshot.playerError).toBeNull();
-            expect(snapshot.maximumPosition).toBeGreaterThan(
-              snapshot.minimumPosition,
-            );
-            testCase.assertLoadedSnapshot(snapshot, timings, {
-              segmentDuration: ctx.liveInfo.segmentDuration,
-              timeShiftBufferDepth: ctx.liveInfo.timeShiftBufferDepth,
-            });
-          },
-        });
-      },
-    );
+          });
+        },
+      });
+    });
   }
 });
 
-liveDescribe("Live packaged content with EXT-X-PROGRAM-DATE-TIME", function () {
-  const players = setupPlayer({
-    concurrent: __PARALLEL_LIVE_TESTS__,
+describe("Live packaged content with EXT-X-PROGRAM-DATE-TIME", function () {
+  const ctx = setupPlayer({
     packageLiveContent: { emitProgramDateTime: true },
   });
 
   it(
     "uses EXT-X-PROGRAM-DATE-TIME as playlist time in the public position API",
     { timeout: LIVE_PLAYBACK_TEST_TIMEOUT_MS },
-    async (testContext) => {
-      const ctx = players.forTest(testContext);
+    async () => {
       const anchorProgramDateTime = await getLiveProgramDateTimeAnchor(
         ctx.liveInfo.playlistUrl,
       );
@@ -280,8 +293,7 @@ liveDescribe("Live packaged content with EXT-X-PROGRAM-DATE-TIME", function () {
   it(
     "defaults to a safe distance from the live edge on a PDT timeline",
     { timeout: LIVE_PLAYBACK_TEST_TIMEOUT_MS },
-    async (testContext) => {
-      const ctx = players.forTest(testContext);
+    async () => {
       await assertStartupBehavior({
         player: ctx.player,
         videoElement: ctx.videoElement,
@@ -301,8 +313,8 @@ liveDescribe("Live packaged content with EXT-X-PROGRAM-DATE-TIME", function () {
           expect(snapshot.playerState).toEqual("Loaded");
           expect(snapshot.playerError).toBeNull();
           expect(snapshot.usesProgramDateTime).toBe(true);
-          expect(gap).toBeGreaterThanOrEqual(context.segmentDuration * 2 - 0.5);
-          expect(gap).toBeLessThanOrEqual(context.segmentDuration * 5 + 1);
+          expect(gap).toBeGreaterThanOrEqual(context.segmentDuration * 3 - 0.5);
+          expect(gap).toBeLessThanOrEqual(context.segmentDuration * 4 + 1);
         },
       });
     },
@@ -311,8 +323,7 @@ liveDescribe("Live packaged content with EXT-X-PROGRAM-DATE-TIME", function () {
   it(
     "interprets `startingPosition` against the live PDT timeline",
     { timeout: LIVE_PLAYBACK_TEST_TIMEOUT_MS },
-    async (testContext) => {
-      const ctx = players.forTest(testContext);
+    async () => {
       const anchorProgramDateTime = await getLiveProgramDateTimeAnchor(
         ctx.liveInfo.playlistUrl,
       );
@@ -393,4 +404,16 @@ async function getLiveProgramDateTimeAnchor(playlistUrl) {
   }
 
   throw new Error("Unable to find EXT-X-PROGRAM-DATE-TIME in live media");
+}
+
+function assertInitialSeekSurvivesLoad(snapshot, timings) {
+  const initialSeek = timings.initialSeekSnapshot;
+  expect(initialSeek).toBeDefined();
+  expect(initialSeek.mediaPosition).toBeDefined();
+  expect(
+    Math.abs(snapshot.currentTime - initialSeek.currentTime),
+  ).toBeLessThanOrEqual(LIVE_POSITION_TOLERANCE_S);
+  expect(snapshot.position).toBeGreaterThanOrEqual(snapshot.minimumPosition);
+  expect(snapshot.position).toBeLessThanOrEqual(snapshot.maximumPosition);
+  return initialSeek;
 }

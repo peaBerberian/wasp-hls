@@ -1,9 +1,7 @@
-import { fileURLToPath } from "url";
 import createContentServer from "./contents/server.mjs";
 import { ensureDefaultVodFixtures } from "./contents/vod_fixtures.mjs";
 
 let contentServer;
-let isolatedLiveServers = [];
 
 let started = false;
 
@@ -17,21 +15,7 @@ export async function setup() {
   }
   started = true;
   contentServer = createContentServer();
-  if (process.env.WASP_HLS_PARALLEL_LIVE === "1") {
-    isolatedLiveServers = [1, 2].map((id) =>
-      createContentServer({
-        port: 3000 + id,
-        liveOutputDir: fileURLToPath(
-          new URL(`../tmp/testcontents/live-${id}`, import.meta.url),
-        ),
-        packagerBasePort: 35951 + id * 10,
-      }),
-    );
-  }
-  await Promise.all([
-    contentServer.listeningPromise,
-    ...isolatedLiveServers.map((server) => server.listeningPromise),
-  ]);
+  await contentServer.listeningPromise;
   await ensureDefaultVodFixtures();
 }
 
@@ -39,10 +23,6 @@ export async function setup() {
  * Peform actions to clean-up after tests.
  */
 export async function teardown() {
-  await Promise.all([
-    contentServer?.close(),
-    ...isolatedLiveServers.map((server) => server.close()),
-  ]);
-  isolatedLiveServers = [];
+  await contentServer?.close();
   started = false;
 }
