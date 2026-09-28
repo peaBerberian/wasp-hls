@@ -7,12 +7,13 @@ import { checkAfterSleepWithBackoff } from "../../utils/checkAfterSleepWithBacko
 
 const DEFAULT_PLAYBACK_SETTLE_MS = 1_500;
 
-function createStartupEventTracker(videoElement) {
+function createStartupEventTracker(player, videoElement, lastPlayerErrorRef) {
   const timestamps = {
     seekingAt: undefined,
     loadedMetadataAt: undefined,
     loadedDataAt: undefined,
   };
+  let initialSeekSnapshot;
 
   const listeners = [
     ["seeking", "seekingAt"],
@@ -21,6 +22,13 @@ function createStartupEventTracker(videoElement) {
   ].map(([eventName, key]) => {
     const onEvent = () => {
       timestamps[key] ??= performance.now();
+      if (eventName === "seeking" && initialSeekSnapshot === undefined) {
+        initialSeekSnapshot = getPlayerStateSnapshot(
+          player,
+          videoElement,
+          lastPlayerErrorRef(),
+        );
+      }
     };
     videoElement.addEventListener(eventName, onEvent);
     return [eventName, onEvent];
@@ -28,6 +36,9 @@ function createStartupEventTracker(videoElement) {
 
   return {
     timestamps,
+    get initialSeekSnapshot() {
+      return initialSeekSnapshot;
+    },
     cleanup() {
       for (const [eventName, listener] of listeners) {
         videoElement.removeEventListener(eventName, listener);
@@ -49,7 +60,11 @@ export async function assertStartupBehavior({
   playbackSettleMs = DEFAULT_PLAYBACK_SETTLE_MS,
   maxPlaybackSettleMs = 30_000,
 }) {
-  const tracker = createStartupEventTracker(videoElement);
+  const tracker = createStartupEventTracker(
+    player,
+    videoElement,
+    lastPlayerErrorRef,
+  );
   const loadStartedAt = performance.now();
 
   try {
@@ -66,6 +81,7 @@ export async function assertStartupBehavior({
     lastPlayerErrorRef(),
   );
   const timings = {
+    initialSeekSnapshot: tracker.initialSeekSnapshot,
     loadedDelayMs: loadedAt - loadStartedAt,
     initialSeekDelayMs:
       tracker.timestamps.seekingAt === undefined

@@ -13,6 +13,13 @@ const LIVE_PROGRAM_DATE_TIME_TOLERANCE_S = 6;
 
 const liveDescribe = __PARALLEL_LIVE_TESTS__ ? describe.concurrent : describe;
 
+function getInitialSeekSnapshot(timings) {
+  const initialSeek = timings.initialSeekSnapshot;
+  expect(initialSeek).toBeDefined();
+  expect(initialSeek.mediaPosition).toBeDefined();
+  return initialSeek;
+}
+
 liveDescribe("Live packaged content", function () {
   const players = setupPlayer({
     packageLiveContent: true,
@@ -24,8 +31,9 @@ liveDescribe("Live packaged content", function () {
       name: "defaults to a safe distance from the live edge without `startingPosition`",
       options: undefined,
       expectInitialSeek: true,
-      assertLoadedSnapshot(snapshot, _timings, context) {
-        const gap = snapshot.maximumPosition - snapshot.position;
+      assertLoadedSnapshot(_snapshot, timings, context) {
+        const initialSeek = getInitialSeekSnapshot(timings);
+        const gap = initialSeek.maximumPosition - initialSeek.mediaPosition;
         expect(gap).toBeGreaterThanOrEqual(context.segmentDuration * 2 - 0.5);
         expect(gap).toBeLessThanOrEqual(context.segmentDuration * 5 + 1);
       },
@@ -34,13 +42,10 @@ liveDescribe("Live packaged content", function () {
       name: "honors numeric absolute `startingPosition` on live",
       options: { startingPosition: 6 },
       expectInitialSeek: true,
-      assertLoadedSnapshot(snapshot) {
-        expect(snapshot.position).toBeGreaterThanOrEqual(
-          6 - LIVE_POSITION_TOLERANCE_S,
-        );
-        expect(snapshot.position).toBeLessThanOrEqual(
-          6 + LIVE_POSITION_TOLERANCE_S,
-        );
+      assertLoadedSnapshot(_snapshot, timings) {
+        const position = getInitialSeekSnapshot(timings).mediaPosition;
+        expect(position).toBeGreaterThanOrEqual(6 - LIVE_POSITION_TOLERANCE_S);
+        expect(position).toBeLessThanOrEqual(6 + LIVE_POSITION_TOLERANCE_S);
       },
     },
     {
@@ -52,13 +57,10 @@ liveDescribe("Live packaged content", function () {
         },
       },
       expectInitialSeek: true,
-      assertLoadedSnapshot(snapshot) {
-        expect(snapshot.position).toBeGreaterThanOrEqual(
-          8 - LIVE_POSITION_TOLERANCE_S,
-        );
-        expect(snapshot.position).toBeLessThanOrEqual(
-          8 + LIVE_POSITION_TOLERANCE_S,
-        );
+      assertLoadedSnapshot(_snapshot, timings) {
+        const position = getInitialSeekSnapshot(timings).mediaPosition;
+        expect(position).toBeGreaterThanOrEqual(8 - LIVE_POSITION_TOLERANCE_S);
+        expect(position).toBeLessThanOrEqual(8 + LIVE_POSITION_TOLERANCE_S);
       },
     },
     {
@@ -70,12 +72,14 @@ liveDescribe("Live packaged content", function () {
         },
       },
       expectInitialSeek: true,
-      assertLoadedSnapshot(snapshot) {
-        expect(snapshot.position).toBeGreaterThanOrEqual(
-          4 - LIVE_POSITION_TOLERANCE_S,
+      assertLoadedSnapshot(_snapshot, timings) {
+        const initialSeek = getInitialSeekSnapshot(timings);
+        const expectedPosition = initialSeek.minimumPosition + 4;
+        expect(initialSeek.mediaPosition).toBeGreaterThanOrEqual(
+          expectedPosition - LIVE_POSITION_TOLERANCE_S,
         );
-        expect(snapshot.position).toBeLessThanOrEqual(
-          4 + LIVE_POSITION_TOLERANCE_S,
+        expect(initialSeek.mediaPosition).toBeLessThanOrEqual(
+          expectedPosition + LIVE_POSITION_TOLERANCE_S,
         );
       },
     },
@@ -88,8 +92,9 @@ liveDescribe("Live packaged content", function () {
         },
       },
       expectInitialSeek: true,
-      assertLoadedSnapshot(snapshot, _timings, context) {
-        const gap = snapshot.maximumPosition - snapshot.position;
+      assertLoadedSnapshot(snapshot, timings) {
+        const initialSeek = getInitialSeekSnapshot(timings);
+        const gap = initialSeek.maximumPosition - initialSeek.mediaPosition;
         expect(gap).toBeGreaterThanOrEqual(8 - LIVE_POSITION_TOLERANCE_S);
         expect(gap).toBeLessThanOrEqual(8 + LIVE_POSITION_TOLERANCE_S);
         expect(snapshot.position).toBeGreaterThanOrEqual(

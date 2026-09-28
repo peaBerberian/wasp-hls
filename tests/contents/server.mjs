@@ -568,19 +568,26 @@ function handlePackagedLiveRequest(res, req, basePath, baseDir) {
   }
 
   const relativeUrl = (req.url ?? "").substring(basePath.length);
-  prepareStaticFile(baseDir, relativeUrl).then(
-    (file) => {
+  prepareStaticFile(baseDir, relativeUrl)
+    .then(async (file) => {
       if (file === null) {
         answerWithCORS(res, 404, "404 Not Found");
         return;
       }
-      const mimeType =
-        file.ext === "m3u8"
-          ? "application/vnd.apple.mpegurl"
-          : "application/octet-stream";
+      if (file.ext === "m3u8") {
+        const playlist = await readCompleteLivePlaylist(file.filePath);
+        if (playlist === null) {
+          console.error(`Incomplete live playlist ${req.url}`);
+          answerWithCORS(res, 503, "Live playlist is being updated");
+          return;
+        }
+        res.setHeader("Content-Type", CONTENT_TYPE_M3U8);
+        answerWithCORS(res, 200, playlist);
+        return;
+      }
       const stream = fs.createReadStream(file.filePath);
       res.writeHead(200, {
-        "Content-Type": mimeType,
+        "Content-Type": "application/octet-stream",
         Connection: "close",
         "Access-Control-Allow-Origin": "*",
         "Access-Control-Allow-Headers": "*",
@@ -597,8 +604,8 @@ function handlePackagedLiveRequest(res, req, basePath, baseDir) {
         );
       });
       stream.pipe(res);
-    },
-    (err) => {
+    })
+    .catch((err) => {
       console.error(
         `Live request failed ${req.url}:`,
         err instanceof Error ? (err.stack ?? err.message) : err,
@@ -609,8 +616,34 @@ function handlePackagedLiveRequest(res, req, basePath, baseDir) {
         500,
         "Error: " + (err instanceof Error ? err.toString() : "Unknown Error"),
       );
-    },
-  );
+    });
+}
+
+/** @param {string} filePath */
+async function readCompleteLivePlaylist(filePath) {
+  const isMaster = path.basename(filePath) === "master.m3u8";
+  for (let attempt = 0; attempt < LIVE_FILE_OPEN_RETRY_COUNT; attempt++) {
+    try {
+      const playlist = await fs.promises.readFile(filePath);
+      const text = playlist.toString("utf8");
+      if (
+        text.startsWith("#EXTM3U\n") &&
+        (isMaster
+          ? text.includes("#EXT-X-STREAM-INF:")
+          : /^#EXT-X-TARGETDURATION:\d+/m.test(text))
+      ) {
+        return playlist;
+      }
+    } catch (error) {
+      if (
+        !(error instanceof Error && "code" in error && error.code === "ENOENT")
+      ) {
+        throw error;
+      }
+    }
+    await sleep(LIVE_FILE_OPEN_RETRY_DELAY_MS);
+  }
+  return null;
 }
 
 /**
