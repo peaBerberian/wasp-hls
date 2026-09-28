@@ -13,7 +13,11 @@ The code is split into several directories:
 
 - `transmux`: Node-based tests for the transmuxing logic.
 
+- `performance`: browser comparisons, run explicitly with `npm run test -- performance`.
+
 - `utils`: test helpers reused by multiple suites.
 
 The `globalSetup.mjs` file starts shared infrastructure before tests, currently
 the local content server used by integration tests.
+
+Run `npm run check -- tests` to typecheck tests.

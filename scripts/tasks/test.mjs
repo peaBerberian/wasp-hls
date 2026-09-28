@@ -12,6 +12,17 @@ const TRANSMUX_DIRECTORY = join(TESTS_DIRECTORY, "transmux");
 const NODE_TEST_FILE_PATTERN = /\.test\.(?:mjs|js)$/;
 const NODE = process.execPath;
 
+/**
+ * @param {string} root
+ * @param {string[]} args
+ */
+export async function testPerformance(root, args) {
+  reportStep("TEST", "running browser performance comparison...");
+  await exec(NODE, ["tests/performance/run.mjs", ...args], {
+    cwd: root,
+  });
+}
+
 /** @param {string} root */
 export async function testAll(root) {
   await testRust(root, { filters: [] });

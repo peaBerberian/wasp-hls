@@ -16,6 +16,7 @@ export async function checkAll(root) {
     checkCommon(root),
     checkDemo(root),
     checkScripts(root),
+    checkTests(root),
     checkRust(root),
   ]);
 }
@@ -86,6 +87,13 @@ export async function checkScripts(root) {
   await exec(tsc.command, tsc.args, {
     cwd: root,
   });
+}
+
+/** @param {string} root */
+export async function checkTests(root) {
+  reportStep("CHECK", "typechecking tests...");
+  const tsc = npmExecCommand("tsc", ["--project", "./tests/tsconfig.json"]);
+  await exec(tsc.command, tsc.args, { cwd: root });
 }
 
 /** @param {string} root */

@@ -61,11 +61,13 @@
       "check -- demo": "Typecheck and lint the demo app.",
       "check -- scripts": "Typecheck the JSDoc-annotated Node scripts that opt into `// @ts-check`.",
       "check -- rust": "Run clippy on the Rust code.",
+      "check -- tests": "Typecheck tests.",
       "test": "Run every test suite: Rust unit tests, transmux tests, and browser integration tests.",
       "test -- rust": "Run only Rust unit tests.",
       "test -- transmux": "Run only the Node-based transmux tests.",
       "test -- integration": "Run only the browser integration tests.",
       "test -- memory": "Run only the browser memory-leak tests on Chrome.",
+      "test -- performance": "Compare browser performance with the main branch (excluded from the default test run).",
       "test -- integration --browser firefox": "Run browser integration tests in Firefox.",
       "test -- integration --filter dash_live_packaged": "Run only matching browser integration tests."
     },

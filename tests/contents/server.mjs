@@ -16,6 +16,17 @@ import {
   getVodScenarioResponse,
 } from "./vod_fixtures.mjs";
 
+/**
+ * @typedef {import("http").ServerResponse} ServerResponse
+ * @typedef {import("http").IncomingMessage} IncomingMessage
+ * @typedef {import("child_process").ChildProcess} PackagingProcess
+ * @typedef {import("./static/urls.mjs").StaticUrlItem} StaticUrlItem
+ * @typedef {{process: PackagingProcess, timeShiftBufferDepth: number,
+ * segmentDuration: number, playlistPath: string, emitProgramDateTime: boolean}} PackagingProcessInfo
+ * @typedef {{ext: string, filePath: string, size: number, mtimeMs: number}} PreparedFile
+ * @typedef {{startedAtMs: number}} EventScenarioState
+ */
+
 /** To activate if you're having content packaging issues. */
 const ACTIVATE_PACKAGER_LOGS = false;
 
@@ -36,10 +47,11 @@ const DEFAULT_PACKAGED_LIVE_OS_PATH = path.join(
 
 // Transform `urls` array into an Object where the key is the url of each
 // element.
+/** @type {Record<string, StaticUrlItem>} */
 const routeObj = urls.reduce((acc, elt) => {
   acc[elt.url] = elt;
   return acc;
-}, {});
+}, /** @type {Record<string, StaticUrlItem>} */ ({}));
 
 const DEFAULT_CONTENT_SERVER_PORT = 3000;
 const CONTENT_TYPE_M3U8 = "application/vnd.apple.mpegurl";
@@ -52,7 +64,7 @@ const EVENT_ENDLIST_SCENARIO_FINAL_SEGMENT_COUNT = 6;
 // the manifest.
 const EVENT_ENDLIST_SCENARIO_PREFIX = "/live/scenario/event-endlist";
 
-/** Global variable to track the "content packaging" process */
+/** @type {PackagingProcessInfo | null} Content packaging process. */
 let packagingProcessInfo = null;
 let eventEndlistScenarioState = createEventEndlistScenarioState();
 // Slow Windows CI machines can briefly make newly written live files
@@ -76,16 +88,20 @@ const LIVE_FILE_OPEN_RETRY_DELAY_MS = 25;
  * Route ordering matters: more specific synthetic scenario endpoints need to be
  * checked before generic prefixes like `/live/`.
  *
- * @param {Object} params
- * @param {number} params.port
- * @returns {Object}
+ * @param {{port?: number}} [params]
+ * @returns {{listeningPromise: Promise<void>, close: () => Promise<void>}}
  */
 export default function createContentServer({
   port = DEFAULT_CONTENT_SERVER_PORT,
 } = {}) {
+  /** @type {Set<import("net").Socket>} */
   const activeSockets = new Set();
   const contentServerBaseUrl = "http://127.0.0.1:" + String(port);
   const server = createServer(function (req, res) {
+    if (req.url === undefined || req.method === undefined) {
+      answerWithCORS(res, 400, "400 Bad Request");
+      return;
+    }
     const requestUrl = new URL(req.url, "http://127.0.0.1");
 
     if (req.url === "/") {
@@ -288,6 +304,10 @@ export default function createContentServer({
       }
     } else {
       data = urlObj.data;
+      if (data === undefined) {
+        answerWithCORS(res, 404, "404 Page Not Found");
+        return;
+      }
       try {
         data = Buffer.from(data);
       } catch (_e) {}
@@ -331,6 +351,7 @@ export default function createContentServer({
     });
   });
 
+  /** @type {Promise<void>} */
   const listeningPromise = new Promise((res) => {
     server.listen(port, function () {
       console.log(
@@ -348,9 +369,11 @@ export default function createContentServer({
       const wasOpen = server.listening;
       server.closeIdleConnections?.();
       server.closeAllConnections?.();
-      await new Promise((resolve) => {
+      /** @type {Promise<void>} */
+      const closed = new Promise((resolve) => {
         server.close(() => resolve());
       });
+      await closed;
       for (const socket of activeSockets) {
         socket.destroy();
       }
@@ -362,20 +385,25 @@ export default function createContentServer({
   };
 }
 
+/**
+ * @param {ServerResponse} res
+ * @param {IncomingMessage} req
+ * @param {string} basePath
+ */
 function handlePackagedLiveRequest(res, req, basePath) {
-  if (req.method.toUpperCase() === "OPTIONS") {
+  if (req.method?.toUpperCase() === "OPTIONS") {
     answerWithCORS(res, 200);
     res.end();
     return;
   }
-  if (req.method.toUpperCase() !== "GET") {
+  if (req.method?.toUpperCase() !== "GET") {
     res.setHeader("Content-Type", "text/plain");
     answerWithCORS(res, 405, "405 Method Not Allowed");
     return;
   }
 
   const baseDir = DEFAULT_PACKAGED_LIVE_OS_PATH;
-  const relativeUrl = req.url.substring(basePath.length);
+  const relativeUrl = (req.url ?? "").substring(basePath.length);
   prepareStaticFile(baseDir, relativeUrl).then(
     (file) => {
       if (file === null) {
@@ -392,7 +420,7 @@ function handlePackagedLiveRequest(res, req, basePath) {
         Connection: "close",
         "Access-Control-Allow-Origin": "*",
         "Access-Control-Allow-Headers": "*",
-        "Access-Control-Allow-Credentials": true,
+        "Access-Control-Allow-Credentials": "true",
         "Access-Control-Allow-Methods": "GET, OPTIONS",
         "Cross-Origin-Resource-Policy": "cross-origin",
         "Cross-Origin-Opener-Policy": "same-origin",
@@ -421,6 +449,11 @@ function handlePackagedLiveRequest(res, req, basePath) {
   );
 }
 
+/**
+ * @param {ServerResponse} res
+ * @param {string} contentServerBaseUrl
+ * @param {EventScenarioState} state
+ */
 async function handleEventEndlistScenarioPlaylistRequest(
   res,
   contentServerBaseUrl,
@@ -452,6 +485,11 @@ async function handleEventEndlistScenarioPlaylistRequest(
   }
 }
 
+/**
+ * @param {string} contentServerBaseUrl
+ * @param {number} segmentCount
+ * @param {{ended: boolean}} options
+ */
 function buildEventEndlistScenarioPlaylist(
   contentServerBaseUrl,
   segmentCount,
@@ -483,6 +521,9 @@ function buildEventEndlistScenarioPlaylist(
   return `${lines.join("\n")}\n`;
 }
 
+/**
+ * @param {EventScenarioState} state
+ */
 function getEventEndlistScenarioPublicationState(state) {
   const elapsedSeconds = Math.max(0, (Date.now() - state.startedAtMs) / 1000);
   const segmentCount = Math.min(
@@ -499,13 +540,19 @@ function getEventEndlistScenarioPublicationState(state) {
   return { ended, segmentCount };
 }
 
+/**
+ * @param {ServerResponse} res
+ * @param {IncomingMessage} req
+ * @param {URL} requestUrl
+ * @param {string} basePath
+ */
 function handlePackagedVodRequest(res, req, requestUrl, basePath) {
-  if (req.method.toUpperCase() === "OPTIONS") {
+  if (req.method?.toUpperCase() === "OPTIONS") {
     answerWithCORS(res, 200);
     res.end();
     return;
   }
-  if (req.method.toUpperCase() !== "GET") {
+  if (req.method?.toUpperCase() !== "GET") {
     res.setHeader("Content-Type", "text/plain");
     answerWithCORS(res, 405, "405 Method Not Allowed");
     return;
@@ -547,6 +594,13 @@ function handlePackagedVodRequest(res, req, requestUrl, basePath) {
   );
 }
 
+/**
+ * @param {ServerResponse} res
+ * @param {IncomingMessage} req
+ * @param {URL} requestUrl
+ * @param {string} basePath
+ * @param {string} contentServerBaseUrl
+ */
 function handleVodScenarioRequest(
   res,
   req,
@@ -554,12 +608,12 @@ function handleVodScenarioRequest(
   basePath,
   contentServerBaseUrl,
 ) {
-  if (req.method.toUpperCase() === "OPTIONS") {
+  if (req.method?.toUpperCase() === "OPTIONS") {
     answerWithCORS(res, 200);
     res.end();
     return;
   }
-  if (req.method.toUpperCase() !== "GET") {
+  if (req.method?.toUpperCase() !== "GET") {
     res.setHeader("Content-Type", "text/plain");
     answerWithCORS(res, 405, "405 Method Not Allowed");
     return;
@@ -611,7 +665,8 @@ function handleVodScenarioRequest(
 
 /**
  * Handle the /start_packager endpoint
- * @param {Response} res
+ * @param {ServerResponse} res
+ * @param {URL} requestUrl
  */
 async function handleStartPackager(res, requestUrl) {
   try {
@@ -691,7 +746,7 @@ async function handleStartPackager(res, requestUrl) {
       JSON.stringify({
         success: false,
         message: "Failed to start content packaging script",
-        error: error.message,
+        error: error instanceof Error ? error.message : String(error),
       }),
     );
   }
@@ -699,7 +754,7 @@ async function handleStartPackager(res, requestUrl) {
 
 /**
  * Handle the /stop_packager endpoint
- * @param {Response} res
+ * @param {ServerResponse} res
  */
 async function handleStopPackager(res) {
   try {
@@ -735,7 +790,7 @@ async function handleStopPackager(res) {
       JSON.stringify({
         success: false,
         message: "Failed to stop content packaging script",
-        error: error.message,
+        error: error instanceof Error ? error.message : String(error),
       }),
     );
   }
@@ -744,9 +799,9 @@ async function handleStopPackager(res) {
 /**
  * Add CORS headers, Content-Length, body, HTTP status and answer with the
  * Response Object given.
- * @param {Response} res
+ * @param {ServerResponse} res
  * @param {number} status
- * @param {*} body
+ * @param {string | Buffer} [body]
  */
 function answerWithCORS(res, status, body) {
   if (Buffer.isBuffer(body)) {
@@ -758,7 +813,7 @@ function answerWithCORS(res, status, body) {
     Connection: "close",
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Headers": "*",
-    "Access-Control-Allow-Credentials": true,
+    "Access-Control-Allow-Credentials": "true",
     "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
     "Cross-Origin-Resource-Policy": "cross-origin",
     "Cross-Origin-Opener-Policy": "same-origin",
@@ -777,7 +832,7 @@ function answerWithCORS(res, status, body) {
  * specifically the start and end range wanted included.
  * @param {string} rangeHeader
  * @param {number} dataLength
- * @returns {Array.<number>}
+ * @returns {[number, number]}
  */
 function parseRangeHeader(rangeHeader, dataLength) {
   const rangesStr = rangeHeader.substring(6).split("-");
@@ -789,9 +844,9 @@ function parseRangeHeader(rangeHeader, dataLength) {
   }
   const rangesNb = rangesStr.map((x) => (x === "" ? null : +x));
   if (rangesNb[1] == null) {
-    return [rangesNb[0], dataLength - 1];
+    return [rangesNb[0] ?? 0, dataLength - 1];
   }
-  if (rangesNb[1] <= rangesNb[0]) {
+  if (rangesNb[0] !== null && rangesNb[1] <= rangesNb[0]) {
     return [0, 0];
   }
   if (rangesNb[0] == null || rangesNb[0] === 0) {
@@ -805,7 +860,7 @@ function parseRangeHeader(rangeHeader, dataLength) {
 
 /**
  * Generate default HTML page listing the URL statically served.
- * @param {Array.<Object>} urls - Information on URLs statically served.
+ * @param {StaticUrlItem[]} urls - Information on URLs statically served.
  * @param {string} baseUrl - Root URL where those are served.
  * @returns {string} - HTML page where those URL can be inspected and browsed.
  */
@@ -909,6 +964,10 @@ function generateUrlListHtml(urls, baseUrl) {
   return html;
 }
 
+/**
+ * @param {string} baseDir
+ * @param {string} url
+ */
 async function prepareStaticFile(baseDir, url) {
   const filePath = path.resolve(baseDir, url);
   const normalizedBase = path.resolve(baseDir);
@@ -947,6 +1006,11 @@ async function prepareStaticFile(baseDir, url) {
   return null;
 }
 
+/**
+ * @param {IncomingMessage} req
+ * @param {ServerResponse} res
+ * @param {PreparedFile} file
+ */
 function streamPreparedFile(req, res, file) {
   const mimeType = getMimeTypeForExtension(file.ext);
   const rangeHeader = req.headers["Range"] || req.headers["range"];
@@ -984,7 +1048,7 @@ function streamPreparedFile(req, res, file) {
     Connection: "close",
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Headers": "*",
-    "Access-Control-Allow-Credentials": true,
+    "Access-Control-Allow-Credentials": "true",
     "Access-Control-Allow-Methods": "GET, OPTIONS",
   });
   stream.on("error", (err) => {
@@ -996,6 +1060,9 @@ function streamPreparedFile(req, res, file) {
   stream.pipe(res);
 }
 
+/**
+ * @param {string} ext
+ */
 function getMimeTypeForExtension(ext) {
   switch (ext) {
     case "m3u8":
@@ -1072,6 +1139,9 @@ function createEventEndlistScenarioState() {
   };
 }
 
+/**
+ * @param {PackagingProcess} proc
+ */
 function attachPackagerLogDrain(proc) {
   if (ACTIVATE_PACKAGER_LOGS) {
     proc.stdout?.on("data", (data) => {
@@ -1083,12 +1153,19 @@ function attachPackagerLogDrain(proc) {
   }
 }
 
+/**
+ * @param {number} ms
+ * @returns {Promise<void>}
+ */
 function sleep(ms) {
   return new Promise((resolve) => {
     setTimeout(resolve, ms);
   });
 }
 
+/**
+ * @param {PackagingProcess | null} proc
+ */
 function forceKillProcessTree(proc) {
   if (!proc || proc.pid === undefined) {
     return;

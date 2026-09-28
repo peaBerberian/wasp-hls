@@ -18,12 +18,33 @@ export const GENERATED_VOD_ROOT = path.join(
   "vod",
 );
 
+/**
+ * @typedef {{id: string, playlistName: string, durationSeconds: number,
+ * segmentDurationSeconds: number, frameRate: number, videoSize: string,
+ * videoBitrate: string, audioBitrate: string, audioFrequency: number,
+ * streams?: "video" | "audio"} &
+ * ({segmentType: "fmp4", segmentExtension: "m4s", initFileName: string} |
+ * {segmentType: "mpegts", segmentExtension: "ts"})} VodRecipe
+ * @typedef {{outputDir: string, playlistPath: string}} GeneratedRecipe
+ * @typedef {{baseUrl: string}} PlaylistContext
+ * @typedef {PlaylistContext & {scenarioId: string,
+ * forRecipe: (recipeId: string) => PlaylistContext}} ScenarioContext
+ * @typedef {{body: string | Buffer, contentType?: string, status?: number,
+ * headers?: Record<string, string>}} FixtureResponse
+ * @typedef {{entryPath: string, recipeId: string,
+ * getFile: (relativePath: string, context: ScenarioContext) =>
+ * Promise<FixtureResponse | null>}} VodScenario
+ * @typedef {{schemaVersion: number, recipeId: string, fingerprint: string}} RecipeMetadata
+ */
+
 const RECIPE_SCHEMA_VERSION = 1;
 const RECIPE_METADATA_FILE = ".recipe.json";
+/** @type {Map<string, Promise<GeneratedRecipe>>} */
 const generationPromises = new Map();
 
 const CONTENT_TYPE_M3U8 = "application/vnd.apple.mpegurl";
 
+/** @type {Record<string, VodRecipe>} */
 const RECIPES = {
   "fmp4-muxed-av": {
     id: "fmp4-muxed-av",
@@ -144,6 +165,7 @@ const RECIPES = {
   },
 };
 
+/** @type {Record<string, VodScenario>} */
 const SCENARIOS = {
   "fmp4-direct-media": {
     entryPath: "playlist.m3u8",
@@ -837,6 +859,11 @@ const SCENARIOS = {
   },
 };
 
+/**
+ * @param {string} scenarioId
+ * @param {string} relativePath
+ * @param {string} serverBaseUrl
+ */
 export async function getVodScenarioResponse(
   scenarioId,
   relativePath,
@@ -868,6 +895,9 @@ export async function ensureDefaultVodFixtures() {
   );
 }
 
+/**
+ * @param {string} relativePath
+ */
 export function getVodRecipeIdFromGeneratedPath(relativePath) {
   const normalizedPath = normalizeScenarioRelativePath(relativePath);
   if (normalizedPath === null) {
@@ -884,6 +914,9 @@ export function getVodRecipeIdFromGeneratedPath(relativePath) {
   return recipeId;
 }
 
+/**
+ * @param {string} relativePath
+ */
 export function getVodGeneratedRelativeFilePath(relativePath) {
   const normalizedPath = normalizeScenarioRelativePath(relativePath);
   if (normalizedPath === null) {
@@ -896,11 +929,17 @@ export function getVodGeneratedRelativeFilePath(relativePath) {
   return normalizedPath.substring(slashIndex + 1);
 }
 
+/**
+ * @param {string} recipeId
+ */
 export function getVodRecipeOutputDir(recipeId) {
   const recipe = RECIPES[recipeId];
   return recipe === undefined ? null : path.join(GENERATED_VOD_ROOT, recipe.id);
 }
 
+/**
+ * @param {string} recipeId
+ */
 export async function ensureVodRecipe(recipeId) {
   const recipe = RECIPES[recipeId];
   if (recipe === undefined) {
@@ -919,6 +958,9 @@ export async function ensureVodRecipe(recipeId) {
   return await generationPromise;
 }
 
+/**
+ * @param {VodRecipe} recipe
+ */
 async function ensureVodRecipeInner(recipe) {
   const outputDir = path.join(GENERATED_VOD_ROOT, recipe.id);
   const expectedFingerprint = buildRecipeFingerprint(recipe);
@@ -955,6 +997,9 @@ async function ensureVodRecipeInner(recipe) {
   };
 }
 
+/**
+ * @param {VodRecipe} recipe
+ */
 function buildRecipeFingerprint(recipe) {
   return createHash("sha1")
     .update(
@@ -966,6 +1011,10 @@ function buildRecipeFingerprint(recipe) {
     .digest("hex");
 }
 
+/**
+ * @param {string} metadataPath
+ * @returns {Promise<RecipeMetadata | null>}
+ */
 async function readRecipeMetadata(metadataPath) {
   try {
     const metadata = await fs.promises.readFile(metadataPath, "utf8");
@@ -975,6 +1024,9 @@ async function readRecipeMetadata(metadataPath) {
   }
 }
 
+/**
+ * @param {VodRecipe} recipe
+ */
 function buildRecipeFfmpegArgs(recipe) {
   const gop = recipe.frameRate * recipe.segmentDurationSeconds;
   const outputPlaylistPath = recipe.playlistName;
@@ -1052,6 +1104,11 @@ function buildRecipeFfmpegArgs(recipe) {
   ];
 }
 
+/**
+ * @param {string[]} args
+ * @param {string} recipeId
+ * @returns {Promise<void>}
+ */
 function runFfmpeg(args, recipeId) {
   return new Promise((resolve, reject) => {
     const outputDir = getVodRecipeOutputDir(recipeId);
@@ -1091,6 +1148,9 @@ function runFfmpeg(args, recipeId) {
   });
 }
 
+/**
+ * @param {string} recipeId
+ */
 async function readGeneratedMediaPlaylist(recipeId) {
   const recipe = RECIPES[recipeId];
   const outputDir = getVodRecipeOutputDir(recipeId);
@@ -1103,6 +1163,10 @@ async function readGeneratedMediaPlaylist(recipeId) {
   );
 }
 
+/**
+ * @param {string} playlistText
+ * @param {PlaylistContext} context
+ */
 function createMediaPlaylistResponse(playlistText, context) {
   return {
     body: rewriteMediaPlaylistUrls(playlistText, context.baseUrl),
@@ -1110,6 +1174,9 @@ function createMediaPlaylistResponse(playlistText, context) {
   };
 }
 
+/**
+ * @param {string} playlistText
+ */
 function createRelativeMediaPlaylistResponse(playlistText) {
   return {
     body: playlistText,
@@ -1117,6 +1184,9 @@ function createRelativeMediaPlaylistResponse(playlistText) {
   };
 }
 
+/**
+ * @param {string} location
+ */
 function createRedirectResponse(location) {
   return {
     status: 302,
@@ -1127,6 +1197,10 @@ function createRedirectResponse(location) {
   };
 }
 
+/**
+ * @param {string} recipeId
+ * @param {string | null} relativePath
+ */
 async function readGeneratedRecipeAssetResponse(recipeId, relativePath) {
   if (relativePath === null) {
     return null;
@@ -1150,6 +1224,10 @@ async function readGeneratedRecipeAssetResponse(recipeId, relativePath) {
   }
 }
 
+/**
+ * @param {string} playlistText
+ * @param {string} startTagLine
+ */
 function injectExtXStart(playlistText, startTagLine) {
   const lines = playlistText.split("\n");
   if (lines[0]?.trim() !== "#EXTM3U") {
@@ -1158,6 +1236,9 @@ function injectExtXStart(playlistText, startTagLine) {
   return [lines[0], startTagLine, ...lines.slice(1)].join("\n");
 }
 
+/**
+ * @param {string} filePath
+ */
 function getMimeTypeForFilePath(filePath) {
   switch (path.extname(filePath).slice(1)) {
     case "m3u8":
@@ -1175,6 +1256,10 @@ function getMimeTypeForFilePath(filePath) {
   }
 }
 
+/**
+ * @param {string} playlistText
+ * @param {string} iso8601DateTime
+ */
 function injectProgramDateTime(playlistText, iso8601DateTime) {
   const lines = playlistText.split("\n");
   const extInfIndex = lines.findIndex((line) =>
@@ -1190,6 +1275,10 @@ function injectProgramDateTime(playlistText, iso8601DateTime) {
   ].join("\n");
 }
 
+/**
+ * @param {string} playlistText
+ * @param {string} insertedLine
+ */
 function injectLineAfterExtM3u(playlistText, insertedLine) {
   const lines = playlistText.split("\n");
   if (lines[0]?.trim() !== "#EXTM3U") {
@@ -1198,6 +1287,11 @@ function injectLineAfterExtM3u(playlistText, insertedLine) {
   return [lines[0], insertedLine, ...lines.slice(1)].join("\n");
 }
 
+/**
+ * @param {string} playlistText
+ * @param {(line: string) => boolean} predicate
+ * @param {string} insertedLine
+ */
 function injectLineAfterFirstMatching(playlistText, predicate, insertedLine) {
   const lines = playlistText.split("\n");
   const index = lines.findIndex((line) => predicate(line.trim()));
@@ -1211,6 +1305,11 @@ function injectLineAfterFirstMatching(playlistText, predicate, insertedLine) {
   ].join("\n");
 }
 
+/**
+ * @param {string} playlistText
+ * @param {(line: string) => boolean} predicate
+ * @param {string} insertedLine
+ */
 function injectLineBeforeFirstMatching(playlistText, predicate, insertedLine) {
   const lines = playlistText.split("\n");
   const index = lines.findIndex((line) => predicate(line.trim()));
@@ -1222,6 +1321,11 @@ function injectLineBeforeFirstMatching(playlistText, predicate, insertedLine) {
   );
 }
 
+/**
+ * @param {string} playlistText
+ * @param {(line: string) => boolean} predicate
+ * @param {string} replacementLine
+ */
 function replaceFirstLineMatching(playlistText, predicate, replacementLine) {
   const lines = playlistText.split("\n");
   const index = lines.findIndex((line) => predicate(line.trim()));
@@ -1232,6 +1336,10 @@ function replaceFirstLineMatching(playlistText, predicate, replacementLine) {
   return lines.join("\n");
 }
 
+/**
+ * @param {string} playlistText
+ * @param {(line: string) => boolean} predicate
+ */
 function removeFirstLineMatching(playlistText, predicate) {
   const lines = playlistText.split("\n");
   const index = lines.findIndex((line) => predicate(line.trim()));
@@ -1242,6 +1350,10 @@ function removeFirstLineMatching(playlistText, predicate) {
   return lines.join("\n");
 }
 
+/**
+ * @param {string} playlistText
+ * @param {string} baseUrl
+ */
 function rewriteMediaPlaylistUrls(playlistText, baseUrl) {
   return playlistText
     .split("\n")
@@ -1249,6 +1361,10 @@ function rewriteMediaPlaylistUrls(playlistText, baseUrl) {
     .join("\n");
 }
 
+/**
+ * @param {string} line
+ * @param {string} baseUrl
+ */
 function rewritePlaylistLine(line, baseUrl) {
   const trimmedLine = line.trim();
   if (trimmedLine.length === 0) {
@@ -1265,10 +1381,17 @@ function rewritePlaylistLine(line, baseUrl) {
   return line;
 }
 
+/**
+ * @param {string} relativeUrl
+ * @param {string} baseUrl
+ */
 function toAbsoluteUrl(relativeUrl, baseUrl) {
   return new URL(relativeUrl, baseUrl).href;
 }
 
+/**
+ * @param {PlaylistContext} context
+ */
 async function createFmp4ByteRangePlaylist(context) {
   const recipeId = "fmp4-muxed-av";
   const playlistText = await readGeneratedMediaPlaylist(recipeId);
@@ -1290,6 +1413,12 @@ async function createFmp4ByteRangePlaylist(context) {
   return playlist.text;
 }
 
+/**
+ * @param {string} playlistText
+ * @param {string} outputDir
+ * @param {string} baseUrl
+ * @param {string} combinedSegmentFileName
+ */
 async function buildByteRangeMediaPlaylist(
   playlistText,
   outputDir,
@@ -1358,6 +1487,9 @@ async function buildByteRangeMediaPlaylist(
   };
 }
 
+/**
+ * @param {string} relativePath
+ */
 function normalizeScenarioRelativePath(relativePath) {
   const normalizedPath = relativePath.replace(/^\/+/u, "");
   if (
@@ -1370,6 +1502,10 @@ function normalizeScenarioRelativePath(relativePath) {
   return normalizedPath;
 }
 
+/**
+ * @param {string} value
+ * @param {string} prefix
+ */
 function stripPrefix(value, prefix) {
   return value.startsWith(prefix) ? value.substring(prefix.length) : null;
 }
