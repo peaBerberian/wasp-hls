@@ -1150,6 +1150,10 @@ function attachPackagerLogDrain(proc) {
     proc.stderr?.on("data", (data) => {
       console.error("Content packaging script stderr:", data.toString());
     });
+  } else {
+    // Unconsumed pipes can block the packager once their buffers fill.
+    proc.stdout?.resume();
+    proc.stderr?.resume();
   }
 }
 
