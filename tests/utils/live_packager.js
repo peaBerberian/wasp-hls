@@ -57,6 +57,7 @@ async function fetchBinary(url) {
   await response.arrayBuffer();
   return {
     ok: response.ok,
+    status: response.status,
   };
 }
 
@@ -86,9 +87,11 @@ async function waitForPackagerStop() {
 }
 
 async function waitForStableLiveOutput(playlistUrl) {
+  let lastObservation = "No request completed";
   for (let attempt = 0; attempt < 60; attempt++) {
     const master = await fetchText(playlistUrl);
     if (!master.ok) {
+      lastObservation = `master playlist returned ${master.status}`;
       await sleep(1000);
       continue;
     }
@@ -100,6 +103,7 @@ async function waitForStableLiveOutput(playlistUrl) {
       (line) => new URL(line, playlistUrl).href,
     )[0];
     if (variantUrl == null || audioUrl == null) {
+      lastObservation = `master playlist lacks variant or audio reference: ${master.text.slice(0, 300)}`;
       await sleep(1000);
       continue;
     }
@@ -109,6 +113,7 @@ async function waitForStableLiveOutput(playlistUrl) {
       fetchText(audioUrl),
     ]);
     if (!variantPlaylist.ok || !audioPlaylist.ok) {
+      lastObservation = `variant/audio playlists returned ${variantPlaylist.status}/${audioPlaylist.status}: ${variantUrl}, ${audioUrl}`;
       await sleep(1000);
       continue;
     }
@@ -118,22 +123,29 @@ async function waitForStableLiveOutput(playlistUrl) {
     )[0];
     const audioSegmentRef = extractPlaylistReferences(audioPlaylist.text)[0];
     if (variantSegmentRef == null || audioSegmentRef == null) {
+      lastObservation = `variant/audio playlists lack segment references: ${variantPlaylist.text.slice(0, 200)} / ${audioPlaylist.text.slice(0, 200)}`;
       await sleep(1000);
       continue;
     }
 
+    const variantSegmentUrl = new URL(variantSegmentRef, variantUrl).href;
+    const audioSegmentUrl = new URL(audioSegmentRef, audioUrl).href;
     const [variantSegment, audioSegment] = await Promise.all([
-      fetchBinary(new URL(variantSegmentRef, variantUrl).href),
-      fetchBinary(new URL(audioSegmentRef, audioUrl).href),
+      fetchBinary(variantSegmentUrl),
+      fetchBinary(audioSegmentUrl),
     ]);
     if (variantSegment.ok && audioSegment.ok) {
       return;
     }
 
+    lastObservation = `variant/audio segments returned ${variantSegment.status}/${audioSegment.status}: ${variantSegmentUrl}, ${audioSegmentUrl}`;
     await sleep(1000);
   }
 
-  throw new Error("Live packager output did not become fetchable");
+  const status = await fetchCurrentPackagerStatus();
+  throw new Error(
+    `Live packager output did not become fetchable. Last observation: ${lastObservation}. Packager status: ${JSON.stringify(status)}`,
+  );
 }
 
 export async function startLivePackager() {

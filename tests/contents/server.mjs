@@ -29,6 +29,9 @@ import {
 
 /** To activate if you're having content packaging issues. */
 const ACTIVATE_PACKAGER_LOGS = false;
+const PACKAGER_LOG_TAIL_LENGTH = 2048;
+let packagerStdoutTail = "";
+let packagerStderrTail = "";
 
 /** Path of the current file. */
 const __filename = fileURLToPath(import.meta.url);
@@ -250,6 +253,8 @@ export default function createContentServer({
                 timeShiftBufferDepth: packagingProcessInfo.timeShiftBufferDepth,
                 segmentDuration: packagingProcessInfo.segmentDuration,
                 emitProgramDateTime: packagingProcessInfo.emitProgramDateTime,
+                stdoutTail: packagerStdoutTail,
+                stderrTail: packagerStderrTail,
               },
             };
       answerWithCORS(res, 200, JSON.stringify(jsonResponse));
@@ -703,6 +708,8 @@ async function handleStartPackager(res, requestUrl) {
       stdio: ["ignore", "pipe", "pipe"], // Don't inherit stdio, capture output
       cwd: __dirname,
     });
+    packagerStdoutTail = "";
+    packagerStderrTail = "";
 
     packagingProcessInfo = {
       process: proc,
@@ -1143,18 +1150,22 @@ function createEventEndlistScenarioState() {
  * @param {PackagingProcess} proc
  */
 function attachPackagerLogDrain(proc) {
-  if (ACTIVATE_PACKAGER_LOGS) {
-    proc.stdout?.on("data", (data) => {
+  proc.stdout?.on("data", (data) => {
+    packagerStdoutTail = (packagerStdoutTail + data.toString()).slice(
+      -PACKAGER_LOG_TAIL_LENGTH,
+    );
+    if (ACTIVATE_PACKAGER_LOGS) {
       console.log("Content packaging script stdout:", data.toString());
-    });
-    proc.stderr?.on("data", (data) => {
+    }
+  });
+  proc.stderr?.on("data", (data) => {
+    packagerStderrTail = (packagerStderrTail + data.toString()).slice(
+      -PACKAGER_LOG_TAIL_LENGTH,
+    );
+    if (ACTIVATE_PACKAGER_LOGS) {
       console.error("Content packaging script stderr:", data.toString());
-    });
-  } else {
-    // Unconsumed pipes can block the packager once their buffers fill.
-    proc.stdout?.resume();
-    proc.stderr?.resume();
-  }
+    }
+  });
 }
 
 /**
