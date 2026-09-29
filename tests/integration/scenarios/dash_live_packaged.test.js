@@ -307,14 +307,27 @@ describe("Live packaged content with EXT-X-PROGRAM-DATE-TIME", function () {
         loadedSnapshotContext: {
           segmentDuration: ctx.liveInfo.segmentDuration,
         },
-        assertLoadedSnapshot(snapshot, _timings, context) {
-          const gap = snapshot.maximumPosition - snapshot.position;
+        assertLoadedSnapshot(snapshot, timings, context) {
+          const initialSeek = assertInitialSeekSurvivesLoad(snapshot, timings);
+          const initialGap =
+            initialSeek.maximumPosition - initialSeek.mediaPosition;
+          const loadedGap = snapshot.maximumPosition - snapshot.position;
 
           expect(snapshot.playerState).toEqual("Loaded");
           expect(snapshot.playerError).toBeNull();
           expect(snapshot.usesProgramDateTime).toBe(true);
-          expect(gap).toBeGreaterThanOrEqual(context.segmentDuration * 3 - 0.5);
-          expect(gap).toBeLessThanOrEqual(context.segmentDuration * 4 + 1);
+          expect(initialGap).toBeGreaterThanOrEqual(
+            context.segmentDuration * 3 - 0.5,
+          );
+          expect(initialGap).toBeLessThanOrEqual(
+            context.segmentDuration * 4 + 1,
+          );
+          expect(loadedGap).toBeGreaterThanOrEqual(
+            context.segmentDuration * 3 - 0.5 - LIVE_WINDOW_DRIFT_TOLERANCE_S,
+          );
+          expect(loadedGap).toBeLessThanOrEqual(
+            context.segmentDuration * 4 + 1,
+          );
         },
       });
     },
