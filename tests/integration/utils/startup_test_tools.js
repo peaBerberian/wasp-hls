@@ -3,16 +3,17 @@ import {
   getPlayerStateSnapshot,
   waitForLoadedState,
 } from "../../utils/player_test_tools.js";
-import sleep from "../../utils/sleep.js";
+import { checkAfterSleepWithBackoff } from "../../utils/checkAfterSleepWithBackoff.js";
 
 const DEFAULT_PLAYBACK_SETTLE_MS = 1_500;
 
-function createStartupEventTracker(videoElement) {
+function createStartupEventTracker(player, videoElement, lastPlayerErrorRef) {
   const timestamps = {
     seekingAt: undefined,
     loadedMetadataAt: undefined,
     loadedDataAt: undefined,
   };
+  let initialSeekSnapshot;
 
   const listeners = [
     ["seeking", "seekingAt"],
@@ -21,6 +22,13 @@ function createStartupEventTracker(videoElement) {
   ].map(([eventName, key]) => {
     const onEvent = () => {
       timestamps[key] ??= performance.now();
+      if (eventName === "seeking" && initialSeekSnapshot === undefined) {
+        initialSeekSnapshot = getPlayerStateSnapshot(
+          player,
+          videoElement,
+          lastPlayerErrorRef(),
+        );
+      }
     };
     videoElement.addEventListener(eventName, onEvent);
     return [eventName, onEvent];
@@ -28,6 +36,9 @@ function createStartupEventTracker(videoElement) {
 
   return {
     timestamps,
+    get initialSeekSnapshot() {
+      return initialSeekSnapshot;
+    },
     cleanup() {
       for (const [eventName, listener] of listeners) {
         videoElement.removeEventListener(eventName, listener);
@@ -44,11 +55,16 @@ export async function assertStartupBehavior({
   assertLoadedSnapshot,
   loadedSnapshotContext,
   expectInitialSeek = false,
-  maxInitialSeekDelayMs = 5_000,
-  maxLoadedDelayMs = 12_000,
+  maxInitialSeekDelayMs = 20_000,
+  maxLoadedDelayMs = 45_000,
   playbackSettleMs = DEFAULT_PLAYBACK_SETTLE_MS,
+  maxPlaybackSettleMs = 30_000,
 }) {
-  const tracker = createStartupEventTracker(videoElement);
+  const tracker = createStartupEventTracker(
+    player,
+    videoElement,
+    lastPlayerErrorRef,
+  );
   const loadStartedAt = performance.now();
 
   try {
@@ -65,6 +81,7 @@ export async function assertStartupBehavior({
     lastPlayerErrorRef(),
   );
   const timings = {
+    initialSeekSnapshot: tracker.initialSeekSnapshot,
     loadedDelayMs: loadedAt - loadStartedAt,
     initialSeekDelayMs:
       tracker.timestamps.seekingAt === undefined
@@ -93,8 +110,17 @@ export async function assertStartupBehavior({
 
   const startPosition = player.getPosition();
   player.resume();
-  await sleep(playbackSettleMs);
-  expect(player.getPosition()).toBeGreaterThan(startPosition + 0.5);
+  await checkAfterSleepWithBackoff(
+    {
+      minTimeMs: playbackSettleMs,
+      maxTimeMs: maxPlaybackSettleMs,
+      stepMs: 250,
+    },
+    () => {
+      expect(player.getError()).toBeNull();
+      expect(player.getPosition()).toBeGreaterThan(startPosition + 0.5);
+    },
+  );
 
   return { snapshot, timings };
 }

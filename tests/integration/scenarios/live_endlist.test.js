@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import sleep from "../../utils/sleep.js";
 import {
   eventListener,
+  getPlayerStateSnapshot,
   waitForLoadedState,
 } from "../../utils/player_test_tools.js";
 import { checkAfterSleepWithBackoff } from "../../utils/checkAfterSleepWithBackoff.js";
@@ -77,7 +78,19 @@ describe("Live content - EXT-X-ENDLIST", function () {
       );
 
       const now = performance.now();
-      await endedListener.awaitNext();
+      try {
+        await endedListener.awaitNext();
+      } catch (error) {
+        throw new Error(
+          `${error instanceof Error ? error.message : String(error)}: ${JSON.stringify(
+            getPlayerStateSnapshot(
+              ctx.player,
+              ctx.videoElement,
+              ctx.lastPlayerError,
+            ),
+          )}`,
+        );
+      }
       expect(performance.now() - now).toBeLessThan(20_000);
       expect(endedListener.getCurrentCount()).toEqual(1);
       expect(ctx.player.isEnded()).toEqual(true);

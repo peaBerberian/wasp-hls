@@ -29,6 +29,13 @@ import {
 
 /** To activate if you're having content packaging issues. */
 const ACTIVATE_PACKAGER_LOGS = false;
+const PACKAGER_LOG_TAIL_LENGTH = 2048;
+let packagerStdoutTail = "";
+let packagerStderrTail = "";
+/** @type {PackagingProcess | null} */
+let packagerLogProcess = null;
+/** @type {{code: number | null, signal: string | null} | {error: string} | null} */
+let packagerExit = null;
 
 /** Path of the current file. */
 const __filename = fileURLToPath(import.meta.url);
@@ -241,6 +248,9 @@ export default function createContentServer({
           ? {
               active: false,
               info: null,
+              exit: packagerExit,
+              stdoutTail: packagerStdoutTail,
+              stderrTail: packagerStderrTail,
             }
           : {
               active: true,
@@ -250,6 +260,8 @@ export default function createContentServer({
                 timeShiftBufferDepth: packagingProcessInfo.timeShiftBufferDepth,
                 segmentDuration: packagingProcessInfo.segmentDuration,
                 emitProgramDateTime: packagingProcessInfo.emitProgramDateTime,
+                stdoutTail: packagerStdoutTail,
+                stderrTail: packagerStderrTail,
               },
             };
       answerWithCORS(res, 200, JSON.stringify(jsonResponse));
@@ -703,6 +715,10 @@ async function handleStartPackager(res, requestUrl) {
       stdio: ["ignore", "pipe", "pipe"], // Don't inherit stdio, capture output
       cwd: __dirname,
     });
+    packagerStdoutTail = "";
+    packagerStderrTail = "";
+    packagerLogProcess = proc;
+    packagerExit = null;
 
     packagingProcessInfo = {
       process: proc,
@@ -713,13 +729,19 @@ async function handleStartPackager(res, requestUrl) {
     };
     attachPackagerLogDrain(packagingProcessInfo.process);
 
-    packagingProcessInfo.process.on("error", (error) => {
+    proc.on("error", (error) => {
       console.error("ERROR: Content packaging script error:", error);
-      packagingProcessInfo = null;
+      if (packagingProcessInfo?.process === proc) {
+        packagerExit = { error: error.message };
+        packagingProcessInfo = null;
+      }
     });
 
-    packagingProcessInfo.process.on("exit", () => {
-      packagingProcessInfo = null;
+    proc.on("exit", (code, signal) => {
+      if (packagingProcessInfo?.process === proc) {
+        packagerExit = { code, signal };
+        packagingProcessInfo = null;
+      }
     });
 
     res.setHeader("Content-Type", "application/json");
@@ -1143,14 +1165,28 @@ function createEventEndlistScenarioState() {
  * @param {PackagingProcess} proc
  */
 function attachPackagerLogDrain(proc) {
-  if (ACTIVATE_PACKAGER_LOGS) {
-    proc.stdout?.on("data", (data) => {
+  proc.stdout?.on("data", (data) => {
+    if (packagerLogProcess !== proc) {
+      return;
+    }
+    packagerStdoutTail = (packagerStdoutTail + data.toString()).slice(
+      -PACKAGER_LOG_TAIL_LENGTH,
+    );
+    if (ACTIVATE_PACKAGER_LOGS) {
       console.log("Content packaging script stdout:", data.toString());
-    });
-    proc.stderr?.on("data", (data) => {
+    }
+  });
+  proc.stderr?.on("data", (data) => {
+    if (packagerLogProcess !== proc) {
+      return;
+    }
+    packagerStderrTail = (packagerStderrTail + data.toString()).slice(
+      -PACKAGER_LOG_TAIL_LENGTH,
+    );
+    if (ACTIVATE_PACKAGER_LOGS) {
       console.error("Content packaging script stderr:", data.toString());
-    });
-  }
+    }
+  });
 }
 
 /**

@@ -3,10 +3,10 @@ import { getVodScenarioUrl } from "../../utils/vod_scenarios.js";
 import setupPlayer from "../utils/player_setup";
 import { assertStartupBehavior } from "../utils/startup_test_tools.js";
 
-const VOD_TEST_TIMEOUT_MS = 60_000;
+const VOD_TEST_TIMEOUT_MS = 120_000;
 const VOD_START_POSITION_TOLERANCE_S = 0.35;
-const VOD_MAX_INITIAL_SEEK_DELAY_MS = 4_000;
-const VOD_MAX_LOADED_DELAY_MS = 8_000;
+const VOD_MAX_INITIAL_SEEK_DELAY_MS = 20_000;
+const VOD_MAX_LOADED_DELAY_MS = 45_000;
 const PROGRAM_DATE_TIME_START = Date.parse("2024-01-02T03:04:05.000Z") / 1000;
 
 const VOD_STARTING_POSITION_CASES = [

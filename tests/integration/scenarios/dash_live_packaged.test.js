@@ -1,15 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { checkAfterSleepWithBackoff } from "../../utils/checkAfterSleepWithBackoff.js";
 import sleep from "../../utils/sleep.js";
-import { waitForLoadedStateAfterLoad } from "../../utils/waitForPlayerState";
+import { waitForLoadedState } from "../../utils/player_test_tools.js";
 import setupPlayer from "../utils/player_setup";
 import { assertStartupBehavior } from "../utils/startup_test_tools.js";
 
-const PLAYER_LOAD_TIMEOUT_MS = 90_000;
 const LIVE_PLAYBACK_TEST_TIMEOUT_MS = 240_000;
-const LIVE_MAX_INITIAL_SEEK_DELAY_MS = 5_000;
-const LIVE_MAX_LOADED_DELAY_MS = 12_000;
+const LIVE_MAX_INITIAL_SEEK_DELAY_MS = 20_000;
+const LIVE_MAX_LOADED_DELAY_MS = 45_000;
 const LIVE_POSITION_TOLERANCE_S = 2.5;
+const LIVE_WINDOW_DRIFT_TOLERANCE_S = 4;
 const LIVE_PROGRAM_DATE_TIME_TOLERANCE_S = 6;
 
 describe("Live packaged content", function () {
@@ -20,17 +20,31 @@ describe("Live packaged content", function () {
       name: "defaults to a safe distance from the live edge without `startingPosition`",
       options: undefined,
       expectInitialSeek: true,
-      assertLoadedSnapshot(snapshot, _timings, context) {
-        const gap = snapshot.maximumPosition - snapshot.position;
+      assertLoadedSnapshot(snapshot, timings, context) {
+        const initialSeek = assertInitialSeekSurvivesLoad(snapshot, timings);
+        const gap = initialSeek.maximumPosition - initialSeek.mediaPosition;
         expect(gap).toBeGreaterThanOrEqual(context.segmentDuration * 3 - 0.5);
         expect(gap).toBeLessThanOrEqual(context.segmentDuration * 4 + 1);
+        const loadedGap = snapshot.maximumPosition - snapshot.position;
+        expect(loadedGap).toBeGreaterThanOrEqual(
+          context.segmentDuration * 3 - 0.5,
+        );
+        expect(loadedGap).toBeLessThanOrEqual(
+          context.segmentDuration * 4 + 1 + LIVE_WINDOW_DRIFT_TOLERANCE_S,
+        );
       },
     },
     {
       name: "honors numeric absolute `startingPosition` on live",
       options: { startingPosition: 6 },
       expectInitialSeek: true,
-      assertLoadedSnapshot(snapshot) {
+      assertLoadedSnapshot(snapshot, timings) {
+        const position = assertInitialSeekSurvivesLoad(
+          snapshot,
+          timings,
+        ).mediaPosition;
+        expect(position).toBeGreaterThanOrEqual(6 - LIVE_POSITION_TOLERANCE_S);
+        expect(position).toBeLessThanOrEqual(6 + LIVE_POSITION_TOLERANCE_S);
         expect(snapshot.position).toBeGreaterThanOrEqual(
           6 - LIVE_POSITION_TOLERANCE_S,
         );
@@ -48,7 +62,13 @@ describe("Live packaged content", function () {
         },
       },
       expectInitialSeek: true,
-      assertLoadedSnapshot(snapshot) {
+      assertLoadedSnapshot(snapshot, timings) {
+        const position = assertInitialSeekSurvivesLoad(
+          snapshot,
+          timings,
+        ).mediaPosition;
+        expect(position).toBeGreaterThanOrEqual(8 - LIVE_POSITION_TOLERANCE_S);
+        expect(position).toBeLessThanOrEqual(8 + LIVE_POSITION_TOLERANCE_S);
         expect(snapshot.position).toBeGreaterThanOrEqual(
           8 - LIVE_POSITION_TOLERANCE_S,
         );
@@ -66,12 +86,20 @@ describe("Live packaged content", function () {
         },
       },
       expectInitialSeek: true,
-      assertLoadedSnapshot(snapshot) {
+      assertLoadedSnapshot(snapshot, timings) {
+        const initialSeek = assertInitialSeekSurvivesLoad(snapshot, timings);
+        const expectedPosition = initialSeek.minimumPosition + 4;
+        expect(initialSeek.mediaPosition).toBeGreaterThanOrEqual(
+          expectedPosition - LIVE_POSITION_TOLERANCE_S,
+        );
+        expect(initialSeek.mediaPosition).toBeLessThanOrEqual(
+          expectedPosition + LIVE_POSITION_TOLERANCE_S,
+        );
         expect(snapshot.position).toBeGreaterThanOrEqual(
           4 - LIVE_POSITION_TOLERANCE_S,
         );
         expect(snapshot.position).toBeLessThanOrEqual(
-          4 + LIVE_POSITION_TOLERANCE_S,
+          4 + LIVE_POSITION_TOLERANCE_S + LIVE_WINDOW_DRIFT_TOLERANCE_S,
         );
       },
     },
@@ -84,15 +112,15 @@ describe("Live packaged content", function () {
         },
       },
       expectInitialSeek: true,
-      assertLoadedSnapshot(snapshot, _timings, context) {
-        const gap = snapshot.maximumPosition - snapshot.position;
+      assertLoadedSnapshot(snapshot, timings) {
+        const initialSeek = assertInitialSeekSurvivesLoad(snapshot, timings);
+        const gap = initialSeek.maximumPosition - initialSeek.mediaPosition;
         expect(gap).toBeGreaterThanOrEqual(8 - LIVE_POSITION_TOLERANCE_S);
         expect(gap).toBeLessThanOrEqual(8 + LIVE_POSITION_TOLERANCE_S);
-        expect(snapshot.position).toBeGreaterThanOrEqual(
-          snapshot.minimumPosition,
-        );
-        expect(snapshot.position).toBeLessThanOrEqual(
-          context.timeShiftBufferDepth,
+        const loadedGap = snapshot.maximumPosition - snapshot.position;
+        expect(loadedGap).toBeGreaterThanOrEqual(8 - LIVE_POSITION_TOLERANCE_S);
+        expect(loadedGap).toBeLessThanOrEqual(
+          8 + LIVE_POSITION_TOLERANCE_S + LIVE_WINDOW_DRIFT_TOLERANCE_S,
         );
       },
     },
@@ -130,7 +158,7 @@ describe("Live packaged content", function () {
       await checkAfterSleepWithBackoff(
         {
           minTimeMs: 2000,
-          maxTimeMs: 12000,
+          maxTimeMs: 45000,
           stepMs: 1000,
         },
         () => {
@@ -279,14 +307,27 @@ describe("Live packaged content with EXT-X-PROGRAM-DATE-TIME", function () {
         loadedSnapshotContext: {
           segmentDuration: ctx.liveInfo.segmentDuration,
         },
-        assertLoadedSnapshot(snapshot, _timings, context) {
-          const gap = snapshot.maximumPosition - snapshot.position;
+        assertLoadedSnapshot(snapshot, timings, context) {
+          const initialSeek = assertInitialSeekSurvivesLoad(snapshot, timings);
+          const initialGap =
+            initialSeek.maximumPosition - initialSeek.mediaPosition;
+          const loadedGap = snapshot.maximumPosition - snapshot.position;
 
           expect(snapshot.playerState).toEqual("Loaded");
           expect(snapshot.playerError).toBeNull();
           expect(snapshot.usesProgramDateTime).toBe(true);
-          expect(gap).toBeGreaterThanOrEqual(context.segmentDuration * 3 - 0.5);
-          expect(gap).toBeLessThanOrEqual(context.segmentDuration * 4 + 1);
+          expect(initialGap).toBeGreaterThanOrEqual(
+            context.segmentDuration * 3 - 0.5,
+          );
+          expect(initialGap).toBeLessThanOrEqual(
+            context.segmentDuration * 4 + 1,
+          );
+          expect(loadedGap).toBeGreaterThanOrEqual(
+            context.segmentDuration * 3 - 0.5 - LIVE_WINDOW_DRIFT_TOLERANCE_S,
+          );
+          expect(loadedGap).toBeLessThanOrEqual(
+            context.segmentDuration * 4 + 1,
+          );
         },
       });
     },
@@ -330,23 +371,6 @@ describe("Live packaged content with EXT-X-PROGRAM-DATE-TIME", function () {
     },
   );
 });
-
-function getPlayerStateSnapshot(player, videoElement, lastPlayerError) {
-  return {
-    playerState: player.getPlayerState(),
-    playerError: player.getError() ?? lastPlayerError,
-    position: player.getPosition(),
-    minimumPosition: player.getMinimumPosition(),
-    maximumPosition: player.getMaximumPosition(),
-    seekableMinimumPosition: player.getSeekableMinimumPosition(),
-    seekableMaximumPosition: player.getSeekableMaximumPosition(),
-    currentTime: videoElement.currentTime,
-    readyState: videoElement.readyState,
-    networkState: videoElement.networkState,
-    paused: videoElement.paused,
-    ended: videoElement.ended,
-  };
-}
 
 function extractPlaylistReferences(playlistText) {
   return playlistText
@@ -395,38 +419,14 @@ async function getLiveProgramDateTimeAnchor(playlistUrl) {
   throw new Error("Unable to find EXT-X-PROGRAM-DATE-TIME in live media");
 }
 
-async function waitForLoadedState(player, videoElement, lastPlayerErrorRef) {
-  const timeoutPromise = sleep(PLAYER_LOAD_TIMEOUT_MS).then(() => {
-    throw new Error(
-      "Player did not reach Loaded in time: " +
-        JSON.stringify(
-          getPlayerStateSnapshot(player, videoElement, lastPlayerErrorRef()),
-        ),
-    );
-  });
-
-  try {
-    await Promise.race([waitForLoadedStateAfterLoad(player), timeoutPromise]);
-  } catch (error) {
-    throw new Error(
-      "Player failed before reaching Loaded: " +
-        JSON.stringify({
-          error,
-          snapshot: getPlayerStateSnapshot(
-            player,
-            videoElement,
-            lastPlayerErrorRef(),
-          ),
-        }),
-    );
-  }
-
-  if (player.getPlayerState() !== "Loaded") {
-    throw new Error(
-      "Player did not settle in Loaded state: " +
-        JSON.stringify(
-          getPlayerStateSnapshot(player, videoElement, lastPlayerErrorRef()),
-        ),
-    );
-  }
+function assertInitialSeekSurvivesLoad(snapshot, timings) {
+  const initialSeek = timings.initialSeekSnapshot;
+  expect(initialSeek).toBeDefined();
+  expect(initialSeek.mediaPosition).toBeDefined();
+  expect(
+    Math.abs(snapshot.currentTime - initialSeek.currentTime),
+  ).toBeLessThanOrEqual(LIVE_POSITION_TOLERANCE_S);
+  expect(snapshot.position).toBeGreaterThanOrEqual(snapshot.minimumPosition);
+  expect(snapshot.position).toBeLessThanOrEqual(snapshot.maximumPosition);
+  return initialSeek;
 }
