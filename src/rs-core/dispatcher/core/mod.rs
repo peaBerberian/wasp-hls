@@ -51,7 +51,6 @@ impl Dispatcher {
         jsStopObservingPlayback();
         self.media_element_ref.reset();
         self.segment_selectors.reset_selectors(0.);
-        self.fast_quality_switching_policy.reset();
         self.playlist_store = None;
         self.ready_probe_segments.clear();
         self.initial_audio_track_selection.clear();
@@ -900,7 +899,6 @@ impl Dispatcher {
                         seg_info.0,
                         &seg_info.1,
                         inventory,
-                        self.fast_quality_switching_policy.get(mt),
                     );
 
                     if let Some(i) = needed_segment.init_segment() {
@@ -944,12 +942,7 @@ impl Dispatcher {
                 let most_needed_segment = self
                     .segment_selectors
                     .get_mut(media_type)
-                    .most_needed_segment(
-                        seg_info.0,
-                        &seg_info.1,
-                        inventory,
-                        self.fast_quality_switching_policy.get(media_type),
-                    );
+                    .most_needed_segment(seg_info.0, &seg_info.1, inventory);
                 if let Some(i) = most_needed_segment.init_segment() {
                     let req_id =
                         self.segment_request_contexts
@@ -999,8 +992,8 @@ impl Dispatcher {
         };
 
         for media_type in changed_media_types.iter().copied() {
-            self.fast_quality_switching_policy
-                .set(media_type, allow_fast_quality_switching);
+            self.segment_selectors
+                .set_fast_quality_switching(media_type, allow_fast_quality_switching);
         }
 
         self.handle_media_playlist_update(&changed_media_types, flush || has_worsened, flush);

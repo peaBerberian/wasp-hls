@@ -60,9 +60,6 @@ pub struct Dispatcher {
     /// Abstraction allowing to know which is the next segment to request.
     segment_selectors: NextSegmentSelectors,
 
-    /// Whether the next quality change may replace already-buffered segments for each media type.
-    fast_quality_switching_policy: FastQualitySwitchingPolicy,
-
     /// Current set-up timers to notify about a needed playlist refresh, associated to the playlist
     /// that needs to be refreshed.
     playlist_refresh_timers: PlaylistRefreshTimers,
@@ -78,39 +75,6 @@ pub struct Dispatcher {
     /// Preferred criteria to resolve the initial audio track selection for the
     /// next content being loaded.
     initial_audio_track_selection: Vec<InitialAudioTrackSelection>,
-}
-
-struct FastQualitySwitchingPolicy {
-    audio: bool,
-    video: bool,
-}
-
-impl FastQualitySwitchingPolicy {
-    fn new() -> Self {
-        Self {
-            audio: true,
-            video: true,
-        }
-    }
-
-    fn get(&self, media_type: MediaType) -> bool {
-        match media_type {
-            MediaType::Audio => self.audio,
-            MediaType::Video => self.video,
-        }
-    }
-
-    fn set(&mut self, media_type: MediaType, value: bool) {
-        match media_type {
-            MediaType::Audio => self.audio = value,
-            MediaType::Video => self.video = value,
-        }
-    }
-
-    fn reset(&mut self) {
-        self.audio = true;
-        self.video = true;
-    }
 }
 
 #[derive(Clone, Debug, Default)]

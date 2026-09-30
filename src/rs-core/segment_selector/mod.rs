@@ -5,6 +5,9 @@ use crate::{
     utils::logger::*,
 };
 
+/// Minimum distance from playback, in seconds, before replacing buffered media.
+const MIN_FAST_QUALITY_SWITCH_LEAD_SECONDS: f64 = 5.;
+
 /// Indicate the most prioritary segment to load according to the given situation.
 ///
 /// Internally, the `NextSegmentSelectors` contains a `NextSegmentSelector` for each type of media,
@@ -120,6 +123,10 @@ impl NextSegmentSelectors {
         }
     }
 
+    pub(crate) fn set_fast_quality_switching(&mut self, media_type: MediaType, is_allowed: bool) {
+        self.get_mut(media_type).allow_fast_quality_switching = is_allowed;
+    }
+
     /// Returns whether changing to `context` would replace already-buffered lower-quality
     /// segments rather than just continue from the end of the buffer.
     pub(crate) fn has_fast_quality_switch_candidate(
@@ -157,6 +164,9 @@ pub(crate) struct NextSegmentSelector {
     /// occured, and to only check if some optimizations have to be performed, such as
     /// "fast quality switching", when the quality changes.
     last_media_id: Option<u32>,
+
+    /// Whether a quality change may replace already-buffered lower-quality segments.
+    allow_fast_quality_switching: bool,
 
     /// Information on segments that were voluntarily not returned by the `NextSegmentSelector`
     /// because "better" segments were already present in the buffer at its place.
@@ -197,6 +207,7 @@ impl NextSegmentSelector {
             base_pos: real_base_pos,
             buffer_goal,
             last_media_id: None,
+            allow_fast_quality_switching: true,
             init_status: InitializationSegmentSelectorStatus::Unchecked,
             skipped_segments: vec![],
         }
@@ -208,6 +219,7 @@ impl NextSegmentSelector {
         self.base_pos = f64::max(0., base_pos);
         self.init_status = InitializationSegmentSelectorStatus::Unchecked;
         self.last_media_id = None;
+        self.allow_fast_quality_switching = true;
         self.segment_cursor = SegmentCursor::new(base_pos);
         self.skipped_segments.clear();
     }
@@ -258,7 +270,6 @@ impl NextSegmentSelector {
         segment_list: &'a SegmentList,
         context: &SegmentQualityContext,
         inventory: &[BufferedChunk],
-        allow_fast_quality_switching: bool,
     ) -> NeededSegmentInfo<'a> {
         let new_media_id = context.media_id();
         let previous_media_id = self.last_media_id;
@@ -276,8 +287,7 @@ impl NextSegmentSelector {
             }
             self.segment_cursor.move_cursor(self.base_pos);
             self.skipped_segments.clear();
-            let start_pos =
-                self.recompute_starting_position(context, inventory, allow_fast_quality_switching);
+            let start_pos = self.recompute_starting_position(context, inventory);
             self.segment_cursor.move_cursor(start_pos);
         }
 
@@ -322,50 +332,40 @@ impl NextSegmentSelector {
         &self,
         context: &SegmentQualityContext,
         inventory: &[BufferedChunk],
-        allow_fast_quality_switching: bool,
     ) -> f64 {
-        let inv_start = inventory
-            .iter()
-            .position(|s| s.playlist_end() > self.base_pos);
-        if let Some(mut curr_idx) = inv_start {
-            let mut prev_end = self.base_pos;
-            while let Some(seg_i) = inventory.get(curr_idx) {
-                if seg_i.playlist_start() > (prev_end + 0.001)
-                    || seg_i.appears_garbage_collected(prev_end)
-                {
-                    // Either not contiguous to the previous segment, or garbage collected.
-                    // Start loading from there.
-                    log_debug!(
-                        "Selector: Segment non-contiguous or GCed starting from {}",
-                        prev_end
-                    );
-                    return prev_end;
-                }
-                if allow_fast_quality_switching && seg_i.is_worse_than(context) {
-                    // We found a segment of worse quality, we can replace it, unless it is
-                    // ending soon, to avoid rebuffering.
-                    let next_seg_duration = inventory
-                        .iter()
-                        .find(|s| s.playlist_end() > seg_i.playlist_end())
-                        .map(|s| s.playlist_end() - s.playlist_start())
-                        .unwrap_or(5.);
-                    if seg_i.last_buffered_end() - self.base_pos > next_seg_duration {
-                        log_debug!("Selector: Fast quality switching from {prev_end}");
-                        return prev_end;
-                    }
-                }
-                prev_end = seg_i.playlist_end();
-                curr_idx += 1;
+        if self.allow_fast_quality_switching {
+            if let Some(position) = self.fast_quality_switch_position(context, inventory) {
+                log_debug!("Selector: Fast quality switching from {}", position);
+                return position;
             }
-            log_debug!("Selector: Starting position after inventory: {prev_end}");
-            prev_end
-        } else {
+        }
+
+        let Some(mut curr_idx) = inventory
+            .iter()
+            .position(|segment| segment.playlist_end() > self.base_pos)
+        else {
             log_debug!(
                 "Selector: Starting position at base position: {}",
                 self.base_pos
             );
-            self.base_pos
+            return self.base_pos;
+        };
+        let mut prev_end = self.base_pos;
+        while let Some(segment) = inventory.get(curr_idx) {
+            if segment.playlist_start() > (prev_end + 0.001)
+                || segment.appears_garbage_collected(prev_end)
+            {
+                log_debug!(
+                    "Selector: Segment non-contiguous or GCed starting from {}",
+                    prev_end
+                );
+                return prev_end;
+            }
+            prev_end = segment.playlist_end();
+            curr_idx += 1;
         }
+        log_debug!("Selector: Starting position after inventory: {}", prev_end);
+        prev_end
     }
 
     fn has_fast_quality_switch_candidate(
@@ -373,33 +373,35 @@ impl NextSegmentSelector {
         context: &SegmentQualityContext,
         inventory: &[BufferedChunk],
     ) -> bool {
-        let Some(mut curr_idx) = inventory
+        self.fast_quality_switch_position(context, inventory)
+            .is_some()
+    }
+
+    fn fast_quality_switch_position(
+        &self,
+        context: &SegmentQualityContext,
+        inventory: &[BufferedChunk],
+    ) -> Option<f64> {
+        let mut curr_idx = inventory
             .iter()
-            .position(|segment| segment.playlist_end() > self.base_pos)
-        else {
-            return false;
-        };
+            .position(|segment| segment.playlist_end() > self.base_pos)?;
         let mut prev_end = self.base_pos;
         while let Some(segment) = inventory.get(curr_idx) {
             if segment.playlist_start() > (prev_end + 0.001)
                 || segment.appears_garbage_collected(prev_end)
             {
-                return false;
+                return None;
             }
-            if segment.is_worse_than(context) {
-                let next_segment_duration = inventory
-                    .iter()
-                    .find(|candidate| candidate.playlist_end() > segment.playlist_end())
-                    .map(|candidate| candidate.playlist_end() - candidate.playlist_start())
-                    .unwrap_or(5.);
-                if segment.last_buffered_end() - self.base_pos > next_segment_duration {
-                    return true;
-                }
+            let replacement_lead = prev_end - self.base_pos;
+            let segment_duration = segment.playlist_end() - segment.playlist_start();
+            let required_lead = MIN_FAST_QUALITY_SWITCH_LEAD_SECONDS.max(segment_duration);
+            if segment.is_worse_than(context) && replacement_lead > required_lead {
+                return Some(prev_end);
             }
             prev_end = segment.playlist_end();
             curr_idx += 1;
         }
-        false
+        None
     }
 
     /// Check that all elements in `self.skipped_segments` can still be skipped
@@ -653,22 +655,38 @@ mod tests {
 
     #[test]
     fn above_throughput_switch_can_continue_after_buffer_without_replacement() {
-        let selector = NextSegmentSelector::new(0., 30.);
-        let buffered = vec![BufferedChunk::new_for_test(
-            0.,
-            10.,
-            SegmentQualityContext::new(1., 1),
-        )];
+        let mut selector = NextSegmentSelector::new(0., 30.);
+        let buffered = vec![
+            BufferedChunk::new_for_test(0., 6., SegmentQualityContext::new(1., 1)),
+            BufferedChunk::new_for_test(6., 10., SegmentQualityContext::new(1., 1)),
+        ];
         let higher_quality = SegmentQualityContext::new(2., 2);
 
         assert!(selector.has_fast_quality_switch_candidate(&higher_quality, &buffered));
         assert_eq!(
-            selector.recompute_starting_position(&higher_quality, &buffered, true),
-            0.
+            selector.recompute_starting_position(&higher_quality, &buffered),
+            6.
         );
+        selector.allow_fast_quality_switching = false;
         assert_eq!(
-            selector.recompute_starting_position(&higher_quality, &buffered, false),
+            selector.recompute_starting_position(&higher_quality, &buffered),
             10.
+        );
+    }
+
+    #[test]
+    fn fast_quality_switch_requires_the_minimum_lead() {
+        let selector = NextSegmentSelector::new(0., 30.);
+        let buffered = vec![
+            BufferedChunk::new_for_test(0., 5., SegmentQualityContext::new(1., 1)),
+            BufferedChunk::new_for_test(5., 9., SegmentQualityContext::new(1., 1)),
+        ];
+        let higher_quality = SegmentQualityContext::new(2., 2);
+
+        assert!(!selector.has_fast_quality_switch_candidate(&higher_quality, &buffered));
+        assert_eq!(
+            selector.recompute_starting_position(&higher_quality, &buffered),
+            9.
         );
     }
 
