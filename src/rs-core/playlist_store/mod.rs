@@ -636,6 +636,28 @@ impl PlaylistStore {
         }
     }
 
+    /// Build the segment quality context that a variant would use for the given media type.
+    pub(crate) fn variant_segment_quality_context(
+        &self,
+        variant_id: u32,
+        media_type: MediaType,
+    ) -> Option<SegmentQualityContext> {
+        let TopLevelPlaylist::Multivariant(playlist) = &self.playlist else {
+            return None;
+        };
+        let variant = playlist.variant(variant_id)?;
+        let (audio_id, video_id) = Self::normalize_current_media_ids(
+            playlist.audio_media_playlist_id_for(variant, self.fixed_audio_track),
+            playlist.video_media_playlist_id_for(variant),
+        );
+        let media_id = match media_type {
+            MediaType::Audio => audio_id,
+            MediaType::Video => video_id,
+        }?;
+        let score = variant.score().unwrap_or(variant.bandwidth() as f64);
+        Some(SegmentQualityContext::new(score, media_id.as_u32()))
+    }
+
     /// Gives an indication of which kind of playlist it is: VoD/live/Event?
     pub(crate) fn playlist_type(&self) -> PlaylistNature {
         let media_playlists = self.current_media_playlists();

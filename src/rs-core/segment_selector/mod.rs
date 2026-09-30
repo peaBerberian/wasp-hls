@@ -119,6 +119,21 @@ impl NextSegmentSelectors {
             MediaType::Video => &mut self.video,
         }
     }
+
+    /// Returns whether changing to `context` would replace already-buffered lower-quality
+    /// segments rather than just continue from the end of the buffer.
+    pub(crate) fn has_fast_switch_candidate(
+        &self,
+        media_type: MediaType,
+        context: &SegmentQualityContext,
+        inventory: &[BufferedChunk],
+    ) -> bool {
+        match media_type {
+            MediaType::Audio => &self.audio,
+            MediaType::Video => &self.video,
+        }
+        .has_fast_switch_candidate(context, inventory)
+    }
 }
 
 pub(crate) struct NextSegmentSelector {
@@ -244,6 +259,7 @@ impl NextSegmentSelector {
         segment_list: &'a SegmentList,
         context: &SegmentQualityContext,
         inventory: &[BufferedChunk],
+        allow_fast_switching: bool,
     ) -> NeededSegmentInfo<'a> {
         let new_media_id = context.media_id();
         let previous_media_id = self.last_media_id;
@@ -261,7 +277,8 @@ impl NextSegmentSelector {
             }
             self.segment_cursor.move_cursor(self.base_pos);
             self.skipped_segments.clear();
-            let start_pos = self.recompute_starting_position(context, inventory);
+            let start_pos =
+                self.recompute_starting_position(context, inventory, allow_fast_switching);
             self.segment_cursor.move_cursor(start_pos);
         }
 
@@ -307,6 +324,7 @@ impl NextSegmentSelector {
         &self,
         context: &SegmentQualityContext,
         inventory: &[BufferedChunk],
+        allow_fast_switching: bool,
     ) -> f64 {
         let inv_start = inventory
             .iter()
@@ -325,7 +343,7 @@ impl NextSegmentSelector {
                     );
                     return prev_end;
                 }
-                if seg_i.is_worse_than(context) {
+                if allow_fast_switching && seg_i.is_worse_than(context) {
                     // We found a segment of worse quality, we can replace it, unless it is
                     // ending soon, to avoid rebuffering.
                     let next_seg_duration = inventory
@@ -350,6 +368,40 @@ impl NextSegmentSelector {
             );
             self.base_pos
         }
+    }
+
+    fn has_fast_switch_candidate(
+        &self,
+        context: &SegmentQualityContext,
+        inventory: &[BufferedChunk],
+    ) -> bool {
+        let Some(mut curr_idx) = inventory
+            .iter()
+            .position(|segment| segment.playlist_end() > self.base_pos)
+        else {
+            return false;
+        };
+        let mut prev_end = self.base_pos;
+        while let Some(segment) = inventory.get(curr_idx) {
+            if segment.playlist_start() > (prev_end + 0.001)
+                || segment.appears_garbage_collected(prev_end)
+            {
+                return false;
+            }
+            if segment.is_worse_than(context) {
+                let next_segment_duration = inventory
+                    .iter()
+                    .find(|candidate| candidate.playlist_end() > segment.playlist_end())
+                    .map(|candidate| candidate.playlist_end() - candidate.playlist_start())
+                    .unwrap_or(5.);
+                if segment.last_buffered_end() - self.base_pos > next_segment_duration {
+                    return true;
+                }
+            }
+            prev_end = segment.playlist_end();
+            curr_idx += 1;
+        }
+        false
     }
 
     /// Check that all elements in `self.skipped_segments` can still be skipped
@@ -594,8 +646,33 @@ impl SegmentCursor {
 
 #[cfg(test)]
 mod tests {
-    use super::SegmentCursor;
-    use crate::{parser::TopLevelPlaylist, utils::url::Url};
+    use super::{NextSegmentSelector, SegmentCursor};
+    use crate::{
+        media_element::{BufferedChunk, SegmentQualityContext},
+        parser::TopLevelPlaylist,
+        utils::url::Url,
+    };
+
+    #[test]
+    fn above_throughput_switch_can_continue_after_buffer_without_replacement() {
+        let selector = NextSegmentSelector::new(0., 30.);
+        let buffered = vec![BufferedChunk::new_for_test(
+            0.,
+            10.,
+            SegmentQualityContext::new(1., 1),
+        )];
+        let higher_quality = SegmentQualityContext::new(2., 2);
+
+        assert!(selector.has_fast_switch_candidate(&higher_quality, &buffered));
+        assert_eq!(
+            selector.recompute_starting_position(&higher_quality, &buffered, true),
+            0.
+        );
+        assert_eq!(
+            selector.recompute_starting_position(&higher_quality, &buffered, false),
+            10.
+        );
+    }
 
     #[test]
     fn segment_cursor_skips_trailing_zero_duration_segment() {

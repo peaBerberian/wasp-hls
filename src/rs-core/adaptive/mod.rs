@@ -12,9 +12,16 @@ pub(crate) struct AdaptiveQualitySelector {
     bandwidth_estimator: BandwithEstimator,
 }
 
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct AdaptiveVariantSelection {
+    pub(crate) variant_id: u32,
+    pub(crate) throughput_variant_id: u32,
+}
+
 const ADAPTIVE_FACTOR: f64 = 0.8;
 const BOLA_MIN_LOW_BUFFER: f64 = 3.0;
 const BOLA_MAX_LOW_BUFFER: f64 = 10.0;
+const BOLA_UP_SWITCH_HYSTERESIS: f64 = 0.25;
 
 impl AdaptiveQualitySelector {
     /// Creates new `AdaptiveQualitySelector`.
@@ -46,18 +53,24 @@ impl AdaptiveQualitySelector {
         buffer_level: f64,
         buffer_goal: f64,
         segment_duration: f64,
-    ) -> Option<u32> {
+    ) -> Option<AdaptiveVariantSelection> {
         if variants.is_empty() {
             return None;
         }
         let throughput_id = best_variant_id(variants.iter().copied(), bandwidth)
             .or_else(|| fallback_variant_id(variants.iter().copied()))?;
         if !segment_duration.is_finite() || segment_duration <= 0. {
-            return Some(throughput_id);
+            return Some(AdaptiveVariantSelection {
+                variant_id: throughput_id,
+                throughput_variant_id: throughput_id,
+            });
         }
 
         if variants.len() == 1 {
-            return variants.first().map(|v| v.id());
+            return variants.first().map(|variant| AdaptiveVariantSelection {
+                variant_id: variant.id(),
+                throughput_variant_id: throughput_id,
+            });
         }
 
         let qmax = buffer_goal.max(segment_duration);
@@ -66,27 +79,35 @@ impl AdaptiveQualitySelector {
             .min((qmax - 0.1).max(segment_duration));
         let normalized_buffer = buffer_level.max(0.).min(qmax);
         if normalized_buffer < qlow {
-            return Some(throughput_id);
+            return Some(AdaptiveVariantSelection {
+                variant_id: throughput_id,
+                throughput_variant_id: throughput_id,
+            });
         }
 
-        let bola_id = compute_bola_variant_id(variants, normalized_buffer, qlow, qmax)?;
-        let bola_index = variants.iter().position(|v| v.id() == bola_id)?;
-        let throughput_index = variants.iter().position(|v| v.id() == throughput_id)?;
-
-        // BOLA-O avoids oscillation by preventing an up-switch beyond both the current
-        // representation and what the throughput estimate can sustain. Buffer-driven
-        // down-switches are still applied immediately.
-        if let Some(current_index) =
-            current_variant_id.and_then(|id| variants.iter().position(|variant| variant.id() == id))
+        let mut bola_id = compute_bola_variant_id(variants, normalized_buffer, qlow, qmax)?;
+        if let Some(current_variant) =
+            current_variant_id.and_then(|id| variants.iter().find(|variant| variant.id() == id))
         {
-            if bola_index > current_index && bola_index > throughput_index {
-                return variants
-                    .get(current_index.max(throughput_index))
-                    .map(|variant| variant.id());
+            let bola_variant = variants.iter().find(|variant| variant.id() == bola_id)?;
+            if bola_variant.bandwidth() > current_variant.bandwidth() {
+                let conservative_buffer =
+                    (normalized_buffer - (segment_duration * BOLA_UP_SWITCH_HYSTERESIS)).max(qlow);
+                let conservative_id =
+                    compute_bola_variant_id(variants, conservative_buffer, qlow, qmax)?;
+                let conservative_variant = variants
+                    .iter()
+                    .find(|variant| variant.id() == conservative_id)?;
+                if conservative_variant.bandwidth() <= current_variant.bandwidth() {
+                    bola_id = current_variant.id();
+                }
             }
         }
 
-        Some(bola_id)
+        Some(AdaptiveVariantSelection {
+            variant_id: bola_id,
+            throughput_variant_id: throughput_id,
+        })
     }
 
     pub(crate) fn reset(&mut self) {
@@ -173,7 +194,7 @@ fn compute_bola_variant_id(
 
 #[cfg(test)]
 mod tests {
-    use super::AdaptiveQualitySelector;
+    use super::{compute_bola_variant_id, AdaptiveQualitySelector};
     use crate::{parser::TopLevelPlaylist, utils::url::Url};
 
     fn parsed_playlist() -> TopLevelPlaylist {
@@ -206,7 +227,7 @@ high.m3u8\n",
         let selected =
             selector.select_variant(&variants, Some(variants[0].id()), 2_500_000., 2., 30., 4.);
 
-        assert_eq!(selected, Some(variants[1].id()));
+        assert_eq!(selected.unwrap().variant_id, variants[1].id());
     }
 
     #[test]
@@ -218,7 +239,7 @@ high.m3u8\n",
         let selected =
             selector.select_variant(&variants, Some(variants[0].id()), 2_500_000., 30., 30., 0.);
 
-        assert_eq!(selected, Some(variants[1].id()));
+        assert_eq!(selected.unwrap().variant_id, variants[1].id());
     }
 
     #[test]
@@ -230,11 +251,11 @@ high.m3u8\n",
         let selected =
             selector.select_variant(&variants, Some(variants[2].id()), 5_000_000., 8., 30., 4.);
 
-        assert_eq!(selected, Some(variants[0].id()));
+        assert_eq!(selected.unwrap().variant_id, variants[0].id());
     }
 
     #[test]
-    fn bola_o_caps_an_unsustainable_quality_increase() {
+    fn buffer_can_fund_an_unsustainable_quality_increase() {
         let selector = AdaptiveQualitySelector::new(5_000_000.);
         let playlist = parsed_playlist();
         let variants = variants(&playlist);
@@ -242,7 +263,40 @@ high.m3u8\n",
         let selected =
             selector.select_variant(&variants, Some(variants[0].id()), 2_500_000., 30., 30., 4.);
 
-        assert_eq!(selected, Some(variants[1].id()));
+        let selected = selected.unwrap();
+        assert_eq!(selected.variant_id, variants[2].id());
+        assert_eq!(selected.throughput_variant_id, variants[1].id());
+    }
+
+    #[test]
+    fn waits_for_a_buffer_margin_before_switching_up() {
+        let selector = AdaptiveQualitySelector::new(5_000_000.);
+        let playlist = parsed_playlist();
+        let variants = variants(&playlist);
+        let current = variants[1];
+        let buffer_level = (81..=300)
+            .map(|step| step as f64 / 10.)
+            .find(|buffer_level| {
+                let raw = compute_bola_variant_id(&variants, *buffer_level, 8., 30.).unwrap();
+                let conservative =
+                    compute_bola_variant_id(&variants, (buffer_level - 1.).max(8.), 8., 30.)
+                        .unwrap();
+                raw == variants[2].id() && conservative == current.id()
+            })
+            .expect("expected a BOLA transition between medium and high");
+
+        let selected = selector
+            .select_variant(
+                &variants,
+                Some(current.id()),
+                5_000_000.,
+                buffer_level,
+                30.,
+                4.,
+            )
+            .unwrap();
+
+        assert_eq!(selected.variant_id, current.id());
     }
 
     #[test]
@@ -264,6 +318,6 @@ high.m3u8\n",
         let selected =
             selector.select_variant(&variants, Some(variants[1].id()), 5_000_000., 30., 30., 4.);
 
-        assert_eq!(selected, Some(variants[2].id()));
+        assert_eq!(selected.unwrap().variant_id, variants[2].id());
     }
 }

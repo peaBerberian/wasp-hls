@@ -35,6 +35,7 @@ impl Dispatcher {
             last_position: 0.,
             buffer_goal: 30.,
             segment_selectors: NextSegmentSelectors::new(0., 30.),
+            fast_switching_policy: super::FastSwitchingPolicy::new(),
             segment_request_contexts: SegmentRequestContexts::new(),
             playlist_refresh_timers: PlaylistRefreshTimers::new(),
             ready_probe_segments: Default::default(),

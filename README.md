@@ -223,8 +223,7 @@ Adaptive BitRate:
       the opposite situation than the one in which fast-switching is active:
       don't re-load segments who're already loaded or being pushed with a higher
       quality).
-- [ ] Also choose variant based on buffer-based estimates.
-      _Priority: average_
+- [x] Also choose variant based on buffer-based estimates.
 - [ ] Logic to detect sudden large fall in bandwidth before the end of a current
       request.
       _Priority: average_
