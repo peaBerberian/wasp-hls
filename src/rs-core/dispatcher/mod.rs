@@ -61,7 +61,7 @@ pub struct Dispatcher {
     segment_selectors: NextSegmentSelectors,
 
     /// Whether the next quality change may replace already-buffered segments for each media type.
-    fast_switching_policy: FastSwitchingPolicy,
+    fast_quality_switching_policy: FastQualitySwitchingPolicy,
 
     /// Current set-up timers to notify about a needed playlist refresh, associated to the playlist
     /// that needs to be refreshed.
@@ -80,12 +80,12 @@ pub struct Dispatcher {
     initial_audio_track_selection: Vec<InitialAudioTrackSelection>,
 }
 
-struct FastSwitchingPolicy {
+struct FastQualitySwitchingPolicy {
     audio: bool,
     video: bool,
 }
 
-impl FastSwitchingPolicy {
+impl FastQualitySwitchingPolicy {
     fn new() -> Self {
         Self {
             audio: true,

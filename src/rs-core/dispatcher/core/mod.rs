@@ -51,7 +51,7 @@ impl Dispatcher {
         jsStopObservingPlayback();
         self.media_element_ref.reset();
         self.segment_selectors.reset_selectors(0.);
-        self.fast_switching_policy.reset();
+        self.fast_quality_switching_policy.reset();
         self.playlist_store = None;
         self.ready_probe_segments.clear();
         self.initial_audio_track_selection.clear();
@@ -95,7 +95,7 @@ impl Dispatcher {
         let Some(selection) = selection else {
             return;
         };
-        let (variant_id, allow_fast_switching) = {
+        let (variant_id, allow_fast_quality_switching) = {
             let Some(pl_store) = self.playlist_store.as_ref() else {
                 return;
             };
@@ -114,7 +114,7 @@ impl Dispatcher {
             let is_buffer_funded = selected_bandwidth
                 .zip(throughput_bandwidth)
                 .is_some_and(|(selected, throughput)| selected > throughput);
-            let should_finish_fast_switch = is_buffer_funded
+            let should_finish_fast_quality_switch = is_buffer_funded
                 && current_bandwidth
                     .zip(throughput_bandwidth)
                     .is_some_and(|(current, throughput)| current <= throughput)
@@ -127,7 +127,7 @@ impl Dispatcher {
                                 media_type,
                             )
                             .is_some_and(|context| {
-                                self.segment_selectors.has_fast_switch_candidate(
+                                self.segment_selectors.has_fast_quality_switch_candidate(
                                     media_type,
                                     &context,
                                     self.media_element_ref.inventory(media_type),
@@ -135,7 +135,7 @@ impl Dispatcher {
                             })
                     });
 
-            if should_finish_fast_switch {
+            if should_finish_fast_quality_switch {
                 (selection.throughput_variant_id, true)
             } else {
                 (selection.variant_id, !is_buffer_funded)
@@ -144,7 +144,7 @@ impl Dispatcher {
 
         if let Some(pl_store) = self.playlist_store.as_mut() {
             let update = pl_store.update_adaptive_variant(actually_used_bandwidth, variant_id);
-            self.handle_variant_update(update, false, allow_fast_switching);
+            self.handle_variant_update(update, false, allow_fast_quality_switching);
         }
     }
 
@@ -900,7 +900,7 @@ impl Dispatcher {
                         seg_info.0,
                         &seg_info.1,
                         inventory,
-                        self.fast_switching_policy.get(mt),
+                        self.fast_quality_switching_policy.get(mt),
                     );
 
                     if let Some(i) = needed_segment.init_segment() {
@@ -948,7 +948,7 @@ impl Dispatcher {
                         seg_info.0,
                         &seg_info.1,
                         inventory,
-                        self.fast_switching_policy.get(media_type),
+                        self.fast_quality_switching_policy.get(media_type),
                     );
                 if let Some(i) = most_needed_segment.init_segment() {
                     let req_id =
@@ -987,7 +987,7 @@ impl Dispatcher {
         &mut self,
         result: VariantUpdateResult,
         flush: bool,
-        allow_fast_switching: bool,
+        allow_fast_quality_switching: bool,
     ) {
         let (changed_media_types, has_worsened) = match result {
             VariantUpdateResult::Improved(mt) => (mt, false),
@@ -999,8 +999,8 @@ impl Dispatcher {
         };
 
         for media_type in changed_media_types.iter().copied() {
-            self.fast_switching_policy
-                .set(media_type, allow_fast_switching);
+            self.fast_quality_switching_policy
+                .set(media_type, allow_fast_quality_switching);
         }
 
         self.handle_media_playlist_update(&changed_media_types, flush || has_worsened, flush);

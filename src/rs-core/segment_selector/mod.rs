@@ -122,7 +122,7 @@ impl NextSegmentSelectors {
 
     /// Returns whether changing to `context` would replace already-buffered lower-quality
     /// segments rather than just continue from the end of the buffer.
-    pub(crate) fn has_fast_switch_candidate(
+    pub(crate) fn has_fast_quality_switch_candidate(
         &self,
         media_type: MediaType,
         context: &SegmentQualityContext,
@@ -132,7 +132,7 @@ impl NextSegmentSelectors {
             MediaType::Audio => &self.audio,
             MediaType::Video => &self.video,
         }
-        .has_fast_switch_candidate(context, inventory)
+        .has_fast_quality_switch_candidate(context, inventory)
     }
 }
 
@@ -155,8 +155,7 @@ pub(crate) struct NextSegmentSelector {
 
     /// `media_id` of the last segment pushed. Allows to determine when a quality switch
     /// occured, and to only check if some optimizations have to be performed, such as
-    /// "fast-switching", when the
-    /// quality change.
+    /// "fast quality switching", when the quality changes.
     last_media_id: Option<u32>,
 
     /// Information on segments that were voluntarily not returned by the `NextSegmentSelector`
@@ -259,7 +258,7 @@ impl NextSegmentSelector {
         segment_list: &'a SegmentList,
         context: &SegmentQualityContext,
         inventory: &[BufferedChunk],
-        allow_fast_switching: bool,
+        allow_fast_quality_switching: bool,
     ) -> NeededSegmentInfo<'a> {
         let new_media_id = context.media_id();
         let previous_media_id = self.last_media_id;
@@ -278,7 +277,7 @@ impl NextSegmentSelector {
             self.segment_cursor.move_cursor(self.base_pos);
             self.skipped_segments.clear();
             let start_pos =
-                self.recompute_starting_position(context, inventory, allow_fast_switching);
+                self.recompute_starting_position(context, inventory, allow_fast_quality_switching);
             self.segment_cursor.move_cursor(start_pos);
         }
 
@@ -316,15 +315,14 @@ impl NextSegmentSelector {
     /// Starts from `self.base_pos`, look at what is already buffered, and determine a new optimal
     /// starting point for segments of the given quality.
     ///
-    /// Note that the quality has an influence here because of "fast-switching" which is the concept
-    /// of replacing segments of a poor quality by segments of a higher quality. If segments of a
-    /// poorer quality is detected in the currently buffered `inventory`, the returned f64 might
-    /// thus be earlier than in the opposite case.
+    /// Note that quality has an influence here because "fast quality switching" replaces
+    /// lower-quality buffered segments with higher-quality ones. If a lower-quality segment is
+    /// detected in `inventory`, the returned position may therefore move backwards.
     fn recompute_starting_position(
         &self,
         context: &SegmentQualityContext,
         inventory: &[BufferedChunk],
-        allow_fast_switching: bool,
+        allow_fast_quality_switching: bool,
     ) -> f64 {
         let inv_start = inventory
             .iter()
@@ -343,7 +341,7 @@ impl NextSegmentSelector {
                     );
                     return prev_end;
                 }
-                if allow_fast_switching && seg_i.is_worse_than(context) {
+                if allow_fast_quality_switching && seg_i.is_worse_than(context) {
                     // We found a segment of worse quality, we can replace it, unless it is
                     // ending soon, to avoid rebuffering.
                     let next_seg_duration = inventory
@@ -352,7 +350,7 @@ impl NextSegmentSelector {
                         .map(|s| s.playlist_end() - s.playlist_start())
                         .unwrap_or(5.);
                     if seg_i.last_buffered_end() - self.base_pos > next_seg_duration {
-                        log_debug!("Selector: Fast switching from {prev_end}");
+                        log_debug!("Selector: Fast quality switching from {prev_end}");
                         return prev_end;
                     }
                 }
@@ -370,7 +368,7 @@ impl NextSegmentSelector {
         }
     }
 
-    fn has_fast_switch_candidate(
+    fn has_fast_quality_switch_candidate(
         &self,
         context: &SegmentQualityContext,
         inventory: &[BufferedChunk],
@@ -431,7 +429,8 @@ impl NextSegmentSelector {
     /// Returns the most needed segment according to the current situation.
     /// Internally, this method may be validating and re-calling itself (hence its name) if it sees
     /// that segments of a higher or similar quality are already present in the buffer, through a
-    /// process we here call "smart-switching".
+    /// process called "smart quality switching": skipping a request when equal- or
+    /// higher-quality media already covers its range.
     fn recursively_check_most_needed_media_segment<'a>(
         &mut self,
         media_segments: &'a [MediaSegmentInfo],
@@ -444,8 +443,8 @@ impl NextSegmentSelector {
             .get_next(media_segments, maximum_position)?;
         let segment_end = si.end();
 
-        // Check for "smart-switching", which is to avoid returning segments who have
-        // already an equal or even better quality in the buffer.
+        // Apply "smart quality switching": skip the request when equal- or higher-quality media
+        // is already buffered for its range.
         if self.can_be_skipped(si.start(), segment_end, context, inventory) {
             log_debug!(
                 "Selector: Segment can be skipped (s:{}, d: {})",
@@ -474,9 +473,8 @@ impl NextSegmentSelector {
     /// If `true`, this generally means that the wanted segment or segment ranges is currently
     /// unneeded.
     ///
-    /// This method is part of what we call the "smart-switching" algorithm, which allows to avoid
-    /// downloading segments when some of a higher or similar quality are already present in the
-    /// buffer.
+    /// This method applies "smart quality switching": skipping downloads when equal- or
+    /// higher-quality media is already buffered for the requested range.
     fn can_be_skipped(
         &self,
         start: f64,
@@ -663,7 +661,7 @@ mod tests {
         )];
         let higher_quality = SegmentQualityContext::new(2., 2);
 
-        assert!(selector.has_fast_switch_candidate(&higher_quality, &buffered));
+        assert!(selector.has_fast_quality_switch_candidate(&higher_quality, &buffered));
         assert_eq!(
             selector.recompute_starting_position(&higher_quality, &buffered, true),
             0.
