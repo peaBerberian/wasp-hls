@@ -68,8 +68,7 @@ pub(crate) struct PlaylistStore {
 impl PlaylistStore {
     /// Create a new `PlaylistStore` based on the given parsed `MultivariantPlaylist`.
     ///
-    /// Automatically selects the variant with the highest quality (or score if defined) on call.
-    /// Please call `update_curr_bandwidth` to select a variant based on an actual criteria.
+    /// Automatically selects an initial variant based on `initial_bandwidth`.
     pub(crate) fn try_new(
         playlist: TopLevelPlaylist,
         initial_bandwidth: f64,
@@ -110,7 +109,7 @@ impl PlaylistStore {
             current_video_id,
             fixed_audio_track: None,
             is_variant_locked: false,
-            last_bandwidth: 0.,
+            last_bandwidth: initial_bandwidth,
             multivariant_support_resolved: false,
             variant_support: HashMap::new(),
             multivariant_media_info: HashMap::new(),
@@ -384,11 +383,6 @@ impl PlaylistStore {
         }
     }
 
-    /// Returns variants compatible with the current track choice.
-    pub(crate) fn variants_for_curr_track(&self) -> Vec<&VariantStream> {
-        self.selectable_variants_for_curr_track()
-    }
-
     /// Estimates the duration of the current content based on the currently selected audio and
     /// video media playlists.
     ///
@@ -466,8 +460,7 @@ impl PlaylistStore {
             .any(|(_, playlist)| playlist.uses_program_date_time())
     }
 
-    /// Returns the `id` of the variant currently considered. You can influence the
-    /// variant currently selected by e.g. calling the `update_curr_bandwidth` method.
+    /// Returns the `id` of the variant currently considered.
     ///
     /// Returns `None` in cases where either no variant is selected or just in direct
     /// media playlist cases - where there's no variant.
@@ -477,33 +470,13 @@ impl PlaylistStore {
         self.current_variant().map(|v| v.id())
     }
 
-    /// Returns the currently selected variant, if any.
-    pub(crate) fn curr_variant(&self) -> Option<&VariantStream> {
-        self.current_variant()
-    }
-
-    /// Optionally update currently-selected variant by communicating the last bandwidth estimate.
-    ///
-    /// Returns a vec of `MediaType` corresponding to the MediaPlaylists that have been in
-    /// consequence updated.
-    /// Returns an empty vec if this new bandwidth estimate did not have any effect on any selected
-    /// MediaPlaylist.
-    pub(crate) fn update_estimated_bandwidth(&mut self, bandwidth: f64) -> VariantUpdateResult {
+    /// Apply the variant chosen by the adaptive selector and remember its bandwidth estimate.
+    pub(crate) fn update_adaptive_variant(
+        &mut self,
+        bandwidth: f64,
+        variant_id: u32,
+    ) -> VariantUpdateResult {
         self.last_bandwidth = bandwidth;
-        if self.current_variant_id.is_none() || self.is_variant_locked() {
-            VariantUpdateResult::Unchanged
-        } else {
-            self.update_variant(None)
-        }
-    }
-
-    /// Optionally update currently-selected variant by communicating the last bandwidth estimate.
-    pub(crate) fn update_curr_bandwidth(&mut self, bandwidth: f64) -> VariantUpdateResult {
-        self.update_estimated_bandwidth(bandwidth)
-    }
-
-    /// Apply an externally selected adaptive variant.
-    pub(crate) fn update_curr_variant(&mut self, variant_id: u32) -> VariantUpdateResult {
         if self.current_variant_id.is_none() || self.is_variant_locked() {
             VariantUpdateResult::Unchanged
         } else {
@@ -661,14 +634,6 @@ impl PlaylistStore {
         } else {
             None
         }
-    }
-
-    /// Get segment metadata linked to the current media playlist of the given type.
-    pub(crate) fn curr_media_playlist_segment_info(
-        &self,
-        media_type: MediaType,
-    ) -> Option<(&SegmentList, SegmentQualityContext)> {
-        self.loaded_media_playlist_segment_info(media_type)
     }
 
     /// Gives an indication of which kind of playlist it is: VoD/live/Event?
@@ -843,9 +808,8 @@ impl PlaylistStore {
     // |                           private methods                           |
     // +---------------------------------------------------------------------+
 
-    /// Returns a reference to the `VariantStream` currently selected. You can influence the
-    /// variant currently selected by e.g. calling the `update_curr_bandwidth` method.
-    fn current_variant(&self) -> Option<&VariantStream> {
+    /// Returns a reference to the `VariantStream` currently selected.
+    pub(crate) fn current_variant(&self) -> Option<&VariantStream> {
         match (&self.playlist, self.current_variant_id) {
             (TopLevelPlaylist::Multivariant(playlist), Some(current_variant_id)) => {
                 playlist.variant(current_variant_id)
@@ -962,7 +926,7 @@ impl PlaylistStore {
     }
 
     /// Returns vec describing all non-rejected variants compatible with the current track choice.
-    fn selectable_variants_for_curr_track(&self) -> Vec<&VariantStream> {
+    pub(crate) fn selectable_variants_for_curr_track(&self) -> Vec<&VariantStream> {
         match &self.playlist {
             TopLevelPlaylist::Multivariant(playlist) => {
                 if let Some(track_id) = self.fixed_audio_track {
@@ -1445,7 +1409,10 @@ pub(crate) enum PlaylistStoreError {
 
 #[cfg(test)]
 mod tests {
-    use super::{PlaylistStore, PlaylistStoreError, SetAudioTrackResponse, StartupStatus};
+    use super::{
+        LockVariantResponse, PlaylistStore, PlaylistStoreError, SetAudioTrackResponse,
+        StartupStatus,
+    };
     use crate::{
         bindings::MediaType,
         parser::{ExternalMediaInfo, TopLevelPlaylist},
@@ -1454,6 +1421,33 @@ mod tests {
 
     fn parse_url(url: &str) -> Url {
         Url::new(url.to_string())
+    }
+
+    #[test]
+    fn adaptive_update_does_not_override_a_variant_lock() {
+        let multivariant = r#"#EXTM3U
+#EXT-X-STREAM-INF:BANDWIDTH=1000
+low.m3u8
+#EXT-X-STREAM-INF:BANDWIDTH=2000
+high.m3u8
+"#;
+        let playlist = TopLevelPlaylist::parse(
+            multivariant.as_bytes(),
+            parse_url("https://example.com/master.m3u8"),
+        )
+        .unwrap();
+        let mut store = PlaylistStore::try_new(playlist, 1_500.).unwrap();
+        let variants = store.available_variants();
+        let low_id = variants[0].id();
+        let high_id = variants[1].id();
+
+        assert!(matches!(
+            store.lock_variant(high_id),
+            LockVariantResponse::VariantLocked { .. }
+        ));
+        store.update_adaptive_variant(1_500., low_id);
+
+        assert_eq!(store.current_variant_id(), Some(high_id));
     }
 
     #[test]

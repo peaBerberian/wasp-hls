@@ -77,11 +77,13 @@ impl Dispatcher {
             let Some(pl_store) = self.playlist_store.as_ref() else {
                 return;
             };
-            let segment_duration = pl_store.segment_target_duration();
-            let variants = pl_store.variants_for_curr_track();
+            let Some(segment_duration) = pl_store.segment_target_duration() else {
+                return;
+            };
+            let variants = pl_store.selectable_variants_for_curr_track();
             self.adaptive_selector.select_variant(
                 &variants,
-                pl_store.curr_variant().map(|v| v.id()),
+                pl_store.current_variant().map(|v| v.id()),
                 actually_used_bandwidth,
                 buffer_level,
                 self.buffer_goal,
@@ -89,12 +91,9 @@ impl Dispatcher {
             )
         };
 
-        if let Some(pl_store) = self.playlist_store.as_mut() {
-            let _ = pl_store.update_curr_bandwidth(actually_used_bandwidth);
-            if let Some(variant_id) = variant_id {
-                let update = pl_store.update_curr_variant(variant_id);
-                self.handle_variant_update(update, false);
-            }
+        if let (Some(pl_store), Some(variant_id)) = (self.playlist_store.as_mut(), variant_id) {
+            let update = pl_store.update_adaptive_variant(actually_used_bandwidth, variant_id);
+            self.handle_variant_update(update, false);
         }
     }
 
@@ -362,22 +361,6 @@ impl Dispatcher {
                 log_warn!("Core: Request failed not found on the current Requester")
             }
         }
-    }
-
-    pub(super) fn on_request_progress_core(
-        &mut self,
-        request_id: RequestId,
-        bytes_loaded: u32,
-        bytes_total: Option<u32>,
-        duration_ms: f64,
-    ) {
-        self.requester.on_segment_request_progress(
-            request_id,
-            bytes_loaded,
-            bytes_total,
-            duration_ms,
-        );
-        self.maybe_abandon_pending_segment_request();
     }
 
     /// Method to call when the `readyState` JS attribute of the linked `MediaSource` object
@@ -793,7 +776,6 @@ impl Dispatcher {
         self.segment_selectors.advance_position(wanted_pos - 0.2);
 
         self.check_best_variant();
-        self.maybe_abandon_pending_segment_request();
         self.check_segments_to_request();
         if !was_already_locked {
             self.requester.unlock_segment_requests();
@@ -933,10 +915,6 @@ impl Dispatcher {
                                 time_info: seg.time_info().clone(),
                                 init_segment_id,
                                 quality_context: seg_info.1,
-                                variant_bandwidth: pl_store
-                                    .curr_variant()
-                                    .map(|variant| variant.bandwidth())
-                                    .unwrap_or(0),
                                 sequence_number: seg.sequence(),
                                 discontinuity_sequence: seg.discontinuity_sequence(),
                             });
@@ -1098,13 +1076,12 @@ impl Dispatcher {
             .media_element_ref
             .announce_incoming_media_segment(push_md);
 
-        self.check_best_variant();
-
         // Check next segment BEFORE actually pushing, as the pushing operation could take in the
         // tens of ms or even in the hundreds depending on segment size and platform performance.
         //
         // We still announce the incoming segment first to ensure the `MediaElementReference`'s
         // inventory is up-to-date.
+        self.check_best_variant();
         self.segment_selectors
             .get_mut(media_type)
             .validate_media_until(segment_end);
@@ -1174,64 +1151,6 @@ impl Dispatcher {
             {
                 self.ready_probe_segments.clear_media_type(media_type);
             }
-        }
-    }
-
-    fn maybe_abandon_pending_segment_request(&mut self) {
-        let Some(pl_store) = self.playlist_store.as_ref() else {
-            return;
-        };
-        if pl_store.is_variant_locked() || !self.media_element_ref.can_monitor_abr_requests() {
-            return;
-        }
-        let Some(buffer_starvation_delay) = self.media_element_ref.starvation_delay() else {
-            return;
-        };
-        let Some(pending_request) = self.requester.pending_segment_request(MediaType::Video) else {
-            return;
-        };
-        let Some(pending_context) = self.segment_request_contexts.get(pending_request.id()) else {
-            return;
-        };
-        if pending_context.requested_media_type() != Some(MediaType::Video) {
-            return;
-        }
-
-        let Some((_, desired_quality_context)) =
-            pl_store.curr_media_playlist_segment_info(MediaType::Video)
-        else {
-            return;
-        };
-        let Some(desired_variant_bandwidth) =
-            pl_store.curr_variant().map(|variant| variant.bandwidth())
-        else {
-            return;
-        };
-        let (Some(pending_quality_context), Some(pending_variant_bandwidth)) = (
-            pending_context.quality_context(),
-            pending_context.variant_bandwidth(),
-        ) else {
-            return;
-        };
-        let segment_duration = pending_context
-            .time_info()
-            .map(|time_info| time_info.duration());
-
-        if self.adaptive_selector.should_abandon_media_request(
-            pending_quality_context,
-            &desired_quality_context,
-            pending_variant_bandwidth,
-            desired_variant_bandwidth,
-            pending_request.bytes_loaded(),
-            pending_request.bytes_total(),
-            pending_request.progress_duration_ms(),
-            pending_request.progress_samples(),
-            self.media_element_ref.wanted_speed(),
-            segment_duration,
-            buffer_starvation_delay,
-        ) {
-            log_info!("Core: Abandoning pending higher-quality video segment request");
-            self.abort_segment_requests_with_type(MediaType::Video);
         }
     }
 

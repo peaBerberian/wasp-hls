@@ -1,7 +1,7 @@
 use std::cmp::Ordering;
 
 use self::bandwidth_estimator::BandwithEstimator;
-use crate::{media_element::SegmentQualityContext, parser::VariantStream};
+use crate::parser::VariantStream;
 
 mod bandwidth_estimator;
 mod ewma;
@@ -15,9 +15,6 @@ pub(crate) struct AdaptiveQualitySelector {
 const ADAPTIVE_FACTOR: f64 = 0.8;
 const BOLA_MIN_LOW_BUFFER: f64 = 3.0;
 const BOLA_MAX_LOW_BUFFER: f64 = 10.0;
-const ABANDON_MIN_PROGRESS_DURATION_MS: f64 = 500.0;
-const ABANDON_MIN_PROGRESS_SAMPLES: u32 = 3;
-const ABANDON_MIN_REPLACEMENT_GAIN_S: f64 = 0.25;
 
 impl AdaptiveQualitySelector {
     /// Creates new `AdaptiveQualitySelector`.
@@ -48,16 +45,16 @@ impl AdaptiveQualitySelector {
         bandwidth: f64,
         buffer_level: f64,
         buffer_goal: f64,
-        segment_duration: Option<f64>,
+        segment_duration: f64,
     ) -> Option<u32> {
         if variants.is_empty() {
             return None;
         }
         let throughput_id = best_variant_id(variants.iter().copied(), bandwidth)
             .or_else(|| fallback_variant_id(variants.iter().copied()))?;
-        let Some(segment_duration) = segment_duration.filter(|d| d.is_finite() && *d > 0.) else {
+        if !segment_duration.is_finite() || segment_duration <= 0. {
             return Some(throughput_id);
-        };
+        }
 
         if variants.len() == 1 {
             return variants.first().map(|v| v.id());
@@ -73,95 +70,23 @@ impl AdaptiveQualitySelector {
         }
 
         let bola_id = compute_bola_variant_id(variants, normalized_buffer, qlow, qmax)?;
-        let bola_bandwidth = variants
-            .iter()
-            .find(|v| v.id() == bola_id)
-            .map(|v| v.bandwidth())?;
-        let throughput_bandwidth = variants
-            .iter()
-            .find(|v| v.id() == throughput_id)
-            .map(|v| v.bandwidth())?;
+        let bola_index = variants.iter().position(|v| v.id() == bola_id)?;
+        let throughput_index = variants.iter().position(|v| v.id() == throughput_id)?;
 
-        let mid_buffer = qlow + ((qmax - qlow) / 2.);
-        if bola_bandwidth > throughput_bandwidth && normalized_buffer < mid_buffer {
-            return Some(throughput_id);
-        }
-
-        if let Some(curr_id) = current_variant_id {
-            let current_bandwidth = variants
-                .iter()
-                .find(|v| v.id() == curr_id)
-                .map(|v| v.bandwidth());
-            if current_bandwidth == Some(bola_bandwidth)
-                || current_bandwidth == Some(throughput_bandwidth)
-            {
-                return Some(curr_id);
+        // BOLA-O avoids oscillation by preventing an up-switch beyond both the current
+        // representation and what the throughput estimate can sustain. Buffer-driven
+        // down-switches are still applied immediately.
+        if let Some(current_index) =
+            current_variant_id.and_then(|id| variants.iter().position(|variant| variant.id() == id))
+        {
+            if bola_index > current_index && bola_index > throughput_index {
+                return variants
+                    .get(current_index.max(throughput_index))
+                    .map(|variant| variant.id());
             }
         }
 
         Some(bola_id)
-    }
-
-    /// Decide whether an in-flight higher-quality segment should be abandoned in favor of the
-    /// currently desired lower-quality one.
-    pub(crate) fn should_abandon_media_request(
-        &self,
-        pending_quality: &SegmentQualityContext,
-        desired_quality: &SegmentQualityContext,
-        pending_variant_bandwidth: u64,
-        desired_variant_bandwidth: u64,
-        pending_bytes_loaded: u32,
-        pending_bytes_total: Option<u32>,
-        progress_duration_ms: f64,
-        progress_samples: u32,
-        playback_rate: f64,
-        segment_duration: Option<f64>,
-        buffer_starvation_delay: f64,
-    ) -> bool {
-        if !playback_rate.is_finite() || playback_rate <= 0. || buffer_starvation_delay <= 0. {
-            return false;
-        }
-
-        let min_progress_duration_ms = segment_duration
-            .filter(|duration| duration.is_finite() && *duration > 0.)
-            .map(|duration| 1000. * (duration / (playback_rate * 2.)))
-            .filter(|duration| duration.is_finite() && *duration > 0.)
-            .map(|duration| duration.max(ABANDON_MIN_PROGRESS_DURATION_MS))
-            .unwrap_or(ABANDON_MIN_PROGRESS_DURATION_MS);
-
-        if !pending_quality.is_better_than(desired_quality)
-            || desired_variant_bandwidth >= pending_variant_bandwidth
-            || progress_duration_ms < min_progress_duration_ms
-            || progress_samples < ABANDON_MIN_PROGRESS_SAMPLES
-        {
-            return false;
-        }
-
-        let Some(pending_bytes_total) = pending_bytes_total
-            .filter(|total| *total > pending_bytes_loaded && pending_bytes_loaded > 0)
-        else {
-            return false;
-        };
-
-        let measured_bandwidth = (pending_bytes_loaded as f64) * 8000. / progress_duration_ms;
-        if measured_bandwidth <= 0. {
-            return false;
-        }
-
-        let remaining_bytes = pending_bytes_total - pending_bytes_loaded;
-        let replacement_total_bytes = ((pending_bytes_total as f64)
-            * (desired_variant_bandwidth as f64 / pending_variant_bandwidth as f64))
-            .ceil();
-        if replacement_total_bytes <= 0. || remaining_bytes as f64 <= replacement_total_bytes {
-            return false;
-        }
-
-        let remaining_download_time = (remaining_bytes as f64) * 8. / measured_bandwidth;
-        let replacement_download_time = replacement_total_bytes * 8. / measured_bandwidth;
-
-        remaining_download_time > buffer_starvation_delay
-            && replacement_download_time < buffer_starvation_delay
-            && replacement_download_time + ABANDON_MIN_REPLACEMENT_GAIN_S < remaining_download_time
     }
 
     pub(crate) fn reset(&mut self) {
@@ -170,29 +95,19 @@ impl AdaptiveQualitySelector {
 }
 
 fn best_variant_id<'a>(
-    variants: impl DoubleEndedIterator<Item = &'a VariantStream>,
+    variants: impl Iterator<Item = &'a VariantStream>,
     bandwidth: f64,
 ) -> Option<u32> {
     variants
-        .rev()
-        .find(|x| (x.bandwidth() as f64) <= bandwidth)
+        .filter(|variant| (variant.bandwidth() as f64) <= bandwidth)
+        .max_by_key(|variant| variant.bandwidth())
         .map(|v| v.id())
 }
 
 fn fallback_variant_id<'a>(variants: impl Iterator<Item = &'a VariantStream>) -> Option<u32> {
     variants
-        .fold(None, |acc, v| {
-            if let Some((bandwidth, _)) = acc {
-                if v.bandwidth() <= bandwidth {
-                    Some((v.bandwidth(), v.id()))
-                } else {
-                    acc
-                }
-            } else {
-                Some((v.bandwidth(), v.id()))
-            }
-        })
-        .map(|r| r.1)
+        .min_by_key(|variant| variant.bandwidth())
+        .map(|variant| variant.id())
 }
 
 fn compute_bola_variant_id(
@@ -206,24 +121,32 @@ fn compute_bola_variant_id(
         return variants.first().map(|v| v.id());
     }
 
+    let all_have_scores = variants.iter().all(|variant| variant.score().is_some());
     let utilities: Vec<f64> = variants
         .iter()
         .map(|variant| {
-            variant
-                .score()
-                .unwrap_or_else(|| ((variant.bandwidth() as f64) / min_bandwidth).ln())
-                .max(0.)
+            if all_have_scores {
+                variant.score().unwrap_or(0.)
+            } else {
+                ((variant.bandwidth() as f64) / min_bandwidth).ln()
+            }
         })
         .collect();
     let s1 = min_bandwidth;
-    let s2 = variants.get(1).map(|v| v.bandwidth() as f64)?;
-    if s2 <= s1 {
-        return variants.first().map(|v| v.id());
-    }
-
     let u1 = utilities[0];
-    let u2 = utilities[1];
-    let alpha = ((s1 * u2) - (s2 * u1)) / (s2 - s1);
+    let Some((s2, u2)) =
+        variants
+            .iter()
+            .zip(utilities.iter())
+            .skip(1)
+            .find_map(|(variant, utility)| {
+                let bandwidth = variant.bandwidth() as f64;
+                (bandwidth > s1).then_some((bandwidth, *utility))
+            })
+    else {
+        return variants.last().map(|variant| variant.id());
+    };
+    let alpha = ((s2 * u1) - (s1 * u2)) / (s2 - s1);
     let u_max = *utilities.last()?;
     let denominator = u_max - alpha;
     if denominator <= 0. {
@@ -251,68 +174,96 @@ fn compute_bola_variant_id(
 #[cfg(test)]
 mod tests {
     use super::AdaptiveQualitySelector;
-    use crate::media_element::SegmentQualityContext;
+    use crate::{parser::TopLevelPlaylist, utils::url::Url};
 
-    #[test]
-    fn does_not_abandon_before_half_a_segment_elapsed() {
-        let selector = AdaptiveQualitySelector::new(5_000_000.);
-        let pending_quality = SegmentQualityContext::new(2., 10);
-        let desired_quality = SegmentQualityContext::new(1., 11);
+    fn parsed_playlist() -> TopLevelPlaylist {
+        TopLevelPlaylist::parse(
+            b"#EXTM3U\n\
+#EXT-X-STREAM-INF:BANDWIDTH=1000000\n\
+low.m3u8\n\
+#EXT-X-STREAM-INF:BANDWIDTH=2000000\n\
+medium.m3u8\n\
+#EXT-X-STREAM-INF:BANDWIDTH=4000000\n\
+high.m3u8\n",
+            Url::new("https://example.com/master.m3u8".to_string()),
+        )
+        .unwrap()
+    }
 
-        assert!(!selector.should_abandon_media_request(
-            &pending_quality,
-            &desired_quality,
-            4_000_000,
-            2_000_000,
-            400_000,
-            Some(1_000_000),
-            1_900.,
-            4,
-            1.,
-            Some(4.),
-            3.,
-        ));
+    fn variants(playlist: &TopLevelPlaylist) -> Vec<&crate::parser::VariantStream> {
+        match playlist {
+            TopLevelPlaylist::Multivariant(playlist) => playlist.all_variants().iter().collect(),
+            TopLevelPlaylist::DirectMedia(_) => panic!("expected a multivariant playlist"),
+        }
     }
 
     #[test]
-    fn abandons_when_replacement_beats_starvation_and_remaining_time() {
+    fn uses_throughput_below_the_low_buffer_threshold() {
         let selector = AdaptiveQualitySelector::new(5_000_000.);
-        let pending_quality = SegmentQualityContext::new(2., 10);
-        let desired_quality = SegmentQualityContext::new(1., 11);
+        let playlist = parsed_playlist();
+        let variants = variants(&playlist);
 
-        assert!(selector.should_abandon_media_request(
-            &pending_quality,
-            &desired_quality,
-            4_000_000,
-            1_000_000,
-            250_000,
-            Some(1_000_000),
-            2_100.,
-            4,
-            1.,
-            Some(4.),
-            3.,
-        ));
+        let selected =
+            selector.select_variant(&variants, Some(variants[0].id()), 2_500_000., 2., 30., 4.);
+
+        assert_eq!(selected, Some(variants[1].id()));
     }
 
     #[test]
-    fn does_not_abandon_when_replacement_would_miss_starvation_deadline() {
+    fn falls_back_to_throughput_with_an_invalid_segment_duration() {
         let selector = AdaptiveQualitySelector::new(5_000_000.);
-        let pending_quality = SegmentQualityContext::new(2., 10);
-        let desired_quality = SegmentQualityContext::new(1., 11);
+        let playlist = parsed_playlist();
+        let variants = variants(&playlist);
 
-        assert!(!selector.should_abandon_media_request(
-            &pending_quality,
-            &desired_quality,
-            4_000_000,
-            2_000_000,
-            250_000,
-            Some(1_000_000),
-            2_100.,
-            4,
-            1.,
-            Some(4.),
-            1.8,
-        ));
+        let selected =
+            selector.select_variant(&variants, Some(variants[0].id()), 2_500_000., 30., 30., 0.);
+
+        assert_eq!(selected, Some(variants[1].id()));
+    }
+
+    #[test]
+    fn buffer_pressure_can_switch_below_the_throughput_choice() {
+        let selector = AdaptiveQualitySelector::new(5_000_000.);
+        let playlist = parsed_playlist();
+        let variants = variants(&playlist);
+
+        let selected =
+            selector.select_variant(&variants, Some(variants[2].id()), 5_000_000., 8., 30., 4.);
+
+        assert_eq!(selected, Some(variants[0].id()));
+    }
+
+    #[test]
+    fn bola_o_caps_an_unsustainable_quality_increase() {
+        let selector = AdaptiveQualitySelector::new(5_000_000.);
+        let playlist = parsed_playlist();
+        let variants = variants(&playlist);
+
+        let selected =
+            selector.select_variant(&variants, Some(variants[0].id()), 2_500_000., 30., 30., 4.);
+
+        assert_eq!(selected, Some(variants[1].id()));
+    }
+
+    #[test]
+    fn duplicate_bandwidths_do_not_disable_bola() {
+        let selector = AdaptiveQualitySelector::new(5_000_000.);
+        let playlist = TopLevelPlaylist::parse(
+            b"#EXTM3U\n\
+#EXT-X-STREAM-INF:BANDWIDTH=1000000\n\
+low-a.m3u8\n\
+#EXT-X-STREAM-INF:BANDWIDTH=1000000\n\
+low-b.m3u8\n\
+#EXT-X-STREAM-INF:BANDWIDTH=4000000\n\
+high.m3u8\n",
+            Url::new("https://example.com/master.m3u8".to_string()),
+        )
+        .unwrap();
+        let variants = variants(&playlist);
+
+        let selected =
+            selector.select_variant(&variants, Some(variants[1].id()), 5_000_000., 30., 30., 4.);
+
+        assert_eq!(selected, Some(variants[2].id()));
     }
 }
