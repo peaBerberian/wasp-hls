@@ -429,8 +429,8 @@ impl NextSegmentSelector {
     /// Returns the most needed segment according to the current situation.
     /// Internally, this method may be validating and re-calling itself (hence its name) if it sees
     /// that segments of a higher or similar quality are already present in the buffer, through a
-    /// process called "smart quality switching": skipping a request when equal- or
-    /// higher-quality media already covers its range.
+    /// project-specific optimization called "smart quality switching": skipping a request when
+    /// equal- or higher-quality media already covers its range.
     fn recursively_check_most_needed_media_segment<'a>(
         &mut self,
         media_segments: &'a [MediaSegmentInfo],
@@ -443,8 +443,8 @@ impl NextSegmentSelector {
             .get_next(media_segments, maximum_position)?;
         let segment_end = si.end();
 
-        // Apply "smart quality switching": skip the request when equal- or higher-quality media
-        // is already buffered for its range.
+        // Apply the project-specific "smart quality switching" optimization: skip the request
+        // when equal- or higher-quality media is already buffered for its range.
         if self.can_be_skipped(si.start(), segment_end, context, inventory) {
             log_debug!(
                 "Selector: Segment can be skipped (s:{}, d: {})",
@@ -473,8 +473,8 @@ impl NextSegmentSelector {
     /// If `true`, this generally means that the wanted segment or segment ranges is currently
     /// unneeded.
     ///
-    /// This method applies "smart quality switching": skipping downloads when equal- or
-    /// higher-quality media is already buffered for the requested range.
+    /// This method applies the project-specific "smart quality switching" optimization: skip
+    /// downloads when equal- or higher-quality media is already buffered for the requested range.
     fn can_be_skipped(
         &self,
         start: f64,

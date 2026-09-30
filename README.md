@@ -219,8 +219,9 @@ Adaptive BitRate:
 - [x] Fast quality switching (Replace already-loaded lower-quality segments
       with higher-quality ones when they are sufficiently far from playback to
       prevent rebuffering).
-- [x] Smart quality switching (Skip a segment request when equal- or
-      higher-quality media is already buffered or being pushed for that range).
+- [x] Smart quality switching (Project-specific term for skipping a segment
+      request when equal- or higher-quality media is already buffered or being
+      pushed for that range).
 - [x] Also choose variant based on buffer-based estimates.
 - [ ] Logic to detect sudden large fall in bandwidth before the end of a current
       request.
