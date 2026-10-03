@@ -57,10 +57,18 @@ fn ensure_ready_playlists(dispatcher: &mut Dispatcher, wanted_position: f64) -> 
         StartupStatus::Ready => true,
         StartupStatus::AwaitingPlaylists => false,
         StartupStatus::AwaitingSupportCheck => false,
-        StartupStatus::VariantSwitchNeeded { variant_id } => {
+        StartupStatus::VariantSelectionNeeded => {
+            // An unsupported variant needs a replacement even when it is manually locked.
+            let Some((variant_id, _)) = dispatcher.select_adaptive_variant() else {
+                return false;
+            };
             jsAnnounceVariantUpdate(Some(variant_id));
 
-            let changed_media_types = playlist_store.set_variant(variant_id);
+            let changed_media_types = dispatcher
+                .playlist_store
+                .as_mut()
+                .unwrap()
+                .set_variant(variant_id);
             dispatcher.handle_media_playlist_update(&changed_media_types, false, false);
             false
         }
