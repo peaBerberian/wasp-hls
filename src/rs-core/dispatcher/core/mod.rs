@@ -3,6 +3,7 @@ use super::{
     MediaSourceReadyState, PlaybackTickReason, PlayerReadyState, ReadyProbeSegment,
 };
 use crate::{
+    adaptive::PlaybackConditions,
     bindings::{
         formatters::format_source_buffer_creation_err_for_js, jsAnnounceTrackUpdate,
         jsAnnounceVariantLockStatusChange, jsAnnounceVariantUpdate, jsInspectSegment,
@@ -63,21 +64,73 @@ impl Dispatcher {
     /// If it changed, handle the consequences (such as requesting new media playlists, loading
     /// and pushing segments etc.).
     pub(super) fn check_best_variant(&mut self) {
+        self.check_best_variant_with_flush(false);
+    }
+
+    fn playback_conditions(&self, pl_store: &PlaylistStore) -> PlaybackConditions {
+        let media_type = if pl_store.has_distinct_media_type(MediaType::Video) {
+            MediaType::Video
+        } else {
+            MediaType::Audio
+        };
+        PlaybackConditions {
+            buffer_level: self.media_element_ref.buffer_ahead_for(media_type),
+            buffer_goal: self.buffer_goal,
+            playback_speed: self.media_element_ref.wanted_speed(),
+            max_target_segment_duration: pl_store.segment_target_duration(),
+        }
+    }
+
+    fn check_best_variant_with_flush(&mut self, flush: bool) {
+        let Some(pl_store) = self.playlist_store.as_ref() else {
+            return;
+        };
+        if pl_store.is_variant_locked() {
+            return;
+        }
+        let Some((variant_id, allow_fast_quality_switching)) = self.select_adaptive_variant()
+        else {
+            return;
+        };
         if let Some(pl_store) = self.playlist_store.as_mut() {
-            let bandwidth = self.adaptive_selector.get_estimate();
-            log_debug!("Core: New bandwidth estimate: {}", bandwidth);
-            let speed = self.media_element_ref.wanted_speed();
-            let actually_used_bandwidth = if speed.is_finite() && speed > 0.0 {
-                bandwidth / speed
-            } else {
-                // TODO: Revisit ABR behavior for non-positive playback rates if reverse playback
-                // becomes a first-class use case. The current pipeline remains forward-oriented,
-                // so negative rates should not currently alter bandwidth scaling. Non-finite
-                // rates are also ignored here defensively to avoid poisoning ABR decisions.
-                bandwidth
-            };
-            let update = pl_store.update_estimated_bandwidth(actually_used_bandwidth);
-            self.handle_variant_update(update, false);
+            let update = pl_store.update_adaptive_variant(variant_id);
+            self.handle_variant_update(update, flush, allow_fast_quality_switching);
+        }
+    }
+
+    /// Combine the ABR recommendation with buffered-segment replacement opportunities.
+    fn select_adaptive_variant(&self) -> Option<(u32, bool)> {
+        let pl_store = self.playlist_store.as_ref()?;
+        let compatible_variants = pl_store.compatible_variants();
+        let current_variant_id = pl_store.current_variant_id();
+        let selection = self.adaptive_selector.select_variant(
+            &compatible_variants,
+            current_variant_id,
+            &self.playback_conditions(pl_store),
+        )?;
+        let has_replacement = [MediaType::Audio, MediaType::Video]
+            .into_iter()
+            .any(|media_type| {
+                pl_store
+                    .variant_segment_quality_context(selection.safe_variant_id, media_type)
+                    .is_some_and(|context| {
+                        self.segment_selectors.has_fast_quality_switch_candidate(
+                            media_type,
+                            &context,
+                            self.media_element_ref.inventory(media_type),
+                        )
+                    })
+            });
+
+        if has_replacement {
+            Some((selection.safe_variant_id, true))
+        } else {
+            // The additive recommendation can also replace buffered media only when both
+            // recommendations identify the same variant.
+            Some((
+                selection.best_variant_id,
+                selection.best_variant_id == selection.safe_variant_id,
+            ))
         }
     }
 
@@ -106,7 +159,7 @@ impl Dispatcher {
                             is_audio_track_distinct,
                         );
                     }
-                    self.handle_variant_update(updates, true);
+                    self.handle_variant_update(updates, true, true);
                     jsAnnounceVariantLockStatusChange(Some(variant_id));
                 }
             }
@@ -116,8 +169,8 @@ impl Dispatcher {
     /// Remove an HLS variant previously put in place through `lock_variant_core`.
     pub(super) fn unlock_variant_core(&mut self) {
         if let Some(pl_store) = self.playlist_store.as_mut() {
-            let update = pl_store.unlock_variant();
-            self.handle_variant_update(update, false);
+            pl_store.unlock_variant();
+            self.check_best_variant();
         }
     }
 
@@ -155,34 +208,25 @@ impl Dispatcher {
 
     /// Set an audio track whose `id` is given in argument.
     pub(super) fn set_audio_track_core(&mut self, track_id: Option<u32>) {
-        let update_result = if let Some(ref mut pl_store) = self.playlist_store {
-            match pl_store.set_audio_track(track_id) {
-                SetAudioTrackResponse::AudioMediaUpdate => Some((true, None)),
-                SetAudioTrackResponse::VariantUpdate {
-                    updates,
-                    unlocked_variant,
-                } => Some((true, Some((updates, unlocked_variant)))),
-                SetAudioTrackResponse::NoUpdate => Some((false, None)),
-            }
-        } else {
-            None
-        };
-
-        let Some((should_announce_track, variant_update)) = update_result else {
+        let Some(pl_store) = self.playlist_store.as_mut() else {
             return;
         };
-
-        if should_announce_track {
-            self.announce_current_audio_track();
-        }
-
-        if let Some((updates, unlocked_variant)) = variant_update {
-            self.handle_variant_update(updates, true);
-            if unlocked_variant {
-                jsAnnounceVariantLockStatusChange(None);
+        match pl_store.set_audio_track(track_id) {
+            SetAudioTrackResponse::VariantSelectionNeeded {
+                variant_lock_removed,
+            } => {
+                self.check_best_variant_with_flush(true);
+                self.announce_current_audio_track();
+                if variant_lock_removed {
+                    jsAnnounceVariantLockStatusChange(None);
+                }
             }
-        } else if should_announce_track {
-            self.handle_media_playlist_update(&[MediaType::Audio], true, true);
+            SetAudioTrackResponse::AudioMediaUpdate => {
+                self.announce_current_audio_track();
+                self.handle_media_playlist_update(&[MediaType::Audio], true, true);
+                self.check_best_variant();
+            }
+            SetAudioTrackResponse::NoUpdate => self.check_best_variant(),
         }
     }
 
@@ -651,10 +695,16 @@ impl Dispatcher {
             }
             Ok(pl) => {
                 log_info!("Core: top-level playlist parsed successfully");
-                let estimate = self.adaptive_selector.get_estimate();
-                match PlaylistStore::try_new(pl, estimate) {
+                match PlaylistStore::try_new(pl) {
                     Ok(mut pl_store) => {
                         self.apply_initial_audio_track_selection(&mut pl_store);
+                        if let Some(selection) = self.adaptive_selector.select_variant(
+                            &pl_store.compatible_variants(),
+                            pl_store.current_variant_id(),
+                            &self.playback_conditions(&pl_store),
+                        ) {
+                            pl_store.update_adaptive_variant(selection.best_variant_id);
+                        }
                         let direct_media_refresh = pl_store
                             .direct_media_playlist()
                             .map(|(id, playlist)| (*id, playlist.refresh_interval()));
@@ -756,6 +806,7 @@ impl Dispatcher {
         self.requester.update_base_position(Some(wanted_pos));
         self.segment_selectors.advance_position(wanted_pos - 0.2);
 
+        self.check_best_variant();
         self.check_segments_to_request();
         if !was_already_locked {
             self.requester.unlock_segment_requests();
@@ -906,7 +957,18 @@ impl Dispatcher {
     }
 
     /// Perform all actions that should be commonly taken after the current variant changes.
-    fn handle_variant_update(&mut self, result: VariantUpdateResult, flush: bool) {
+    fn handle_variant_update(
+        &mut self,
+        result: VariantUpdateResult,
+        flush: bool,
+        allow_fast_quality_switching: bool,
+    ) {
+        // The recommendation's permitted use can change even when the variant ID does not.
+        for media_type in [MediaType::Audio, MediaType::Video] {
+            self.segment_selectors
+                .set_fast_quality_switching(media_type, allow_fast_quality_switching);
+        }
+
         let (changed_media_types, has_worsened) = match result {
             VariantUpdateResult::Improved(mt) => (mt, false),
             VariantUpdateResult::EqualOrUnknown(mt) => (mt, false),
@@ -1155,5 +1217,89 @@ fn sync_media_source_duration(playlist_store: &PlaylistStore) {
         }
     } else {
         let _ = jsSetMediaSourceDuration(u32::MAX as f64);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Dispatcher;
+    use crate::{
+        dispatcher::{JsTimeRanges, MediaObservation, PlaybackTickReason},
+        parser::TopLevelPlaylist,
+        playlist_store::PlaylistStore,
+        utils::url::Url,
+    };
+
+    fn selected_playlist(manifest: &[u8]) -> PlaylistStore {
+        let playlist = TopLevelPlaylist::parse(
+            manifest,
+            Url::new("https://example.com/master.m3u8".to_string()),
+        )
+        .unwrap();
+        let mut store = PlaylistStore::try_new(playlist).unwrap();
+        let variant_id = store.available_variants()[0].id();
+        store.set_variant(variant_id);
+        store
+    }
+
+    fn dispatcher_with_buffer_observation(video: Option<Vec<f64>>) -> Dispatcher {
+        let mut dispatcher = Dispatcher::new(3_125_000.);
+        dispatcher
+            .media_element_ref
+            .on_observation(MediaObservation::new(
+                PlaybackTickReason::RegularInterval,
+                10.,
+                4,
+                JsTimeRanges::new(vec![0., 15.]),
+                false,
+                false,
+                false,
+                f64::MAX,
+                Some(JsTimeRanges::new(vec![0., 15.])),
+                video.map(JsTimeRanges::new),
+            ));
+        dispatcher
+    }
+
+    #[test]
+    fn playback_conditions_use_video_source_buffer_for_video_variants() {
+        for manifest in [
+            "#EXTM3U\n#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID=\"aud\",NAME=\"English\",DEFAULT=YES,URI=\"audio.m3u8\"\n#EXT-X-STREAM-INF:BANDWIDTH=1000000,CODECS=\"avc1.42E01E,mp4a.40.2\",AUDIO=\"aud\"\nvideo.m3u8\n",
+            "#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1000000,CODECS=\"avc1.42E01E,mp4a.40.2\"\nmuxed.m3u8\n",
+        ] {
+            let store = selected_playlist(manifest.as_bytes());
+            let dispatcher = dispatcher_with_buffer_observation(Some(vec![0., 40.]));
+
+            assert_eq!(dispatcher.playback_conditions(&store).buffer_level, Some(30.));
+        }
+    }
+
+    #[test]
+    fn playback_conditions_use_audio_source_buffer_for_audio_only_variants() {
+        let store = selected_playlist(
+            b"#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1000000,CODECS=\"mp4a.40.2\"\naudio.m3u8\n",
+        );
+        let dispatcher = dispatcher_with_buffer_observation(Some(vec![0., 40.]));
+
+        assert_eq!(
+            dispatcher.playback_conditions(&store).buffer_level,
+            Some(5.)
+        );
+    }
+
+    #[test]
+    fn playback_conditions_do_not_fall_back_to_audio_when_video_ranges_are_missing() {
+        let store = selected_playlist(
+            b"#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1000000,CODECS=\"avc1.42E01E\"\nvideo.m3u8\n",
+        );
+        for video in [None, Some(vec![])] {
+            let expected = video.as_ref().map(|_| 0.);
+            let dispatcher = dispatcher_with_buffer_observation(video);
+
+            assert_eq!(
+                dispatcher.playback_conditions(&store).buffer_level,
+                expected
+            );
+        }
     }
 }

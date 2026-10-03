@@ -109,6 +109,7 @@ impl Dispatcher {
     pub fn set_buffer_goal(&mut self, buffer_goal: f64) {
         self.buffer_goal = buffer_goal;
         self.segment_selectors.update_buffer_goal(buffer_goal);
+        self.check_best_variant();
         self.check_segments_to_request();
     }
 
