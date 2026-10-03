@@ -123,6 +123,13 @@ impl NextSegmentSelectors {
         }
     }
 
+    /// Enable or disable fast quality switching for the given MediaType.
+    ///
+    /// Fast quality switching is here the concept of loading higher-quality segments to replace
+    /// already buffered lower-quality segments (instead of just loading the next unbuffered
+    /// segment).
+    ///
+    /// Enabling or disabling fast switching may be a user, device or adaptive decision.
     pub(crate) fn set_fast_quality_switching(&mut self, media_type: MediaType, is_allowed: bool) {
         self.get_mut(media_type).allow_fast_quality_switching = is_allowed;
     }
@@ -139,7 +146,9 @@ impl NextSegmentSelectors {
             MediaType::Audio => &self.audio,
             MediaType::Video => &self.video,
         }
-        .has_fast_quality_switch_candidate(context, inventory)
+        // XXX TODO: So we do this two times and this one is thrown away?
+        .fast_quality_switch_position(context, inventory)
+        .is_some()
     }
 }
 
@@ -166,6 +175,8 @@ pub(crate) struct NextSegmentSelector {
     last_media_id: Option<u32>,
 
     /// Whether a quality change may replace already-buffered lower-quality segments.
+    /// XXX TODO: Can't that one be passed to `most_needed_segment`, or maybe better, not be needed
+    /// at all?
     allow_fast_quality_switching: bool,
 
     /// Information on segments that were voluntarily not returned by the `NextSegmentSelector`
@@ -368,15 +379,12 @@ impl NextSegmentSelector {
         prev_end
     }
 
-    fn has_fast_quality_switch_candidate(
-        &self,
-        context: &SegmentQualityContext,
-        inventory: &[BufferedChunk],
-    ) -> bool {
-        self.fast_quality_switch_position(context, inventory)
-            .is_some()
-    }
-
+    /// Returns if found a candidate position that we could re-load (moving the cursor backward)
+    /// if it would mean buffering higher quality data (by basing us on `context` for the new
+    /// quality).
+    ///
+    /// Getting a value basically means that "fast quality switching" is possible here, and
+    /// indicates where.
     fn fast_quality_switch_position(
         &self,
         context: &SegmentQualityContext,
@@ -662,7 +670,9 @@ mod tests {
         ];
         let higher_quality = SegmentQualityContext::new(2., 2);
 
-        assert!(selector.has_fast_quality_switch_candidate(&higher_quality, &buffered));
+        assert!(selector
+            .fast_quality_switch_position(&higher_quality, &buffered)
+            .is_some());
         assert_eq!(
             selector.recompute_starting_position(&higher_quality, &buffered),
             6.
@@ -683,7 +693,9 @@ mod tests {
         ];
         let higher_quality = SegmentQualityContext::new(2., 2);
 
-        assert!(!selector.has_fast_quality_switch_candidate(&higher_quality, &buffered));
+        assert!(!selector
+            .fast_quality_switch_position(&higher_quality, &buffered)
+            .is_some());
         assert_eq!(
             selector.recompute_starting_position(&higher_quality, &buffered),
             9.

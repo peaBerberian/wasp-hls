@@ -31,15 +31,24 @@ pub(crate) struct AdaptiveVariantSelection {
 
 /// Playback information used to choose an adaptive variant.
 pub(crate) struct PlaybackConditions {
-    /// Current amount of buffered data in front of the current position
-    pub(crate) buffer_level: f64,
+    /// Current amount of buffered data in front of the current position in
+    /// seconds for the buffer type we want to get a variant estimate for.
+    /// `None` means buffer information is unavailable.
+    pub(crate) buffer_level: Option<f64>,
+    /// Amount of buffered data in front of the current position in seconds at
+    /// which data will stop being buffered.
     pub(crate) buffer_goal: f64,
+    /// Current **wanted** playback rate. `2` indicates x2 playback, `1` is
+    /// normal playback etc.
     pub(crate) playback_speed: f64,
-    /// Maximum target segment duration across the currently selected media playlists.
+    /// Maximum segment duration across the currently selected media playlists.
     pub(crate) max_target_segment_duration: Option<f64>,
 }
 
-const ADAPTIVE_FACTOR: f64 = 0.8;
+/// Factor with which we multiply bandwidth estimates to ensure a safe variant
+/// recommendation is given in terms of variant.
+const BANDWIDTH_ESTIMATE_FACTOR: f64 = 0.8;
+
 const BOLA_MIN_LOW_BUFFER: f64 = 3.0;
 const BOLA_MAX_LOW_BUFFER: f64 = 10.0;
 const BOLA_UP_SWITCH_HYSTERESIS: f64 = 0.25;
@@ -59,23 +68,36 @@ impl AdaptiveQualitySelector {
         self.bandwidth_estimator.add_sample(duration_ms, size_bytes);
     }
 
-    /// Returns the throughput estimate produced by the `AdaptiveQualitySelector`.
-    fn get_estimate(&self) -> f64 {
-        self.bandwidth_estimator.get_estimate() * ADAPTIVE_FACTOR
-    }
-
-    /// Select the best variant by composing the throughput estimate with a BOLA-style
-    /// buffer-occupancy rule.
-    /// `compatible_variants` must preserve the playlist's ascending quality order.
+    /// Estimate which variant to choose from what's available, playback conditions, and
+    /// collected bandwidth estimates.
+    ///
+    /// # Arguments
+    ///
+    /// * `variants` - The pool of variants this method should choose from. **MUST**
+    ///   be in ascending quality order.
+    ///
+    /// * `current_variant_id` - The id for the optional current variant selected.
+    ///
+    /// *`playback` - Various metadata about playback.
+    ///
+    /// # Returns
+    ///
+    /// - The produced variant estimate from those conditions and internal data.
     pub(crate) fn select_variant(
         &self,
-        compatible_variants: &[&VariantStream],
+        variants: &[&VariantStream],
         current_variant_id: Option<u32>,
         playback: &PlaybackConditions,
     ) -> Option<AdaptiveVariantSelection> {
-        let variants = compatible_variants;
-        if variants.is_empty() {
-            return None;
+        match variants {
+            [] => return None,
+            [variant] => {
+                return Some(AdaptiveVariantSelection {
+                    best_variant_id: variant.id(),
+                    safe_variant_id: variant.id(),
+                });
+            }
+            _ => {}
         }
         let estimate = self.get_estimate();
         let bandwidth = if playback.playback_speed.is_finite() && playback.playback_speed > 0. {
@@ -83,19 +105,23 @@ impl AdaptiveQualitySelector {
         } else {
             estimate
         };
+
+        // Variant id just by looking at the throughput estimate.
         let throughput_id = best_variant_id(variants.iter().copied(), bandwidth)
             .or_else(|| fallback_variant_id(variants.iter().copied()))?;
-        let segment_duration = playback.max_target_segment_duration.unwrap_or(0.);
-        if !segment_duration.is_finite() || segment_duration <= 0. {
+
+        let Some(buffer_level) = playback.buffer_level else {
             return Some(AdaptiveVariantSelection {
                 best_variant_id: throughput_id,
                 safe_variant_id: throughput_id,
             });
-        }
-
-        if variants.len() == 1 {
-            return variants.first().map(|variant| AdaptiveVariantSelection {
-                best_variant_id: variant.id(),
+        };
+        let segment_duration = playback.max_target_segment_duration.unwrap_or(0.);
+        if !segment_duration.is_finite() || segment_duration <= 0. {
+            // Missing enough information for the buffer-based estimate, exiting with throughput
+            // choice
+            return Some(AdaptiveVariantSelection {
+                best_variant_id: throughput_id,
                 safe_variant_id: throughput_id,
             });
         }
@@ -104,7 +130,7 @@ impl AdaptiveQualitySelector {
         let qlow = (segment_duration * 2.)
             .clamp(BOLA_MIN_LOW_BUFFER, BOLA_MAX_LOW_BUFFER)
             .min((qmax - 0.1).max(segment_duration));
-        let normalized_buffer = playback.buffer_level.max(0.).min(qmax);
+        let normalized_buffer = buffer_level.max(0.).min(qmax);
         if normalized_buffer < qlow {
             return Some(AdaptiveVariantSelection {
                 best_variant_id: throughput_id,
@@ -112,21 +138,29 @@ impl AdaptiveQualitySelector {
             });
         }
 
-        let mut bola_id = compute_bola_variant_id(variants, normalized_buffer, qlow, qmax)?;
-        if let Some(current_variant) =
-            current_variant_id.and_then(|id| variants.iter().find(|variant| variant.id() == id))
+        let Some(bola) = BolaModel::new(variants, qlow, qmax) else {
+            return Some(AdaptiveVariantSelection {
+                best_variant_id: throughput_id,
+                safe_variant_id: throughput_id,
+            });
+        };
+        let mut bola_id = bola.variant_id(normalized_buffer)?;
+        if let Some(current_position) =
+            current_variant_id.and_then(|id| variants.iter().position(|variant| variant.id() == id))
         {
-            let bola_variant = variants.iter().find(|variant| variant.id() == bola_id)?;
-            if bola_variant.bandwidth() > current_variant.bandwidth() {
+            // Rely on hysteresis to limit oscillation
+            let bola_position = variants
+                .iter()
+                .position(|variant| variant.id() == bola_id)?;
+            if bola_position > current_position {
                 let conservative_buffer =
                     (normalized_buffer - (segment_duration * BOLA_UP_SWITCH_HYSTERESIS)).max(qlow);
-                let conservative_id =
-                    compute_bola_variant_id(variants, conservative_buffer, qlow, qmax)?;
-                let conservative_variant = variants
+                let conservative_id = bola.variant_id(conservative_buffer)?;
+                let conservative_position = variants
                     .iter()
-                    .find(|variant| variant.id() == conservative_id)?;
-                if conservative_variant.bandwidth() <= current_variant.bandwidth() {
-                    bola_id = current_variant.id();
+                    .position(|variant| variant.id() == conservative_id)?;
+                if conservative_position <= current_position {
+                    bola_id = variants[current_position].id();
                 }
             }
         }
@@ -143,8 +177,14 @@ impl AdaptiveQualitySelector {
         })
     }
 
+    /// Reset internal state kept by the `AdaptiveQualitySelector`.
     pub(crate) fn reset(&mut self) {
         self.bandwidth_estimator.reset();
+    }
+
+    /// Returns the throughput estimate produced by the `AdaptiveQualitySelector`.
+    fn get_estimate(&self) -> f64 {
+        self.bandwidth_estimator.get_estimate() * BANDWIDTH_ESTIMATE_FACTOR
     }
 }
 
@@ -154,7 +194,7 @@ fn best_variant_id<'a>(
 ) -> Option<u32> {
     variants
         .filter(|variant| (variant.bandwidth() as f64) <= bandwidth)
-        .max_by_key(|variant| variant.bandwidth())
+        .last()
         .map(|v| v.id())
 }
 
@@ -164,70 +204,132 @@ fn fallback_variant_id<'a>(variants: impl Iterator<Item = &'a VariantStream>) ->
         .map(|variant| variant.id())
 }
 
+struct BolaCandidate {
+    variant_id: u32,
+    bandwidth: f64,
+    utility: f64,
+}
+
+/// Candidates and calibration shared by the buffer-level evaluations of one selection.
+enum BolaModel {
+    FixedVariant(u32),
+    BufferBased {
+        candidates: Vec<BolaCandidate>,
+        v: f64,
+        gamma_p: f64,
+    },
+}
+
+impl BolaModel {
+    fn new(variants: &[&VariantStream], qlow: f64, qmax: f64) -> Option<Self> {
+        let all_have_scores = variants.iter().all(|variant| variant.score().is_some());
+        if !all_have_scores && variants.iter().any(|variant| variant.score().is_some()) {
+            // Missing scores leave BOLA without a consistent utility scale.
+            return None;
+        }
+
+        let mut scored_candidates = Vec::new();
+        let variants = if all_have_scores {
+            // BOLA calibration needs increasing cost as quality increases. Keep this
+            // filtering local: it must not change track choices or manual variant locks.
+            let mut cheapest_higher_quality = None;
+            for &variant in variants.iter().rev() {
+                if cheapest_higher_quality.is_none_or(|bandwidth| variant.bandwidth() < bandwidth) {
+                    scored_candidates.push(variant);
+                    cheapest_higher_quality = Some(variant.bandwidth());
+                }
+            }
+            scored_candidates.reverse();
+            scored_candidates.as_slice()
+        } else {
+            variants
+        };
+
+        let min_bandwidth = variants.first()?.bandwidth() as f64;
+        if min_bandwidth <= 0. || qmax <= qlow {
+            return variants
+                .first()
+                .map(|variant| Self::FixedVariant(variant.id()));
+        }
+
+        let candidates: Vec<BolaCandidate> = variants
+            .iter()
+            .map(|variant| BolaCandidate {
+                variant_id: variant.id(),
+                bandwidth: variant.bandwidth() as f64,
+                utility: if all_have_scores {
+                    variant.score().unwrap_or(0.)
+                } else {
+                    ((variant.bandwidth() as f64) / min_bandwidth).ln()
+                },
+            })
+            .collect();
+        let s1 = min_bandwidth;
+        let u1 = candidates.first()?.utility;
+        let Some(second) = candidates
+            .iter()
+            .skip(1)
+            .find(|candidate| candidate.bandwidth > s1)
+        else {
+            return candidates
+                .last()
+                .map(|candidate| Self::FixedVariant(candidate.variant_id));
+        };
+        let s2 = second.bandwidth;
+        let u2 = second.utility;
+        let alpha = ((s2 * u1) - (s1 * u2)) / (s2 - s1);
+        let u_max = candidates.last()?.utility;
+        let denominator = u_max - alpha;
+        if denominator <= 0. {
+            return candidates
+                .last()
+                .map(|candidate| Self::FixedVariant(candidate.variant_id));
+        }
+
+        let v = (qmax - qlow) / denominator;
+        let gamma_p = ((u_max * qlow) - (alpha * qmax)) / (qmax - qlow);
+
+        Some(Self::BufferBased {
+            candidates,
+            v,
+            gamma_p,
+        })
+    }
+
+    fn variant_id(&self, buffer_level: f64) -> Option<u32> {
+        match self {
+            Self::FixedVariant(id) => Some(*id),
+            Self::BufferBased {
+                candidates,
+                v,
+                gamma_p,
+            } => candidates
+                .iter()
+                .max_by(|a, b| {
+                    let objective_a = ((v * (a.utility + gamma_p)) - buffer_level) / a.bandwidth;
+                    let objective_b = ((v * (b.utility + gamma_p)) - buffer_level) / b.bandwidth;
+                    objective_a
+                        .partial_cmp(&objective_b)
+                        .unwrap_or(Ordering::Equal)
+                })
+                .map(|candidate| candidate.variant_id),
+        }
+    }
+}
+
+#[cfg(test)]
 fn compute_bola_variant_id(
     variants: &[&VariantStream],
     buffer_level: f64,
     qlow: f64,
     qmax: f64,
 ) -> Option<u32> {
-    let min_bandwidth = variants.first()?.bandwidth() as f64;
-    if min_bandwidth <= 0. || qmax <= qlow {
-        return variants.first().map(|v| v.id());
-    }
-
-    let all_have_scores = variants.iter().all(|variant| variant.score().is_some());
-    let utilities: Vec<f64> = variants
-        .iter()
-        .map(|variant| {
-            if all_have_scores {
-                variant.score().unwrap_or(0.)
-            } else {
-                ((variant.bandwidth() as f64) / min_bandwidth).ln()
-            }
-        })
-        .collect();
-    let s1 = min_bandwidth;
-    let u1 = utilities[0];
-    let Some((s2, u2)) =
-        variants
-            .iter()
-            .zip(utilities.iter())
-            .skip(1)
-            .find_map(|(variant, utility)| {
-                let bandwidth = variant.bandwidth() as f64;
-                (bandwidth > s1).then_some((bandwidth, *utility))
-            })
-    else {
-        return variants.last().map(|variant| variant.id());
-    };
-    let alpha = ((s2 * u1) - (s1 * u2)) / (s2 - s1);
-    let u_max = *utilities.last()?;
-    let denominator = u_max - alpha;
-    if denominator <= 0. {
-        return variants.last().map(|v| v.id());
-    }
-
-    let v = (qmax - qlow) / denominator;
-    let gamma_p = ((u_max * qlow) - (alpha * qmax)) / (qmax - qlow);
-
-    variants
-        .iter()
-        .zip(utilities.iter())
-        .max_by(|(variant_a, utility_a), (variant_b, utility_b)| {
-            let objective_a =
-                ((v * (*utility_a + gamma_p)) - buffer_level) / (variant_a.bandwidth() as f64);
-            let objective_b =
-                ((v * (*utility_b + gamma_p)) - buffer_level) / (variant_b.bandwidth() as f64);
-            objective_a
-                .partial_cmp(&objective_b)
-                .unwrap_or(Ordering::Equal)
-        })
-        .map(|(variant, _)| variant.id())
+    BolaModel::new(variants, qlow, qmax)?.variant_id(buffer_level)
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{compute_bola_variant_id, AdaptiveQualitySelector, PlaybackConditions};
+    use super::{compute_bola_variant_id, AdaptiveQualitySelector, BolaModel, PlaybackConditions};
     use crate::{parser::TopLevelPlaylist, utils::url::Url};
 
     fn playback_conditions(
@@ -235,7 +337,7 @@ mod tests {
         max_target_segment_duration: Option<f64>,
     ) -> PlaybackConditions {
         PlaybackConditions {
-            buffer_level,
+            buffer_level: Some(buffer_level),
             buffer_goal: 30.,
             playback_speed: 1.,
             max_target_segment_duration,
@@ -264,6 +366,202 @@ high.m3u8\n",
     }
 
     #[test]
+    fn prepared_bola_model_can_be_reused_for_different_buffer_levels() {
+        let playlist = parsed_playlist();
+        let variants = variants(&playlist);
+        let bola = BolaModel::new(&variants, 8., 30.).unwrap();
+        for (buffer_level, expected_position) in [(8., 0), (30., 2), (8., 0), (30., 2)] {
+            assert_eq!(
+                bola.variant_id(buffer_level),
+                Some(variants[expected_position].id())
+            );
+        }
+    }
+
+    #[test]
+    fn prepared_bola_model_preserves_fixed_variant_fallbacks() {
+        let playlist = parsed_playlist();
+        let variants = variants(&playlist);
+        for bola in [
+            BolaModel::new(&variants, 8., 8.).unwrap(),
+            BolaModel::new(&variants[..1], 8., 30.).unwrap(),
+        ] {
+            for buffer_level in [0., 8., 20., 30.] {
+                assert_eq!(bola.variant_id(buffer_level), Some(variants[0].id()));
+            }
+        }
+    }
+
+    #[test]
+    fn empty_variant_pool_has_no_selection() {
+        let selector = AdaptiveQualitySelector::new(5_000_000.);
+        assert!(selector
+            .select_variant(&[], None, &playback_conditions(30., Some(4.)))
+            .is_none());
+    }
+
+    #[test]
+    fn single_variant_needs_no_throughput_or_playback_information() {
+        let playlist = parsed_playlist();
+        let variants = variants(&playlist);
+        let selector = AdaptiveQualitySelector::new(f64::NAN);
+        let playback = PlaybackConditions {
+            buffer_level: None,
+            buffer_goal: f64::NAN,
+            playback_speed: f64::NAN,
+            max_target_segment_duration: None,
+        };
+        let selected = selector
+            .select_variant(&variants[1..2], None, &playback)
+            .unwrap();
+        assert_eq!(selected.best_variant_id, variants[1].id());
+        assert_eq!(selected.safe_variant_id, variants[1].id());
+    }
+
+    #[test]
+    fn throughput_prefers_the_highest_quality_affordable_variant() {
+        let playlist = TopLevelPlaylist::parse(
+            b"#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=4000000,SCORE=1\nlow.m3u8\n#EXT-X-STREAM-INF:BANDWIDTH=2000000,SCORE=2\nmedium.m3u8\n#EXT-X-STREAM-INF:BANDWIDTH=6000000,SCORE=3\nhigh.m3u8\n",
+            Url::new("https://example.com/master.m3u8".to_string()),
+        ).unwrap();
+        let variants = variants(&playlist);
+        for (initial_bandwidth, expected_position) in [
+            (500_000., 1),
+            (2_500_000., 1),
+            (5_000_000., 1),
+            (7_500_000., 2),
+        ] {
+            let selector = AdaptiveQualitySelector::new(initial_bandwidth);
+            for duration in [None, Some(4.)] {
+                let selected = selector
+                    .select_variant(&variants, None, &playback_conditions(0., duration))
+                    .unwrap();
+                assert_eq!(selected.best_variant_id, variants[expected_position].id());
+                assert_eq!(selected.safe_variant_id, variants[expected_position].id());
+            }
+        }
+    }
+
+    #[test]
+    fn mixed_scores_use_only_throughput_even_with_a_full_buffer() {
+        let playlist = TopLevelPlaylist::parse(
+            b"#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1000000\nunknown.m3u8\n#EXT-X-STREAM-INF:BANDWIDTH=4000000,SCORE=1\nlow.m3u8\n#EXT-X-STREAM-INF:BANDWIDTH=2000000,SCORE=2\nhigh.m3u8\n",
+            Url::new("https://example.com/master.m3u8".to_string()),
+        ).unwrap();
+        let variants = variants(&playlist);
+        assert_eq!(compute_bola_variant_id(&variants, 30., 8., 30.), None);
+        for (initial_bandwidth, expected_position) in [(500_000., 0), (2_500_000., 2)] {
+            let selector = AdaptiveQualitySelector::new(initial_bandwidth);
+            for current in &variants {
+                for buffer_level in [0., 8., 20., 30.] {
+                    let selected = selector
+                        .select_variant(
+                            &variants,
+                            Some(current.id()),
+                            &playback_conditions(buffer_level, Some(4.)),
+                        )
+                        .unwrap();
+                    assert_eq!(selected.best_variant_id, variants[expected_position].id());
+                    assert_eq!(selected.safe_variant_id, variants[expected_position].id());
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn bola_calibrates_after_excluding_more_expensive_lower_quality_candidates() {
+        let playlist = TopLevelPlaylist::parse(
+            b"#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=4000000,SCORE=1\nlow.m3u8\n#EXT-X-STREAM-INF:BANDWIDTH=1000000,SCORE=2\nmedium.m3u8\n#EXT-X-STREAM-INF:BANDWIDTH=3000000,SCORE=3\nhigh.m3u8\n",
+            Url::new("https://example.com/master.m3u8".to_string()),
+        ).unwrap();
+        let variants = variants(&playlist);
+        let selector = AdaptiveQualitySelector::new(1_250_000.);
+        for (buffer_level, expected_position) in [(7., 1), (30., 2)] {
+            assert_eq!(
+                compute_bola_variant_id(&variants, buffer_level, 8., 30.),
+                Some(variants[expected_position].id()),
+            );
+            let selected = selector
+                .select_variant(
+                    &variants,
+                    None,
+                    &playback_conditions(buffer_level, Some(4.)),
+                )
+                .unwrap();
+            assert_eq!(selected.best_variant_id, variants[expected_position].id());
+            assert_eq!(selected.safe_variant_id, variants[1].id());
+        }
+        // BOLA's exclusion does not remove the original candidates.
+        assert_eq!(variants.len(), 3);
+        assert_eq!(variants[0].bandwidth(), 4_000_000);
+    }
+
+    #[test]
+    fn bola_keeps_only_the_highest_quality_at_equal_bandwidth() {
+        let playlist = TopLevelPlaylist::parse(
+            b"#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1000000,SCORE=1\nlow.m3u8\n#EXT-X-STREAM-INF:BANDWIDTH=1000000,SCORE=2\nmedium.m3u8\n#EXT-X-STREAM-INF:BANDWIDTH=1000000,SCORE=3\nhigh.m3u8\n",
+            Url::new("https://example.com/master.m3u8".to_string()),
+        ).unwrap();
+        let variants = variants(&playlist);
+        for buffer_level in [8., 20., 30.] {
+            assert_eq!(
+                compute_bola_variant_id(&variants, buffer_level, 8., 30.),
+                Some(variants[2].id()),
+            );
+        }
+    }
+
+    #[test]
+    fn bola_ignores_dominated_candidates_throughout_the_buffer_range() {
+        let playlist = TopLevelPlaylist::parse(
+            b"#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=4000000,SCORE=1\nlow.m3u8\n#EXT-X-STREAM-INF:BANDWIDTH=1000000,SCORE=2\nmedium.m3u8\n#EXT-X-STREAM-INF:BANDWIDTH=5000000,SCORE=3\nhigh.m3u8\n#EXT-X-STREAM-INF:BANDWIDTH=3000000,SCORE=4\nhigher.m3u8\n#EXT-X-STREAM-INF:BANDWIDTH=8000000,SCORE=5\nhighest.m3u8\n",
+            Url::new("https://example.com/master.m3u8".to_string()),
+        ).unwrap();
+        let variants = variants(&playlist);
+        let remaining = [variants[1], variants[3], variants[4]];
+        for step in 0..=300 {
+            let buffer_level = step as f64 / 10.;
+            let selected = compute_bola_variant_id(&variants, buffer_level, 8., 30.).unwrap();
+            assert_eq!(
+                Some(selected),
+                compute_bola_variant_id(&remaining, buffer_level, 8., 30.),
+            );
+            assert!(remaining.iter().any(|variant| variant.id() == selected));
+        }
+        assert_eq!(variants.len(), 5);
+    }
+
+    #[test]
+    fn upgrade_hysteresis_uses_quality_order_even_when_bandwidth_decreases() {
+        let playlist = TopLevelPlaylist::parse(
+            b"#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1000000,SCORE=1\nlow.m3u8\n#EXT-X-STREAM-INF:BANDWIDTH=2000000,SCORE=2\nmedium.m3u8\n#EXT-X-STREAM-INF:BANDWIDTH=10000000,SCORE=3\nhigh.m3u8\n#EXT-X-STREAM-INF:BANDWIDTH=8000000,SCORE=4\nhighest.m3u8\n",
+            Url::new("https://example.com/master.m3u8".to_string()),
+        ).unwrap();
+        let variants = variants(&playlist);
+        let current = variants[2];
+        let buffer_level = (81..=300)
+            .map(|step| step as f64 / 10.)
+            .find(|buffer_level| {
+                let raw = compute_bola_variant_id(&variants, *buffer_level, 8., 30.).unwrap();
+                let conservative =
+                    compute_bola_variant_id(&variants, (buffer_level - 1.).max(8.), 8., 30.)
+                        .unwrap();
+                raw == variants[3].id() && conservative == variants[1].id()
+            })
+            .expect("expected a BOLA transition from medium to highest quality");
+        let selector = AdaptiveQualitySelector::new(2_500_000.);
+        let selected = selector
+            .select_variant(
+                &variants,
+                Some(current.id()),
+                &playback_conditions(buffer_level, Some(4.)),
+            )
+            .unwrap();
+        assert_eq!(selected.best_variant_id, current.id());
+        assert_eq!(selected.safe_variant_id, variants[1].id());
+    }
+
+    #[test]
     fn uses_throughput_below_the_low_buffer_threshold() {
         let selector = AdaptiveQualitySelector::new(3_125_000.);
         let playlist = parsed_playlist();
@@ -276,6 +574,28 @@ high.m3u8\n",
         );
 
         assert_eq!(selected.unwrap().best_variant_id, variants[1].id());
+    }
+
+    #[test]
+    fn missing_buffer_information_uses_throughput_without_disabling_selection() {
+        let playlist = parsed_playlist();
+        let variants = variants(&playlist);
+        let playback = PlaybackConditions {
+            buffer_level: None,
+            ..playback_conditions(30., Some(4.))
+        };
+        for (initial_bandwidth, expected_position) in
+            [(500_000., 0), (3_125_000., 1), (5_000_000., 2)]
+        {
+            let selector = AdaptiveQualitySelector::new(initial_bandwidth);
+            for current_id in [None, Some(variants[2].id())] {
+                let selected = selector
+                    .select_variant(&variants, current_id, &playback)
+                    .unwrap();
+                assert_eq!(selected.best_variant_id, variants[expected_position].id());
+                assert_eq!(selected.safe_variant_id, variants[expected_position].id());
+            }
+        }
     }
 
     #[test]
@@ -404,24 +724,24 @@ high.m3u8\n",
     #[test]
     fn throughput_choice_is_not_capped_by_bola_with_scored_variants() {
         let playlist = TopLevelPlaylist::parse(
-            b"#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1000000,SCORE=1\nlow.m3u8\n#EXT-X-STREAM-INF:BANDWIDTH=1000000,SCORE=2\nmedium.m3u8\n#EXT-X-STREAM-INF:BANDWIDTH=2000000,SCORE=3\nhigh.m3u8\n",
+            b"#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1000000,SCORE=1\nlow.m3u8\n#EXT-X-STREAM-INF:BANDWIDTH=1000000,SCORE=2\nmedium.m3u8\n#EXT-X-STREAM-INF:BANDWIDTH=2000000,SCORE=3\nhigh.m3u8\n#EXT-X-STREAM-INF:BANDWIDTH=4000000,SCORE=4\nhighest.m3u8\n",
             Url::new("https://example.com/master.m3u8".to_string()),
         ).unwrap();
         let variants = variants(&playlist);
         assert_eq!(
-            compute_bola_variant_id(&variants, 8., 8., 30.),
-            Some(variants[1].id())
+            compute_bola_variant_id(&variants, 8.5, 8., 30.),
+            Some(variants[2].id())
         );
         let selector = AdaptiveQualitySelector::new(5_000_000.);
         let selected = selector
             .select_variant(
                 &variants,
-                Some(variants[2].id()),
-                &playback_conditions(8., Some(4.)),
+                Some(variants[3].id()),
+                &playback_conditions(8.5, Some(4.)),
             )
             .unwrap();
-        assert_eq!(selected.best_variant_id, variants[2].id());
-        assert_eq!(selected.safe_variant_id, variants[2].id());
+        assert_eq!(selected.best_variant_id, variants[3].id());
+        assert_eq!(selected.safe_variant_id, variants[3].id());
     }
 
     #[test]
@@ -438,7 +758,7 @@ high.m3u8\n",
         assert!(variants[2].bandwidth() < variants[1].bandwidth());
         assert!(variants[2].id() < variants[1].id());
         assert_eq!(selected.best_variant_id, variants[2].id());
-        assert_eq!(selected.safe_variant_id, variants[1].id());
+        assert_eq!(selected.safe_variant_id, variants[2].id());
     }
 
     #[test]

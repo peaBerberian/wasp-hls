@@ -68,8 +68,13 @@ impl Dispatcher {
     }
 
     fn playback_conditions(&self, pl_store: &PlaylistStore) -> PlaybackConditions {
+        let media_type = if pl_store.has_distinct_media_type(MediaType::Video) {
+            MediaType::Video
+        } else {
+            MediaType::Audio
+        };
         PlaybackConditions {
-            buffer_level: self.media_element_ref.last_buffer_gap(),
+            buffer_level: self.media_element_ref.buffer_ahead_for(media_type),
             buffer_goal: self.buffer_goal,
             playback_speed: self.media_element_ref.wanted_speed(),
             max_target_segment_duration: pl_store.segment_target_duration(),
@@ -1212,5 +1217,89 @@ fn sync_media_source_duration(playlist_store: &PlaylistStore) {
         }
     } else {
         let _ = jsSetMediaSourceDuration(u32::MAX as f64);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Dispatcher;
+    use crate::{
+        dispatcher::{JsTimeRanges, MediaObservation, PlaybackTickReason},
+        parser::TopLevelPlaylist,
+        playlist_store::PlaylistStore,
+        utils::url::Url,
+    };
+
+    fn selected_playlist(manifest: &[u8]) -> PlaylistStore {
+        let playlist = TopLevelPlaylist::parse(
+            manifest,
+            Url::new("https://example.com/master.m3u8".to_string()),
+        )
+        .unwrap();
+        let mut store = PlaylistStore::try_new(playlist).unwrap();
+        let variant_id = store.available_variants()[0].id();
+        store.set_variant(variant_id);
+        store
+    }
+
+    fn dispatcher_with_buffer_observation(video: Option<Vec<f64>>) -> Dispatcher {
+        let mut dispatcher = Dispatcher::new(3_125_000.);
+        dispatcher
+            .media_element_ref
+            .on_observation(MediaObservation::new(
+                PlaybackTickReason::RegularInterval,
+                10.,
+                4,
+                JsTimeRanges::new(vec![0., 15.]),
+                false,
+                false,
+                false,
+                f64::MAX,
+                Some(JsTimeRanges::new(vec![0., 15.])),
+                video.map(JsTimeRanges::new),
+            ));
+        dispatcher
+    }
+
+    #[test]
+    fn playback_conditions_use_video_source_buffer_for_video_variants() {
+        for manifest in [
+            "#EXTM3U\n#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID=\"aud\",NAME=\"English\",DEFAULT=YES,URI=\"audio.m3u8\"\n#EXT-X-STREAM-INF:BANDWIDTH=1000000,CODECS=\"avc1.42E01E,mp4a.40.2\",AUDIO=\"aud\"\nvideo.m3u8\n",
+            "#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1000000,CODECS=\"avc1.42E01E,mp4a.40.2\"\nmuxed.m3u8\n",
+        ] {
+            let store = selected_playlist(manifest.as_bytes());
+            let dispatcher = dispatcher_with_buffer_observation(Some(vec![0., 40.]));
+
+            assert_eq!(dispatcher.playback_conditions(&store).buffer_level, Some(30.));
+        }
+    }
+
+    #[test]
+    fn playback_conditions_use_audio_source_buffer_for_audio_only_variants() {
+        let store = selected_playlist(
+            b"#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1000000,CODECS=\"mp4a.40.2\"\naudio.m3u8\n",
+        );
+        let dispatcher = dispatcher_with_buffer_observation(Some(vec![0., 40.]));
+
+        assert_eq!(
+            dispatcher.playback_conditions(&store).buffer_level,
+            Some(5.)
+        );
+    }
+
+    #[test]
+    fn playback_conditions_do_not_fall_back_to_audio_when_video_ranges_are_missing() {
+        let store = selected_playlist(
+            b"#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1000000,CODECS=\"avc1.42E01E\"\nvideo.m3u8\n",
+        );
+        for video in [None, Some(vec![])] {
+            let expected = video.as_ref().map(|_| 0.);
+            let dispatcher = dispatcher_with_buffer_observation(video);
+
+            assert_eq!(
+                dispatcher.playback_conditions(&store).buffer_level,
+                expected
+            );
+        }
     }
 }

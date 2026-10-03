@@ -254,6 +254,9 @@ impl PlaylistStore {
             }
             TopLevelPlaylist::Multivariant(_) => {
                 if self.current_variant_id.is_none() {
+                    if self.compatible_variants().is_empty() {
+                        return Err(PlaylistStoreError::NoSupportedVariant);
+                    }
                     return Ok(StartupStatus::VariantSelectionNeeded);
                 }
                 if [MediaType::Audio, MediaType::Video]
@@ -1121,8 +1124,7 @@ impl PlaylistStore {
             .into_iter()
             .for_each(|(variant_id, supported)| self.set_variant_support(variant_id, supported));
 
-        let current_variant_id = self.current_variant_id.unwrap();
-        let curr_variant_support = self.variant_support(current_variant_id);
+        let curr_variant_support = current_variant_id.and_then(|id| self.variant_support(id));
 
         if curr_variant_support == Some(false) {
             if !self.compatible_variants().is_empty() {
@@ -1333,6 +1335,45 @@ mod tests {
         Url::new(url.to_string())
     }
 
+    #[test]
+    fn startup_rejects_an_initial_audio_track_without_compatible_variants() {
+        let playlist = TopLevelPlaylist::parse(
+            br#"#EXTM3U
+#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="unused",NAME="French",LANGUAGE="fr",URI="unused.m3u8"
+#EXT-X-STREAM-INF:BANDWIDTH=1000000,CODECS="avc1.42E01E"
+video.m3u8
+"#
+            .as_slice(),
+            parse_url("https://example.com/master.m3u8"),
+        )
+        .unwrap();
+        let mut store = PlaylistStore::try_new(playlist).unwrap();
+        let track_id = store.audio_tracks().first().unwrap().id();
+        store.set_audio_track(Some(track_id));
+
+        assert!(store.current_variant_id().is_none());
+        assert!(store.compatible_variants().is_empty());
+        assert!(matches!(
+            store.startup_status(0.),
+            Err(PlaylistStoreError::NoSupportedVariant)
+        ));
+    }
+
+    #[test]
+    fn startup_requests_initial_selection_when_compatible_variants_exist() {
+        let playlist = TopLevelPlaylist::parse(
+            b"#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1000000\nvideo.m3u8\n",
+            parse_url("https://example.com/master.m3u8"),
+        )
+        .unwrap();
+        let mut store = PlaylistStore::try_new(playlist).unwrap();
+
+        assert!(matches!(
+            store.startup_status(0.),
+            Ok(StartupStatus::VariantSelectionNeeded)
+        ));
+    }
+
     fn playlist_store_with_variant(
         playlist: TopLevelPlaylist,
         initial_bandwidth: f64,
@@ -1343,7 +1384,7 @@ mod tests {
             &store.compatible_variants(),
             store.current_variant_id(),
             &PlaybackConditions {
-                buffer_level: 0.,
+                buffer_level: Some(0.),
                 buffer_goal: 30.,
                 playback_speed: 1.,
                 max_target_segment_duration: store.segment_target_duration(),
@@ -1440,7 +1481,7 @@ fr-high.m3u8
                 &compatible_variants,
                 store.current_variant_id(),
                 &PlaybackConditions {
-                    buffer_level: 0.,
+                    buffer_level: Some(0.),
                     buffer_goal: 30.,
                     playback_speed: 1.,
                     max_target_segment_duration: store.segment_target_duration(),
@@ -1492,7 +1533,7 @@ fr-high.m3u8
                 &compatible_variants,
                 store.current_variant_id(),
                 &PlaybackConditions {
-                    buffer_level: 0.,
+                    buffer_level: Some(0.),
                     buffer_goal: 30.,
                     playback_speed: 1.,
                     max_target_segment_duration: store.segment_target_duration(),

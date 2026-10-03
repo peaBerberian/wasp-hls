@@ -58,17 +58,21 @@ fn ensure_ready_playlists(dispatcher: &mut Dispatcher, wanted_position: f64) -> 
         StartupStatus::AwaitingPlaylists => false,
         StartupStatus::AwaitingSupportCheck => false,
         StartupStatus::VariantSelectionNeeded => {
-            // An unsupported variant needs a replacement even when it is manually locked.
+            // Initial selection and unsupported-variant recovery must either choose or fail.
             let Some((variant_id, _)) = dispatcher.select_adaptive_variant() else {
+                jsSendOtherError(
+                    true,
+                    OtherErrorCode::Unknown,
+                    "Unable to select a variant during startup",
+                );
+                dispatcher.stop_current_content();
                 return false;
             };
+            let Some(playlist_store) = dispatcher.playlist_store.as_mut() else {
+                return false;
+            };
+            let changed_media_types = playlist_store.set_variant(variant_id);
             jsAnnounceVariantUpdate(Some(variant_id));
-
-            let changed_media_types = dispatcher
-                .playlist_store
-                .as_mut()
-                .unwrap()
-                .set_variant(variant_id);
             dispatcher.handle_media_playlist_update(&changed_media_types, false, false);
             false
         }

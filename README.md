@@ -210,6 +210,7 @@ Worker-related features:
 Adaptive BitRate:
 
 - [x] Choose variant based on throughtput-based estimates
+- [x] Also choose variant based on buffer-based estimates.
 - [x] Allow application to list and select its own variant (quality) and know
       the current one
 - [x] Automatically filter out codecs not supported by the current environment.
@@ -222,7 +223,6 @@ Adaptive BitRate:
 - [x] Smart quality switching (Project-specific term for skipping a segment
       request when equal- or higher-quality media is already buffered or being
       pushed for that range).
-- [x] Also choose variant based on buffer-based estimates.
 - [ ] Logic to detect sudden large fall in bandwidth before the end of a current
       request.
       _Priority: average_
