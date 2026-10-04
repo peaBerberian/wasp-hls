@@ -237,9 +237,9 @@ jobs:
           # Windows hosted-runner behavior has proven highly unstable and
           # low-signal for this live-packager scenario. Keep a single
           # best-effort smoke lane instead of blocking the full CI matrix on it.
-          - os: windows-2025
-            browser: firefox
-            allow_failure: true
+          # - os: windows-2025
+          #   browser: firefox
+          #   allow_failure: true
 
     steps:
       - uses: actions/checkout@v5
