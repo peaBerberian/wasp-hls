@@ -87,6 +87,8 @@ pub(crate) enum PendingSegmentRequest {
     Media {
         /// The `MediaType` the media segment is linked to.
         media_type: MediaType,
+        /// Playlist actually used, which may differ from the preferred variant's playlist.
+        playlist_id: crate::parser::MediaPlaylistPermanentId,
         /// Unique identifier of the initialization segment applying to that media segment, if any.
         init_segment_id: Option<f64>,
         /// Time-related metadata linked to that segment.

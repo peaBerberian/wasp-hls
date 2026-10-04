@@ -174,26 +174,44 @@ impl PlaylistStore {
         media_playlist_data: impl BufRead,
         url: Url,
     ) -> Result<&MediaPlaylist, MediaPlaylistUpdateError> {
+        self.update_media_playlist_with_reference(id, media_playlist_data, url, None)
+    }
+
+    /// Use an already active request source to align a newly loaded live playlist.
+    pub(crate) fn update_media_playlist_with_reference(
+        &mut self,
+        id: &MediaPlaylistPermanentId,
+        media_playlist_data: impl BufRead,
+        url: Url,
+        reference: Option<MediaPlaylistPermanentId>,
+    ) -> Result<&MediaPlaylist, MediaPlaylistUpdateError> {
         // Update logic may optionally need a reference for Audio/Video sync
-        let sync_playlist_id = match self.media_type_for(id) {
-            Some(MediaType::Audio)
-                if self
-                    .current_video_id
-                    .as_ref()
-                    .is_some_and(|video_id| video_id != id) =>
-            {
-                self.current_video_id
+        let sync_playlist_id = reference.or_else(|| {
+            if !self.is_current_media_playlist(id) {
+                // An alternate request source must share the active playback timeline.
+                self.current_video_id.or(self.current_audio_id)
+            } else {
+                match self.media_type_for(id) {
+                    Some(MediaType::Audio)
+                        if self
+                            .current_video_id
+                            .as_ref()
+                            .is_some_and(|video_id| video_id != id) =>
+                    {
+                        self.current_video_id
+                    }
+                    Some(MediaType::Video)
+                        if self
+                            .current_audio_id
+                            .as_ref()
+                            .is_some_and(|audio_id| audio_id != id) =>
+                    {
+                        self.current_audio_id
+                    }
+                    _ => None,
+                }
             }
-            Some(MediaType::Video)
-                if self
-                    .current_audio_id
-                    .as_ref()
-                    .is_some_and(|audio_id| audio_id != id) =>
-            {
-                self.current_audio_id
-            }
-            _ => None,
-        };
+        });
         let media_playlist = match &mut self.playlist {
             TopLevelPlaylist::Multivariant(playlist) => {
                 playlist.update_media_playlist(id, media_playlist_data, url, sync_playlist_id)
@@ -678,6 +696,55 @@ impl PlaylistStore {
         }?;
         let score = variant.score().unwrap_or(variant.bandwidth() as f64);
         Some(SegmentQualityContext::new(score, media_id.as_u32()))
+    }
+
+    /// Resolve a request source without changing the preferred variant or track selection.
+    pub(crate) fn variant_media_playlist_id_for(
+        &self,
+        variant_id: u32,
+        media_type: MediaType,
+    ) -> Option<MediaPlaylistPermanentId> {
+        let TopLevelPlaylist::Multivariant(playlist) = &self.playlist else {
+            return None;
+        };
+        let variant = playlist.variant(variant_id)?;
+        let (audio, video) = Self::normalize_current_media_ids(
+            playlist.audio_media_playlist_id_for(variant, self.fixed_audio_track),
+            playlist.video_media_playlist_id_for(variant),
+        );
+        match media_type {
+            MediaType::Audio => audio,
+            MediaType::Video => video,
+        }
+    }
+
+    pub(crate) fn media_playlist_by_id(
+        &self,
+        id: &MediaPlaylistPermanentId,
+    ) -> Option<&MediaPlaylist> {
+        match &self.playlist {
+            TopLevelPlaylist::Multivariant(playlist) => playlist.media_playlist(id),
+            TopLevelPlaylist::DirectMedia(playlist) => playlist.media_playlist(id),
+        }
+    }
+
+    pub(crate) fn is_known_supported_variant(&self, id: u32) -> bool {
+        self.variant_support(id) == Some(true)
+    }
+
+    /// A live playlist that stopped being maintained must be fetched before reuse.
+    pub(crate) fn invalidate_inactive_live_playlist(&mut self, id: MediaPlaylistPermanentId) {
+        if self.is_current_media_playlist(&id) {
+            return;
+        }
+        if let TopLevelPlaylist::Multivariant(playlist) = &mut self.playlist {
+            if playlist
+                .media_playlist(&id)
+                .is_some_and(MediaPlaylist::is_live)
+            {
+                playlist.clear_media_playlist(&id);
+            }
+        }
     }
 
     /// Gives an indication of which kind of playlist it is: VoD/live/Event?
@@ -1373,6 +1440,62 @@ mod tests {
 
     fn parse_url(url: &str) -> Url {
         Url::new(url.to_string())
+    }
+
+    #[test]
+    fn alternate_request_sources_preserve_selection_and_align_to_the_active_live_timeline() {
+        let parsed = TopLevelPlaylist::parse(
+            b"#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1000,CODECS=\"avc1.42E01E\"\nlow.m3u8\n#EXT-X-STREAM-INF:BANDWIDTH=2000,CODECS=\"avc1.42E01E\"\nhigh.m3u8\n".as_slice(),
+            parse_url("https://example.com/master.m3u8"),
+        ).unwrap();
+        let mut store = PlaylistStore::try_new(parsed).unwrap();
+        let low = store.available_variants()[0].id();
+        let high = store.available_variants()[1].id();
+        store.set_variant(low);
+        let low_id = store
+            .variant_media_playlist_id_for(low, MediaType::Video)
+            .unwrap();
+        let high_id = store
+            .variant_media_playlist_id_for(high, MediaType::Video)
+            .unwrap();
+        store.update_media_playlist(&low_id,
+            b"#EXTM3U\n#EXT-X-TARGETDURATION:4\n#EXT-X-MEDIA-SEQUENCE:100\n#EXTINF:4,\na.m4s\n#EXTINF:4,\nb.m4s\n".as_slice(),
+            parse_url("https://example.com/low.m3u8")).unwrap();
+        store.update_media_playlist(&low_id,
+            b"#EXTM3U\n#EXT-X-TARGETDURATION:4\n#EXT-X-MEDIA-SEQUENCE:101\n#EXTINF:4,\nb.m4s\n#EXTINF:4,\nc.m4s\n".as_slice(),
+            parse_url("https://example.com/low.m3u8")).unwrap();
+        store.set_variant(high);
+        store.update_media_playlist_with_reference(&high_id,
+            b"#EXTM3U\n#EXT-X-TARGETDURATION:4\n#EXT-X-MEDIA-SEQUENCE:101\n#EXTINF:4,\nb-high.m4s\n#EXTINF:4,\nc-high.m4s\n".as_slice(),
+            parse_url("https://example.com/high.m3u8"), Some(low_id)).unwrap();
+        assert_eq!(
+            store
+                .media_playlist_by_id(&high_id)
+                .unwrap()
+                .segment_list()
+                .media()[0]
+                .start(),
+            4.
+        );
+        assert_eq!(
+            store
+                .media_playlist_by_id(&low_id)
+                .unwrap()
+                .segment_list()
+                .media()[0]
+                .start(),
+            4.
+        );
+        store.lock_variant(high);
+        assert_eq!(
+            store.variant_media_playlist_id_for(low, MediaType::Video),
+            Some(low_id)
+        );
+        assert_eq!(store.current_variant_id(), Some(high));
+        assert!(store.is_variant_locked());
+        store.invalidate_inactive_live_playlist(low_id);
+        assert!(store.media_playlist_by_id(&low_id).is_none());
+        assert!(store.media_playlist_by_id(&high_id).is_some());
     }
 
     #[test]

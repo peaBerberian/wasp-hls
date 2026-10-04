@@ -1,7 +1,8 @@
 use crate::{
     bindings::MediaType,
     media_element::{BufferedChunk, SegmentQualityContext},
-    parser::{InitSegmentInfo, MediaSegmentInfo, SegmentList, SegmentTimeInfo},
+    parser::{InitSegmentInfo, MediaPlaylist, MediaSegmentInfo, SegmentList, SegmentTimeInfo},
+    playlist_store::MediaPlaylistPermanentId,
     utils::logger::*,
 };
 
@@ -122,33 +123,6 @@ impl NextSegmentSelectors {
             MediaType::Video => &mut self.video,
         }
     }
-
-    /// Enable or disable fast quality switching for the given MediaType.
-    ///
-    /// Fast quality switching is here the concept of loading higher-quality segments to replace
-    /// already buffered lower-quality segments (instead of just loading the next unbuffered
-    /// segment).
-    ///
-    /// Enabling or disabling fast switching may be a user, device or adaptive decision.
-    pub(crate) fn set_fast_quality_switching(&mut self, media_type: MediaType, is_allowed: bool) {
-        self.get_mut(media_type).allow_fast_quality_switching = is_allowed;
-    }
-
-    /// Returns whether changing to `context` would replace already-buffered lower-quality
-    /// segments rather than just continue from the end of the buffer.
-    pub(crate) fn has_fast_quality_switch_candidate(
-        &self,
-        media_type: MediaType,
-        context: &SegmentQualityContext,
-        inventory: &[BufferedChunk],
-    ) -> bool {
-        match media_type {
-            MediaType::Audio => &self.audio,
-            MediaType::Video => &self.video,
-        }
-        .fast_quality_switch_position(context, inventory)
-        .is_some()
-    }
 }
 
 pub(crate) struct NextSegmentSelector {
@@ -175,9 +149,7 @@ pub(crate) struct NextSegmentSelector {
 
     /// Whether a quality change may replace already-buffered lower-quality segments.
     ///
-    /// TODO: Refacto the `NextSegmentSelector` so it is given both a "best"
-    /// quality and a "safe" quality, it then does the check itself of which strategy
-    /// is the best.
+    /// Set for the chosen request source: additions must not revisit buffered lower quality.
     allow_fast_quality_switching: bool,
 
     /// Permission used when the current segment cursor was last considered. A change must
@@ -202,7 +174,159 @@ pub(crate) struct NextSegmentSelector {
     skipped_segments: Vec<SegmentTimeInfo>,
 }
 
+/// Which recommendation should supply the next request for one media type.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum SegmentSourceChoice {
+    Additive,
+    Replacement,
+}
+
+/// One recommendation and the playlist currently available for using it.
+/// A missing playlist means it needs preparation before segments can be selected.
+#[derive(Clone)]
+pub(crate) struct SegmentSource<'a> {
+    pub(crate) playlist_id: MediaPlaylistPermanentId,
+    pub(crate) quality_context: SegmentQualityContext,
+    pub(crate) playlist: Option<&'a MediaPlaylist>,
+}
+
+pub(crate) enum SelectedSegment {
+    Init(InitSegmentInfo),
+    Media {
+        segment: MediaSegmentInfo,
+        init_segment_id: Option<f64>,
+    },
+}
+
+pub(crate) struct SelectedSegmentRequest {
+    pub(crate) playlist_id: MediaPlaylistPermanentId,
+    pub(crate) quality_context: SegmentQualityContext,
+    pub(crate) segment: SelectedSegment,
+}
+
+pub(crate) struct NextSegmentSelection {
+    /// Sources to load or keep refreshed, including preparation for subsequent additions.
+    pub(crate) needed_playlists: Vec<MediaPlaylistPermanentId>,
+    pub(crate) request: Option<SelectedSegmentRequest>,
+}
+
 impl NextSegmentSelector {
+    /// Choose both the source and segment. When a request is already pending, only emit
+    /// preparation hints: changing the cursor then would interfere with init validation.
+    pub(crate) fn select_next_segment(
+        &mut self,
+        best: &SegmentSource<'_>,
+        safe: Option<&SegmentSource<'_>>,
+        inventory: &[BufferedChunk],
+        request_pending: bool,
+    ) -> NextSegmentSelection {
+        let additive_end = best
+            .playlist
+            .filter(|playlist| playlist.is_ended())
+            .and_then(|playlist| playlist.segment_list().media().last())
+            .map(|segment| segment.end());
+        let Some(choice) = self.next_request_role(
+            safe.map(|source| &source.quality_context),
+            inventory,
+            additive_end,
+        ) else {
+            return NextSegmentSelection {
+                needed_playlists: Vec::new(),
+                request: None,
+            };
+        };
+        let mut needed_playlists = Vec::with_capacity(2);
+        // Prepare subsequent additions even when the next request is a replacement.
+        needed_playlists.push(best.playlist_id);
+        let replacement = choice == SegmentSourceChoice::Replacement;
+        if replacement || best.playlist.is_none() {
+            if let Some(safe) = safe {
+                if !needed_playlists.contains(&safe.playlist_id) {
+                    needed_playlists.push(safe.playlist_id);
+                }
+            }
+        }
+        let source = if replacement {
+            safe
+        } else if best.playlist.is_some() {
+            Some(best)
+        } else {
+            safe
+        };
+        let request = if request_pending {
+            None
+        } else {
+            source.and_then(|source| {
+                let playlist = source.playlist?;
+                self.allow_fast_quality_switching = replacement;
+                let needed = self.most_needed_segment(
+                    playlist.segment_list(),
+                    &source.quality_context,
+                    inventory,
+                );
+                let segment = if let Some(init) = needed.init_segment() {
+                    SelectedSegment::Init(init.clone())
+                } else {
+                    let segment = needed.media_segment()?;
+                    SelectedSegment::Media {
+                        init_segment_id: playlist
+                            .segment_list()
+                            .init_for(segment)
+                            .map(|init| init.id()),
+                        segment: segment.clone(),
+                    }
+                };
+                Some(SelectedSegmentRequest {
+                    playlist_id: source.playlist_id,
+                    quality_context: source.quality_context.clone(),
+                    segment,
+                })
+            })
+        };
+        NextSegmentSelection {
+            needed_playlists,
+            request,
+        }
+    }
+
+    /// Prioritize extensions at low buffer, otherwise consider optional replacements.
+    fn next_request_role(
+        &self,
+        replacement: Option<&SegmentQualityContext>,
+        inventory: &[BufferedChunk],
+        additive_end: Option<f64>,
+    ) -> Option<SegmentSourceChoice> {
+        let mut buffered_until = self.base_pos;
+        for segment in inventory
+            .iter()
+            .filter(|segment| segment.playlist_end() > self.base_pos)
+        {
+            if segment.playlist_start() > buffered_until + 0.001
+                || segment.appears_garbage_collected(buffered_until)
+            {
+                break;
+            }
+            buffered_until = buffered_until.max(segment.playlist_end());
+        }
+        let wanted_end = additive_end.map_or(self.base_pos + self.buffer_goal, |end| {
+            end.min(self.base_pos + self.buffer_goal)
+        });
+        let needs_addition = buffered_until < wanted_end;
+        if needs_addition && buffered_until - self.base_pos <= MIN_FAST_QUALITY_SWITCH_LEAD_SECONDS
+        {
+            Some(SegmentSourceChoice::Additive)
+        } else if replacement
+            .and_then(|context| self.fast_quality_switch_position(context, inventory))
+            .is_some()
+        {
+            Some(SegmentSourceChoice::Replacement)
+        } else if needs_addition {
+            Some(SegmentSourceChoice::Additive)
+        } else {
+            None
+        }
+    }
+
     /// Create a new `NextSegmentSelector`, which will start loading segments from `base_pos` (as a
     /// playlist time in seconds) for a single type of media and will stop loading segments if
     /// enough to fill the buffer until `base_pos + buffer_goal` are already loaded.
@@ -285,7 +409,7 @@ impl NextSegmentSelector {
     /// `most_needed_segment` call.
     /// To "validate" a segment, you can call `validate_init` if we're talking about an
     /// initialization segment, or `validate_media_until` if we're talking about a media segment.
-    pub(crate) fn most_needed_segment<'a>(
+    fn most_needed_segment<'a>(
         &mut self,
         segment_list: &'a SegmentList,
         context: &SegmentQualityContext,
@@ -510,7 +634,7 @@ impl NextSegmentSelector {
             let mut prev_seg_end = start;
             while let Some(mut curr_seg) = inventory.get(curr_idx) {
                 if curr_seg.appears_garbage_collected(self.base_pos)
-                    || curr_seg.is_worse_than(context)
+                    || (self.allow_fast_quality_switching && curr_seg.is_worse_than(context))
                     || curr_seg.playlist_start() > (prev_seg_end + 0.05)
                 {
                     return false;
@@ -584,7 +708,7 @@ enum InitializationSegmentSelectorStatus {
 ///
 /// Its lifetime is generally linked to the `MediaPlaylist` to which those information are
 /// initially linked to.
-pub(crate) struct NeededSegmentInfo<'a> {
+struct NeededSegmentInfo<'a> {
     /// The initialization segment that should now be needed, corresponding to the inner
     /// information.
     ///
@@ -602,14 +726,14 @@ impl<'a> NeededSegmentInfo<'a> {
     ///
     /// `None` either if there's no needed initialization segment or if we consider that the last
     /// validated one is still compatible.
-    pub(crate) fn media_segment(&self) -> Option<&MediaSegmentInfo> {
+    fn media_segment(&self) -> Option<&MediaSegmentInfo> {
         self.media_segment
     }
 
     /// Returns media segment that should be loaded, corresponding to the inner information.
     ///
     /// `None` if no media segment is currently needed.
-    pub(crate) fn init_segment(&self) -> Option<&InitSegmentInfo> {
+    fn init_segment(&self) -> Option<&InitSegmentInfo> {
         self.init_segment
     }
 }
@@ -667,7 +791,10 @@ impl SegmentCursor {
 
 #[cfg(test)]
 mod tests {
-    use super::{NextSegmentSelector, NextSegmentSelectors, SegmentCursor};
+    use super::{
+        NextSegmentSelector, NextSegmentSelectors, SegmentCursor, SegmentSource,
+        SegmentSourceChoice, SelectedSegment, SelectedSegmentRequest,
+    };
     use crate::{
         bindings::MediaType,
         media_element::{BufferedChunk, SegmentQualityContext},
@@ -701,7 +828,9 @@ mod tests {
             .collect();
         let context = SegmentQualityContext::new(2., 2);
         let mut selectors = NextSegmentSelectors::new(0., 40.);
-        selectors.set_fast_quality_switching(MediaType::Video, initial_permission);
+        selectors
+            .get_mut(MediaType::Video)
+            .allow_fast_quality_switching = initial_permission;
         let first = selectors
             .get_mut(MediaType::Video)
             .most_needed_segment(list, &context, &inventory);
@@ -716,7 +845,9 @@ mod tests {
             .get_mut(MediaType::Video)
             .validate_media_until(first.media_segment.unwrap().end());
 
-        selectors.set_fast_quality_switching(MediaType::Video, !initial_permission);
+        selectors
+            .get_mut(MediaType::Video)
+            .allow_fast_quality_switching = !initial_permission;
         let next = selectors
             .get_mut(MediaType::Video)
             .most_needed_segment(list, &context, &inventory);
@@ -730,7 +861,9 @@ mod tests {
             .validate_media_until(next.media_segment.unwrap().end());
 
         // Repeated recommendations with the same permission must keep forward progress.
-        selectors.set_fast_quality_switching(MediaType::Video, !initial_permission);
+        selectors
+            .get_mut(MediaType::Video)
+            .allow_fast_quality_switching = !initial_permission;
         let following = selectors
             .get_mut(MediaType::Video)
             .most_needed_segment(list, &context, &inventory);
@@ -739,6 +872,279 @@ mod tests {
             following.media_segment.unwrap().start(),
             expected_start + 4.
         );
+    }
+
+    #[test]
+    fn two_sources_choose_safe_replacement_and_best_addition_independently() {
+        let safe_playlist = selection_test_playlist("safe");
+        let best_playlist = selection_test_playlist("best");
+        let TopLevelPlaylist::DirectMedia(safe_playlist) = safe_playlist else {
+            panic!("expected media playlist")
+        };
+        let TopLevelPlaylist::DirectMedia(best_playlist) = best_playlist else {
+            panic!("expected media playlist")
+        };
+        let safe = SegmentSource {
+            playlist_id: selection_test_id(0),
+            quality_context: SegmentQualityContext::new(2., selection_test_id(0).as_u32()),
+            playlist: Some(safe_playlist.playlist()),
+        };
+        let best = SegmentSource {
+            playlist_id: selection_test_id(1),
+            quality_context: SegmentQualityContext::new(3., selection_test_id(1).as_u32()),
+            playlist: Some(best_playlist.playlist()),
+        };
+        let audio: Vec<_> = (0..6)
+            .map(|i| {
+                BufferedChunk::new_for_test(
+                    i as f64 * 4.,
+                    (i + 1) as f64 * 4.,
+                    SegmentQualityContext::new(1., u32::MAX),
+                )
+            })
+            .collect();
+        let video = vec![BufferedChunk::new_for_test(
+            0.,
+            24.,
+            safe.quality_context.clone(),
+        )];
+        let mut selectors = NextSegmentSelectors::new(0., 40.);
+        let audio_request =
+            select_media_request(selectors.get_mut(MediaType::Audio), &best, &safe, &audio);
+        let video_request =
+            select_media_request(selectors.get_mut(MediaType::Video), &best, &safe, &video);
+        assert_eq!(audio_request.playlist_id, safe.playlist_id);
+        assert_eq!(video_request.playlist_id, best.playlist_id);
+        let SelectedSegment::Media {
+            segment: audio_segment,
+            ..
+        } = audio_request.segment
+        else {
+            panic!("expected media")
+        };
+        let SelectedSegment::Media {
+            segment: video_segment,
+            ..
+        } = video_request.segment
+        else {
+            panic!("expected media")
+        };
+        assert_eq!(audio_segment.start(), 8.);
+        assert_eq!(video_segment.start(), 24.);
+        assert!(
+            !selectors
+                .get_mut(MediaType::Video)
+                .allow_fast_quality_switching
+        );
+    }
+
+    #[test]
+    fn selector_uses_safe_additions_until_best_is_ready_and_accepts_fresh_recommendations() {
+        let safe_playlist = selection_test_playlist("safe");
+        let best_playlist = selection_test_playlist("best");
+        let TopLevelPlaylist::DirectMedia(safe_playlist) = safe_playlist else {
+            panic!("expected media playlist")
+        };
+        let TopLevelPlaylist::DirectMedia(best_playlist) = best_playlist else {
+            panic!("expected media playlist")
+        };
+        let safe = SegmentSource {
+            playlist_id: selection_test_id(0),
+            quality_context: SegmentQualityContext::new(1., selection_test_id(0).as_u32()),
+            playlist: Some(safe_playlist.playlist()),
+        };
+        let mut best = SegmentSource {
+            playlist_id: selection_test_id(1),
+            quality_context: SegmentQualityContext::new(2., selection_test_id(1).as_u32()),
+            playlist: None,
+        };
+        let mut inventory = vec![BufferedChunk::new_for_test(
+            0.,
+            24.,
+            safe.quality_context.clone(),
+        )];
+        let mut selector = NextSegmentSelector::new(0., 40.);
+        let pending = selector.select_next_segment(&best, Some(&safe), &inventory, true);
+        assert!(pending.request.is_none());
+        assert_eq!(
+            pending.needed_playlists,
+            vec![best.playlist_id, safe.playlist_id]
+        );
+        let fallback = select_media_request(&mut selector, &best, &safe, &inventory);
+        assert_eq!(fallback.playlist_id, safe.playlist_id);
+        let SelectedSegment::Media { segment, .. } = fallback.segment else {
+            panic!("expected media")
+        };
+        assert_eq!(segment.start(), 24.);
+        assert!(!selector.allow_fast_quality_switching);
+        selector.validate_media_until(segment.end());
+        inventory.push(BufferedChunk::new_for_test(
+            24.,
+            28.,
+            safe.quality_context.clone(),
+        ));
+
+        // A recommendation change while best is loading must also change the hints.
+        let fresh = selector.select_next_segment(&safe, Some(&safe), &inventory, true);
+        assert_eq!(fresh.needed_playlists, vec![safe.playlist_id]);
+        assert!(fresh.request.is_none());
+        best.playlist = Some(best_playlist.playlist());
+        let next = select_media_request(&mut selector, &best, &safe, &inventory);
+        assert_eq!(next.playlist_id, best.playlist_id);
+        let SelectedSegment::Media { segment, .. } = next.segment else {
+            panic!("expected media")
+        };
+        assert_eq!(segment.start(), 28.);
+        assert_eq!(
+            selector
+                .select_next_segment(&best, Some(&safe), &inventory, true)
+                .needed_playlists,
+            vec![best.playlist_id]
+        );
+    }
+
+    #[test]
+    fn preparation_hints_do_not_change_the_pending_init_source() {
+        let parsed = selection_test_playlist("safe");
+        let TopLevelPlaylist::DirectMedia(playlist) = parsed else {
+            panic!("expected media playlist")
+        };
+        let safe = SegmentSource {
+            playlist_id: *playlist.id(),
+            quality_context: SegmentQualityContext::new(1., playlist.id().as_u32()),
+            playlist: Some(playlist.playlist()),
+        };
+        let mut selector = NextSegmentSelector::new(0., 40.);
+        let init = selector
+            .select_next_segment(&safe, Some(&safe), &[], false)
+            .request
+            .unwrap();
+        let SelectedSegment::Init(init) = init.segment else {
+            panic!("expected init")
+        };
+        let previous_media_id = selector.last_media_id;
+        let parsed_best = selection_test_playlist("best");
+        let TopLevelPlaylist::DirectMedia(best_playlist) = parsed_best else {
+            panic!("expected media playlist")
+        };
+        let best = SegmentSource {
+            playlist_id: selection_test_id(1),
+            quality_context: SegmentQualityContext::new(2., selection_test_id(1).as_u32()),
+            playlist: Some(best_playlist.playlist()),
+        };
+        let pending = selector.select_next_segment(&best, Some(&safe), &[], true);
+        assert!(pending.request.is_none());
+        assert_eq!(selector.last_media_id, previous_media_id);
+        selector.validate_init(init.id());
+        let next = selector
+            .select_next_segment(&safe, Some(&safe), &[], false)
+            .request
+            .unwrap();
+        assert!(matches!(next.segment, SelectedSegment::Media { .. }));
+    }
+
+    fn selection_test_playlist(name: &str) -> TopLevelPlaylist {
+        let mut text =
+            String::from("#EXTM3U\n#EXT-X-TARGETDURATION:4\n#EXT-X-MAP:URI=\"init.mp4\"\n");
+        for number in 0..10 {
+            text.push_str(&format!("#EXTINF:4,\nseg-{number}.m4s\n"));
+        }
+        text.push_str("#EXT-X-ENDLIST\n");
+        TopLevelPlaylist::parse(
+            text.as_bytes(),
+            Url::new(format!("https://example.com/{name}/main.m3u8")),
+        )
+        .unwrap()
+    }
+
+    fn selection_test_id(index: usize) -> crate::playlist_store::MediaPlaylistPermanentId {
+        let parsed = TopLevelPlaylist::parse(
+            b"#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1000\nsafe.m3u8\n#EXT-X-STREAM-INF:BANDWIDTH=2000\nbest.m3u8\n",
+            Url::new("https://example.com/master.m3u8".to_owned()),
+        ).unwrap();
+        let TopLevelPlaylist::Multivariant(playlist) = parsed else {
+            panic!("expected master")
+        };
+        playlist
+            .video_media_playlist_id_for(playlist.variant_from_idx(index).unwrap())
+            .unwrap()
+    }
+
+    fn select_media_request(
+        selector: &mut NextSegmentSelector,
+        best: &SegmentSource<'_>,
+        safe: &SegmentSource<'_>,
+        inventory: &[BufferedChunk],
+    ) -> SelectedSegmentRequest {
+        let selection = selector.select_next_segment(best, Some(safe), inventory, false);
+        let request = selection.request.unwrap();
+        if let SelectedSegment::Init(init) = &request.segment {
+            selector.validate_init(init.id());
+            selector
+                .select_next_segment(best, Some(safe), inventory, false)
+                .request
+                .unwrap()
+        } else {
+            request
+        }
+    }
+
+    #[test]
+    fn request_role_prioritizes_low_buffer_and_does_not_replace_across_holes() {
+        let selector = NextSegmentSelector::new(0., 30.);
+        let safe = SegmentQualityContext::new(2., 2);
+        for inventory in [
+            vec![BufferedChunk::new_for_test(
+                0.,
+                4.,
+                SegmentQualityContext::new(1., 1),
+            )],
+            vec![
+                BufferedChunk::new_for_test(0., 6., SegmentQualityContext::new(1., 1)),
+                BufferedChunk::new_for_test(8., 30., SegmentQualityContext::new(1., 1)),
+            ],
+        ] {
+            assert_eq!(
+                selector
+                    .next_request_role(Some(&safe), &inventory, None)
+                    .unwrap(),
+                SegmentSourceChoice::Additive
+            );
+        }
+    }
+
+    #[test]
+    fn request_role_is_absent_when_no_work_remains() {
+        let selector = NextSegmentSelector::new(0., 30.);
+        let safe = SegmentQualityContext::new(2., 2);
+        let inventory = vec![BufferedChunk::new_for_test(0., 12., safe.clone())];
+        assert!(selector
+            .next_request_role(Some(&safe), &inventory, Some(12.))
+            .is_none());
+        let full = vec![BufferedChunk::new_for_test(0., 30., safe.clone())];
+        assert!(selector
+            .next_request_role(Some(&safe), &full, None)
+            .is_none());
+        assert_eq!(
+            selector.next_request_role(None, &inventory, None).unwrap(),
+            SegmentSourceChoice::Additive
+        );
+        assert!(selector.next_request_role(None, &full, None).is_none());
+    }
+
+    #[test]
+    fn additive_selection_skips_lower_quality_coverage_even_after_cursor_restart() {
+        let mut selector = NextSegmentSelector::new(0., 30.);
+        selector.allow_fast_quality_switching = false;
+        let best = SegmentQualityContext::new(3., 3);
+        let inventory = vec![BufferedChunk::new_for_test(
+            0.,
+            12.,
+            SegmentQualityContext::new(1., 1),
+        )];
+        assert!(selector.can_be_skipped(0., 12., &best, &inventory));
+        selector.allow_fast_quality_switching = true;
+        assert!(!selector.can_be_skipped(0., 12., &best, &inventory));
     }
 
     #[test]
@@ -783,7 +1189,9 @@ mod tests {
         ] {
             let context = SegmentQualityContext::new(2., 2);
             let mut selectors = NextSegmentSelectors::new(0., 40.);
-            selectors.set_fast_quality_switching(MediaType::Video, allow_replacement);
+            selectors
+                .get_mut(MediaType::Video)
+                .allow_fast_quality_switching = allow_replacement;
             let selector = selectors.get_mut(MediaType::Video);
             let first = selector.most_needed_segment(list, &context, &inventory);
             selector.validate_init(first.init_segment.unwrap().id());

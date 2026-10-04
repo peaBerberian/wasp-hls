@@ -58,8 +58,7 @@ fn ensure_ready_playlists(dispatcher: &mut Dispatcher, wanted_position: f64) -> 
         StartupStatus::AwaitingPlaylists => false,
         StartupStatus::AwaitingSupportCheck => false,
         StartupStatus::VariantSelectionNeeded => {
-            let Some((variant_id, allow_fast_switching)) = dispatcher.compute_optimal_variant()
-            else {
+            let Some(variant_id) = dispatcher.compute_optimal_variant() else {
                 // NOTE: Should normally never happen, we should have ensured this was not possible
                 // before
                 jsSendOtherError(
@@ -74,11 +73,6 @@ fn ensure_ready_playlists(dispatcher: &mut Dispatcher, wanted_position: f64) -> 
                 return false;
             };
             let changed_media_types = playlist_store.set_variant(variant_id);
-            for media_type in [MediaType::Audio, MediaType::Video] {
-                dispatcher
-                    .segment_selectors
-                    .set_fast_quality_switching(media_type, allow_fast_switching);
-            }
             jsAnnounceVariantUpdate(Some(variant_id));
             dispatcher.handle_media_playlist_update(&changed_media_types, false, false);
             false
@@ -389,15 +383,18 @@ fn consume_probe_segments(dispatcher: &mut Dispatcher) {
                     .find(|seg| seg.sequence() == sequence)
                     .and_then(|seg| segment_list.init_for(seg))
                     .map(|init| init.id());
-                dispatcher.on_media_segment_loaded(SegmentPushMetadata {
-                    data,
-                    media_type,
-                    time_info,
-                    context,
-                    init_segment_id,
-                    sequence_number: sequence,
-                    discontinuity_sequence,
-                });
+                dispatcher.on_media_segment_loaded(
+                    SegmentPushMetadata {
+                        data,
+                        media_type,
+                        time_info,
+                        context,
+                        init_segment_id,
+                        sequence_number: sequence,
+                        discontinuity_sequence,
+                    },
+                    None,
+                );
             }
         }
     }

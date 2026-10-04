@@ -62,12 +62,13 @@ pub(super) fn is_stale_segment_request_context(
 ) -> bool {
     match context {
         PendingSegmentRequest::Media {
-            media_type,
+            playlist_id,
             sequence_number,
             ..
         } => playlist_store.as_ref().is_some_and(|pl_store| {
-            pl_store.has_loaded_media_playlist(*media_type)
-                && !pl_store.loaded_playlist_contains_sequence(*media_type, *sequence_number)
+            pl_store
+                .media_playlist_by_id(playlist_id)
+                .is_some_and(|playlist| !playlist.contains_sequence(*sequence_number))
         }),
 
         PendingSegmentRequest::Probe {

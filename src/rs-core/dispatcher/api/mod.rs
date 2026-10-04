@@ -37,6 +37,7 @@ impl Dispatcher {
             segment_selectors: NextSegmentSelectors::new(0., 30.),
             segment_request_contexts: SegmentRequestContexts::new(),
             playlist_refresh_timers: PlaylistRefreshTimers::new(),
+            alternate_playlists: Vec::new(),
             ready_probe_segments: Default::default(),
             initial_audio_track_selection: Vec::new(),
         }

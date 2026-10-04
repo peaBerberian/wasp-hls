@@ -64,6 +64,12 @@ pub struct Dispatcher {
     /// that needs to be refreshed.
     playlist_refresh_timers: PlaylistRefreshTimers,
 
+    /// Alternate request sources currently needed by the segment selectors.
+    alternate_playlists: Vec<(
+        crate::parser::MediaPlaylistPermanentId,
+        crate::bindings::MediaType,
+    )>,
+
     /// Stores data on pending requests linked to init or media segments.
     /// Allowing to retreive them once finished.
     segment_request_contexts: SegmentRequestContexts,
