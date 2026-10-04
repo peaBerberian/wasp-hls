@@ -21,6 +21,7 @@ pub(crate) struct AdaptiveVariantSelection {
     ///
     /// Unlike `safe_variant_id` this is the recommentation **ONLY** for buffer
     /// addition, not buffer replacement.
+    /// Switching may incidentally overlap the buffer's tail when segment boundaries differ.
     pub(crate) best_variant_id: u32,
     /// Variant ID that should be selected if *replacing* buffered positions
     /// (e.g. you might want to do that to visually raise in quality more
@@ -55,6 +56,8 @@ const BOLA_MAX_LOW_BUFFER: f64 = 10.0;
 const BOLA_UP_SWITCH_HYSTERESIS: f64 = 0.25;
 /// Spend at most this fraction of buffered playback time when raising quality above throughput.
 const BOLA_DOWNLOAD_BUFFER_FRACTION: f64 = 0.5;
+/// Minimum playback lead after allowing for an overlapping segment at a rendition switch.
+const BOLA_MIN_SWITCH_LEAD_SECONDS: f64 = 5.;
 
 impl AdaptiveQualitySelector {
     /// Creates new `AdaptiveQualitySelector`.
@@ -173,6 +176,9 @@ impl AdaptiveQualitySelector {
         // `bandwidth` already accounts for playback speed, so the budget is in media seconds.
         let buffer_funded_bandwidth =
             bandwidth * (normalized_buffer / segment_duration) * BOLA_DOWNLOAD_BUFFER_FRACTION;
+        // A segment from another rendition may begin one target duration before the buffer
+        // ends. Gate new buffer-funded choices on that rough overlap plus a playback lead.
+        let has_switch_lead = normalized_buffer > segment_duration + BOLA_MIN_SWITCH_LEAD_SECONDS;
         let bola_position = variants
             .iter()
             .position(|variant| variant.id() == bola_id)?;
@@ -182,7 +188,7 @@ impl AdaptiveQualitySelector {
             .iter()
             .rev()
             .find(|variant| {
-                (variant.bandwidth() as f64) <= buffer_funded_bandwidth
+                (has_switch_lead && (variant.bandwidth() as f64) <= buffer_funded_bandwidth)
                     || Some(variant.id()) == current_variant_id
             })
             .map(|variant| variant.id());
@@ -691,6 +697,54 @@ high.m3u8\n",
             .unwrap();
         assert_eq!(selected.best_variant_id, variants[0].id());
         assert_eq!(selected.safe_variant_id, variants[0].id());
+    }
+
+    #[test]
+    fn buffer_funded_upgrade_leaves_lead_for_an_overlapping_segment() {
+        let playlist = parsed_playlist();
+        let variants = variants(&playlist);
+        let selector = AdaptiveQualitySelector::new(1_875_000.);
+        for (segment_duration, buffer_level, expected_position) in [
+            (1., 5.5, 0),
+            (1., 6., 0),
+            (1., 6.1, 2),
+            (2., 6.5, 0),
+            (2., 7., 0),
+            (2., 7.1, 1),
+        ] {
+            let playback = PlaybackConditions {
+                buffer_goal: buffer_level,
+                ..playback_conditions(buffer_level, Some(segment_duration))
+            };
+            let selected = selector
+                .select_variant(&variants, Some(variants[0].id()), &playback)
+                .unwrap();
+            assert_eq!(selected.best_variant_id, variants[expected_position].id());
+            assert_eq!(selected.safe_variant_id, variants[0].id());
+        }
+    }
+
+    #[test]
+    fn overlap_lead_preserves_funded_quality_and_the_throughput_floor() {
+        let playlist = parsed_playlist();
+        let variants = variants(&playlist);
+        let playback = PlaybackConditions {
+            buffer_goal: 6.1,
+            ..playback_conditions(6., Some(1.))
+        };
+        let selector = AdaptiveQualitySelector::new(1_875_000.);
+        let selected = selector
+            .select_variant(&variants, Some(variants[2].id()), &playback)
+            .unwrap();
+        assert_eq!(selected.best_variant_id, variants[2].id());
+        assert_eq!(selected.safe_variant_id, variants[0].id());
+
+        let selector = AdaptiveQualitySelector::new(10_000_000.);
+        let selected = selector
+            .select_variant(&variants, Some(variants[0].id()), &playback)
+            .unwrap();
+        assert_eq!(selected.best_variant_id, variants[2].id());
+        assert_eq!(selected.safe_variant_id, variants[2].id());
     }
 
     #[test]
