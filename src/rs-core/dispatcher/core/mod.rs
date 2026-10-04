@@ -569,7 +569,7 @@ impl Dispatcher {
             buffer_level: self.media_element_ref.buffer_ahead_for(media_type),
             buffer_goal: self.buffer_goal,
             playback_speed: self.media_element_ref.wanted_speed(),
-            max_target_segment_duration: pl_store.segment_target_duration(),
+            abr_reference_segment_duration: pl_store.max_observed_target_duration(),
         }
     }
 
@@ -1247,6 +1247,7 @@ fn sync_media_source_duration(playlist_store: &PlaylistStore) {
 mod tests {
     use super::Dispatcher;
     use crate::{
+        bindings::MediaType,
         dispatcher::{JsTimeRanges, MediaObservation, PlaybackTickReason},
         parser::TopLevelPlaylist,
         playlist_store::PlaylistStore,
@@ -1282,6 +1283,78 @@ mod tests {
                 video.map(JsTimeRanges::new),
             ));
         dispatcher
+    }
+
+    fn dispatcher_with_abr_playlists(high_duration: Option<u32>, buffer_level: f64) -> Dispatcher {
+        let mut pl_store = selected_playlist(
+            b"#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1000000,CODECS=\"avc1.42E01E\"\nlow.m3u8\n#EXT-X-STREAM-INF:BANDWIDTH=2000000,CODECS=\"avc1.42E01E\"\nmedium.m3u8\n#EXT-X-STREAM-INF:BANDWIDTH=4000000,CODECS=\"avc1.42E01E\"\nhigh.m3u8\n",
+        );
+        let variant_ids: Vec<_> = pl_store
+            .available_variants()
+            .iter()
+            .map(|v| v.id())
+            .collect();
+        for (variant_id, duration) in variant_ids.iter().zip([Some(4), Some(4), high_duration]) {
+            if let Some(duration) = duration {
+                pl_store.set_variant(*variant_id);
+                let id = *pl_store.media_playlist_id_for(MediaType::Video).unwrap();
+                let media = format!(
+                    "#EXTM3U\n#EXT-X-TARGETDURATION:{duration}\n#EXTINF:{duration},\nseg.ts\n#EXT-X-ENDLIST\n"
+                );
+                pl_store
+                    .update_media_playlist(
+                        &id,
+                        media.as_bytes(),
+                        Url::new("https://example.com/media.m3u8".to_string()),
+                    )
+                    .unwrap();
+            }
+        }
+        pl_store.set_variant(variant_ids[0]);
+        let mut dispatcher = dispatcher_with_buffer_observation(Some(vec![0., 10. + buffer_level]));
+        dispatcher.adaptive_selector = crate::adaptive::AdaptiveQualitySelector::new(1_875_000.);
+        dispatcher.playlist_store = Some(pl_store);
+        dispatcher
+    }
+
+    #[test]
+    fn adaptive_selection_stays_stable_while_the_selected_playlist_loads() {
+        let mut dispatcher = dispatcher_with_abr_playlists(None, 30.);
+        let high_id = dispatcher
+            .playlist_store
+            .as_ref()
+            .unwrap()
+            .available_variants()[2]
+            .id();
+
+        for _ in 0..6 {
+            let (variant_id, allow_fast_switching) = dispatcher.select_adaptive_variant().unwrap();
+            assert_eq!(variant_id, high_id);
+            assert!(!allow_fast_switching);
+            let pl_store = dispatcher.playlist_store.as_mut().unwrap();
+            pl_store.update_adaptive_variant(variant_id);
+            assert!(!pl_store.has_loaded_media_playlist(MediaType::Video));
+            assert_eq!(pl_store.segment_target_duration(), None);
+            assert_eq!(pl_store.max_observed_target_duration(), Some(4.));
+        }
+    }
+
+    #[test]
+    fn adaptive_selection_stays_stable_with_different_observed_target_durations() {
+        let mut dispatcher = dispatcher_with_abr_playlists(Some(6), 16.5);
+        let pl_store = dispatcher.playlist_store.as_ref().unwrap();
+        let medium_id = pl_store.available_variants()[1].id();
+        assert_eq!(pl_store.segment_target_duration(), Some(4.));
+        assert_eq!(pl_store.max_observed_target_duration(), Some(6.));
+
+        for _ in 0..6 {
+            let (variant_id, _) = dispatcher.select_adaptive_variant().unwrap();
+            assert_eq!(variant_id, medium_id);
+            let pl_store = dispatcher.playlist_store.as_mut().unwrap();
+            pl_store.update_adaptive_variant(variant_id);
+            assert_eq!(pl_store.segment_target_duration(), Some(4.));
+            assert_eq!(pl_store.max_observed_target_duration(), Some(6.));
+        }
     }
 
     #[test]
