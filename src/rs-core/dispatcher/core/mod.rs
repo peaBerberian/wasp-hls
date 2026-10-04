@@ -57,18 +57,7 @@ impl Dispatcher {
     /// * `flush` - To set to `true` if you want a potential resulting quality or track
     ///   change to take effect as soon as possible, even if it means a rebuffering period.
     pub(super) fn check_best_variant(&mut self, flush: bool) {
-        let Some(pl_store) = self.playlist_store.as_ref() else {
-            return;
-        };
-        if pl_store.is_variant_locked() {
-            return;
-        }
-        let Some((variant_id, allow_fast_quality_switching)) = self.select_adaptive_variant()
-        else {
-            return;
-        };
-        if let Some(pl_store) = self.playlist_store.as_mut() {
-            let update = pl_store.update_adaptive_variant(variant_id);
+        if let Some((update, allow_fast_quality_switching)) = self.set_optimal_variant() {
             self.handle_variant_update(update, flush, allow_fast_quality_switching);
         }
     }
@@ -160,16 +149,7 @@ impl Dispatcher {
                 variant_lock_removed,
             } => {
                 // First, update the playlist store with a compatible variant
-                let variant_update = self.select_adaptive_variant().and_then(
-                    |(variant_id, allow_fast_switching)| {
-                        self.playlist_store.as_mut().map(|pl_store| {
-                            (
-                                pl_store.update_adaptive_variant(variant_id),
-                                allow_fast_switching,
-                            )
-                        })
-                    },
-                );
+                let variant_update = self.set_optimal_variant();
 
                 // Second, now send event and do the actual dispatcher logic
                 self.announce_current_audio_track();
@@ -181,9 +161,18 @@ impl Dispatcher {
                 }
             }
             SetAudioTrackResponse::AudioMediaUpdate => {
+                let variant_update = self.set_optimal_variant();
                 self.announce_current_audio_track();
-                self.handle_media_playlist_update(&[MediaType::Audio], true, true);
-                self.check_best_variant(false);
+                if let Some((update, allow_fast_switching)) = variant_update {
+                    self.handle_variant_and_audio_track_update(
+                        update,
+                        false,
+                        allow_fast_switching,
+                        true,
+                    );
+                } else {
+                    self.handle_media_playlist_update(&[MediaType::Audio], true, true);
+                }
             }
             SetAudioTrackResponse::NoUpdate => self.check_best_variant(false),
         }
@@ -509,6 +498,25 @@ impl Dispatcher {
         }
     }
 
+    /// Check the optimal variant under the last known network/playback conditions.
+    ///
+    /// If it changed, set it on the `PlaylistStore` and return a tuple indicating what is the
+    /// result of this update and whether "fast-quality switching" is enabled in this iteration.
+    ///
+    /// Returns `None` if switching variant is not possible at this time (current variant is locked,
+    /// no `PlaylistStore`...).
+    fn set_optimal_variant(&mut self) -> Option<(VariantUpdateResult, bool)> {
+        if self.playlist_store.as_ref()?.is_variant_locked() {
+            return None;
+        }
+        let (variant_id, allow_fast_switching) = self.compute_optimal_variant()?;
+        let update = self
+            .playlist_store
+            .as_mut()?
+            .update_adaptive_variant(variant_id);
+        Some((update, allow_fast_switching))
+    }
+
     fn announce_current_audio_track(&self) {
         let Some(pl_store) = self.playlist_store.as_ref() else {
             return;
@@ -521,8 +529,13 @@ impl Dispatcher {
         );
     }
 
-    /// Combine the ABR recommendation with buffered-segment replacement opportunities.
-    fn select_adaptive_variant(&self) -> Option<(u32, bool)> {
+    /// Ask our adaptive logic what is the optimal variant to play according to current conditions
+    /// and available variants under current constraints (tracks selected, codec compatibility
+    /// etc.).
+    ///
+    /// Returns `None` if this cannot be computed right now. Returns a tuple with the selected
+    /// variant id and whether "fast quality switching" is enabled if a variant update can be done.
+    fn compute_optimal_variant(&self) -> Option<(u32, bool)> {
         let pl_store = self.playlist_store.as_ref()?;
         let compatible_variants = pl_store.compatible_variants();
         let current_variant_id = pl_store.current_variant_id();
@@ -986,24 +999,49 @@ impl Dispatcher {
         flush: bool,
         allow_fast_quality_switching: bool,
     ) {
+        self.handle_variant_and_audio_track_update(
+            result,
+            flush,
+            allow_fast_quality_switching,
+            false,
+        );
+    }
+
+    /// Apply a variant change and an optional audio track change together, before requesting
+    /// segments. A track change always flushes audio, independently of the video policy.
+    fn handle_variant_and_audio_track_update(
+        &mut self,
+        result: VariantUpdateResult,
+        flush: bool,
+        allow_fast_quality_switching: bool,
+        audio_track_changed: bool,
+    ) {
         // The recommendation's permitted use can change even when the variant ID does not.
         for media_type in [MediaType::Audio, MediaType::Video] {
             self.segment_selectors
                 .set_fast_quality_switching(media_type, allow_fast_quality_switching);
         }
 
-        let (changed_media_types, has_worsened) = match result {
+        let variant_changed = !matches!(&result, VariantUpdateResult::Unchanged);
+        let (mut changed_media_types, has_worsened) = match result {
             VariantUpdateResult::Improved(mt) => (mt, false),
             VariantUpdateResult::EqualOrUnknown(mt) => (mt, false),
             VariantUpdateResult::Worsened(mt) => (mt, true),
-            VariantUpdateResult::Unchanged => {
-                return;
-            }
+            VariantUpdateResult::Unchanged if audio_track_changed => (vec![], false),
+            VariantUpdateResult::Unchanged => return,
         };
 
-        self.handle_media_playlist_update(&changed_media_types, flush || has_worsened, flush);
-        if let Some(pl_store) = self.playlist_store.as_mut() {
-            jsAnnounceVariantUpdate(pl_store.current_variant_id());
+        if audio_track_changed && !changed_media_types.contains(&MediaType::Audio) {
+            changed_media_types.insert(0, MediaType::Audio);
+        }
+        self.handle_media_playlist_update_with_policy(&changed_media_types, |media_type| {
+            let flush_media = flush || (audio_track_changed && media_type == MediaType::Audio);
+            (flush_media || has_worsened, flush_media)
+        });
+        if variant_changed {
+            if let Some(pl_store) = self.playlist_store.as_ref() {
+                jsAnnounceVariantUpdate(pl_store.current_variant_id());
+            }
         }
     }
 
@@ -1015,11 +1053,22 @@ impl Dispatcher {
         abort_prev: bool,
         flush: bool,
     ) {
+        self.handle_media_playlist_update_with_policy(changed_media_types, |_| (abort_prev, flush));
+    }
+
+    /// Apply each media type's cancellation/flush policy and schedule segments once after all
+    /// media changes have been handled.
+    fn handle_media_playlist_update_with_policy(
+        &mut self,
+        changed_media_types: &[MediaType],
+        policy: impl Fn(MediaType) -> (bool, bool),
+    ) {
         if self.playlist_store.is_none() {
             return;
         }
 
         for mt in changed_media_types.iter().copied() {
+            let (abort_prev, flush) = policy(mt);
             log_info!("Core: {} MediaPlaylist changed", mt);
             self.ready_probe_segments.clear_media_type(mt);
 
@@ -1328,7 +1377,7 @@ mod tests {
             .id();
 
         for _ in 0..6 {
-            let (variant_id, allow_fast_switching) = dispatcher.select_adaptive_variant().unwrap();
+            let (variant_id, allow_fast_switching) = dispatcher.compute_optimal_variant().unwrap();
             assert_eq!(variant_id, high_id);
             assert!(!allow_fast_switching);
             let pl_store = dispatcher.playlist_store.as_mut().unwrap();
@@ -1348,7 +1397,7 @@ mod tests {
         assert_eq!(pl_store.max_observed_target_duration(), Some(6.));
 
         for _ in 0..6 {
-            let (variant_id, _) = dispatcher.select_adaptive_variant().unwrap();
+            let (variant_id, _) = dispatcher.compute_optimal_variant().unwrap();
             assert_eq!(variant_id, medium_id);
             let pl_store = dispatcher.playlist_store.as_mut().unwrap();
             pl_store.update_adaptive_variant(variant_id);
