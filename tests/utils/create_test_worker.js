@@ -17,6 +17,7 @@ import EmbeddedWorker from "../../build/embedded/worker.js";
  * @typedef {Object} TestWorkerFetchAction
  * @property {"passthrough"|"error"|"timeout"|"response"} type
  * @property {number} [delayMs]
+ * @property {boolean} [waitForRelease] Hold the response and request timeout until releaseFetch.
  * @property {number} [status]
  * @property {string} [body]
  * @property {Record<string, string>} [headers]
@@ -36,6 +37,7 @@ import EmbeddedWorker from "../../build/embedded/worker.js";
  * @property {(predicate: (event: unknown) => boolean, timeoutMs?: number) => Promise<unknown>} waitFor
  * @property {(predicate: (event: unknown) => boolean, count: number, timeoutMs?: number) => Promise<Array<unknown>>} waitForCount
  * @property {(timeoutMs?: number) => Promise<unknown>} requestMemorySnapshot
+ * @property {(requestId: number) => void} releaseFetch
  * @property {() => void} close
  */
 
@@ -107,6 +109,9 @@ function createTelemetryCollector(channelName, { storeHistory = true } = {}) {
   return {
     getEvents() {
       return events.slice();
+    },
+    releaseFetch(requestId) {
+      channel.postMessage({ type: "release-fetch", requestId });
     },
     waitFor(predicate, timeoutMs = 20_000) {
       return new Promise((resolve, reject) => {

@@ -182,14 +182,13 @@ impl AdaptiveQualitySelector {
         let bola_position = variants
             .iter()
             .position(|variant| variant.id() == bola_id)?;
-        // Once an upgrade is funded, don't withdraw it just because its download drains
-        // buffer. BOLA can still recommend a downgrade as occupancy falls.
+        // TODO: Have safe/best-aware segment selection budget new requests without cancelling
+        // in-flight downloads solely because playback drained buffer during the download.
         let budgeted_bola_id = variants[..=bola_position]
             .iter()
             .rev()
             .find(|variant| {
-                (has_switch_lead && (variant.bandwidth() as f64) <= buffer_funded_bandwidth)
-                    || Some(variant.id()) == current_variant_id
+                has_switch_lead && (variant.bandwidth() as f64) <= buffer_funded_bandwidth
             })
             .map(|variant| variant.id());
         let best_id = variants
@@ -602,7 +601,8 @@ high.m3u8\n",
                 raw == variants[3].id() && conservative == variants[1].id()
             })
             .expect("expected a BOLA transition from medium to highest quality");
-        let selector = AdaptiveQualitySelector::new(2_500_000.);
+        // Fund the current variant so this checks hysteresis rather than the download budget.
+        let selector = AdaptiveQualitySelector::new(6_500_000.);
         let selected = selector
             .select_variant(
                 &variants,
@@ -749,7 +749,7 @@ high.m3u8\n",
     }
 
     #[test]
-    fn overlap_lead_preserves_funded_quality_and_the_throughput_floor() {
+    fn overlap_lead_applies_to_current_quality_and_preserves_the_throughput_floor() {
         let playlist = parsed_playlist();
         let variants = variants(&playlist);
         let playback = PlaybackConditions {
@@ -760,7 +760,7 @@ high.m3u8\n",
         let selected = selector
             .select_variant(&variants, Some(variants[2].id()), &playback)
             .unwrap();
-        assert_eq!(selected.best_variant_id, variants[2].id());
+        assert_eq!(selected.best_variant_id, variants[0].id());
         assert_eq!(selected.safe_variant_id, variants[0].id());
 
         let selector = AdaptiveQualitySelector::new(10_000_000.);
@@ -793,16 +793,21 @@ high.m3u8\n",
     }
 
     #[test]
-    fn funded_upgrade_is_not_withdrawn_as_its_download_drains_buffer() {
+    fn current_variant_must_still_fit_the_download_budget() {
         let playlist = TopLevelPlaylist::parse(
             b"#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1000000\nlow.m3u8\n#EXT-X-STREAM-INF:BANDWIDTH=3000000\nmedium.m3u8\n#EXT-X-STREAM-INF:BANDWIDTH=12000000\nhigh.m3u8\n",
             Url::new("https://example.com/master.m3u8".to_string()),
         ).unwrap();
         let variants = variants(&playlist);
         let selector = AdaptiveQualitySelector::new(1_250_000.);
-        for (buffer_level, current_position, expected_position) in
-            [(29., 0, 1), (20., 1, 1), (16., 1, 1), (2., 1, 0)]
-        {
+        for (buffer_level, current_position, expected_position) in [
+            (29., 0, 1),
+            (24.1, 1, 1),
+            (23.9, 1, 0),
+            (20., 1, 0),
+            (16., 1, 0),
+            (2., 1, 0),
+        ] {
             let selected = selector
                 .select_variant(
                     &variants,
