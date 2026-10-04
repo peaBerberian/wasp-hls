@@ -180,6 +180,10 @@ pub(crate) struct NextSegmentSelector {
     /// is the best.
     allow_fast_quality_switching: bool,
 
+    /// Permission used when the current segment cursor was last considered. A change must
+    /// reconsider replacement opportunities even when the selected playlist stays the same.
+    last_fast_quality_switching: bool,
+
     /// Information on segments that were voluntarily not returned by the `NextSegmentSelector`
     /// because "better" segments were already present in the buffer at its place.
     ///
@@ -220,6 +224,7 @@ impl NextSegmentSelector {
             buffer_goal,
             last_media_id: None,
             allow_fast_quality_switching: true,
+            last_fast_quality_switching: true,
             init_status: InitializationSegmentSelectorStatus::Unchecked,
             skipped_segments: vec![],
         }
@@ -232,6 +237,7 @@ impl NextSegmentSelector {
         self.init_status = InitializationSegmentSelectorStatus::Unchecked;
         self.last_media_id = None;
         self.allow_fast_quality_switching = true;
+        self.last_fast_quality_switching = true;
         self.segment_cursor = SegmentCursor::new(base_pos);
         self.skipped_segments.clear();
     }
@@ -287,15 +293,19 @@ impl NextSegmentSelector {
         let previous_media_id = self.last_media_id;
         let has_quality_changed =
             previous_media_id.is_some() && previous_media_id != Some(new_media_id);
-        let should_recompute_starting_position = previous_media_id != Some(new_media_id);
+        let should_recompute_starting_position = previous_media_id != Some(new_media_id)
+            || self.last_fast_quality_switching != self.allow_fast_quality_switching;
         self.last_media_id = Some(new_media_id);
+        self.last_fast_quality_switching = self.allow_fast_quality_switching;
 
         if should_recompute_starting_position {
             if has_quality_changed {
                 log_debug!("Selector: Quality changed, recomputing starting position");
                 self.init_status = InitializationSegmentSelectorStatus::Unchecked;
-            } else {
+            } else if previous_media_id.is_none() {
                 log_debug!("Selector: Initial media selection, computing starting position");
+            } else {
+                log_debug!("Selector: Fast quality switching permission changed, recomputing starting position");
             }
             self.segment_cursor.move_cursor(self.base_pos);
             self.skipped_segments.clear();
@@ -655,12 +665,89 @@ impl SegmentCursor {
 
 #[cfg(test)]
 mod tests {
-    use super::{NextSegmentSelector, SegmentCursor};
+    use super::{NextSegmentSelector, NextSegmentSelectors, SegmentCursor};
     use crate::{
+        bindings::MediaType,
         media_element::{BufferedChunk, SegmentQualityContext},
         parser::TopLevelPlaylist,
         utils::url::Url,
     };
+
+    fn check_permission_transition(initial_permission: bool, expected_start: f64) {
+        let mut text =
+            String::from("#EXTM3U\n#EXT-X-TARGETDURATION:4\n#EXT-X-MAP:URI=\"init.mp4\"\n");
+        for number in 0..10 {
+            text.push_str(&format!("#EXTINF:4,\nseg-{number}.m4s\n"));
+        }
+        let parsed = TopLevelPlaylist::parse(
+            text.as_bytes(),
+            Url::new("https://example.com/high.m3u8".to_owned()),
+        )
+        .unwrap();
+        let TopLevelPlaylist::DirectMedia(playlist) = parsed else {
+            panic!("expected direct media playlist");
+        };
+        let list = playlist.playlist().segment_list();
+        let inventory: Vec<_> = (0..6)
+            .map(|number| {
+                BufferedChunk::new_for_test(
+                    number as f64 * 4.,
+                    (number + 1) as f64 * 4.,
+                    SegmentQualityContext::new(1., 1),
+                )
+            })
+            .collect();
+        let context = SegmentQualityContext::new(2., 2);
+        let mut selectors = NextSegmentSelectors::new(0., 40.);
+        selectors.set_fast_quality_switching(MediaType::Video, initial_permission);
+        let first = selectors
+            .get_mut(MediaType::Video)
+            .most_needed_segment(list, &context, &inventory);
+        assert_eq!(
+            first.media_segment.unwrap().start(),
+            if initial_permission { 8. } else { 24. }
+        );
+        selectors
+            .get_mut(MediaType::Video)
+            .validate_init(first.init_segment.unwrap().id());
+        selectors
+            .get_mut(MediaType::Video)
+            .validate_media_until(first.media_segment.unwrap().end());
+
+        selectors.set_fast_quality_switching(MediaType::Video, !initial_permission);
+        let next = selectors
+            .get_mut(MediaType::Video)
+            .most_needed_segment(list, &context, &inventory);
+        assert!(
+            next.init_segment.is_none(),
+            "the validated init is preserved"
+        );
+        assert_eq!(next.media_segment.unwrap().start(), expected_start);
+        selectors
+            .get_mut(MediaType::Video)
+            .validate_media_until(next.media_segment.unwrap().end());
+
+        // Repeated recommendations with the same permission must keep forward progress.
+        selectors.set_fast_quality_switching(MediaType::Video, !initial_permission);
+        let following = selectors
+            .get_mut(MediaType::Video)
+            .most_needed_segment(list, &context, &inventory);
+        assert!(following.init_segment.is_none());
+        assert_eq!(
+            following.media_segment.unwrap().start(),
+            expected_start + 4.
+        );
+    }
+
+    #[test]
+    fn withdrawing_fast_switch_permission_continues_after_buffer_with_same_playlist() {
+        check_permission_transition(true, 24.);
+    }
+
+    #[test]
+    fn granting_fast_switch_permission_reconsiders_buffer_with_same_playlist() {
+        check_permission_transition(false, 8.);
+    }
 
     #[test]
     fn above_throughput_switch_can_continue_after_buffer_without_replacement() {
