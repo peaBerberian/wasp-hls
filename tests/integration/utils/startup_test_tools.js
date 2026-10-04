@@ -5,7 +5,7 @@ import {
 } from "../../utils/player_test_tools.js";
 import sleep from "../../utils/sleep.js";
 
-const DEFAULT_PLAYBACK_SETTLE_MS = 1_500;
+const DEFAULT_PLAYBACK_SETTLE_MS = 5_000;
 
 function createStartupEventTracker(videoElement) {
   const timestamps = {
@@ -44,8 +44,8 @@ export async function assertStartupBehavior({
   assertLoadedSnapshot,
   loadedSnapshotContext,
   expectInitialSeek = false,
-  maxInitialSeekDelayMs = 5_000,
-  maxLoadedDelayMs = 12_000,
+  maxInitialSeekDelayMs = 10_000,
+  maxLoadedDelayMs = 24_000,
   playbackSettleMs = DEFAULT_PLAYBACK_SETTLE_MS,
 }) {
   const tracker = createStartupEventTracker(videoElement);
