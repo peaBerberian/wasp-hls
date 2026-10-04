@@ -920,6 +920,7 @@ impl Dispatcher {
 
         self.requester.lock_segment_requests();
         self.requester.update_base_position(Some(wanted_pos));
+        self.check_best_variant(false);
         self.check_requested_segments_still_needed();
         self.check_segments_to_request();
         self.requester.unlock_segment_requests();
