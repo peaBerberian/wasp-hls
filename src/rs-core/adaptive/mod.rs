@@ -229,7 +229,14 @@ fn best_variant_id<'a>(
 
 fn fallback_variant_id<'a>(variants: impl Iterator<Item = &'a VariantStream>) -> Option<u32> {
     variants
-        .min_by_key(|variant| variant.bandwidth())
+        .reduce(|best, variant| {
+            // Variants are in ascending quality order, so prefer the later one on a tie.
+            if variant.bandwidth() <= best.bandwidth() {
+                variant
+            } else {
+                best
+            }
+        })
         .map(|variant| variant.id())
 }
 
@@ -468,6 +475,23 @@ high.m3u8\n",
                 assert_eq!(selected.best_variant_id, variants[expected_position].id());
                 assert_eq!(selected.safe_variant_id, variants[expected_position].id());
             }
+        }
+    }
+
+    #[test]
+    fn throughput_fallback_prefers_highest_quality_at_the_lowest_bandwidth() {
+        let playlist = TopLevelPlaylist::parse(
+            b"#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1000000,SCORE=1\nlow.m3u8\n#EXT-X-STREAM-INF:BANDWIDTH=2000000,SCORE=2\nmedium.m3u8\n#EXT-X-STREAM-INF:BANDWIDTH=1000000,SCORE=3\nhigh.m3u8\n",
+            Url::new("https://example.com/master.m3u8".to_string()),
+        ).unwrap();
+        let variants = variants(&playlist);
+        let selector = AdaptiveQualitySelector::new(500_000.);
+        for duration in [None, Some(4.)] {
+            let selected = selector
+                .select_variant(&variants, None, &playback_conditions(0., duration))
+                .unwrap();
+            assert_eq!(selected.best_variant_id, variants[2].id());
+            assert_eq!(selected.safe_variant_id, variants[2].id());
         }
     }
 
