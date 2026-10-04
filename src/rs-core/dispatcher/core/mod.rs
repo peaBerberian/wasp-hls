@@ -98,6 +98,7 @@ impl Dispatcher {
     pub(super) fn unlock_variant_core(&mut self) {
         if let Some(pl_store) = self.playlist_store.as_mut() {
             pl_store.unlock_variant();
+            // TODO: Did I forget to emit a lock status change here? To check.
             self.check_best_variant(false);
         }
     }
@@ -194,7 +195,7 @@ impl Dispatcher {
             Some(FinishedRequestType::Playlist(pl_info)) => {
                 if let Some(playlist_data) = data.obtain() {
                     self.on_playlist_fetch_success(pl_info, playlist_data, final_url);
-                } else {
+                } else if !self.is_obsolete_playlist_request(&pl_info.playlist_type) {
                     jsSendOtherError(
                         true,
                         OtherErrorCode::Unknown,
@@ -214,10 +215,17 @@ impl Dispatcher {
         has_timeouted: bool,
         status: Option<u32>,
     ) {
-        match self
+        let is_obsolete_playlist = self
             .requester
-            .on_pending_request_failure(request_id, has_timeouted, status)
-        {
+            .pending_playlist_type(request_id)
+            .is_some_and(|playlist_type| self.is_obsolete_playlist_request(playlist_type));
+
+        match self.requester.on_pending_request_failure(
+            request_id,
+            has_timeouted,
+            status,
+            !is_obsolete_playlist,
+        ) {
             // Failing segment request
             RetryResult::Failed {
                 request_type: FinishedRequestType::Segment(s),
@@ -270,6 +278,10 @@ impl Dispatcher {
                 status,
                 ..
             } => {
+                if is_obsolete_playlist {
+                    log_info!("Core: Ignoring failure of a deselected media playlist");
+                    return;
+                }
                 match x.playlist_type {
                     PlaylistFileType::MediaPlaylist { media_type, .. } => {
                         jsSendMediaPlaylistRequestError(
@@ -664,6 +676,7 @@ impl Dispatcher {
         data: Vec<u8>,
         final_url: Url,
     ) {
+        let is_obsolete = self.is_obsolete_playlist_request(&pl_info.playlist_type);
         let PlaylistRequestInfo { playlist_type, .. } = pl_info;
         match playlist_type {
             PlaylistFileType::TopLevelPlaylist => {
@@ -687,6 +700,12 @@ impl Dispatcher {
                     };
                     match playlist_store.update_media_playlist(&id, data.as_ref(), final_url) {
                         Err(e) => {
+                            if is_obsolete {
+                                log_info!(
+                                    "Core: Ignoring parse failure of a deselected media playlist"
+                                );
+                                return;
+                            }
                             let err_message = e.to_string();
                             jsSendMediaPlaylistParsingError(
                                 true,
@@ -702,6 +721,18 @@ impl Dispatcher {
                 };
                 self.process_parsed_media_playlist(id, refresh_interval);
             }
+        }
+    }
+
+    /// A media playlist response is obsolete only when its permanent ID is no longer
+    /// selected. The same playlist may still be selected through another variant.
+    fn is_obsolete_playlist_request(&self, playlist_type: &PlaylistFileType) -> bool {
+        match playlist_type {
+            PlaylistFileType::TopLevelPlaylist => false,
+            PlaylistFileType::MediaPlaylist { id, .. } => !self
+                .playlist_store
+                .as_ref()
+                .is_some_and(|store| store.is_current_media_playlist(id)),
         }
     }
 

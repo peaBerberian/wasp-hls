@@ -428,6 +428,14 @@ impl Requester {
             .any(|req| &req.url == url && &req.playlist_type == playlist_type)
     }
 
+    /// Type of the playlist associated with a pending host request, if any.
+    pub(crate) fn pending_playlist_type(&self, host_id: RequestId) -> Option<&PlaylistFileType> {
+        self.pending_playlist_requests
+            .iter()
+            .find(|request| request.host_id == host_id)
+            .map(|request| &request.playlist_type)
+    }
+
     /// Fetch the initialization segment whose metadata is given here add its
     /// `host_id` to `pending_segment_requests`.
     ///
@@ -553,11 +561,14 @@ impl Requester {
         self.end_pending_request(host_id)
     }
 
+    /// Handle a completed request failure. The caller may prohibit retries when the
+    /// resource is no longer needed; the request is then finished with its failure reason.
     pub(crate) fn on_pending_request_failure(
         &'_ mut self,
         host_id: RequestId,
         has_timeouted: bool,
         status: Option<u32>,
+        allow_retry: bool,
     ) -> RetryResult<'_> {
         let reason = match (has_timeouted, status) {
             (true, _) => Some(RequestErrorReason::Timeout),
@@ -566,7 +577,7 @@ impl Requester {
             }
             _ => None,
         };
-        if let Some(reason) = reason {
+        if let Some(reason) = reason.filter(|_| allow_retry) {
             if let Some(pos) = self
                 .pending_segment_requests
                 .iter()
@@ -602,7 +613,7 @@ impl Requester {
                 None => RetryResult::NotFound,
                 Some(req) => RetryResult::Failed {
                     request_type: req,
-                    reason: RequestErrorReason::Error,
+                    reason: reason.unwrap_or(RequestErrorReason::Error),
                     status,
                 },
             }
@@ -1038,10 +1049,53 @@ fn pending_segment_could_fill_before<T: RequesterSegmentInfo>(
 #[cfg(test)]
 mod tests {
     use super::{
-        pending_segment_could_fill_before, PlaylistFileType, PlaylistRequestInfo, Requester,
-        WaitingSegmentInfo,
+        pending_segment_could_fill_before, FinishedRequestType, PlaylistFileType,
+        PlaylistRequestInfo, Requester, RetryResult, WaitingSegmentInfo,
     };
-    use crate::{parser::SegmentTimeInfo, requester::RequestLaneTag, utils::url::Url};
+    use crate::{
+        bindings::RequestErrorReason, parser::SegmentTimeInfo, requester::RequestLaneTag,
+        utils::url::Url,
+    };
+
+    #[test]
+    fn prohibited_retry_finishes_only_the_failed_request_and_preserves_its_reason() {
+        for (has_timeouted, status, expected_reason) in [
+            (true, None, RequestErrorReason::Timeout),
+            (false, Some(500), RequestErrorReason::Status),
+            (false, None, RequestErrorReason::Error),
+        ] {
+            let mut requester = Requester::new();
+            for host_id in [1, 2] {
+                requester
+                    .pending_playlist_requests
+                    .push(PlaylistRequestInfo {
+                        host_id,
+                        url: Url::new(format!("https://example.com/{host_id}.m3u8")),
+                        playlist_type: PlaylistFileType::TopLevelPlaylist,
+                        attempts_failed: 0,
+                        is_waiting_for_retry: false,
+                    });
+            }
+            assert!(matches!(
+                requester.pending_playlist_type(1),
+                Some(PlaylistFileType::TopLevelPlaylist)
+            ));
+            let RetryResult::Failed {
+                request_type: FinishedRequestType::Playlist(request),
+                reason,
+                status: returned_status,
+            } = requester.on_pending_request_failure(1, has_timeouted, status, false)
+            else {
+                panic!("expected a terminal playlist failure");
+            };
+            assert_eq!(request.host_id, 1);
+            assert_eq!(reason, expected_reason);
+            assert_eq!(returned_status, status);
+            assert!(requester.pending_playlist_type(1).is_none());
+            assert!(requester.pending_playlist_type(2).is_some());
+            assert!(requester.retry_timers.is_empty());
+        }
+    }
 
     fn waiting_media(start: f64) -> WaitingSegmentInfo {
         WaitingSegmentInfo {
