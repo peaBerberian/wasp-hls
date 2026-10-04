@@ -46,6 +46,20 @@ const CONTENT_TYPE_M3U8 = "application/vnd.apple.mpegurl";
 
 /** @type {Record<string, VodRecipe>} */
 const RECIPES = {
+  "fmp4-abr": {
+    id: "fmp4-abr",
+    playlistName: "main.m3u8",
+    segmentType: "fmp4",
+    segmentExtension: "m4s",
+    initFileName: "init.mp4",
+    durationSeconds: 60,
+    segmentDurationSeconds: 2,
+    frameRate: 24,
+    videoSize: "960x540",
+    videoBitrate: "1600k",
+    audioBitrate: "128k",
+    audioFrequency: 880,
+  },
   "fmp4-muxed-av": {
     id: "fmp4-muxed-av",
     playlistName: "main.m3u8",
