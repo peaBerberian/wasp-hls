@@ -42,7 +42,7 @@ pub(crate) struct PlaybackConditions {
     /// normal playback etc.
     pub(crate) playback_speed: f64,
     /// Content-wide maximum observed target duration, retained while playlists load.
-    /// Used to calibrate BOLA thresholds, not to estimate a candidate's download time.
+    /// Used to calibrate BOLA thresholds and roughly budget buffer-funded downloads.
     pub(crate) abr_reference_segment_duration: Option<f64>,
 }
 
@@ -53,6 +53,8 @@ const BANDWIDTH_ESTIMATE_FACTOR: f64 = 0.8;
 const BOLA_MIN_LOW_BUFFER: f64 = 3.0;
 const BOLA_MAX_LOW_BUFFER: f64 = 10.0;
 const BOLA_UP_SWITCH_HYSTERESIS: f64 = 0.25;
+/// Spend at most this fraction of buffered playback time when raising quality above throughput.
+const BOLA_DOWNLOAD_BUFFER_FRACTION: f64 = 0.5;
 
 impl AdaptiveQualitySelector {
     /// Creates new `AdaptiveQualitySelector`.
@@ -166,10 +168,30 @@ impl AdaptiveQualitySelector {
             }
         }
 
+        // Approximate segment cost from BANDWIDTH and the reference duration. Keeping half
+        // the buffer in reserve avoids extreme upgrades without needing per-segment sizes.
+        // `bandwidth` already accounts for playback speed, so the budget is in media seconds.
+        let buffer_funded_bandwidth =
+            bandwidth * (normalized_buffer / segment_duration) * BOLA_DOWNLOAD_BUFFER_FRACTION;
+        let bola_position = variants
+            .iter()
+            .position(|variant| variant.id() == bola_id)?;
+        // Once an upgrade is funded, don't withdraw it just because its download drains
+        // buffer. BOLA can still recommend a downgrade as occupancy falls.
+        let budgeted_bola_id = variants[..=bola_position]
+            .iter()
+            .rev()
+            .find(|variant| {
+                (variant.bandwidth() as f64) <= buffer_funded_bandwidth
+                    || Some(variant.id()) == current_variant_id
+            })
+            .map(|variant| variant.id());
         let best_id = variants
             .iter()
             .rev()
-            .find(|variant| variant.id() == bola_id || variant.id() == throughput_id)?
+            .find(|variant| {
+                Some(variant.id()) == budgeted_bola_id || variant.id() == throughput_id
+            })?
             .id();
 
         Some(AdaptiveVariantSelection {
@@ -650,6 +672,69 @@ high.m3u8\n",
         let selected = selected.unwrap();
         assert_eq!(selected.best_variant_id, variants[2].id());
         assert_eq!(selected.safe_variant_id, variants[1].id());
+    }
+
+    #[test]
+    fn buffer_does_not_fund_a_segment_that_would_exhaust_it() {
+        let playlist = TopLevelPlaylist::parse(
+            b"#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1000000\nlow.m3u8\n#EXT-X-STREAM-INF:BANDWIDTH=12000000\nhigh.m3u8\n",
+            Url::new("https://example.com/master.m3u8".to_string()),
+        ).unwrap();
+        let variants = variants(&playlist);
+        let selector = AdaptiveQualitySelector::new(1_250_000.);
+        let selected = selector
+            .select_variant(
+                &variants,
+                Some(variants[0].id()),
+                &playback_conditions(29., Some(4.)),
+            )
+            .unwrap();
+        assert_eq!(selected.best_variant_id, variants[0].id());
+        assert_eq!(selected.safe_variant_id, variants[0].id());
+    }
+
+    #[test]
+    fn buffer_budget_keeps_affordable_upgrades_in_quality_order_and_accounts_for_speed() {
+        let playlist = TopLevelPlaylist::parse(
+            b"#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1000000,SCORE=1\nlow.m3u8\n#EXT-X-STREAM-INF:BANDWIDTH=8000000,SCORE=2\nmedium.m3u8\n#EXT-X-STREAM-INF:BANDWIDTH=3000000,SCORE=3\nhigh.m3u8\n#EXT-X-STREAM-INF:BANDWIDTH=12000000,SCORE=4\nhighest.m3u8\n",
+            Url::new("https://example.com/master.m3u8".to_string()),
+        ).unwrap();
+        let variants = variants(&playlist);
+        let selector = AdaptiveQualitySelector::new(1_250_000.);
+        for (speed, expected_position) in [(1., 2), (2., 0), (0., 2), (-1., 2)] {
+            let playback = PlaybackConditions {
+                playback_speed: speed,
+                ..playback_conditions(29., Some(4.))
+            };
+            let selected = selector
+                .select_variant(&variants, Some(variants[0].id()), &playback)
+                .unwrap();
+            assert_eq!(selected.best_variant_id, variants[expected_position].id());
+            assert_eq!(selected.safe_variant_id, variants[0].id());
+        }
+    }
+
+    #[test]
+    fn funded_upgrade_is_not_withdrawn_as_its_download_drains_buffer() {
+        let playlist = TopLevelPlaylist::parse(
+            b"#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1000000\nlow.m3u8\n#EXT-X-STREAM-INF:BANDWIDTH=3000000\nmedium.m3u8\n#EXT-X-STREAM-INF:BANDWIDTH=12000000\nhigh.m3u8\n",
+            Url::new("https://example.com/master.m3u8".to_string()),
+        ).unwrap();
+        let variants = variants(&playlist);
+        let selector = AdaptiveQualitySelector::new(1_250_000.);
+        for (buffer_level, current_position, expected_position) in
+            [(29., 0, 1), (20., 1, 1), (16., 1, 1), (2., 1, 0)]
+        {
+            let selected = selector
+                .select_variant(
+                    &variants,
+                    Some(variants[current_position].id()),
+                    &playback_conditions(buffer_level, Some(4.)),
+                )
+                .unwrap();
+            assert_eq!(selected.best_variant_id, variants[expected_position].id());
+            assert_eq!(selected.safe_variant_id, variants[0].id());
+        }
     }
 
     #[test]
