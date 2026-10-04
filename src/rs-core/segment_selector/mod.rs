@@ -182,7 +182,8 @@ pub(crate) struct NextSegmentSelector {
 
     /// Permission used when the current segment cursor was last considered. A change must
     /// reconsider replacement opportunities even when the selected playlist stays the same.
-    last_fast_quality_switching: bool,
+    /// `None` means the cursor restarted and buffered coverage must be reconsidered.
+    last_fast_quality_switching: Option<bool>,
 
     /// Information on segments that were voluntarily not returned by the `NextSegmentSelector`
     /// because "better" segments were already present in the buffer at its place.
@@ -224,7 +225,7 @@ impl NextSegmentSelector {
             buffer_goal,
             last_media_id: None,
             allow_fast_quality_switching: true,
-            last_fast_quality_switching: true,
+            last_fast_quality_switching: Some(true),
             init_status: InitializationSegmentSelectorStatus::Unchecked,
             skipped_segments: vec![],
         }
@@ -237,7 +238,7 @@ impl NextSegmentSelector {
         self.init_status = InitializationSegmentSelectorStatus::Unchecked;
         self.last_media_id = None;
         self.allow_fast_quality_switching = true;
-        self.last_fast_quality_switching = true;
+        self.last_fast_quality_switching = Some(true);
         self.segment_cursor = SegmentCursor::new(base_pos);
         self.skipped_segments.clear();
     }
@@ -252,6 +253,7 @@ impl NextSegmentSelector {
     pub(crate) fn restart_from_position(&mut self, base_pos: f64) {
         self.base_pos = f64::max(0., base_pos);
         self.segment_cursor = SegmentCursor::new(base_pos);
+        self.last_fast_quality_switching = None;
         self.skipped_segments.clear();
     }
 
@@ -294,9 +296,9 @@ impl NextSegmentSelector {
         let has_quality_changed =
             previous_media_id.is_some() && previous_media_id != Some(new_media_id);
         let should_recompute_starting_position = previous_media_id != Some(new_media_id)
-            || self.last_fast_quality_switching != self.allow_fast_quality_switching;
+            || self.last_fast_quality_switching != Some(self.allow_fast_quality_switching);
         self.last_media_id = Some(new_media_id);
-        self.last_fast_quality_switching = self.allow_fast_quality_switching;
+        self.last_fast_quality_switching = Some(self.allow_fast_quality_switching);
 
         if should_recompute_starting_position {
             if has_quality_changed {
@@ -305,7 +307,7 @@ impl NextSegmentSelector {
             } else if previous_media_id.is_none() {
                 log_debug!("Selector: Initial media selection, computing starting position");
             } else {
-                log_debug!("Selector: Fast quality switching permission changed, recomputing starting position");
+                log_debug!("Selector: Recomputing starting position for the current media");
             }
             self.segment_cursor.move_cursor(self.base_pos);
             self.skipped_segments.clear();
@@ -747,6 +749,59 @@ mod tests {
     #[test]
     fn granting_fast_switch_permission_reconsiders_buffer_with_same_playlist() {
         check_permission_transition(false, 8.);
+    }
+
+    #[test]
+    fn cursor_restart_reconsiders_buffered_coverage_and_preserves_media_identity() {
+        let mut text =
+            String::from("#EXTM3U\n#EXT-X-TARGETDURATION:4\n#EXT-X-MAP:URI=\"init.mp4\"\n");
+        for number in 0..10 {
+            text.push_str(&format!("#EXTINF:4,\nseg-{number}.m4s\n"));
+        }
+        let TopLevelPlaylist::DirectMedia(playlist) = TopLevelPlaylist::parse(
+            text.as_bytes(),
+            Url::new("https://example.com/high.m3u8".to_owned()),
+        )
+        .unwrap() else {
+            panic!("expected direct media playlist");
+        };
+        let list = playlist.playlist().segment_list();
+        let inventory: Vec<_> = (0..6)
+            .map(|number| {
+                BufferedChunk::new_for_test(
+                    number as f64 * 4.,
+                    (number + 1) as f64 * 4.,
+                    SegmentQualityContext::new(1., 1),
+                )
+            })
+            .collect();
+        for (allow_replacement, seek_position, expected_start, change_media) in [
+            (false, 4., 24., false),
+            (true, 4., 12., false),
+            (false, 30., 28., false),
+            (false, 4., 24., true),
+        ] {
+            let context = SegmentQualityContext::new(2., 2);
+            let mut selectors = NextSegmentSelectors::new(0., 40.);
+            selectors.set_fast_quality_switching(MediaType::Video, allow_replacement);
+            let selector = selectors.get_mut(MediaType::Video);
+            let first = selector.most_needed_segment(list, &context, &inventory);
+            selector.validate_init(first.init_segment.unwrap().id());
+            selector.validate_media_until(first.media_segment.unwrap().end());
+
+            selector.restart_from_position(seek_position - 0.2);
+            let context = SegmentQualityContext::new(2., if change_media { 3 } else { 2 });
+            let next = selector.most_needed_segment(list, &context, &inventory);
+            assert_eq!(next.media_segment.unwrap().start(), expected_start);
+            assert_eq!(next.init_segment.is_some(), change_media);
+            selector.validate_media_until(next.media_segment.unwrap().end());
+
+            let following = selector.most_needed_segment(list, &context, &inventory);
+            assert_eq!(
+                following.media_segment.unwrap().start(),
+                expected_start + 4.
+            );
+        }
     }
 
     #[test]
