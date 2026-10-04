@@ -356,14 +356,24 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
     if (this.__worker__ === null) {
       throw new Error("The Player is not initialized or is disposed.");
     }
-    for (const [key, value] of Object.entries(overwrite)) {
+    for (const [key, value] of Object.entries(
+      overwrite as Record<string, unknown>,
+    )) {
       if (value !== undefined) {
-        this.__config__[key as keyof WaspHlsPlayerConfig] = value;
+        if (key in this.__config__) {
+          const typedKey = key as keyof WaspHlsPlayerConfig;
+          (
+            this.__config__ as Record<
+              keyof WaspHlsPlayerConfig,
+              WaspHlsPlayerConfig[keyof WaspHlsPlayerConfig]
+            >
+          )[typedKey] = value as WaspHlsPlayerConfig[keyof WaspHlsPlayerConfig];
+        }
       }
     }
     postMessageToWorker(this.__worker__, {
       type: MainMessageType.UpdateConfig,
-      value: this.__config__,
+      value: overwrite,
     });
   }
 

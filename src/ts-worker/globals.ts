@@ -7,6 +7,11 @@ import type {
 } from "../ts-common/types.ts";
 import type Transmuxer from "../ts-transmux/index.ts";
 import { Dispatcher, type InitOutput, type MediaType } from "../wasm/index.js";
+import {
+  type HiddenTransmuxProfilingConfig,
+  resetTransmuxProfiling,
+  updateTransmuxProfilingConfig,
+} from "./transmux-profiling.ts";
 
 export interface WorkerInitializationOptions {
   hasMseInWorker: boolean;
@@ -36,6 +41,7 @@ class PlayerInstance {
     wasm.wasp_set_logger_level(logLevel);
     const dispatcher = new Dispatcher(opts.initialBandwidth);
     updateDispatcherConfig(dispatcher, config);
+    resetTransmuxProfiling();
     this._instanceInfo = {
       wasm,
       dispatcher,
@@ -50,6 +56,7 @@ class PlayerInstance {
     requestsStore.freeEverything((request) => {
       request.abortController.abort();
     });
+    resetTransmuxProfiling();
   }
 
   public changeContent(content: ContentInfo) {
@@ -59,6 +66,7 @@ class PlayerInstance {
       );
       return;
     }
+    resetTransmuxProfiling();
     this._instanceInfo.content = content;
   }
 
@@ -175,8 +183,9 @@ const I32_MAX_VALUE = 2147483647;
 
 export function updateDispatcherConfig(
   dispatcher: Dispatcher,
-  config: Partial<WaspHlsPlayerConfig>,
+  config: Partial<WaspHlsPlayerConfig> & HiddenTransmuxProfilingConfig,
 ): void {
+  updateTransmuxProfilingConfig(config);
   if (config.bufferGoal !== undefined) {
     dispatcher.set_buffer_goal(config.bufferGoal);
   }
