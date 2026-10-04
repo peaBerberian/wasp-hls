@@ -25,6 +25,7 @@
  *     actions?: Array<{
  *       type: "passthrough" | "error" | "timeout" | "response";
  *       delayMs?: number;
+ *       waitForRelease?: boolean;
  *       status?: number;
  *       body?: string;
  *       headers?: Record<string, string>;
@@ -46,6 +47,16 @@ export function runTestWorkerBootstrap(config) {
       ? null
       : new BroadcastChannel(config.telemetryChannelName);
   const ruleHitCounts = new Array(config.fetchRules.length).fill(0);
+  const originalSetTimeout = self.setTimeout.bind(self);
+  const originalClearTimeout = self.clearTimeout.bind(self);
+  /** @typedef {{ id: number; nativeId: number | null; duration: number | undefined; run: () => void }} FetchTimer */
+  /** @type {Map<number, FetchTimer>} */
+  const requestTimers = new Map();
+  /** @type {Map<number, () => void>} */
+  const fetchReleases = new Map();
+  const patchedImports = new WeakSet();
+  /** @type {FetchTimer | null} */
+  let currentFetchTimer = null;
   let fetchRequestId = 0;
   let latestWasmMemory = null;
 
@@ -172,7 +183,100 @@ export function runTestWorkerBootstrap(config) {
     }
   }
 
+  // doFetch creates its timeout synchronously, just before calling fetch. Capture
+  // that timer within the WASM fetch binding so a gated request can pause only
+  // its own deadline. Other worker timers keep running normally.
+  /** @param {WebAssembly.Imports | undefined} imports */
+  function captureFetchTimers(imports) {
+    if (
+      !config.fetchRules.some((rule) =>
+        rule.actions?.some((action) => action.waitForRelease),
+      )
+    ) {
+      return;
+    }
+    const fetchBinding = imports?.wasp?.__js_func__fetch;
+    if (imports === undefined || typeof fetchBinding !== "function") {
+      throw new Error("Missing WASM fetch binding for gated requests");
+    }
+    if (patchedImports.has(imports)) {
+      return;
+    }
+    patchedImports.add(imports);
+    /** @param {...number} args */
+    imports.wasp.__js_func__fetch = (...args) => {
+      const previousSetTimeout = self.setTimeout;
+      const previousFetchTimer = currentFetchTimer;
+      currentFetchTimer = null;
+      self.setTimeout = (callback, duration, ...timerArgs) => {
+        if (typeof callback !== "function") {
+          throw new Error("Expected a callback for the request timeout");
+        }
+        /** @type {FetchTimer} */
+        const timer = {
+          id: 0,
+          nativeId: null,
+          duration,
+          run() {
+            requestTimers.delete(timer.id);
+            callback(...timerArgs);
+          },
+        };
+        timer.id = timer.nativeId = originalSetTimeout(timer.run, duration);
+        requestTimers.set(timer.id, timer);
+        currentFetchTimer = timer;
+        return timer.id;
+      };
+      try {
+        return fetchBinding(...args);
+      } finally {
+        self.setTimeout = previousSetTimeout;
+        currentFetchTimer = previousFetchTimer;
+      }
+    };
+  }
+
+  self.clearTimeout = (id) => {
+    const timer = id === undefined ? undefined : requestTimers.get(id);
+    if (timer !== undefined) {
+      if (timer.nativeId !== null) {
+        originalClearTimeout(timer.nativeId);
+      }
+      requestTimers.delete(timer.id);
+    } else {
+      originalClearTimeout(id);
+    }
+  };
+
+  /**
+   * @param {number} requestId
+   * @param {AbortSignal | null | undefined} signal
+   * @returns {Promise<void>}
+   */
+  function waitForFetchRelease(requestId, signal) {
+    return new Promise((resolve, reject) => {
+      const cleanup = () => {
+        fetchReleases.delete(requestId);
+        signal?.removeEventListener?.("abort", onAbort);
+      };
+      const onAbort = () => {
+        cleanup();
+        reject(createAbortError());
+      };
+      fetchReleases.set(requestId, () => {
+        cleanup();
+        resolve();
+      });
+      if (signal?.aborted === true) {
+        onAbort();
+      } else {
+        signal?.addEventListener?.("abort", onAbort);
+      }
+    });
+  }
+
   WebAssembly.instantiate = async function patchedInstantiate(source, imports) {
+    captureFetchTimers(imports);
     const result = await originalInstantiate(source, imports);
     maybeCaptureWasmMemory(result);
     return result;
@@ -181,6 +285,7 @@ export function runTestWorkerBootstrap(config) {
   if (originalInstantiateStreaming !== null) {
     WebAssembly.instantiateStreaming =
       async function patchedInstantiateStreaming(source, imports) {
+        captureFetchTimers(imports);
         const result = await originalInstantiateStreaming(source, imports);
         maybeCaptureWasmMemory(result);
         return result;
@@ -213,6 +318,10 @@ export function runTestWorkerBootstrap(config) {
 
   channel?.addEventListener("message", (evt) => {
     const data = evt.data;
+    if (data?.type === "release-fetch") {
+      fetchReleases.get(data.requestId)?.();
+      return;
+    }
     if (data?.type !== "memory-snapshot-request") {
       return;
     }
@@ -256,6 +365,26 @@ export function runTestWorkerBootstrap(config) {
     });
 
     try {
+      if (action.waitForRelease) {
+        const timer = currentFetchTimer;
+        if (timer !== null) {
+          if (timer.nativeId !== null) {
+            originalClearTimeout(timer.nativeId);
+          }
+          timer.nativeId = null;
+        }
+        try {
+          await waitForFetchRelease(requestId, init?.signal);
+        } catch (error) {
+          if (timer !== null) {
+            self.clearTimeout(timer.id);
+          }
+          throw error;
+        }
+        if (timer !== null && requestTimers.has(timer.id)) {
+          timer.nativeId = originalSetTimeout(timer.run, timer.duration);
+        }
+      }
       await delayWithAbort(action.delayMs, init?.signal);
       switch (action.type) {
         case "error":

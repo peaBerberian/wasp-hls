@@ -52,20 +52,22 @@ describe("Deselected media playlist failures", function () {
       const alternativeUrl = `${baseUrl}variant.m3u8?rendition=alternative`;
       const action =
         failure === "status"
-          ? { type: "response", status: 500, delayMs: 500 }
+          ? { type: "response", status: 500, waitForRelease: true }
           : failure === "network"
-            ? { type: "error", delayMs: 500 }
+            ? { type: "error", waitForRelease: true }
             : failure === "timeout"
-              ? { type: "timeout" }
+              ? { type: "timeout", waitForRelease: true }
               : {
                   type: "response",
                   status: 200,
                   body: "invalid playlist",
-                  delayMs: 500,
+                  waitForRelease: true,
                 };
       const ctx = await createPlayerHarness({
         initialBandwidth: 2_500_000,
         playerConfig: {
+          // Keep this 12-second fixture from reaching end-of-stream before switching.
+          bufferGoal: 4,
           mediaPlaylistMaxRetry: 1,
           mediaPlaylistRequestTimeout: 700,
           mediaPlaylistBackoffBase: 1,
@@ -107,7 +109,7 @@ ${alternativeUrl}
         const warnings = eventListener(ctx.player, "warning");
 
         ctx.player.lockVariant(alternativeVariant.id);
-        await ctx.workerHandle.telemetry.waitFor(
+        const pendingRequest = await ctx.workerHandle.telemetry.waitFor(
           (event) =>
             event.type === "fetch-start" && event.url === alternativeUrl,
         );
@@ -118,16 +120,25 @@ ${alternativeUrl}
         );
         ctx.player.lockVariant(initialVariant.id);
         await restored;
-        await ctx.workerHandle.telemetry.waitFor(
+        // variantUpdate is sent after the worker has applied the deselection.
+        // Only now allow the obsolete response (or its real timeout) to finish.
+        ctx.workerHandle.telemetry.releaseFetch(pendingRequest.requestId);
+        const completedRequest = await ctx.workerHandle.telemetry.waitFor(
           (event) =>
-            event.url === alternativeUrl &&
+            event.requestId === pendingRequest.requestId &&
             ["fetch-resolve", "fetch-reject", "fetch-abort"].includes(
               event.type,
             ),
         );
+        expect(completedRequest.type).toBe(
+          failure === "network"
+            ? "fetch-reject"
+            : failure === "timeout"
+              ? "fetch-abort"
+              : "fetch-resolve",
+        );
 
-        await ctx.player.resume();
-        await waitForProgress(ctx.videoElement);
+        await playUntilProgress(ctx.player, ctx.videoElement);
         expect(ctx.player.getCurrentVariant().id).toBe(initialVariant.id);
         expect(ctx.player.getPlayerState()).toBe("Loaded");
         expect(ctx.getLastPlayerError()).toBeNull();
@@ -148,7 +159,7 @@ ${alternativeUrl}
             event.url === alternativeUrl &&
             event.attempt === 2,
         );
-        await waitForProgress(ctx.videoElement);
+        await playUntilProgress(ctx.player, ctx.videoElement);
         expect(alternativeRequests(ctx)).toHaveLength(2);
         expect(ctx.player.getPlayerState()).toBe("Loaded");
         expect(ctx.getLastPlayerError()).toBeNull();
@@ -169,14 +180,15 @@ function alternativeRequests(ctx) {
     );
 }
 
-function waitForProgress(videoElement) {
+async function playUntilProgress(player, videoElement) {
   const initialTime = videoElement.currentTime;
-  return new Promise((resolve) => {
-    videoElement.addEventListener("timeupdate", function onTimeUpdate() {
-      if (videoElement.currentTime > initialTime + 0.25) {
-        videoElement.removeEventListener("timeupdate", onTimeUpdate);
-        resolve();
-      }
-    });
-  });
+  try {
+    await player.resume();
+    await expect
+      .poll(() => videoElement.currentTime, { timeout: 20_000 })
+      .toBeGreaterThan(initialTime + 0.25);
+  } finally {
+    // Keep the next request/selection waits from consuming the rest of the clip.
+    videoElement.pause();
+  }
 }
