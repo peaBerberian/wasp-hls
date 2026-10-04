@@ -37,7 +37,7 @@ describe("BOLA replacement requests", function () {
               body: `#EXTM3U
 #EXT-X-STREAM-INF:BANDWIDTH=1000000,CODECS="avc1.64001f,mp4a.40.2"
 ${baseUrl}low.m3u8
-#EXT-X-STREAM-INF:BANDWIDTH=12000000,CODECS="avc1.64001f,mp4a.40.2"
+#EXT-X-STREAM-INF:BANDWIDTH=8000000,CODECS="avc1.64001f,mp4a.40.2"
 ${baseUrl}high.m3u8
 `,
             },
@@ -55,6 +55,8 @@ ${baseUrl}high.m3u8
             id: "high-segments",
             match: { urlMatches: "seg-\\d+\\.m4s\\?quality=high$" },
             actions: [
+              // The slow request must still stop replacements. The 8 Mb/s
+              // variant leaves recovery headroom for real localhost fetches.
               { type: "passthrough", delayMs: 3000 },
               { type: "passthrough", delayMs: 20 },
             ],
@@ -92,19 +94,41 @@ ${baseUrl}high.m3u8
             event.attempt === 2,
         );
         expect(segmentStart(addition)).toBeGreaterThanOrEqual(originalEnd);
-        expect(ctx.player.getCurrentVariant().bandwidth).toBe(12_000_000);
-        const replacementAfterRecovery =
-          await ctx.workerHandle.telemetry.waitFor(
+        expect(ctx.player.getCurrentVariant().bandwidth).toBe(8_000_000);
+        const replacementAfterRecovery = await ctx.workerHandle.telemetry
+          .waitFor(
             (event) =>
               event.type === "fetch-start" &&
               event.ruleId === "high-segments" &&
               event.requestId > addition.requestId &&
               segmentStart(event) < originalEnd,
-          );
+            // Recovery requires several downloads, which can take longer on CI.
+            60_000,
+          )
+          .catch((cause) => {
+            throw new Error(
+              "BOLA replacement recovery failed: " +
+                JSON.stringify({
+                  originalEnd,
+                  bufferedEnd: bufferedEnd(ctx.videoElement),
+                  currentVariant: ctx.player.getCurrentVariant(),
+                  lastPlayerError: ctx.getLastPlayerError(),
+                  recentSegmentEvents: ctx.workerHandle.telemetry
+                    .getEvents()
+                    .filter(
+                      (event) =>
+                        event.ruleId === "low-segments" ||
+                        event.ruleId === "high-segments",
+                    )
+                    .slice(-20),
+                }),
+              { cause },
+            );
+          });
         expect(segmentStart(replacementAfterRecovery)).toBeGreaterThan(
           segmentStart(firstReplacement),
         );
-        expect(ctx.player.getCurrentVariant().bandwidth).toBe(12_000_000);
+        expect(ctx.player.getCurrentVariant().bandwidth).toBe(8_000_000);
         expect(
           ctx.workerHandle.telemetry
             .getEvents()

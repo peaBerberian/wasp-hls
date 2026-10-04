@@ -585,13 +585,12 @@ impl Dispatcher {
     /// Generate the `PlaybackConditions` object needed by the adaptive code according to current
     /// playback conditions.
     fn playback_conditions(&self, pl_store: &PlaylistStore) -> PlaybackConditions {
-        let media_type = if pl_store.has_distinct_media_type(MediaType::Video) {
-            MediaType::Video
-        } else {
-            MediaType::Audio
-        };
+        let buffer_level = [MediaType::Audio, MediaType::Video]
+            .into_iter()
+            .filter_map(|media_type| self.media_element_ref.buffer_ahead_for(media_type))
+            .reduce(f64::min);
         PlaybackConditions {
-            buffer_level: self.media_element_ref.buffer_ahead_for(media_type),
+            buffer_level,
             buffer_goal: self.buffer_goal,
             playback_speed: self.media_element_ref.wanted_speed(),
             abr_reference_segment_duration: pl_store.max_observed_target_duration(),
@@ -1347,7 +1346,10 @@ mod tests {
         pl_store
     }
 
-    fn dispatcher_with_buffer_observation(video: Option<Vec<f64>>) -> Dispatcher {
+    fn dispatcher_with_buffer_observation(
+        audio: Option<Vec<f64>>,
+        video: Option<Vec<f64>>,
+    ) -> Dispatcher {
         let mut dispatcher = Dispatcher::new(3_125_000.);
         dispatcher
             .media_element_ref
@@ -1360,7 +1362,7 @@ mod tests {
                 false,
                 false,
                 f64::MAX,
-                Some(JsTimeRanges::new(vec![0., 15.])),
+                audio.map(JsTimeRanges::new),
                 video.map(JsTimeRanges::new),
             ));
         dispatcher
@@ -1392,7 +1394,8 @@ mod tests {
             }
         }
         pl_store.set_variant(variant_ids[0]);
-        let mut dispatcher = dispatcher_with_buffer_observation(Some(vec![0., 10. + buffer_level]));
+        let mut dispatcher =
+            dispatcher_with_buffer_observation(None, Some(vec![0., 10. + buffer_level]));
         dispatcher.adaptive_selector = crate::adaptive::AdaptiveQualitySelector::new(1_875_000.);
         dispatcher.playlist_store = Some(pl_store);
         dispatcher
@@ -1439,15 +1442,15 @@ mod tests {
     }
 
     #[test]
-    fn playback_conditions_use_video_source_buffer_for_video_variants() {
-        for manifest in [
-            "#EXTM3U\n#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID=\"aud\",NAME=\"English\",DEFAULT=YES,URI=\"audio.m3u8\"\n#EXT-X-STREAM-INF:BANDWIDTH=1000000,CODECS=\"avc1.42E01E,mp4a.40.2\",AUDIO=\"aud\"\nvideo.m3u8\n",
-            "#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1000000,CODECS=\"avc1.42E01E,mp4a.40.2\"\nmuxed.m3u8\n",
+    fn playback_conditions_use_minimum_known_required_buffer() {
+        for (manifest, audio, expected_buffer_level) in [
+            ("#EXTM3U\n#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID=\"aud\",NAME=\"English\",DEFAULT=YES,URI=\"audio.m3u8\"\n#EXT-X-STREAM-INF:BANDWIDTH=1000000,CODECS=\"avc1.42E01E,mp4a.40.2\",AUDIO=\"aud\"\nvideo.m3u8\n", Some(vec![0., 15.]), 5.),
+            ("#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1000000,CODECS=\"avc1.42E01E,mp4a.40.2\"\nmuxed.m3u8\n", None, 30.),
         ] {
             let pl_store = selected_playlist(manifest.as_bytes());
-            let dispatcher = dispatcher_with_buffer_observation(Some(vec![0., 40.]));
+            let dispatcher = dispatcher_with_buffer_observation(audio, Some(vec![0., 40.]));
 
-            assert_eq!(dispatcher.playback_conditions(&pl_store).buffer_level, Some(30.));
+            assert_eq!(dispatcher.playback_conditions(&pl_store).buffer_level, Some(expected_buffer_level));
         }
     }
 
@@ -1456,7 +1459,7 @@ mod tests {
         let pl_store = selected_playlist(
             b"#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1000000,CODECS=\"mp4a.40.2\"\naudio.m3u8\n",
         );
-        let dispatcher = dispatcher_with_buffer_observation(Some(vec![0., 40.]));
+        let dispatcher = dispatcher_with_buffer_observation(Some(vec![0., 15.]), None);
 
         assert_eq!(
             dispatcher.playback_conditions(&pl_store).buffer_level,
@@ -1471,7 +1474,7 @@ mod tests {
         );
         for video in [None, Some(vec![])] {
             let expected = video.as_ref().map(|_| 0.);
-            let dispatcher = dispatcher_with_buffer_observation(video);
+            let dispatcher = dispatcher_with_buffer_observation(None, video);
 
             assert_eq!(
                 dispatcher.playback_conditions(&pl_store).buffer_level,
