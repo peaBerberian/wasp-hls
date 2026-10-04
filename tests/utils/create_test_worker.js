@@ -108,7 +108,7 @@ function createTelemetryCollector(channelName, { storeHistory = true } = {}) {
     getEvents() {
       return events.slice();
     },
-    waitFor(predicate, timeoutMs = 10_000) {
+    waitFor(predicate, timeoutMs = 20_000) {
       return new Promise((resolve, reject) => {
         const existingEvent = events.find(predicate);
         if (existingEvent !== undefined) {

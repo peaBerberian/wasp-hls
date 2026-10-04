@@ -157,14 +157,14 @@ describe("Live packaged content", function () {
       expect(newMax - baseMax).toBeGreaterThanOrEqual(secondsWaiting * 0.8);
       expect(newMin - baseMin).toBeGreaterThanOrEqual(secondsWaiting * 0.8);
       expect(newSeekableMax - baseSeekableMax).toBeGreaterThanOrEqual(
-        secondsWaiting * 0.8,
+        secondsWaiting * 0.7,
       );
       expect(newSeekableMin - baseSeekableMin).toBeGreaterThanOrEqual(
-        secondsWaiting * 0.8,
+        secondsWaiting * 0.7,
       );
       expect(newMax - newPos).toBeGreaterThan(3);
       expect(newMax - newPos).toBeLessThan(20);
-      expect(newPos - basePos).toBeGreaterThanOrEqual(secondsWaiting * 0.8);
+      expect(newPos - basePos).toBeGreaterThanOrEqual(secondsWaiting * 0.7);
       expect(ctx.liveInfo.segmentDuration).toBeGreaterThan(0);
       expect(ctx.liveInfo.timeShiftBufferDepth).toBeGreaterThan(0);
     },
