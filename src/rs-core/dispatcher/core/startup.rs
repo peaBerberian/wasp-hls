@@ -58,9 +58,10 @@ fn ensure_ready_playlists(dispatcher: &mut Dispatcher, wanted_position: f64) -> 
         StartupStatus::AwaitingPlaylists => false,
         StartupStatus::AwaitingSupportCheck => false,
         StartupStatus::VariantSelectionNeeded => {
-            // Initial selection and unsupported-variant recovery must either choose or fail.
-            let Some((variant_id, allow_fast_switching)) = dispatcher.select_adaptive_variant()
+            let Some((variant_id, allow_fast_switching)) = dispatcher.compute_optimal_variant()
             else {
+                // NOTE: Should normally never happen, we should have ensured this was not possible
+                // before
                 jsSendOtherError(
                     true,
                     OtherErrorCode::Unknown,

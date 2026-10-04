@@ -70,7 +70,11 @@ export function repeatAction(action, count) {
   return Array.from({ length: count }, () => ({ ...action }));
 }
 
-export async function createPlayerHarness({ playerConfig, fetchRules }) {
+export async function createPlayerHarness({
+  playerConfig,
+  fetchRules,
+  initialBandwidth,
+}) {
   const videoElement = document.createElement("video");
   document.body.appendChild(videoElement);
 
@@ -83,6 +87,7 @@ export async function createPlayerHarness({ playerConfig, fetchRules }) {
   await player.initialize({
     workerUrl: workerHandle.url,
     wasmUrl: EmbeddedWasm,
+    initialBandwidth,
   });
 
   return {
