@@ -41,8 +41,9 @@ pub(crate) struct PlaybackConditions {
     /// Current **wanted** playback rate. `2` indicates x2 playback, `1` is
     /// normal playback etc.
     pub(crate) playback_speed: f64,
-    /// Maximum segment duration across the currently selected media playlists.
-    pub(crate) max_target_segment_duration: Option<f64>,
+    /// Content-wide maximum observed target duration, retained while playlists load.
+    /// Used to calibrate BOLA thresholds, not to estimate a candidate's download time.
+    pub(crate) abr_reference_segment_duration: Option<f64>,
 }
 
 /// Factor with which we multiply bandwidth estimates to ensure a safe variant
@@ -116,7 +117,7 @@ impl AdaptiveQualitySelector {
                 safe_variant_id: throughput_id,
             });
         };
-        let segment_duration = playback.max_target_segment_duration.unwrap_or(0.);
+        let segment_duration = playback.abr_reference_segment_duration.unwrap_or(0.);
         if !segment_duration.is_finite() || segment_duration <= 0. {
             // Missing enough information for the buffer-based estimate, exiting with throughput
             // choice
@@ -334,13 +335,13 @@ mod tests {
 
     fn playback_conditions(
         buffer_level: f64,
-        max_target_segment_duration: Option<f64>,
+        abr_reference_segment_duration: Option<f64>,
     ) -> PlaybackConditions {
         PlaybackConditions {
             buffer_level: Some(buffer_level),
             buffer_goal: 30.,
             playback_speed: 1.,
-            max_target_segment_duration,
+            abr_reference_segment_duration,
         }
     }
 
@@ -409,7 +410,7 @@ high.m3u8\n",
             buffer_level: None,
             buffer_goal: f64::NAN,
             playback_speed: f64::NAN,
-            max_target_segment_duration: None,
+            abr_reference_segment_duration: None,
         };
         let selected = selector
             .select_variant(&variants[1..2], None, &playback)

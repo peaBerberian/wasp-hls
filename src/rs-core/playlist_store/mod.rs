@@ -60,6 +60,11 @@ pub(crate) struct PlaylistStore {
 
     /// Probe metadata inferred for currently known multivariant media playlists.
     multivariant_media_info: HashMap<MediaPlaylistPermanentId, ExternalMediaInfo>,
+
+    /// Maximum positive, finite target duration observed for this content's audio/video
+    /// playlists since this store was created. Retained when playlists are deselected
+    /// or their cached contents are invalidated.
+    max_observed_target_duration: Option<f64>,
 }
 
 impl PlaylistStore {
@@ -68,6 +73,12 @@ impl PlaylistStore {
         if matches!(&playlist, TopLevelPlaylist::Multivariant(pl) if pl.all_variants().is_empty()) {
             return Err(PlaylistStoreError::NoInitialVariant);
         }
+
+        let max_observed_target_duration = match &playlist {
+            TopLevelPlaylist::DirectMedia(playlist) => Some(playlist.playlist().target_duration())
+                .filter(|duration| duration.is_finite() && *duration > 0.),
+            TopLevelPlaylist::Multivariant(_) => None,
+        };
 
         Ok(Self {
             playlist,
@@ -79,6 +90,7 @@ impl PlaylistStore {
             multivariant_support_resolved: false,
             variant_support: HashMap::new(),
             multivariant_media_info: HashMap::new(),
+            max_observed_target_duration,
         })
     }
 
@@ -182,14 +194,22 @@ impl PlaylistStore {
             }
             _ => None,
         };
-        match &mut self.playlist {
+        let media_playlist = match &mut self.playlist {
             TopLevelPlaylist::Multivariant(playlist) => {
                 playlist.update_media_playlist(id, media_playlist_data, url, sync_playlist_id)
             }
             TopLevelPlaylist::DirectMedia(playlist) => {
                 playlist.update_media_playlist(id, media_playlist_data, url, sync_playlist_id)
             }
+        }?;
+        let duration = media_playlist.target_duration();
+        if duration.is_finite() && duration > 0. {
+            self.max_observed_target_duration = Some(
+                self.max_observed_target_duration
+                    .map_or(duration, |known| known.max(duration)),
+            );
         }
+        Ok(media_playlist)
     }
 
     /// Get the codec string of the current playlist associated to this media type if known.
@@ -405,6 +425,14 @@ impl PlaylistStore {
             (Some(a), None) => Some(a),
             (None, Some(v)) => Some(v),
         }
+    }
+
+    /// Maximum positive, finite target duration, in seconds, encountered across this
+    /// content's audio/video playlists since this store was created.
+    /// Returns `None` until a valid duration has been observed. Deselection and cache
+    /// invalidation do not discard previously observed durations.
+    pub(crate) fn max_observed_target_duration(&self) -> Option<f64> {
+        self.max_observed_target_duration
     }
 
     /// Get the maximum target duration considered currently for both audio+video.
@@ -1399,12 +1427,99 @@ video.m3u8
                 buffer_level: Some(0.),
                 buffer_goal: 30.,
                 playback_speed: 1.,
-                max_target_segment_duration: store.segment_target_duration(),
+                abr_reference_segment_duration: store.max_observed_target_duration(),
             },
         ) {
             store.update_adaptive_variant(selection.best_variant_id);
         }
         store
+    }
+
+    #[test]
+    fn maximum_observed_target_duration_survives_live_cache_invalidation() {
+        let playlist = TopLevelPlaylist::parse(
+            b"#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1000\nlow.m3u8\n#EXT-X-STREAM-INF:BANDWIDTH=2000\nhigh.m3u8\n",
+            parse_url("https://example.com/master.m3u8"),
+        )
+        .unwrap();
+        let mut store = playlist_store_with_variant(playlist, 1_500.);
+        let low_id = store.available_variants()[0].id();
+        let high_id = store.available_variants()[1].id();
+        let low_playlist_id = *store.media_playlist_id_for(MediaType::Video).unwrap();
+        assert_eq!(store.max_observed_target_duration(), None);
+
+        assert!(store
+            .update_media_playlist(
+                &low_playlist_id,
+                b"invalid playlist".as_slice(),
+                parse_url("https://example.com/low.m3u8"),
+            )
+            .is_err());
+        assert_eq!(store.max_observed_target_duration(), None);
+
+        store
+            .update_media_playlist(
+                &low_playlist_id,
+                b"#EXTM3U\n#EXT-X-TARGETDURATION:6\n#EXTINF:6,\nseg.ts\n".as_slice(),
+                parse_url("https://example.com/low.m3u8"),
+            )
+            .unwrap();
+        assert_eq!(store.max_observed_target_duration(), Some(6.));
+
+        store.set_variant(high_id);
+        assert_eq!(store.segment_target_duration(), None);
+        assert_eq!(store.max_observed_target_duration(), Some(6.));
+        let high_playlist_id = *store.media_playlist_id_for(MediaType::Video).unwrap();
+        store
+            .update_media_playlist(
+                &high_playlist_id,
+                b"#EXTM3U\n#EXT-X-TARGETDURATION:4\n#EXTINF:4,\nseg.ts\n".as_slice(),
+                parse_url("https://example.com/high.m3u8"),
+            )
+            .unwrap();
+        assert_eq!(store.segment_target_duration(), Some(4.));
+        assert_eq!(store.max_observed_target_duration(), Some(6.));
+
+        store.set_variant(low_id);
+        assert!(!store.has_loaded_media_playlist(MediaType::Video));
+        assert_eq!(store.segment_target_duration(), None);
+        assert_eq!(store.max_observed_target_duration(), Some(6.));
+        for duration in [8, 4] {
+            let media =
+                format!("#EXTM3U\n#EXT-X-TARGETDURATION:{duration}\n#EXTINF:{duration},\nseg.ts\n");
+            store
+                .update_media_playlist(
+                    &low_playlist_id,
+                    media.as_bytes(),
+                    parse_url("https://example.com/low.m3u8"),
+                )
+                .unwrap();
+            assert_eq!(store.segment_target_duration(), Some(duration as f64));
+            assert_eq!(store.max_observed_target_duration(), Some(8.));
+        }
+    }
+
+    #[test]
+    fn maximum_observed_target_duration_is_initialized_and_scoped_to_its_content() {
+        let direct_playlist = TopLevelPlaylist::parse(
+            b"#EXTM3U\n#EXT-X-TARGETDURATION:4\n#EXTINF:4,\nseg.ts\n#EXT-X-ENDLIST\n",
+            parse_url("https://example.com/direct.m3u8"),
+        )
+        .unwrap();
+        let store = PlaylistStore::try_new(direct_playlist).unwrap();
+        assert_eq!(store.max_observed_target_duration(), Some(4.));
+        assert_eq!(
+            store.direct_media_playlist().unwrap().1.target_duration(),
+            4.
+        );
+
+        let playlist = TopLevelPlaylist::parse(
+            b"#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1000\nvideo.m3u8\n",
+            parse_url("https://example.com/master.m3u8"),
+        )
+        .unwrap();
+        let new_store = PlaylistStore::try_new(playlist).unwrap();
+        assert_eq!(new_store.max_observed_target_duration(), None);
     }
 
     #[test]
@@ -1567,7 +1682,7 @@ fr-high.m3u8
                     buffer_level: Some(0.),
                     buffer_goal: 30.,
                     playback_speed: 1.,
-                    max_target_segment_duration: store.segment_target_duration(),
+                    abr_reference_segment_duration: store.max_observed_target_duration(),
                 },
             )
             .unwrap();
@@ -1619,7 +1734,7 @@ fr-high.m3u8
                     buffer_level: Some(0.),
                     buffer_goal: 30.,
                     playback_speed: 1.,
-                    max_target_segment_duration: store.segment_target_duration(),
+                    abr_reference_segment_duration: store.max_observed_target_duration(),
                 },
             )
             .unwrap();
