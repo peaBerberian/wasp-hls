@@ -33,7 +33,7 @@ mod startup;
 /// Describe the strategy that should be taken when switching from a video/text/audio media to
 /// another.
 #[derive(Clone, Copy)]
-enum MediaTransitionMode {
+enum MediaPlaylistUpdateMode {
     /// Don't do anything with previous request and buffer linked to the previous media of the same
     /// type.
     Seamless,
@@ -44,17 +44,13 @@ enum MediaTransitionMode {
     AbortRequestsAndFlushBuffer,
 }
 
-/// Describe the status of a "transition" that should be performed for a media type.
-///
-/// A transition is a disruptive action this object defines, that has to be done relative to a
-/// media type (audio / video /text).
-struct MediaTransition {
-    /// Type concerned by the transition.
+/// Describe a change of media playlist for a given media type (audio/video/text) and how the
+/// player should handle the transition.
+struct MediaPlaylistUpdate {
+    /// Type concerned by the change.
     media_type: MediaType,
-    /// Whether the MediaPlaylist itself changed and its related state should be updated.
-    media_playlist_changed: bool,
     /// How the player should handle that transition.
-    mode: MediaTransitionMode,
+    mode: MediaPlaylistUpdateMode,
 }
 
 impl Dispatcher {
@@ -122,26 +118,30 @@ impl Dispatcher {
                             is_audio_track_distinct,
                         );
                     }
-                    let (changed_media_types, variant_changed) = match updates {
-                        VariantUpdateResult::Improved(media_types)
-                        | VariantUpdateResult::EqualOrUnknown(media_types)
-                        | VariantUpdateResult::Worsened(media_types) => (media_types, true),
-                        VariantUpdateResult::Unchanged => (vec![], false),
-                    };
-                    let media_transitions = [MediaType::Audio, MediaType::Video]
-                        .into_iter()
-                        .filter_map(|media_type| {
-                            let media_playlist_changed = changed_media_types.contains(&media_type);
-                            (media_playlist_changed
-                                || self.media_element_ref.has_buffer(media_type))
-                            .then_some(MediaTransition {
-                                media_type,
-                                media_playlist_changed,
-                                mode: MediaTransitionMode::AbortRequestsAndFlushBuffer,
-                            })
-                        })
+                    let media_playlist_updates =
+                        Self::media_playlist_updates_for_variant(updates, true);
+                    let variant_changed = media_playlist_updates.is_some();
+                    let media_playlist_updates = media_playlist_updates.unwrap_or_default();
+                    let changed_media_types = media_playlist_updates
+                        .iter()
+                        .map(|update| update.media_type)
                         .collect::<Vec<_>>();
-                    self.apply_media_transitions(media_transitions);
+                    let has_media_playlist_updates = !media_playlist_updates.is_empty();
+                    for update in media_playlist_updates {
+                        self.apply_media_playlist_update(update);
+                    }
+                    for media_type in [MediaType::Audio, MediaType::Video] {
+                        if self.media_element_ref.has_buffer(media_type)
+                            && !changed_media_types.contains(&media_type)
+                        {
+                            self.abort_segment_requests_with_type(media_type);
+                            self.flush_media_buffer(media_type);
+                        }
+                    }
+                    if has_media_playlist_updates {
+                        self.clean_up_playlist_refresh_timers();
+                    }
+                    self.check_segments_to_request();
                     if variant_changed {
                         if let Some(pl_store) = self.playlist_store.as_ref() {
                             jsAnnounceVariantUpdate(pl_store.current_variant_id());
@@ -232,24 +232,21 @@ impl Dispatcher {
 
                 // We want to abort and flush audio here, independently of the variant update, as
                 // we're in an audio-track-setting context.
-                let mut media_transitions = vec![MediaTransition {
+                let mut media_pl_updates = vec![MediaPlaylistUpdate {
                     media_type: MediaType::Audio,
-                    media_playlist_changed: true,
-                    mode: MediaTransitionMode::AbortRequestsAndFlushBuffer,
+                    mode: MediaPlaylistUpdateMode::AbortRequestsAndFlushBuffer,
                 }];
 
                 // Complete with what media update was necessary from the potential variant update
                 let variant_changed = match variant_update {
                     Some(variant_update_result) => {
-                        match Self::media_transitions_for_variant_update(
-                            variant_update_result,
-                            false,
-                        ) {
-                            Some(transitions) => {
+                        match Self::media_playlist_updates_for_variant(variant_update_result, false)
+                        {
+                            Some(updates) => {
                                 // The audio update is already present with the strongest required
                                 // mode. Only add the variant's other Media Playlist updates.
-                                media_transitions.extend(
-                                    transitions
+                                media_pl_updates.extend(
+                                    updates
                                         .into_iter()
                                         .filter(|update| update.media_type != MediaType::Audio),
                                 );
@@ -260,7 +257,7 @@ impl Dispatcher {
                     }
                     None => false,
                 };
-                self.apply_media_transitions(media_transitions);
+                self.handle_media_playlist_updates(media_pl_updates);
                 if variant_changed {
                     if let Some(pl_store) = self.playlist_store.as_ref() {
                         jsAnnounceVariantUpdate(pl_store.current_variant_id());
@@ -1122,10 +1119,10 @@ impl Dispatcher {
 
     /// Perform all actions that should be commonly taken after the current variant changes.
     fn handle_variant_update(&mut self, result: VariantUpdateResult, flush: bool) {
-        let Some(transitions) = Self::media_transitions_for_variant_update(result, flush) else {
+        let Some(updates) = Self::media_playlist_updates_for_variant(result, flush) else {
             return;
         };
-        self.apply_media_transitions(transitions);
+        self.handle_media_playlist_updates(updates);
         if let Some(pl_store) = self.playlist_store.as_ref() {
             jsAnnounceVariantUpdate(pl_store.current_variant_id());
         }
@@ -1145,10 +1142,10 @@ impl Dispatcher {
     /// Returns `None` if the variant stayed unchanged. Otherwise returns the Media Playlist
     /// updates to perform. The returned vector may be empty if the variant changed but points to
     /// the same Media Playlists.
-    fn media_transitions_for_variant_update(
+    fn media_playlist_updates_for_variant(
         result: VariantUpdateResult,
         flush: bool,
-    ) -> Option<Vec<MediaTransition>> {
+    ) -> Option<Vec<MediaPlaylistUpdate>> {
         let (changed_media_types, has_worsened) = match result {
             VariantUpdateResult::Improved(media_types) => (media_types, false),
             VariantUpdateResult::EqualOrUnknown(media_types) => (media_types, false),
@@ -1156,87 +1153,86 @@ impl Dispatcher {
             VariantUpdateResult::Unchanged => return None,
         };
         let mode = if flush {
-            MediaTransitionMode::AbortRequestsAndFlushBuffer
+            MediaPlaylistUpdateMode::AbortRequestsAndFlushBuffer
         } else if has_worsened {
-            MediaTransitionMode::AbortRequests
+            MediaPlaylistUpdateMode::AbortRequests
         } else {
-            MediaTransitionMode::Seamless
+            MediaPlaylistUpdateMode::Seamless
         };
         Some(
             changed_media_types
                 .into_iter()
-                .map(|media_type| MediaTransition {
-                    media_type,
-                    media_playlist_changed: true,
-                    mode,
-                })
+                .map(|media_type| MediaPlaylistUpdate { media_type, mode })
                 .collect(),
         )
     }
 
-    /// Apply a batch of media transitions and schedule segments once after all changes have been
-    /// handled.
-    fn apply_media_transitions(&mut self, transitions: impl IntoIterator<Item = MediaTransition>) {
+    /// Apply a batch of Media Playlist updates and schedule segments once after all changes have
+    /// been handled.
+    fn handle_media_playlist_updates(
+        &mut self,
+        updates: impl IntoIterator<Item = MediaPlaylistUpdate>,
+    ) {
         if self.playlist_store.is_none() {
             return;
         }
 
-        let mut has_media_playlist_updates = false;
-        for MediaTransition {
-            media_type,
-            media_playlist_changed,
-            mode,
-        } in transitions
-        {
-            if media_playlist_changed {
-                has_media_playlist_updates = true;
-                log_info!("Core: {} MediaPlaylist changed", media_type);
-                self.ready_probe_segments.clear_media_type(media_type);
-            }
-
-            if !matches!(mode, MediaTransitionMode::Seamless) {
-                self.abort_segment_requests_with_type(media_type);
-            }
-            if matches!(mode, MediaTransitionMode::AbortRequestsAndFlushBuffer) {
-                if let Err(e) = self.media_element_ref.flush(media_type) {
-                    log_warn!(
-                        "Could not remove data from the previous {media_type} buffer: {}",
-                        e
-                    );
-                }
-                self.segment_selectors
-                    .get_mut(media_type)
-                    .restart_from_position(self.media_element_ref.wanted_position() - 0.2);
-            }
-
-            let playlist_to_fetch = if media_playlist_changed {
-                self.playlist_store.as_ref().and_then(|pl_store| {
-                    if pl_store.has_loaded_media_playlist(media_type) {
-                        None
-                    } else {
-                        let id = *pl_store.media_playlist_id_for(media_type)?;
-                        let url = pl_store.media_playlist_url(&id)?.clone();
-                        Some((id, url))
-                    }
-                })
-            } else {
-                None
-            };
-
-            if let Some((id, url)) = playlist_to_fetch {
-                use PlaylistFileType::*;
-                log_debug!("Core: Media changed, requesting its media playlist");
-                let playlist_type = MediaPlaylist { id, media_type };
-                if !self.requester.is_requesting_playlist(&url, &playlist_type) {
-                    self.requester.fetch_playlist(url, playlist_type);
-                }
-            }
+        let mut has_updates = false;
+        for update in updates {
+            has_updates = true;
+            self.apply_media_playlist_update(update);
         }
-
-        if has_media_playlist_updates {
+        if has_updates {
             self.clean_up_playlist_refresh_timers();
         }
         self.check_segments_to_request();
+    }
+
+    /// Apply the local consequences of a Media Playlist change.
+    ///
+    /// Batch-level cleanup and segment scheduling are left to the caller.
+    fn apply_media_playlist_update(&mut self, update: MediaPlaylistUpdate) {
+        let MediaPlaylistUpdate { media_type, mode } = update;
+        log_info!("Core: {} MediaPlaylist changed", media_type);
+        self.ready_probe_segments.clear_media_type(media_type);
+
+        if !matches!(mode, MediaPlaylistUpdateMode::Seamless) {
+            self.abort_segment_requests_with_type(media_type);
+        }
+        if matches!(mode, MediaPlaylistUpdateMode::AbortRequestsAndFlushBuffer) {
+            self.flush_media_buffer(media_type);
+        }
+
+        let playlist_to_fetch = self.playlist_store.as_ref().and_then(|pl_store| {
+            if pl_store.has_loaded_media_playlist(media_type) {
+                None
+            } else {
+                let id = *pl_store.media_playlist_id_for(media_type)?;
+                let url = pl_store.media_playlist_url(&id)?.clone();
+                Some((id, url))
+            }
+        });
+
+        if let Some((id, url)) = playlist_to_fetch {
+            use PlaylistFileType::*;
+            log_debug!("Core: Media changed, requesting its media playlist");
+            let playlist_type = MediaPlaylist { id, media_type };
+            if !self.requester.is_requesting_playlist(&url, &playlist_type) {
+                self.requester.fetch_playlist(url, playlist_type);
+            }
+        }
+    }
+
+    fn flush_media_buffer(&mut self, media_type: MediaType) {
+        if let Err(e) = self.media_element_ref.flush(media_type) {
+            log_warn!(
+                "Could not remove data from the previous {media_type} buffer: {}",
+                e
+            );
+        }
+        self.segment_selectors
+            .get_mut(media_type)
+            .restart_from_position(self.media_element_ref.wanted_position() - 0.2);
     }
 
     /// Method called once a segment request ended with success
