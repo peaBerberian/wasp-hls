@@ -516,17 +516,18 @@ impl PlaylistStore {
     /// To be able to change again the variant, you can call `lock_variant` again or
     /// you can call the `unlock_variant` method.
     ///
-    /// The returned option is `None` if the `variant_id` given is not found to correspond
-    /// to any existing variant. It contains the corresponding update when set to the `Some`
-    /// variant.
+    /// Returns whether the variant was newly locked, was already locked, or could not be found.
     pub(crate) fn lock_variant(&mut self, variant_id: u32) -> LockVariantResponse {
-        if self.current_variant_id.is_none() {
+        let Some(current_variant_id) = self.current_variant_id else {
             return LockVariantResponse::NoVariantWithId;
-        }
+        };
         let variants = self.compatible_variants();
         let pos = variants.iter().find(|x| x.id() == variant_id);
 
         if pos.is_some() {
+            if self.is_variant_locked && current_variant_id == variant_id {
+                return LockVariantResponse::AlreadyLocked;
+            }
             self.is_variant_locked = true;
             let prev_track_id = self
                 .fixed_audio_track
@@ -1333,6 +1334,8 @@ pub(crate) enum SetAudioTrackResponse {
 pub(crate) enum LockVariantResponse {
     /// Error status for when no variant with the given id was found.
     NoVariantWithId,
+    /// The exact same lock was already there.
+    AlreadyLocked,
     /// The variant has been locked.
     VariantLocked {
         /// Side-effects of that change, in terms of media playlists loaded in consequence
@@ -1543,6 +1546,10 @@ high.m3u8
         assert!(matches!(
             store.lock_variant(high_id),
             LockVariantResponse::VariantLocked { .. }
+        ));
+        assert!(matches!(
+            store.lock_variant(high_id),
+            LockVariantResponse::AlreadyLocked
         ));
         assert_eq!(store.compatible_variants().len(), 2);
         store.update_adaptive_variant(low_id);
