@@ -220,6 +220,9 @@ ${baseUrl}video.m3u8
         const variantUpdates = eventListener(ctx.player, "variantUpdate");
         const lockUpdates = eventListener(ctx.player, "variantLockUpdate");
 
+        // The following warning-producing track request acts as a worker-ordering barrier for
+        // this repeated lock request.
+        ctx.player.lockVariant(initialVariant.id);
         for (const trackId of [frenchTrack.id, frenchTrack.id, 0xfffffffe]) {
           const previousWarningCount = warnings.getCurrentCount();
           const warningPromise = warnings.awaitNext();
