@@ -538,7 +538,7 @@ impl PlaylistStore {
                 .or_else(|| self.current_audio_track_id());
             let audio_track_change = match (prev_track_id, new_track_id) {
                 (Some(prev_id), Some(new_id)) => {
-                    if prev_id == new_id {
+                    if prev_id != new_id {
                         Some(new_id)
                     } else {
                         None
@@ -1340,7 +1340,7 @@ pub(crate) enum LockVariantResponse {
     VariantLocked {
         /// Side-effects of that change, in terms of media playlists loaded in consequence
         updates: VariantUpdateResult,
-        /// If `Some(true)`, the new audio media playlist is considered as not part of the same
+        /// If `Some(x)`, the new audio media playlist is considered as not part of the same
         /// "audio track" as the previous one.
         audio_track_change: Option<u32>,
     },
@@ -1561,6 +1561,52 @@ high.m3u8
         assert_eq!(store.current_variant_id(), Some(high_id));
         store.update_adaptive_variant(low_id);
         assert_eq!(store.current_variant_id(), Some(low_id));
+    }
+
+    #[test]
+    fn locking_variant_only_reports_logical_audio_track_changes() {
+        let multivariant = r#"#EXTM3U
+#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="low",NAME="English",LANGUAGE="en",DEFAULT=YES,URI="en-low.m3u8"
+#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="high",NAME="English",LANGUAGE="en",URI="en-high.m3u8"
+#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="high",NAME="French",LANGUAGE="fr",DEFAULT=YES,URI="fr-high.m3u8"
+#EXT-X-STREAM-INF:BANDWIDTH=1000,AUDIO="low"
+low.m3u8
+#EXT-X-STREAM-INF:BANDWIDTH=2000,AUDIO="high"
+high.m3u8
+"#;
+        let playlist = TopLevelPlaylist::parse(
+            multivariant.as_bytes(),
+            parse_url("https://example.com/master.m3u8"),
+        )
+        .unwrap();
+        let mut store = PlaylistStore::try_new(playlist).unwrap();
+        let low_id = store.available_variants()[0].id();
+        let high_id = store.available_variants()[1].id();
+        let french_id = store
+            .audio_tracks()
+            .iter()
+            .find(|track| track.name() == "French")
+            .unwrap()
+            .id();
+        store.set_variant(low_id);
+
+        let LockVariantResponse::VariantLocked {
+            audio_track_change, ..
+        } = store.lock_variant(high_id)
+        else {
+            panic!("expected the high variant to be locked");
+        };
+        assert_eq!(audio_track_change, Some(french_id));
+
+        store.unlock_variant();
+        store.set_audio_track(Some(french_id));
+        let LockVariantResponse::VariantLocked {
+            audio_track_change, ..
+        } = store.lock_variant(high_id)
+        else {
+            panic!("expected the high variant to be locked");
+        };
+        assert_eq!(audio_track_change, None);
     }
 
     #[test]
