@@ -89,7 +89,6 @@ impl Dispatcher {
     /// playing that one.
     pub(super) fn lock_variant_core(&mut self, variant_id: u32) {
         if let Some(pl_store) = self.playlist_store.as_mut() {
-            let is_audio_track_distinct = pl_store.current_audio_track_id().is_some();
             match pl_store.lock_variant(variant_id) {
                 LockVariantResponse::AlreadyLocked => {}
                 LockVariantResponse::NoVariantWithId => {
@@ -112,10 +111,11 @@ impl Dispatcher {
                             .set_fast_quality_switching(media_type, true);
                     }
                     if let Some(track_id) = audio_track_change {
+                        let is_audio_track_selected = pl_store.fixed_audio_track_id().is_some();
                         jsAnnounceTrackUpdate(
                             MediaType::Audio,
                             Some(track_id),
-                            is_audio_track_distinct,
+                            is_audio_track_selected,
                         );
                     }
                     let (changed_media_types, variant_changed) = match updates {
