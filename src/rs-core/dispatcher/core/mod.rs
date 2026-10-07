@@ -128,51 +128,19 @@ impl Dispatcher {
                         log_info!("Core: {} MediaPlaylist changed", media_type);
                         self.ready_probe_segments.clear_media_type(media_type);
                         self.abort_segment_requests_with_type(media_type);
-                        if let Err(e) = self.media_element_ref.flush(media_type) {
-                            log_warn!(
-                                "Could not remove data from the previous {media_type} buffer: {}",
-                                e
-                            );
-                        }
-                        self.segment_selectors
-                            .get_mut(media_type)
-                            .restart_from_position(self.media_element_ref.wanted_position() - 0.2);
-
-                        let playlist_to_fetch = self.playlist_store.as_ref().and_then(|pl_store| {
-                            if pl_store.has_loaded_media_playlist(media_type) {
-                                None
-                            } else {
-                                let id = *pl_store.media_playlist_id_for(media_type)?;
-                                let url = pl_store.media_playlist_url(&id)?.clone();
-                                Some((id, url))
-                            }
-                        });
-
-                        if let Some((id, url)) = playlist_to_fetch {
-                            use PlaylistFileType::*;
-                            log_debug!("Core: Media changed, requesting its media playlist");
-                            let playlist_type = MediaPlaylist { id, media_type };
-                            if !self.requester.is_requesting_playlist(&url, &playlist_type) {
-                                self.requester.fetch_playlist(url, playlist_type);
-                            }
-                        }
+                        self.flush_media_buffer(media_type);
+                        self.request_current_media_playlist_if_needed(media_type);
                     }
+                    // TODO: Avoid flushing an unchanged media type when its buffer already only
+                    // contains data from the newly-locked variant. `VariantUpdateResult::Unchanged`
+                    // may still hide older-quality buffered data, but when it does not this causes
+                    // an unnecessary rebuffer and refetch.
                     for media_type in [MediaType::Audio, MediaType::Video] {
                         if self.media_element_ref.has_buffer(media_type)
                             && !changed_media_types.contains(&media_type)
                         {
                             self.abort_segment_requests_with_type(media_type);
-                            if let Err(e) = self.media_element_ref.flush(media_type) {
-                                log_warn!(
-                                    "Could not remove data from the previous {media_type} buffer: {}",
-                                    e
-                                );
-                            }
-                            self.segment_selectors
-                                .get_mut(media_type)
-                                .restart_from_position(
-                                    self.media_element_ref.wanted_position() - 0.2,
-                                );
+                            self.flush_media_buffer(media_type);
                         }
                     }
                     if !changed_media_types.is_empty() {
@@ -1238,41 +1206,48 @@ impl Dispatcher {
                 self.abort_segment_requests_with_type(media_type);
             }
             if matches!(mode, MediaPlaylistUpdateMode::AbortRequestsAndFlushBuffer) {
-                if let Err(e) = self.media_element_ref.flush(media_type) {
-                    log_warn!(
-                        "Could not remove data from the previous {media_type} buffer: {}",
-                        e
-                    );
-                }
-                self.segment_selectors
-                    .get_mut(media_type)
-                    .restart_from_position(self.media_element_ref.wanted_position() - 0.2);
+                self.flush_media_buffer(media_type);
             }
-
-            let playlist_to_fetch = self.playlist_store.as_ref().and_then(|pl_store| {
-                if pl_store.has_loaded_media_playlist(media_type) {
-                    None
-                } else {
-                    let id = *pl_store.media_playlist_id_for(media_type)?;
-                    let url = pl_store.media_playlist_url(&id)?.clone();
-                    Some((id, url))
-                }
-            });
-
-            if let Some((id, url)) = playlist_to_fetch {
-                use PlaylistFileType::*;
-                log_debug!("Core: Media changed, requesting its media playlist");
-                let playlist_type = MediaPlaylist { id, media_type };
-                if !self.requester.is_requesting_playlist(&url, &playlist_type) {
-                    self.requester.fetch_playlist(url, playlist_type);
-                }
-            }
+            self.request_current_media_playlist_if_needed(media_type);
         }
 
         if has_updates {
             self.clean_up_playlist_refresh_timers();
         }
         self.check_segments_to_request();
+    }
+
+    fn flush_media_buffer(&mut self, media_type: MediaType) {
+        if let Err(e) = self.media_element_ref.flush(media_type) {
+            log_warn!(
+                "Could not remove data from the previous {media_type} buffer: {}",
+                e
+            );
+        }
+        self.segment_selectors
+            .get_mut(media_type)
+            .restart_from_position(self.media_element_ref.wanted_position() - 0.2);
+    }
+
+    fn request_current_media_playlist_if_needed(&mut self, media_type: MediaType) {
+        let playlist_to_fetch = self.playlist_store.as_ref().and_then(|pl_store| {
+            if pl_store.has_loaded_media_playlist(media_type) {
+                None
+            } else {
+                let id = *pl_store.media_playlist_id_for(media_type)?;
+                let url = pl_store.media_playlist_url(&id)?.clone();
+                Some((id, url))
+            }
+        });
+
+        if let Some((id, url)) = playlist_to_fetch {
+            use PlaylistFileType::*;
+            log_debug!("Core: Media changed, requesting its media playlist");
+            let playlist_type = MediaPlaylist { id, media_type };
+            if !self.requester.is_requesting_playlist(&url, &playlist_type) {
+                self.requester.fetch_playlist(url, playlist_type);
+            }
+        }
     }
 
     /// Method called once a segment request ended with success

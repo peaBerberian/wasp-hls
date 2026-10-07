@@ -94,6 +94,14 @@ ${baseUrl}high.m3u8
           );
           ctx.player.lockVariant(highVariant.id);
           await locked;
+          const restartedHighRequest = await ctx.workerHandle.telemetry.waitFor(
+            (event) =>
+              event.type === "fetch-start" &&
+              event.ruleId === "high-segments" &&
+              event.requestId > highRequest.requestId &&
+              segmentStart(event) < originalEnd,
+          );
+          expect(segmentStart(restartedHighRequest)).toBeLessThan(originalEnd);
         }
 
         const seekPosition = 40;
