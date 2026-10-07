@@ -290,7 +290,7 @@ impl NextSegmentSelector {
         segment_list: &'a SegmentList,
         context: &SegmentQualityContext,
         inventory: &[BufferedChunk],
-    ) -> NeededSegmentInfo<'a> {
+    ) -> MostNeededSegmentInfo<'a> {
         let new_media_id = context.media_id();
         let previous_media_id = self.last_media_id;
         let has_quality_changed =
@@ -579,12 +579,22 @@ enum InitializationSegmentSelectorStatus {
     Validated(f64),
 }
 
+pub(crate) struct MostNeededSegmentInfo<'a> {
+    // Segment(s) that should be loaded right now, as per the NextSegmentSelector.
+    // `None` if either no segment should be loaded or if we don't have enough information yet.
+    needed_segments: Option<NeededSegmentInfo<'a>>,
+    // Whether a media playlist needs to be loaded for the next segments to load.
+    needed_media_playlist: Option<u32>,
+}
+
 /// Segment information for segments that may now be loaded as returned by the
 /// `NextSegmentSelector`.
 ///
 /// Its lifetime is generally linked to the `MediaPlaylist` to which those information are
 /// initially linked to.
 pub(crate) struct NeededSegmentInfo<'a> {
+    // Variant linked to the segment(s) that should be loaded.
+    variant_id: u32,
     /// The initialization segment that should now be needed, corresponding to the inner
     /// information.
     ///
