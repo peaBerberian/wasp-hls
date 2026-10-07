@@ -568,6 +568,7 @@ impl Requester {
         host_id: RequestId,
         has_timeouted: bool,
         status: Option<u32>,
+        // TODO: closure instead?
         allow_retry: bool,
     ) -> RetryResult<'_> {
         let reason = match (has_timeouted, status) {

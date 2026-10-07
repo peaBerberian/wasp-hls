@@ -1,5 +1,8 @@
 use super::super::segment_request_contexts::PendingSegmentRequest;
-use super::{sync_media_source_duration, utils, Dispatcher, PlayerReadyState, ReadyProbeSegment};
+use super::{
+    sync_media_source_duration, utils, Dispatcher, MediaPlaylistUpdateMode, PlayerReadyState,
+    ReadyProbeSegment,
+};
 use crate::media_element::SegmentPushMetadata;
 use crate::playlist_store::ProbeSegmentMetadata;
 use crate::{
@@ -80,7 +83,10 @@ fn ensure_ready_playlists(dispatcher: &mut Dispatcher, wanted_position: f64) -> 
                     .set_fast_quality_switching(media_type, allow_fast_switching);
             }
             jsAnnounceVariantUpdate(Some(variant_id));
-            dispatcher.handle_media_playlist_update(&changed_media_types, false, false);
+            dispatcher.handle_media_playlist_update(
+                &changed_media_types,
+                MediaPlaylistUpdateMode::Seamless,
+            );
             false
         }
         StartupStatus::NeedsProbes(probe_metadata) => {
