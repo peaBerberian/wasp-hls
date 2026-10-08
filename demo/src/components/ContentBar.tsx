@@ -18,7 +18,7 @@ export default React.memo(function ContentBar({
 }): React.JSX.Element {
   const nameEltId = React.useId();
   const [url, setUrl] = React.useState<string>(
-    "https://storage.googleapis.com/shaka-demo-assets/angel-one-hls/hls.m3u8",
+    "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
   );
   const [isContentListOpened, setIsContentListOpened] = React.useState(false);
   const loadContent = React.useCallback(() => {
@@ -91,12 +91,12 @@ export default React.memo(function ContentBar({
 
 const DEFAULT_CONTENT_LIST = [
   {
-    name: "Angel One (fmp4, multi-audio, ABR)",
-    url: "https://storage.googleapis.com/shaka-demo-assets/angel-one-hls/hls.m3u8",
-  },
-  {
     name: "Big Buck Bunny (mpeg-ts, ABR, 10s segments)",
     url: "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
+  },
+  {
+    name: "Big Buck Bunny The Dark Truth (fmp4, separate audio, ABR)",
+    url: "https://storage.googleapis.com/shaka-demo-assets/bbb-dark-truths-hls/hls.m3u8",
   },
   {
     name: "China documentary Arte (mpeg-ts, ABR, no playlist codec)",
