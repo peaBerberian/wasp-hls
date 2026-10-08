@@ -7,7 +7,7 @@ import type { WaspHlsPlayerConfig } from "../ts-common/types.ts";
  * @see WaspHlsPlayerConfig
  */
 const DEFAULT_CONFIG: WaspHlsPlayerConfig = {
-  bufferGoal: 15,
+  bufferGoal: 30,
   segmentMaxRetry: 5,
   segmentRequestTimeout: 20000,
   segmentBackoffBase: 300,

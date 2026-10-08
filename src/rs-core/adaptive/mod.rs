@@ -62,7 +62,7 @@ const BOLA_MAX_LOW_BUFFER: f64 = 10.0;
 
 const BOLA_UP_SWITCH_HYSTERESIS: f64 = 0.25;
 /// Spend at most this fraction of buffered playback time when raising quality above throughput.
-const BOLA_DOWNLOAD_BUFFER_FRACTION: f64 = 0.5;
+const BOLA_DOWNLOAD_BUFFER_FRACTION: f64 = 1.;
 /// Minimum playback lead after allowing for an overlapping segment at a rendition switch.
 const BOLA_MIN_SWITCH_LEAD_SECONDS: f64 = 5.;
 
@@ -737,7 +737,7 @@ high.m3u8\n",
             (1., 6.1, 2),
             (2., 6.5, 0),
             (2., 7., 0),
-            (2., 7.1, 1),
+            (2., 7.1, 2),
         ] {
             let playback = PlaybackConditions {
                 buffer_goal: buffer_level,
@@ -778,7 +778,7 @@ high.m3u8\n",
     fn best_variant_above_safe_picks_highest_score_that_fits_in_buffer_and_depends_on_playback_speed(
     ) {
         let playlist = TopLevelPlaylist::parse(
-            b"#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1000000,SCORE=1\nlow.m3u8\n#EXT-X-STREAM-INF:BANDWIDTH=8000000,SCORE=2\nmedium.m3u8\n#EXT-X-STREAM-INF:BANDWIDTH=3000000,SCORE=3\nhigh.m3u8\n#EXT-X-STREAM-INF:BANDWIDTH=12000000,SCORE=4\nhighest.m3u8\n",
+            b"#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1000000,SCORE=1\nlow.m3u8\n#EXT-X-STREAM-INF:BANDWIDTH=8000000,SCORE=2\nmedium.m3u8\n#EXT-X-STREAM-INF:BANDWIDTH=5000000,SCORE=3\nhigh.m3u8\n#EXT-X-STREAM-INF:BANDWIDTH=12000000,SCORE=4\nhighest.m3u8\n",
             Url::new("https://example.com/master.m3u8".to_string()),
         ).unwrap();
         let variants = variants(&playlist);
@@ -806,10 +806,10 @@ high.m3u8\n",
         let selector = AdaptiveQualitySelector::new(1_250_000.);
         for (buffer_level, current_position, expected_position) in [
             (29., 0, 1),
-            (24.1, 1, 1),
-            (23.9, 1, 0),
-            (20., 1, 0),
-            (16., 1, 0),
+            (12.1, 1, 1),
+            (11.9, 1, 0),
+            (10., 1, 0),
+            (9., 1, 0),
             (2., 1, 0),
         ] {
             let selected = selector
