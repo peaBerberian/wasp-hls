@@ -12,34 +12,37 @@ function AudioTrackSetting({
 }: {
   audioTrack: AudioTrackInfo | undefined;
   audioTrackList: AudioTrackInfo[];
-  isAuto: boolean;
-  updateAudioTrack: (t: AudioTrackInfo) => void;
+  updateAudioTrack: (t: AudioTrackInfo | undefined) => void;
 }): React.JSX.Element | null {
   const onSelectChange = React.useCallback(
     (evt: React.SyntheticEvent<HTMLSelectElement>) => {
-      if (audioTrackList.length <= 1) {
+      if (audioTrackList.length < 2) {
         return;
       }
       const index = +(evt.target as HTMLSelectElement).value;
-      const selected = audioTrackList[index];
-      updateAudioTrack(selected);
+      updateAudioTrack(index === 0 ? undefined : audioTrackList[index - 1]);
     },
     [audioTrackList],
   );
 
   const selectedIndex =
-    audioTrackList.length <= 1
+    audioTrack === undefined
       ? 0
-      : audioTrackList.findIndex((t) => t.id === audioTrack?.id);
+      : audioTrackList.findIndex((t) => t.id === audioTrack.id) + 1;
 
   const optionsEl = React.useMemo(() => {
-    return audioTrackList.map((t, index) => {
-      return (
-        <option key={t.id} value={index}>
-          {formatAudioTrack(t)}
-        </option>
-      );
-    });
+    return [
+      <option key="default" value={0}>
+        {"default"}
+      </option>,
+      ...audioTrackList.map((t, index) => {
+        return (
+          <option key={t.id} value={index + 1}>
+            {formatAudioTrack(t)}
+          </option>
+        );
+      }),
+    ];
   }, [audioTrack, audioTrackList]);
 
   if (audioTrackList.length === 0) {

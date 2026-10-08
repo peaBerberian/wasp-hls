@@ -104,8 +104,8 @@ function SettingsWindow({
   );
 
   const updateAudioTrack = React.useCallback(
-    (t: AudioTrackInfo) => {
-      player.setAudioTrack(t.id);
+    (t: AudioTrackInfo | undefined) => {
+      player.setAudioTrack(t?.id ?? null);
       setAudioTrack(t);
     },
     [player],
@@ -116,7 +116,6 @@ function SettingsWindow({
       <AudioTrackSetting
         audioTrack={audioTrack}
         audioTrackList={audioTrackList}
-        isAuto={isAutoVariant}
         updateAudioTrack={updateAudioTrack}
       />
       <VariantSetting

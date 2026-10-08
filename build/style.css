@@ -468,6 +468,10 @@ body {
   text-align: left;
   cursor: pointer;
 }
+.setting-value:disabled {
+  color: #aaa;
+  cursor: default;
+}
 .setting-value option {
   background-color: #000;
   color: #fff;
