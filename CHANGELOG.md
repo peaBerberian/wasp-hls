@@ -11,6 +11,10 @@
 - Actually send `audioTrackUpdate` if the audio track switched from one audio track to another (or none) on a `lockVariant` call
 - Don't needlessly send `audioTrackUpdate` if the audio track did not change on a `lockVariant` call
 
+### Other
+
+- Make `bufferGoal` `30` by default.
+
 ## v0.5.0 (2025-06-01)
 
 ### Changes
