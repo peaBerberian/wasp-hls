@@ -10,10 +10,14 @@
 
 - Actually send `audioTrackUpdate` if the audio track switched from one audio track to another (or none) on a `lockVariant` call
 - Don't needlessly send `audioTrackUpdate` if the audio track did not change on a `lockVariant` call
+- Be resilient to non-UTF-8 HLS playlists
 
 ### Other
 
 - Make `bufferGoal` `30` by default.
+- WebAssembly compilation now always target the initial WebAssembly browser release (a.k.a. "MVP") to maximize support
+- Embedded WebAssembly is now embedded through a Base64 string instead of number array for initialization performance reasons
+- tests: Begin automatically checking for performance regressions / improvements
 
 ## v0.5.0 (2025-06-01)
 
