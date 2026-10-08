@@ -19,8 +19,8 @@ use crate::{
     media_element::SegmentPushMetadata,
     parser::{TopLevelPlaylist, TopLevelPlaylistParsingError},
     playlist_store::{
-        LockVariantResponse, MediaPlaylistPermanentId, PlaylistStore, ProbeSegmentMetadata,
-        SetAudioTrackResponse, VariantUpdateResult,
+        AudioTrackChange, LockVariantResponse, MediaPlaylistPermanentId, PlaylistStore,
+        ProbeSegmentMetadata, SetAudioTrackResponse, VariantUpdateResult,
     },
     requester::{
         FinishedRequestType, PlaylistFileType, PlaylistRequestInfo, RetryResult, SegmentRequestInfo,
@@ -110,13 +110,9 @@ impl Dispatcher {
                         self.segment_selectors
                             .set_fast_quality_switching(media_type, true);
                     }
-                    if let Some(track_id) = audio_track_change {
+                    if let AudioTrackChange::Changed(track_id) = audio_track_change {
                         let is_audio_track_selected = pl_store.fixed_audio_track_id().is_some();
-                        jsAnnounceTrackUpdate(
-                            MediaType::Audio,
-                            Some(track_id),
-                            is_audio_track_selected,
-                        );
+                        jsAnnounceTrackUpdate(MediaType::Audio, track_id, is_audio_track_selected);
                     }
                     let (changed_media_types, variant_changed) = match updates {
                         VariantUpdateResult::Improved(media_types)

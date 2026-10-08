@@ -536,16 +536,10 @@ impl PlaylistStore {
             let new_track_id = self
                 .fixed_audio_track
                 .or_else(|| self.current_audio_track_id());
-            let audio_track_change = match (prev_track_id, new_track_id) {
-                (Some(prev_id), Some(new_id)) => {
-                    if prev_id != new_id {
-                        Some(new_id)
-                    } else {
-                        None
-                    }
-                }
-                (None, Some(new_id)) => Some(new_id),
-                _ => None,
+            let audio_track_change = if prev_track_id == new_track_id {
+                AudioTrackChange::Unchanged
+            } else {
+                AudioTrackChange::Changed(new_track_id)
             };
             LockVariantResponse::VariantLocked {
                 updates,
@@ -1330,6 +1324,15 @@ pub(crate) enum SetAudioTrackResponse {
     NoUpdate,
 }
 
+/// Potential audio track change caused by locking a variant.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum AudioTrackChange {
+    /// The audio track stayed unchanged.
+    Unchanged,
+    /// The audio track changed to the given track, or to no track when set to `None`.
+    Changed(Option<u32>),
+}
+
 /// Return value for the `lock_variant` API.
 pub(crate) enum LockVariantResponse {
     /// Error status for when no variant with the given id was found.
@@ -1340,9 +1343,8 @@ pub(crate) enum LockVariantResponse {
     VariantLocked {
         /// Side-effects of that change, in terms of media playlists loaded in consequence
         updates: VariantUpdateResult,
-        /// If `Some(x)`, the new audio media playlist is considered as not part of the same
-        /// "audio track" as the previous one.
-        audio_track_change: Option<u32>,
+        /// Whether locking changed the audio track.
+        audio_track_change: AudioTrackChange,
     },
 }
 
@@ -1364,8 +1366,8 @@ pub(crate) enum PlaylistStoreError {
 #[cfg(test)]
 mod tests {
     use super::{
-        LockVariantResponse, MultivariantStartupStatus, PlaylistStore, PlaylistStoreError,
-        SetAudioTrackResponse, StartupStatus,
+        AudioTrackChange, LockVariantResponse, MultivariantStartupStatus, PlaylistStore,
+        PlaylistStoreError, SetAudioTrackResponse, StartupStatus,
     };
     use crate::{
         adaptive::{AdaptiveQualitySelector, PlaybackConditions},
@@ -1596,7 +1598,10 @@ high.m3u8
         else {
             panic!("expected the high variant to be locked");
         };
-        assert_eq!(audio_track_change, Some(french_id));
+        assert_eq!(
+            audio_track_change,
+            AudioTrackChange::Changed(Some(french_id))
+        );
 
         store.unlock_variant();
         store.set_audio_track(Some(french_id));
@@ -1606,7 +1611,37 @@ high.m3u8
         else {
             panic!("expected the high variant to be locked");
         };
-        assert_eq!(audio_track_change, None);
+        assert_eq!(audio_track_change, AudioTrackChange::Unchanged);
+    }
+
+    #[test]
+    fn locking_variant_reports_when_the_selectable_audio_track_disappears() {
+        let multivariant = r#"#EXTM3U
+#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="separate",NAME="English",LANGUAGE="en",DEFAULT=YES,URI="audio.m3u8"
+#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="muxed",NAME="English",LANGUAGE="en",DEFAULT=YES
+#EXT-X-STREAM-INF:BANDWIDTH=1000,AUDIO="separate"
+separate.m3u8
+#EXT-X-STREAM-INF:BANDWIDTH=2000,AUDIO="muxed"
+muxed.m3u8
+"#;
+        let playlist = TopLevelPlaylist::parse(
+            multivariant.as_bytes(),
+            parse_url("https://example.com/master.m3u8"),
+        )
+        .unwrap();
+        let mut store = PlaylistStore::try_new(playlist).unwrap();
+        let separate_id = store.available_variants()[0].id();
+        let muxed_id = store.available_variants()[1].id();
+        store.set_variant(separate_id);
+        assert!(store.current_audio_track_id().is_some());
+
+        let LockVariantResponse::VariantLocked {
+            audio_track_change, ..
+        } = store.lock_variant(muxed_id)
+        else {
+            panic!("expected the muxed variant to be locked");
+        };
+        assert_eq!(audio_track_change, AudioTrackChange::Changed(None));
     }
 
     #[test]
