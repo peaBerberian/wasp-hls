@@ -8,7 +8,7 @@ use crate::{
 ///
 /// This metadata then allows to perform advanced optimizations such as avoiding the loading of
 /// media data where segments of higher quality already exists.
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub(crate) struct SegmentQualityContext {
     /// Indicator of the desirability of the variant selected when loading this segment.
     /// A higher number meaning a higher quality.
