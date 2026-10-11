@@ -20,8 +20,17 @@ to be built on top of it) for the web which:
    for media buffering when APIs are available), to reduce the influence an
    heavy UI can have on playback (and in some situations vice-versa).
 
-Note that this is only a personal project as well as a proof of concept and it
-is still heavily in development.
+Note that this is still heavily in development. Plans are:
+
+- **Short-term goal**: Answer most web needs expected from an HLS media engine.
+
+  We're almost there with mainly subtitles handling missing
+
+- **Long-term goals**: Optimal low-latency HLS handling. In-Rust transmuxing.
+
+  Extend beyond web: separate back-end systems for web (MSE API, HTML5), native
+  (through e.g. `gstreamer`) and mobile usage, allowing common core logic for
+  virtually all OTT platforms.
 
 ## What's this exactly? HLS?
 
@@ -168,11 +177,13 @@ The reasons why I started this project are mainly:
   APIs only exposed to JavaScript could be conjugated with WebAssembly and
   Rust.
 
+- to experiment with ambitious streaming-related ideas with a high payoff
+  potential, like using a shared HLS implementation for web, native and mobile
+  platforms (paving the way for cross-platform protocol extensions, optimizations
+  and features).
+
 - to experiment with a big-enough WebAssembly and Web Worker-based library:
   how should it interact with applications written in JavaScript?
-
-- to learn more about the HLS streaming protocol, for which the RxPlayer does
-  not provide first class support (yet?)
 
 - to see how I would write a complex beast like a Media player if restarting
   from scratch (though the situation is very different here, due to the
@@ -182,12 +193,6 @@ The reasons why I started this project are mainly:
   disadvantage) in relying on WebAssembly for the core logic of a media
   player, in various situations (multiple players on the same page, large 4k
   segments, web workers, mse-in-worker).
-
-- to play with a Web Worker-based media player, and find out its influence
-  in terms of API definition, synchronization difficulties, performance issues
-  etc.
-
-- to work on and improve my Rust skills
 
 ## What's done
 
@@ -293,12 +298,18 @@ Tracks:
       (TTML IMSC1 or webVTT) - through a JS library first?
       _Priority: low_
 
-Miscellaneous:
+Multi-platform work:
 
-- [x] Error API
-- [x] Export embedded versions of the WebAssembly and Worker files to facilitate
-      application's development code.
-- [x] Initial position API
+- [x] Web target (JS lib), relying on WebAssembly, MSE and HTML5 media.
+- [ ] Native target (Rust library), probably relying on a `gstreamer` back-end.
+      _Priority: average_
+- [ ] Android target (AAR), probably relying on `MediaCodec` API through `NDK`.
+      _Priority: low_
+- [ ] Apple targets (XCFramework), probably relying on `VideoToolbox` for hardware decoding.
+      _Priority: very low_
+
+Supplementary nice-to-have features:
+
 - [ ] Delta playlist handling.
       _Priority: low_
 - [ ] Content Steering handling.
