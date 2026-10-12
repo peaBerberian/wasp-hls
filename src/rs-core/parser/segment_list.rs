@@ -97,6 +97,23 @@ impl InitSegmentInfo {
     }
 }
 
+/// Identity of a media segment within one media playlist lineage, independently of timestamps.
+/// Compare it alongside the playlist's media ID when identifying media across playlists.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct SegmentIdentity {
+    sequence: u32,
+    discontinuity_sequence: u32,
+}
+
+impl SegmentIdentity {
+    pub(crate) fn new(sequence: u32, discontinuity_sequence: u32) -> Self {
+        Self {
+            sequence,
+            discontinuity_sequence,
+        }
+    }
+}
+
 /// Information linked to a single media segment.
 #[derive(Clone, Debug)]
 pub(crate) struct MediaSegmentInfo {
@@ -121,6 +138,10 @@ pub(crate) struct MediaSegmentInfo {
 }
 
 impl MediaSegmentInfo {
+    pub(crate) fn identity(&self) -> SegmentIdentity {
+        SegmentIdentity::new(self.sequence, self.discontinuity_sequence)
+    }
+
     /// Media sequence number identifying this segment within the current playlist lineage.
     pub(crate) fn sequence(&self) -> u32 {
         self.sequence
