@@ -3,7 +3,7 @@ use super::{
     MediaSourceReadyState, PlaybackTickReason, PlayerReadyState, ReadyProbeSegment,
 };
 use crate::{
-    adaptive::PlaybackConditions,
+    adaptive::{AdaptiveVariantSelection, PlaybackConditions},
     bindings::{
         formatters::format_source_buffer_creation_err_for_js, jsAnnounceTrackUpdate,
         jsAnnounceVariantLockStatusChange, jsAnnounceVariantUpdate, jsInspectSegment,
@@ -17,7 +17,7 @@ use crate::{
     },
     dispatcher::segment_request_contexts::PendingSegmentRequest,
     media_element::SegmentPushMetadata,
-    parser::{TopLevelPlaylist, TopLevelPlaylistParsingError},
+    parser::{SegmentIdentity, TopLevelPlaylist, TopLevelPlaylistParsingError},
     playlist_store::{
         AudioTrackChange, LockVariantResponse, MediaPlaylistPermanentId, PlaylistStore,
         ProbeSegmentMetadata, SetAudioTrackResponse, VariantUpdateResult,
@@ -25,6 +25,7 @@ use crate::{
     requester::{
         FinishedRequestType, PlaylistFileType, PlaylistRequestInfo, RetryResult, SegmentRequestInfo,
     },
+    segment_selector::{PlaylistToRefresh, SegmentSelectionCandidate},
     utils::{logger::*, url::Url},
 };
 
@@ -64,25 +65,12 @@ impl Dispatcher {
         self.media_element_ref.reset();
         self.segment_selectors.reset_selectors(0.);
         self.playlist_store = None;
+        self.loaded_variant_id = None;
         self.ready_probe_segments.clear();
         self.initial_audio_track_selection.clear();
         self.last_position = 0.;
         self.clean_up_playlist_refresh_timers();
         self.ready_state = PlayerReadyState::Stopped;
-    }
-
-    /// Check which is the best HLS variant to select according to the current conditions
-    /// If it changed, handle the consequences (such as requesting new media playlists, loading
-    /// and pushing segments etc.).
-    ///
-    /// # Arguments
-    ///
-    /// * `flush` - To set to `true` if you want a potential resulting quality or track
-    ///   change to take effect as soon as possible, even if it means a rebuffering period.
-    pub(super) fn check_best_variant(&mut self, flush: bool) {
-        if let Some(update) = self.update_to_optimal_variant() {
-            self.handle_variant_update(update, flush);
-        }
     }
 
     /// Begin "locking" HLS variant whose `id` is given in argument, meaning that we will keep only
@@ -103,22 +91,17 @@ impl Dispatcher {
                     updates,
                     audio_track_change,
                 } => {
-                    // First: reset fast-quality switching to `true` at this point. Shouldn't be
-                    // needed but it's a good default for when we want to force the future quality
-                    // anyway
-                    for media_type in [MediaType::Audio, MediaType::Video] {
-                        self.segment_selectors
-                            .set_fast_quality_switching(media_type, true);
-                    }
+                    // XXX TODO: risks?
+                    self.playlist_refresh_timers.clear_refresh_targets();
                     if let AudioTrackChange::Changed(track_id) = audio_track_change {
                         let is_audio_track_selected = pl_store.fixed_audio_track_id().is_some();
                         jsAnnounceTrackUpdate(MediaType::Audio, track_id, is_audio_track_selected);
                     }
-                    let (changed_media_types, variant_changed) = match updates {
+                    let changed_media_types = match updates {
                         VariantUpdateResult::Improved(media_types)
                         | VariantUpdateResult::EqualOrUnknown(media_types)
-                        | VariantUpdateResult::Worsened(media_types) => (media_types, true),
-                        VariantUpdateResult::Unchanged => (Vec::new(), false),
+                        | VariantUpdateResult::Worsened(media_types) => media_types,
+                        VariantUpdateResult::Unchanged => Vec::new(),
                     };
                     for media_type in changed_media_types.iter().copied() {
                         log_info!("Core: {} MediaPlaylist changed", media_type);
@@ -143,11 +126,7 @@ impl Dispatcher {
                         self.clean_up_playlist_refresh_timers();
                     }
                     self.check_segments_to_request();
-                    if variant_changed {
-                        if let Some(pl_store) = self.playlist_store.as_ref() {
-                            jsAnnounceVariantUpdate(pl_store.current_variant_id());
-                        }
-                    }
+                    // XXX TODO: No variantUpdate?
                     jsAnnounceVariantLockStatusChange(Some(variant_id));
                 }
             }
@@ -159,7 +138,8 @@ impl Dispatcher {
         if let Some(pl_store) = self.playlist_store.as_mut() {
             pl_store.unlock_variant();
             // TODO: Did I forget to emit a lock status change here? To check.
-            self.check_best_variant(false);
+            self.check_requested_segments_still_needed();
+            self.check_segments_to_request();
         }
     }
 
@@ -173,19 +153,21 @@ impl Dispatcher {
             return;
         };
 
-        if let (Some(url), Some(media_type)) = (
-            playlist_store.media_playlist_url(&playlist_id),
-            playlist_store.media_type_for(&playlist_id),
-        ) {
-            let playlist_type = PlaylistFileType::MediaPlaylist {
-                id: playlist_id,
-                media_type,
-            };
-            if !self.requester.is_requesting_playlist(url, &playlist_type) {
-                self.requester.fetch_playlist(url.clone(), playlist_type);
-            }
-        } else {
-            log_error!("Core: Cannot refresh Media Playlist: id not found");
+        let media_type = self.playlist_refresh_timers.refresh_media_type(
+            &playlist_id,
+            playlist_store.selected_playlist_media_type(&playlist_id),
+        );
+        let (Some(url), Some(media_type)) =
+            (playlist_store.media_playlist_url(&playlist_id), media_type)
+        else {
+            return;
+        };
+        let playlist_type = PlaylistFileType::MediaPlaylist {
+            id: playlist_id,
+            media_type,
+        };
+        if !self.requester.is_requesting_playlist(url, &playlist_type) {
+            self.requester.fetch_playlist(url.clone(), playlist_type);
         }
     }
 
@@ -210,13 +192,19 @@ impl Dispatcher {
             SetAudioTrackResponse::VariantSelectionNeeded {
                 variant_lock_removed,
             } => {
-                // First, set a compatible variant
-                let variant_update = self.update_to_optimal_variant();
+                // Choose a compatible path to inspect without relying on the old track's buffer.
+                let variant_update = self.compute_optimal_variant().and_then(|selection| {
+                    let store = self.playlist_store.as_mut()?;
+                    Some(store.set_variant(selection.safe_variant_id))
+                });
 
                 // Second, now send event and do the actual dispatcher logic
                 self.announce_current_audio_track();
-                if let Some(update) = variant_update {
-                    self.handle_variant_update(update, true);
+                if let Some(changed_media_types) = variant_update {
+                    self.handle_media_playlist_update(
+                        &changed_media_types,
+                        MediaPlaylistUpdateMode::AbortRequestsAndFlushBuffer,
+                    );
                 }
                 if variant_lock_removed {
                     jsAnnounceVariantLockStatusChange(None);
@@ -224,48 +212,19 @@ impl Dispatcher {
             }
 
             SetAudioTrackResponse::AudioMediaUpdate => {
-                // Selecting a track might change the pool of available variants. Re-evaluate the
-                // optimal one before applying the Media Playlist updates.
-                let variant_update = self.update_to_optimal_variant();
-
-                // Send track event (now that a `PlaylistStore` variant update might have been done)
                 self.announce_current_audio_track();
-
+                self.check_requested_segments_still_needed();
                 // We want to abort and flush audio here, independently of the variant update, as
                 // we're in an audio-track-setting context.
-                let mut media_pl_updates = vec![MediaPlaylistUpdate {
-                    media_type: MediaType::Audio,
-                    mode: MediaPlaylistUpdateMode::AbortRequestsAndFlushBuffer,
-                }];
-
-                // Complete with what media update was necessary from the potential variant update
-                let variant_changed = match variant_update {
-                    Some(variant_update_result) => {
-                        match Self::media_playlist_updates_for_variant(variant_update_result, false)
-                        {
-                            Some(updates) => {
-                                // The audio update is already present with the strongest required
-                                // mode. Only add the variant's other Media Playlist updates.
-                                media_pl_updates.extend(
-                                    updates
-                                        .into_iter()
-                                        .filter(|update| update.media_type != MediaType::Audio),
-                                );
-                                true
-                            }
-                            None => false,
-                        }
-                    }
-                    None => false,
-                };
-                self.handle_media_playlist_updates(media_pl_updates);
-                if variant_changed {
-                    if let Some(pl_store) = self.playlist_store.as_ref() {
-                        jsAnnounceVariantUpdate(pl_store.current_variant_id());
-                    }
-                }
+                self.handle_media_playlist_update(
+                    &[MediaType::Audio],
+                    MediaPlaylistUpdateMode::AbortRequestsAndFlushBuffer,
+                );
             }
-            SetAudioTrackResponse::NoUpdate => self.check_best_variant(false),
+            SetAudioTrackResponse::NoUpdate => {
+                self.check_requested_segments_still_needed();
+                self.check_segments_to_request();
+            }
         }
     }
 
@@ -330,6 +289,10 @@ impl Dispatcher {
                     self.ready_probe_segments.clear_media_type(media_type);
                 }
 
+                // TODO: On terminal 404/410 for a still-listed cached segment, wait for the
+                // requested playlist's refresh before reporting a fatal failure. If its range is
+                // still playable, abandon the upgrade and exclude it from replacement selection
+                // until an explicit restart, so the same failed upgrade is not retried endlessly.
                 if status.is_some_and(|s| s == 404 || s == 410)
                     && req_ctxt.as_ref().is_some_and(|ctxt| {
                         utils::is_stale_segment_request_context(self.playlist_store.as_ref(), ctxt)
@@ -589,38 +552,16 @@ impl Dispatcher {
             return;
         }
 
+        let recommendation = self.compute_optimal_variant();
         let was_already_locked = self.requester.lock_segment_requests();
         [MediaType::Video, MediaType::Audio]
             .into_iter()
             .for_each(|mt| {
-                self.check_segment_to_request_for_type(mt);
+                self.check_segment_to_request_for_type(mt, recommendation);
             });
         if !was_already_locked {
             self.requester.unlock_segment_requests();
         }
-    }
-
-    /// Check the optimal variant under the last known network/playback conditions.
-    ///
-    /// If it changed, set it on the `PlaylistStore` and return the potential result of this update.
-    ///
-    /// Returns `None` if switching variant is not possible at this time (current variant is locked,
-    /// no `PlaylistStore`...).
-    fn update_to_optimal_variant(&mut self) -> Option<VariantUpdateResult> {
-        if self.playlist_store.as_ref()?.is_variant_locked() {
-            return None;
-        }
-        let (variant_id, allow_fast_switching) = self.compute_optimal_variant()?;
-        let update = self
-            .playlist_store
-            .as_mut()?
-            .update_adaptive_variant(variant_id);
-
-        for media_type in [MediaType::Audio, MediaType::Video] {
-            self.segment_selectors
-                .set_fast_quality_switching(media_type, allow_fast_switching);
-        }
-        Some(update)
     }
 
     /// Send `trackUpdate` event for the audio track currently-set on the `PlaylistStore`.
@@ -640,46 +581,31 @@ impl Dispatcher {
     /// and available variants under current constraints (tracks selected, codec compatibility
     /// etc.).
     ///
-    /// Returns `None` if this cannot be computed right now. Returns a tuple with the selected
-    /// variant id and whether "fast quality switching" is enabled if a variant update can be done.
-    fn compute_optimal_variant(&self) -> Option<(u32, bool)> {
+    /// Returns `None` if this cannot be computed right now. Otherwise returns the variant
+    /// recommendations for additive loading and safe replacements.
+    fn compute_optimal_variant(&self) -> Option<AdaptiveVariantSelection> {
         let pl_store = self.playlist_store.as_ref()?;
+        if pl_store.is_variant_locked() {
+            let variant_id = pl_store.current_variant_id()?;
+            return Some(AdaptiveVariantSelection {
+                best_variant_id: variant_id,
+                safe_variant_id: variant_id,
+            });
+        }
         let compatible_variants = pl_store.compatible_variants();
         let current_variant_id = pl_store.current_variant_id();
-        let selection = self.adaptive_selector.select_variant(
+        self.adaptive_selector.select_variant(
             &compatible_variants,
             current_variant_id,
             &self.playback_conditions(pl_store),
-        )?;
-        let has_replacement = [MediaType::Audio, MediaType::Video]
-            .into_iter()
-            .any(|media_type| {
-                pl_store
-                    .variant_segment_quality_context(selection.safe_variant_id, media_type)
-                    .is_some_and(|context| {
-                        self.segment_selectors.has_fast_quality_switch_candidate(
-                            media_type,
-                            &context,
-                            self.media_element_ref.inventory(media_type),
-                        )
-                    })
-            });
-
-        if has_replacement {
-            Some((selection.safe_variant_id, true))
-        } else {
-            // The additive recommendation can also replace buffered media only when both
-            // recommendations identify the same variant.
-            Some((
-                selection.best_variant_id,
-                selection.best_variant_id == selection.safe_variant_id,
-            ))
-        }
+        )
     }
 
     /// Generate the `PlaybackConditions` object needed by the adaptive code according to current
     /// playback conditions.
     fn playback_conditions(&self, pl_store: &PlaylistStore) -> PlaybackConditions {
+        // TODO: Do not count buffer that a track or variant change is about to flush.
+        // The last playback observation may also still report it after a flush is queued.
         let buffer_level = [MediaType::Audio, MediaType::Video]
             .into_iter()
             .filter_map(|media_type| self.media_element_ref.buffer_ahead_for(media_type))
@@ -823,10 +749,13 @@ impl Dispatcher {
     fn is_obsolete_playlist_request(&self, playlist_type: &PlaylistFileType) -> bool {
         match playlist_type {
             PlaylistFileType::TopLevelPlaylist => false,
-            PlaylistFileType::MediaPlaylist { id, .. } => !self
-                .playlist_store
-                .as_ref()
-                .is_some_and(|store| store.is_current_media_playlist(id)),
+            PlaylistFileType::MediaPlaylist { id, .. } => {
+                !self
+                    .playlist_store
+                    .as_ref()
+                    .is_some_and(|store| store.is_current_media_playlist(id))
+                    && !self.playlist_refresh_timers.is_following(id)
+            }
         }
     }
 
@@ -859,12 +788,14 @@ impl Dispatcher {
                 match PlaylistStore::try_new(pl) {
                     Ok(mut pl_store) => {
                         self.apply_initial_audio_track_selection(&mut pl_store);
+                        // Inspect the safe variant at startup. Later recommendations go straight
+                        // to segment selection.
                         if let Some(selection) = self.adaptive_selector.select_variant(
                             &pl_store.compatible_variants(),
-                            pl_store.current_variant_id(),
+                            None,
                             &self.playback_conditions(&pl_store),
                         ) {
-                            pl_store.update_adaptive_variant(selection.best_variant_id);
+                            pl_store.set_variant(selection.safe_variant_id);
                         }
                         let direct_media_refresh = pl_store
                             .direct_media_playlist()
@@ -967,7 +898,7 @@ impl Dispatcher {
         self.requester.update_base_position(Some(wanted_pos));
         self.segment_selectors.advance_position(wanted_pos - 0.2);
 
-        self.check_best_variant(false);
+        self.check_requested_segments_still_needed();
         self.check_segments_to_request();
         if !was_already_locked {
             self.requester.unlock_segment_requests();
@@ -1014,7 +945,6 @@ impl Dispatcher {
 
         self.requester.lock_segment_requests();
         self.requester.update_base_position(Some(wanted_pos));
-        self.check_best_variant(false);
         self.check_requested_segments_still_needed();
         self.check_segments_to_request();
         self.requester.unlock_segment_requests();
@@ -1025,147 +955,185 @@ impl Dispatcher {
     ///
     /// If not, abort the corresponding pending requests.
     ///
-    /// This method is intended to be called on exceptional events which may have led to a
-    /// potential change of segment priorization, such as a seek.
-    fn check_requested_segments_still_needed(&mut self) {
-        [MediaType::Audio, MediaType::Video]
-            .into_iter()
-            .for_each(|mt| {
-                let Some(pl_store) = self.playlist_store.as_ref() else {
-                    self.abort_segment_requests_with_type(mt);
-                    return;
-                };
-
-                let inventory = self.media_element_ref.inventory(mt);
-                if let Some(seg_info) = pl_store.loaded_media_playlist_segment_info(mt) {
-                    let needed_segment = self.segment_selectors.get_mut(mt).most_needed_segment(
-                        seg_info.0,
-                        &seg_info.1,
-                        inventory,
-                    );
-
-                    if let Some(i) = needed_segment.init_segment() {
-                        if !self
-                            .requester
-                            .is_requesting_segment(mt, i.url(), i.byte_range())
-                        {
-                            log_debug!(
-                                "Core: {mt} init segment request not needed anymore, abort."
-                            );
-                            self.abort_segment_requests_with_type(mt);
-                        } else {
-                            log_debug!("Core: {mt} init segment request still needed.");
-                        }
-                    } else if let Some(seg) = needed_segment.media_segment() {
-                        if !self
-                            .requester
-                            .is_requesting_segment(mt, seg.url(), seg.byte_range())
-                        {
-                            log_debug!(
-                                "Core: {mt} media segment request not needed anymore, abort."
-                            );
-                            self.abort_segment_requests_with_type(mt);
-                        } else {
-                            log_debug!("Core: {mt} media segment request still needed.");
-                        }
-                    } else {
-                        self.abort_segment_requests_with_type(mt);
-                    }
+    /// Reconsider pending requests when playback conditions change, including seeks and
+    /// regular ticks. Both candidates come from the same ABR recommendation.
+    pub(super) fn check_requested_segments_still_needed(&mut self) {
+        let recommendation = self.compute_optimal_variant();
+        for media_type in [MediaType::Audio, MediaType::Video] {
+            if !self.requester.has_segment_request_pending(media_type)
+                || self.segment_request_contexts.has(|context| {
+                    matches!(
+                        context,
+                        PendingSegmentRequest::Probe {
+                            requested_media_type: Some(probe_type),
+                            ..
+                        } if *probe_type == media_type
+                    )
+                })
+            {
+                // Probes establish the metadata needed to resume ordinary selection.
+                continue;
+            }
+            let Some(store) = self.playlist_store.as_ref() else {
+                self.abort_segment_requests_with_type(media_type);
+                continue;
+            };
+            let Some((_, best)) = segment_candidate(
+                store,
+                recommendation.map(|selection| selection.best_variant_id),
+                media_type,
+            ) else {
+                self.abort_segment_requests_with_type(media_type);
+                continue;
+            };
+            let safe_id = recommendation.map(|selection| selection.safe_variant_id);
+            let Some((_, safe)) = segment_candidate(store, safe_id, media_type) else {
+                self.abort_segment_requests_with_type(media_type);
+                continue;
+            };
+            let selected = self
+                .segment_selectors
+                .get_mut(media_type)
+                .most_needed_segment(best, safe, self.media_element_ref.inventory(media_type));
+            let still_needed = selected.needed_segments().is_some_and(|needed| {
+                if let Some(init) = needed.init_segment() {
+                    self.requester
+                        .is_requesting_segment(media_type, init.url(), init.byte_range())
+                } else if let Some(media) = needed.media_segment() {
+                    self.requester.is_requesting_segment(
+                        media_type,
+                        media.url(),
+                        media.byte_range(),
+                    )
+                } else {
+                    false
                 }
             });
-    }
-
-    fn check_segment_to_request_for_type(&mut self, media_type: MediaType) {
-        let Some(pl_store) = self.playlist_store.as_ref() else {
-            return;
-        };
-        if !self.requester.has_segment_request_pending(media_type) {
-            let inventory = self.media_element_ref.inventory(media_type);
-            if let Some(seg_info) = pl_store.loaded_media_playlist_segment_info(media_type) {
-                let most_needed_segment = self
-                    .segment_selectors
-                    .get_mut(media_type)
-                    .most_needed_segment(seg_info.0, &seg_info.1, inventory);
-                if let Some(i) = most_needed_segment.init_segment() {
-                    let req_id =
-                        self.segment_request_contexts
-                            .insert(PendingSegmentRequest::Init {
-                                media_type,
-                                init_segment_id: i.id(),
-                            });
-                    self.requester.request_init_segment(
-                        media_type,
-                        i.url().clone(),
-                        i.byte_range(),
-                        req_id,
-                    );
-                } else if let Some(seg) = most_needed_segment.media_segment() {
-                    let init_segment_id = seg_info.0.init_for(seg).map(|i| i.id());
-                    let req_id =
-                        self.segment_request_contexts
-                            .insert(PendingSegmentRequest::Media {
-                                media_type,
-                                time_info: seg.time_info().clone(),
-                                init_segment_id,
-                                quality_context: seg_info.1,
-                                sequence_number: seg.sequence(),
-                                discontinuity_sequence: seg.discontinuity_sequence(),
-                            });
-                    self.requester
-                        .request_media_segment(media_type, seg, req_id);
-                }
+            if !still_needed {
+                self.abort_segment_requests_with_type(media_type);
             }
         }
     }
 
-    /// Perform all actions that should be commonly taken after the current variant changes.
-    fn handle_variant_update(&mut self, result: VariantUpdateResult, flush: bool) {
-        let Some(updates) = Self::media_playlist_updates_for_variant(result, flush) else {
+    fn check_segment_to_request_for_type(
+        &mut self,
+        media_type: MediaType,
+        recommendation: Option<AdaptiveVariantSelection>,
+    ) {
+        if self.requester.has_segment_request_pending(media_type) {
+            return;
+        }
+        let Some(store) = self.playlist_store.as_ref() else {
             return;
         };
-        self.handle_media_playlist_updates(updates);
-        if let Some(pl_store) = self.playlist_store.as_ref() {
-            jsAnnounceVariantUpdate(pl_store.current_variant_id());
+        let Some((best_id, best)) = segment_candidate(
+            store,
+            recommendation.map(|selection| selection.best_variant_id),
+            media_type,
+        ) else {
+            return;
+        };
+        let safe_variant_id = recommendation.map(|selection| selection.safe_variant_id);
+        let Some((safe_id, safe)) = segment_candidate(store, safe_variant_id, media_type) else {
+            return;
+        };
+        let best_variant_id = best.variant_id;
+        let best_context = best.context;
+        let safe_context = safe.context;
+        let selected = self
+            .segment_selectors
+            .get_mut(media_type)
+            .most_needed_segment(best, safe, self.media_element_ref.inventory(media_type));
+        let refresh_id = match selected.playlist_to_refresh() {
+            PlaylistToRefresh::Best => best_id,
+            PlaylistToRefresh::Safe => safe_id,
+        };
+        let Some(needed) = selected.needed_segments() else {
+            self.follow_media_playlist(media_type, refresh_id);
+            return;
+        };
+        let variant_id = needed.variant_id();
+        let (playlist_id, quality_context) = if variant_id == best_variant_id {
+            (best_id, best_context)
+        } else {
+            (safe_id, safe_context)
+        };
+
+        // Own just the proposed segment metadata so the store can record this choice and
+        // check its codecs before a request is scheduled.
+        let init = needed.init_segment().cloned();
+        let media = needed.media_segment().cloned();
+        let init_segment_id = media.as_ref().and_then(|media| {
+            store
+                .media_playlist(&playlist_id)
+                .and_then(|playlist| playlist.segment_list().init_for(media))
+                .map(|init| init.id())
+        });
+
+        // NOTE: The "active variant" (which is the one enabled in the `PlaylistStore` that we're
+        // currently loading segments from) might be different from the "refreshed playlist".
+        // This is based on segment-selection heuristics (which may e.g. indicate that we can load a
+        // segment of a quality A while waiting for the request of a playlist B).
+        self.playlist_store
+            .as_mut()
+            // XXX TODO: to remove the need to rely on unwrap
+            .unwrap()
+            .update_variant_for_type(variant_id, media_type);
+        self.follow_media_playlist(media_type, refresh_id);
+
+        if !self.ready_to_load_segments() {
+            return;
+        }
+        if let Some(init) = init {
+            let req_id = self
+                .segment_request_contexts
+                .insert(PendingSegmentRequest::Init {
+                    media_type,
+                    init_segment_id: init.id(),
+                });
+            self.requester.request_init_segment(
+                media_type,
+                init.url().clone(),
+                init.byte_range(),
+                req_id,
+            );
+        } else if let Some(media) = media {
+            let req_id = self
+                .segment_request_contexts
+                .insert(PendingSegmentRequest::Media {
+                    variant_id,
+                    playlist_id,
+                    media_type,
+                    init_segment_id,
+                    quality_context,
+                    sequence_number: media.sequence(),
+                    discontinuity_sequence: media.discontinuity_sequence(),
+                });
+            self.requester
+                .request_media_segment(media_type, &media, req_id);
         }
     }
 
-    /// When a variant has been updated, check which Media Playlists have been updated and indicate
-    /// how each media switch should be handled.
-    ///
-    /// # Arguments
-    ///
-    /// * `result` - The result of updating the current variant.
-    /// * `flush` - To set to `true` if all linked Media Playlist updates should abort previous
-    ///   requests and flush their corresponding buffers.
-    ///
-    /// # Return value
-    ///
-    /// Returns `None` if the variant stayed unchanged. Otherwise returns the Media Playlist
-    /// updates to perform. The returned vector may be empty if the variant changed but points to
-    /// the same Media Playlists.
-    fn media_playlist_updates_for_variant(
-        result: VariantUpdateResult,
-        flush: bool,
-    ) -> Option<Vec<MediaPlaylistUpdate>> {
-        let (changed_media_types, has_worsened) = match result {
-            VariantUpdateResult::Improved(media_types) => (media_types, false),
-            VariantUpdateResult::EqualOrUnknown(media_types) => (media_types, false),
-            VariantUpdateResult::Worsened(media_types) => (media_types, true),
-            VariantUpdateResult::Unchanged => return None,
+    /// Resume refreshes alongside cached segment requests. A retained timer is also a reload
+    /// cooldown: switching candidates must not make us reload the same list too frequently.
+    fn follow_media_playlist(&mut self, media_type: MediaType, id: MediaPlaylistPermanentId) {
+        self.playlist_refresh_timers.follow(media_type, id);
+        let Some(store) = self.playlist_store.as_ref() else {
+            return;
         };
-        let mode = if flush {
-            MediaPlaylistUpdateMode::AbortRequestsAndFlushBuffer
-        } else if has_worsened {
-            MediaPlaylistUpdateMode::AbortRequests
-        } else {
-            MediaPlaylistUpdateMode::Seamless
+        let needs_reload = store
+            .media_playlist(&id)
+            .is_none_or(|playlist| playlist.may_be_refreshed());
+        if !needs_reload || self.playlist_refresh_timers.has_timer(&id) {
+            return;
+        }
+        let Some(url) = store.media_playlist_url(&id) else {
+            return;
         };
-        Some(
-            changed_media_types
-                .into_iter()
-                .map(|media_type| MediaPlaylistUpdate { media_type, mode })
-                .collect(),
-        )
+        let playlist_type = PlaylistFileType::MediaPlaylist { id, media_type };
+        if !self.requester.is_requesting_playlist(url, &playlist_type) {
+            self.requester.fetch_playlist(url.clone(), playlist_type);
+        }
     }
 
     /// Perform all actions that should be commonly taken after one or multiple of the current Media
@@ -1199,6 +1167,7 @@ impl Dispatcher {
             self.ready_probe_segments.clear_media_type(media_type);
 
             if !matches!(mode, MediaPlaylistUpdateMode::Seamless) {
+                self.playlist_refresh_timers.forget_media_type(media_type);
                 self.abort_segment_requests_with_type(media_type);
             }
             if matches!(mode, MediaPlaylistUpdateMode::AbortRequestsAndFlushBuffer) {
@@ -1230,7 +1199,7 @@ impl Dispatcher {
             if pl_store.has_loaded_media_playlist(media_type) {
                 None
             } else {
-                let id = *pl_store.media_playlist_id_for(media_type)?;
+                let id = *pl_store.current_media_playlist_id(media_type)?;
                 let url = pl_store.media_playlist_url(&id)?.clone();
                 Some((id, url))
             }
@@ -1278,17 +1247,22 @@ impl Dispatcher {
 
         match req_ctxt {
             PendingSegmentRequest::Media {
+                variant_id,
                 media_type: req_media_type,
                 init_segment_id,
-                time_info,
                 quality_context,
                 sequence_number,
                 discontinuity_sequence,
                 ..
             } => {
+                let time_info = segment_req
+                    .time_info()
+                    .expect("Media segment requests have timing information")
+                    .clone();
                 if Some(req_media_type) != media_type {
                     log_warn!("Loaded media segment with mismatched media type context.");
                 }
+                self.announce_loaded_variant(variant_id);
                 self.on_media_segment_loaded(SegmentPushMetadata {
                     data: result,
                     media_type: req_media_type,
@@ -1318,10 +1292,22 @@ impl Dispatcher {
         }
     }
 
+    /// Recommendations may change during a download; announce the variant retained by that
+    /// completed media request rather than the current additive recommendation.
+    fn announce_loaded_variant(&mut self, variant_id: u32) {
+        if self.loaded_variant_id != Some(variant_id) {
+            self.loaded_variant_id = Some(variant_id);
+            jsAnnounceVariantUpdate(Some(variant_id));
+        }
+    }
+
     fn on_media_segment_loaded(&mut self, push_md: SegmentPushMetadata) {
         let segment_start = push_md.time_info.start();
         let segment_end = push_md.time_info.end();
         let media_type = push_md.media_type;
+        let media_id = push_md.context.media_id();
+        let identity =
+            SegmentIdentity::new(push_md.sequence_number, push_md.discontinuity_sequence);
         let prepared_data = self
             .media_element_ref
             .announce_incoming_media_segment(push_md);
@@ -1331,10 +1317,9 @@ impl Dispatcher {
         //
         // We still announce the incoming segment first to ensure the `MediaElementReference`'s
         // inventory is up-to-date.
-        self.check_best_variant(false);
         self.segment_selectors
             .get_mut(media_type)
-            .validate_media_until(segment_end);
+            .validate_media(media_id, identity, segment_end);
         self.check_segments_to_request();
 
         match self
@@ -1387,7 +1372,6 @@ impl Dispatcher {
                 .validate_init(init_id),
         }
 
-        self.check_best_variant(false);
         self.check_segments_to_request();
     }
 
@@ -1404,15 +1388,48 @@ impl Dispatcher {
         }
     }
 
-    /// Removes from `self.playlist_refresh_timers` timers for playlist that are not current
-    /// anymore and abort their corresponding timers
+    /// Remove timers for unknown playlists. Inactive playlists keep their timer as a cooldown;
+    /// when it expires, the callback only fetches playlists that are still being followed.
     fn clean_up_playlist_refresh_timers(&mut self) {
         if let Some(ref pl_store) = self.playlist_store {
             self.playlist_refresh_timers
-                .retain(|id| pl_store.is_current_media_playlist(id))
+                .retain(|id| pl_store.media_playlist_url(id).is_some())
         } else {
             self.playlist_refresh_timers.clear_all_timers();
         }
+    }
+}
+
+fn segment_candidate(
+    store: &PlaylistStore,
+    variant_id: Option<u32>,
+    media_type: MediaType,
+) -> Option<(MediaPlaylistPermanentId, SegmentSelectionCandidate<'_>)> {
+    if let Some(variant_id) = variant_id {
+        let id = store.media_playlist_id_for_variant(variant_id, media_type)?;
+        let context = store.variant_segment_quality_context(variant_id, media_type)?;
+        Some((
+            id,
+            SegmentSelectionCandidate {
+                variant_id,
+                context,
+                playlist: store
+                    .media_playlist(&id)
+                    .map(|playlist| playlist.segment_list()),
+            },
+        ))
+    } else {
+        store.direct_media_playlist()?;
+        let id = *store.current_media_playlist_id(media_type)?;
+        let (list, context) = store.loaded_media_playlist_segment_info(media_type)?;
+        Some((
+            id,
+            SegmentSelectionCandidate {
+                variant_id: crate::bindings::formatters::DIRECT_MEDIA_VARIANT_ID,
+                context,
+                playlist: Some(list),
+            },
+        ))
     }
 }
 
@@ -1430,7 +1447,7 @@ fn sync_media_source_duration(playlist_store: &PlaylistStore) {
 
 #[cfg(test)]
 mod tests {
-    use super::Dispatcher;
+    use super::{segment_candidate, Dispatcher};
     use crate::{
         bindings::MediaType,
         dispatcher::{JsTimeRanges, MediaObservation, PlaybackTickReason},
@@ -1485,7 +1502,9 @@ mod tests {
         for (variant_id, duration) in variant_ids.iter().zip([Some(4), Some(4), high_duration]) {
             if let Some(duration) = duration {
                 pl_store.set_variant(*variant_id);
-                let id = *pl_store.media_playlist_id_for(MediaType::Video).unwrap();
+                let id = *pl_store
+                    .current_media_playlist_id(MediaType::Video)
+                    .unwrap();
                 let media = format!(
                     "#EXTM3U\n#EXT-X-TARGETDURATION:{duration}\n#EXTINF:{duration},\nseg.ts\n#EXT-X-ENDLIST\n"
                 );
@@ -1498,12 +1517,227 @@ mod tests {
                     .unwrap();
             }
         }
+        for variant_id in &variant_ids {
+            pl_store.assume_variant_supported_for_test(*variant_id);
+        }
         pl_store.set_variant(variant_ids[0]);
         let mut dispatcher =
             dispatcher_with_buffer_observation(None, Some(vec![0., 10. + buffer_level]));
         dispatcher.adaptive_selector = crate::adaptive::AdaptiveQualitySelector::new(1_875_000.);
         dispatcher.playlist_store = Some(pl_store);
         dispatcher
+    }
+
+    #[test]
+    fn missing_recommendation_does_not_fall_back_to_a_stored_variant() {
+        let mut dispatcher = dispatcher_with_abr_playlists(Some(4), 30.);
+        let current = dispatcher
+            .playlist_store
+            .as_ref()
+            .unwrap()
+            .current_variant_id();
+        dispatcher.check_segment_to_request_for_type(MediaType::Video, None);
+        assert!(!dispatcher
+            .requester
+            .has_segment_request_pending(MediaType::Video));
+        assert_eq!(
+            dispatcher
+                .playlist_store
+                .as_ref()
+                .unwrap()
+                .current_variant_id(),
+            current
+        );
+    }
+
+    #[test]
+    fn recommendations_do_not_change_the_current_choice() {
+        let dispatcher = dispatcher_with_abr_playlists(Some(4), 30.);
+        let store = dispatcher.playlist_store.as_ref().unwrap();
+        let current = store.current_variant_id().unwrap();
+        let playlist_id = *store.current_media_playlist_id(MediaType::Video).unwrap();
+        let recommendation = dispatcher.compute_optimal_variant().unwrap();
+        assert_ne!(recommendation.best_variant_id, current);
+        assert_eq!(store.current_variant_id(), Some(current));
+        assert_eq!(
+            store.current_media_playlist_id(MediaType::Video),
+            Some(&playlist_id)
+        );
+    }
+
+    #[test]
+    fn scheduling_and_pending_checks_use_the_recommended_best() {
+        let mut dispatcher = dispatcher_with_abr_playlists(Some(4), 30.);
+        let recommendation = dispatcher.compute_optimal_variant().unwrap();
+        let store = dispatcher.playlist_store.as_mut().unwrap();
+        let previous_variant = store.current_variant_id().unwrap();
+        let best_id = store
+            .media_playlist_id_for_variant(recommendation.best_variant_id, MediaType::Video)
+            .unwrap();
+        store
+            .update_media_playlist(
+                &best_id,
+                b"#EXTM3U\n#EXT-X-TARGETDURATION:4\n#EXTINF:4,\nbest-seg.ts\n#EXT-X-ENDLIST\n"
+                    .as_slice(),
+                Url::new("https://example.com/best.m3u8".into()),
+            )
+            .unwrap();
+        let expected_url = Url::new("https://example.com/best-seg.ts".into());
+        dispatcher.requester.lock_segment_requests();
+        dispatcher.check_segment_to_request_for_type(MediaType::Video, Some(recommendation));
+        assert!(dispatcher
+            .requester
+            .is_requesting_segment(MediaType::Video, &expected_url, None));
+        assert_eq!(
+            dispatcher
+                .playlist_store
+                .as_ref()
+                .unwrap()
+                .current_variant_id(),
+            Some(recommendation.best_variant_id)
+        );
+        // Scheduling a request must not announce its variant as loaded.
+        assert_eq!(dispatcher.loaded_variant_id, None);
+
+        // A pending check must use the ABR pair, even if the stored choice differs.
+        dispatcher
+            .playlist_store
+            .as_mut()
+            .unwrap()
+            .update_variant_for_type(previous_variant, MediaType::Video);
+        dispatcher.check_requested_segments_still_needed();
+        assert!(dispatcher
+            .requester
+            .is_requesting_segment(MediaType::Video, &expected_url, None));
+        assert_eq!(
+            dispatcher
+                .playlist_store
+                .as_ref()
+                .unwrap()
+                .current_variant_id(),
+            Some(previous_variant)
+        );
+    }
+
+    #[test]
+    fn safe_candidate_keeps_its_playlist_and_init_while_best_is_selected() {
+        let mut dispatcher = dispatcher_with_abr_playlists(Some(4), 30.);
+        let store = dispatcher.playlist_store.as_mut().unwrap();
+        let ids: Vec<_> = store
+            .available_variants()
+            .iter()
+            .map(|variant| variant.id())
+            .collect();
+        let safe_variant = ids[1];
+        let best_variant = ids[2];
+        let safe_id = store
+            .media_playlist_id_for_variant(safe_variant, MediaType::Video)
+            .unwrap();
+        let mut text =
+            String::from("#EXTM3U\n#EXT-X-TARGETDURATION:4\n#EXT-X-MAP:URI=\"safe-init.mp4\"\n");
+        for number in 0..10 {
+            text.push_str(&format!("#EXTINF:4,\nsegment-{number}.m4s\n"));
+        }
+        store
+            .update_media_playlist(
+                &safe_id,
+                text.as_bytes(),
+                Url::new("https://example.com/safe.m3u8".into()),
+            )
+            .unwrap();
+        store.set_variant(best_variant);
+        let (_, best) = segment_candidate(store, Some(best_variant), MediaType::Video).unwrap();
+        let (_, safe) = segment_candidate(store, Some(safe_variant), MediaType::Video).unwrap();
+        let low_context = store
+            .variant_segment_quality_context(ids[0], MediaType::Video)
+            .unwrap();
+        let inventory: Vec<_> = (0..6)
+            .map(|number| {
+                crate::media_element::BufferedChunk::new_for_test(
+                    number as f64 * 4.,
+                    (number + 1) as f64 * 4.,
+                    low_context,
+                )
+            })
+            .collect();
+        let selected = dispatcher
+            .segment_selectors
+            .get_mut(MediaType::Video)
+            .most_needed_segment(best, safe, &inventory);
+        let needed = selected.needed_segments().unwrap();
+        assert_eq!(needed.variant_id(), safe_variant);
+        assert_eq!(needed.media_segment().unwrap().start(), 8.);
+        assert_eq!(
+            needed.init_segment().unwrap().url().get_ref(),
+            "https://example.com/safe-init.mp4"
+        );
+        assert_eq!(
+            dispatcher
+                .playlist_store
+                .as_ref()
+                .unwrap()
+                .current_variant_id(),
+            Some(best_variant)
+        );
+    }
+
+    #[test]
+    fn followed_safe_playlist_response_is_not_obsolete() {
+        let mut dispatcher = dispatcher_with_abr_playlists(Some(4), 30.);
+        let store = dispatcher.playlist_store.as_ref().unwrap();
+        let safe_variant = store.available_variants()[1].id();
+        let id = store
+            .media_playlist_id_for_variant(safe_variant, MediaType::Video)
+            .unwrap();
+        let request = crate::requester::PlaylistFileType::MediaPlaylist {
+            id,
+            media_type: MediaType::Video,
+        };
+        assert!(dispatcher.is_obsolete_playlist_request(&request));
+        dispatcher
+            .playlist_refresh_timers
+            .follow(MediaType::Video, id);
+        assert!(!dispatcher.is_obsolete_playlist_request(&request));
+    }
+
+    #[test]
+    fn segment_failure_checks_its_own_playlist_after_best_changes() {
+        let mut dispatcher = dispatcher_with_abr_playlists(Some(4), 30.);
+        let store = dispatcher.playlist_store.as_mut().unwrap();
+        let ids: Vec<_> = store
+            .available_variants()
+            .iter()
+            .map(|variant| variant.id())
+            .collect();
+        let safe_id = store
+            .media_playlist_id_for_variant(ids[1], MediaType::Video)
+            .unwrap();
+        store.update_media_playlist(&safe_id,
+            b"#EXTM3U\n#EXT-X-TARGETDURATION:4\n#EXT-X-MEDIA-SEQUENCE:100\n#EXTINF:4,\nsegment-100.ts\n".as_slice(),
+            Url::new("https://example.com/safe.m3u8".into())).unwrap();
+        store.set_variant(ids[2]);
+        let context = crate::dispatcher::segment_request_contexts::PendingSegmentRequest::Media {
+            variant_id: ids[1],
+            playlist_id: safe_id,
+            media_type: MediaType::Video,
+            init_segment_id: None,
+            quality_context: store
+                .variant_segment_quality_context(ids[1], MediaType::Video)
+                .unwrap(),
+            sequence_number: 100,
+            discontinuity_sequence: 0,
+        };
+        assert!(!crate::dispatcher::utils::is_stale_segment_request_context(
+            Some(store),
+            &context
+        ));
+        store.update_media_playlist(&safe_id,
+            b"#EXTM3U\n#EXT-X-TARGETDURATION:4\n#EXT-X-MEDIA-SEQUENCE:101\n#EXTINF:4,\nsegment-101.ts\n".as_slice(),
+            Url::new("https://example.com/safe.m3u8".into())).unwrap();
+        assert!(crate::dispatcher::utils::is_stale_segment_request_context(
+            Some(store),
+            &context
+        ));
     }
 
     #[test]
@@ -1517,11 +1751,12 @@ mod tests {
             .id();
 
         for _ in 0..6 {
-            let (variant_id, allow_fast_switching) = dispatcher.compute_optimal_variant().unwrap();
+            let selection = dispatcher.compute_optimal_variant().unwrap();
+            let variant_id = selection.best_variant_id;
             assert_eq!(variant_id, high_id);
-            assert!(!allow_fast_switching);
+            assert_ne!(variant_id, selection.safe_variant_id);
             let pl_store = dispatcher.playlist_store.as_mut().unwrap();
-            pl_store.update_adaptive_variant(variant_id);
+            pl_store.update_variant_for_type(variant_id, MediaType::Video);
             assert!(!pl_store.has_loaded_media_playlist(MediaType::Video));
             assert_eq!(pl_store.segment_target_duration(), None);
             assert_eq!(pl_store.max_observed_target_duration(), Some(4.));
@@ -1537,10 +1772,13 @@ mod tests {
         assert_eq!(pl_store.max_observed_target_duration(), Some(6.));
 
         for _ in 0..6 {
-            let (variant_id, _) = dispatcher.compute_optimal_variant().unwrap();
+            let variant_id = dispatcher
+                .compute_optimal_variant()
+                .unwrap()
+                .best_variant_id;
             assert_eq!(variant_id, medium_id);
             let pl_store = dispatcher.playlist_store.as_mut().unwrap();
-            pl_store.update_adaptive_variant(variant_id);
+            pl_store.update_variant_for_type(variant_id, MediaType::Video);
             assert_eq!(pl_store.segment_target_duration(), Some(4.));
             assert_eq!(pl_store.max_observed_target_duration(), Some(6.));
         }

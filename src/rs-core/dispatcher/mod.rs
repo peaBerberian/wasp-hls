@@ -35,6 +35,10 @@ pub struct Dispatcher {
     /// mostly based on network metrics.
     adaptive_selector: AdaptiveQualitySelector,
 
+    /// Variant of the last loaded media segment announced to the application, independently of
+    /// adaptive recommendations and initialization or playlist requests.
+    loaded_variant_id: Option<u32>,
+
     /// Store the "Top level Playlist" (structure which describes the currently
     /// loaded content) alongside some state to keep track of the chosen... tracks.
     /// (More technically of variants and media streams).

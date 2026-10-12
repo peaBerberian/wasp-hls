@@ -1,26 +1,48 @@
 use crate::parser::SegmentIdentity;
 
-/// Accepted media, retained independently of what the decoding back-end keeps buffered.
-/// Selection and playlist inspection never create entries; only caller validation does.
+/// When choosing which segment to load next, there's a need to understand which segments we already
+/// loaded.
+///
+/// We could use the decoding back-end's buffer-related API, but they aren't reliable: they may not
+/// show a segment that has been pushed, might do GC at some point etc.
+///
+/// So this history here separately keeps around the list of segments that have been considered as
+/// loaded+pushed. It is intended as more of a history of operations than an actual representation
+/// of what's in the buffer.
 #[derive(Default)]
 pub(super) struct ValidatedSegmentHistory {
     entries: Vec<ValidatedSegment>,
 }
 
 struct ValidatedSegment {
+    /// Identifier for the associated `media_playlist`.
     media_id: u32,
+    /// Identifies unambiguously the segment.
     identity: SegmentIdentity,
     /// Playlist end time used only for eviction, not for identity comparisons.
     end: f64,
 }
 
 impl ValidatedSegmentHistory {
+    /// Returns `true` if current history contains the given segment.
+    ///
+    /// # Arguments
+    ///
+    /// * `media_id` - Identifier of the segment's media playlist.
+    /// * `identity` - Identity of the segment within that playlist.
     pub(super) fn contains(&self, media_id: u32, identity: SegmentIdentity) -> bool {
         self.entries
             .iter()
             .any(|entry| entry.media_id == media_id && entry.identity == identity)
     }
 
+    /// Adds the segment to the `ValidatedSegmentHistory`.
+    ///
+    /// # Arguments
+    ///
+    /// * `media_id` - Identifier of the segment's media playlist.
+    /// * `identity` - Identity of the segment within that playlist.
+    /// * `end` - Segment end in playlist time. Used for eviction rather than identity.
     pub(super) fn insert(&mut self, media_id: u32, identity: SegmentIdentity, end: f64) {
         if let Some(entry) = self
             .entries
@@ -37,12 +59,16 @@ impl ValidatedSegmentHistory {
         }
     }
 
-    /// Remove entries ending at or before playback. Times must remain on the same playlist
-    /// timeline while history is retained; a timeline restart must clear the history.
+    /// Removes entries ending before or at the given `position` (playlist time).
+    ///
+    /// # Arguments
+    ///
+    /// * `position` - All history entries ending before or at that playlist time will be evicted.
     pub(super) fn evict_before(&mut self, position: f64) {
         self.entries.retain(|entry| entry.end > position);
     }
 
+    // Completely clears the content of the history.
     pub(super) fn clear(&mut self) {
         self.entries.clear();
     }

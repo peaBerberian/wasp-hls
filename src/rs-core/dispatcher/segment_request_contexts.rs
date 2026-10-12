@@ -3,8 +3,9 @@ pub(crate) type SegmentRequestId = u32;
 use std::collections::HashMap;
 
 use crate::{
-    bindings::MediaType, media_element::SegmentQualityContext, parser::SegmentTimeInfo,
-    playlist_store::ProbeSegmentMetadata,
+    bindings::MediaType,
+    media_element::SegmentQualityContext,
+    playlist_store::{MediaPlaylistPermanentId, ProbeSegmentMetadata},
 };
 
 /// Simple store util which maps pending async segment operations to an u32
@@ -85,13 +86,16 @@ pub(crate) enum PendingSegmentRequest {
     },
     /// This request concerns a media segment
     Media {
+        /// Variant selected for this segment, retained across later adaptive recommendation changes.
+        variant_id: u32,
+        /// Playlist supplying the request, independently of the additive variant's playlist.
+        playlist_id: MediaPlaylistPermanentId,
         /// The `MediaType` the media segment is linked to.
         media_type: MediaType,
         /// Unique identifier of the initialization segment applying to that media segment, if any.
         init_segment_id: Option<f64>,
-        /// Time-related metadata linked to that segment.
-        time_info: SegmentTimeInfo,
         /// Additional context required for ABR
+        /// TODO: Reconstruct this on completion from `variant_id` and `playlist_id`
         quality_context: SegmentQualityContext,
         // The media segment sequence number, as infered by the HLS playlist
         sequence_number: u32,

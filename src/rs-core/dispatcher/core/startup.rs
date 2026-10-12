@@ -12,7 +12,7 @@ use crate::{
             format_direct_media_variants_info_for_js, format_source_buffer_creation_err_for_js,
             format_variants_info_for_js, DIRECT_MEDIA_AUDIO_TRACK_ID, DIRECT_MEDIA_VARIANT_ID,
         },
-        jsAnnounceFetchedContent, jsAnnounceTrackUpdate, jsAnnounceVariantUpdate, jsSendOtherError,
+        jsAnnounceFetchedContent, jsAnnounceTrackUpdate, jsSendOtherError,
         jsSendSegmentParsingError, jsSendSourceBufferCreationError, jsStartObservingPlayback,
         MediaSourceReadyState, MediaType, OtherErrorCode, PlaylistType,
     },
@@ -61,8 +61,7 @@ fn ensure_ready_playlists(dispatcher: &mut Dispatcher, wanted_position: f64) -> 
         StartupStatus::AwaitingPlaylists => false,
         StartupStatus::AwaitingSupportCheck => false,
         StartupStatus::VariantSelectionNeeded => {
-            let Some((variant_id, allow_fast_switching)) = dispatcher.compute_optimal_variant()
-            else {
+            let Some(selection) = dispatcher.compute_optimal_variant() else {
                 // NOTE: Should normally never happen, we should have ensured this was not possible
                 // before
                 jsSendOtherError(
@@ -76,13 +75,10 @@ fn ensure_ready_playlists(dispatcher: &mut Dispatcher, wanted_position: f64) -> 
             let Some(playlist_store) = dispatcher.playlist_store.as_mut() else {
                 return false;
             };
+            let variant_id = selection.safe_variant_id;
+            // Probe the safe variant before normal segment selection can run.
             let changed_media_types = playlist_store.set_variant(variant_id);
-            for media_type in [MediaType::Audio, MediaType::Video] {
-                dispatcher
-                    .segment_selectors
-                    .set_fast_quality_switching(media_type, allow_fast_switching);
-            }
-            jsAnnounceVariantUpdate(Some(variant_id));
+            dispatcher.announce_current_audio_track();
             dispatcher.handle_media_playlist_update(
                 &changed_media_types,
                 MediaPlaylistUpdateMode::Seamless,
@@ -141,7 +137,7 @@ fn advance_awaiting_playlist_info_state(dispatcher: &mut Dispatcher) {
             if playlist_store.has_loaded_media_playlist(mt) {
                 continue; // Already fetched
             }
-            if let Some(id) = playlist_store.media_playlist_id_for(mt) {
+            if let Some(id) = playlist_store.current_media_playlist_id(mt) {
                 if let Some(url) = playlist_store.media_playlist_url(id) {
                     let url = url.clone();
                     let playlist_type = PlaylistFileType::MediaPlaylist {
@@ -160,14 +156,7 @@ fn advance_awaiting_playlist_info_state(dispatcher: &mut Dispatcher) {
     }
 
     if !lifecycle_announced {
-        let (
-            playlist_kind,
-            variants_info,
-            audio_tracks_info,
-            curr_variant,
-            curr_audio_track,
-            is_fixed,
-        ) = {
+        let (playlist_kind, variants_info, audio_tracks_info, curr_audio_track, is_fixed) = {
             let Some(playlist_store) = dispatcher.playlist_store.as_mut() else {
                 return;
             };
@@ -208,24 +197,17 @@ fn advance_awaiting_playlist_info_state(dispatcher: &mut Dispatcher) {
             } else {
                 playlist_store.current_audio_track_id()
             };
-            let curr_variant = if playlist_store.playlist_kind() == PlaylistType::MediaPlaylist {
-                Some(DIRECT_MEDIA_VARIANT_ID)
-            } else {
-                playlist_store.current_variant_id()
-            };
 
             (
                 playlist_store.playlist_kind(),
                 variants_info,
                 audio_tracks_info,
-                curr_variant,
                 curr_audio_track,
                 is_fixed,
             )
         };
 
         jsAnnounceFetchedContent(playlist_kind, variants_info, audio_tracks_info);
-        jsAnnounceVariantUpdate(curr_variant);
         jsAnnounceTrackUpdate(MediaType::Audio, curr_audio_track, is_fixed);
 
         dispatcher.ready_state = PlayerReadyState::AwaitingPlaylistInfo {
@@ -395,6 +377,13 @@ fn consume_probe_segments(dispatcher: &mut Dispatcher) {
                     .find(|seg| seg.sequence() == sequence)
                     .and_then(|seg| segment_list.init_for(seg))
                     .map(|init| init.id());
+                let variant_id = dispatcher
+                    .playlist_store
+                    .as_ref()
+                    .unwrap()
+                    .current_variant_id_for_media_type(media_type)
+                    .unwrap_or(DIRECT_MEDIA_VARIANT_ID);
+                dispatcher.announce_loaded_variant(variant_id);
                 dispatcher.on_media_segment_loaded(SegmentPushMetadata {
                     data,
                     media_type,
