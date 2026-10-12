@@ -213,6 +213,9 @@ impl TimelineReference {
         Some(delta)
     }
 
+    // TODO: Revisit this cross-playlist fallback: HLS permits independent media sequence
+    // numbers and forbids using them to synchronize streams (RFC 8216 sections 6.3.2/6.3.4).
+    // Keep the existing compatibility heuristic for now; use reliable timing anchors instead.
     fn align_by_sequence_number(&self, media_segments: &[MediaSegmentInfo]) -> Option<f64> {
         let new_first = media_segments.first()?;
         let ref_last_sequence = self.last_sequence?;

@@ -15,7 +15,10 @@ use super::{
     variant_stream::{VariantParsingError, VariantStream},
     AudioTrack, MediaTagType,
 };
-use crate::utils::{logger::*, url::Url};
+use crate::{
+    bindings::MediaType,
+    utils::{logger::*, url::Url},
+};
 use std::{
     collections::{HashMap, HashSet},
     error, fmt, io,
@@ -226,22 +229,32 @@ impl MultivariantPlaylist {
         self.variants.as_slice()
     }
 
-    // pub(crate) fn media_type_for(&self, id: &MediaPlaylistPermanentId) -> Option<MediaType> {
-    //     match id.location() {
-    //         MediaPlaylistUrlLocation::Variant => {
-    //             let variant = self.variant(id.id())?;
-    //             if variant.has_type(MediaType::Video) {
-    //                 Some(MediaType::Video)
-    //             } else if variant.has_type(MediaType::Audio) {
-    //                 Some(MediaType::Audio)
-    //             } else {
-    //                 None
-    //             }
-    //         }
-    //         MediaPlaylistUrlLocation::AudioTrack => Some(MediaType::Audio),
-    //         MediaPlaylistUrlLocation::OtherMedia => None,
-    //     }
-    // }
+    /// Media type declared for a playlist, whether selected or not. Muxed playlists use Video.
+    /// Returns None when the type is not known from the multivariant playlist.
+    pub(crate) fn playlist_media_type(&self, id: &MediaPlaylistPermanentId) -> Option<MediaType> {
+        match id.location() {
+            MediaPlaylistUrlLocation::Variant => {
+                let variant = self.variant(id.id())?;
+                if variant.codecs(MediaType::Video).is_none()
+                    && variant.codecs(MediaType::Audio).is_none()
+                {
+                    return None;
+                }
+                if variant.has_type(MediaType::Video) {
+                    Some(MediaType::Video)
+                } else if variant.has_type(MediaType::Audio) {
+                    Some(MediaType::Audio)
+                } else {
+                    None
+                }
+            }
+            MediaPlaylistUrlLocation::AudioTrack => self
+                .audio_tracks
+                .media_tag(id.id())
+                .map(|_| MediaType::Audio),
+            MediaPlaylistUrlLocation::OtherMedia | MediaPlaylistUrlLocation::Direct => None,
+        }
+    }
 
     /// Returns information on all known variants linked to this `MultivariantPlaylist`, ordered by
     /// `bandwidth` ascending, which are linked to the given track_id.
