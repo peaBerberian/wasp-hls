@@ -1,9 +1,13 @@
 use crate::{
     bindings::MediaType,
     media_element::{BufferedChunk, SegmentQualityContext},
-    parser::{InitSegmentInfo, MediaSegmentInfo, SegmentList, SegmentTimeInfo},
+    parser::{InitSegmentInfo, MediaSegmentInfo, SegmentIdentity, SegmentList, SegmentTimeInfo},
     utils::logger::*,
 };
+
+mod validated_segment_history;
+
+use validated_segment_history::ValidatedSegmentHistory;
 
 /// Minimum distance from playback, in seconds, before replacing buffered media.
 const MIN_FAST_QUALITY_SWITCH_LEAD_SECONDS: f64 = 5.;
@@ -124,35 +128,20 @@ impl NextSegmentSelectors {
     }
 }
 
-/// The `NextSegmentSelector` may download a higher-quality version of a segment already in the
-/// buffer. This cursor remembers where to resume looking for such segments.
-struct SafeInspectionCursor {
-    /// Variant whose segments would replace the buffered media.
-    variant_id: u32,
-    /// Context alongside that variant.
-    context: SegmentQualityContext,
-    /// Cutoff in playlist seconds: buffered chunks ending at or before it are no
-    /// longer replacement candidates for this variant and context.
-    inspected_until: f64,
-    /// End of a replacement segment selected but not yet taken into account in `inspected_until`.
-    pending_segment_end: Option<f64>,
-}
-
-impl SafeInspectionCursor {
-    fn matches(&self, candidate: &SegmentSelectionCandidate<'_>) -> bool {
-        self.variant_id == candidate.variant_id
-            && self.context.media_id() == candidate.context.media_id()
-            && self.context.variant_score() == candidate.context.variant_score()
-    }
-}
-
 pub(crate) struct NextSegmentSelector {
     /// Interface allowing to keep track of which audio and video segments we need to load next.
     segment_cursor: SegmentCursor,
 
-    /// Alternative cursor only used for segment replacement (of lower quality content to higher
-    /// quality content).
-    replacement_cursor: Option<SafeInspectionCursor>,
+    /// Accepted media that must not be selected again for replacement, even if the decoding
+    /// back-end did not retain it.
+    ///
+    /// This allows to prevent segment-loading-loop for complex cases where the decoding-side is
+    /// not reliable.
+    ///
+    /// TODO: Check if we should consult this history during ordinary forward selection, so
+    /// accepted media remains skipped after cursor recomputation, can be risky as we don't want
+    /// to prevent GC handling.
+    validated_segments: ValidatedSegmentHistory,
 
     /// Approximation of the current playback position, which will be used as a base position where
     /// segments should start to be loaded.
@@ -167,9 +156,8 @@ pub(crate) struct NextSegmentSelector {
     /// Status in the `NextSegmentSelector` regarding the initialization segment.
     init_status: InitializationSegmentSelectorStatus,
 
-    /// `media_id` of the last segment pushed. Allows to determine when a quality switch
-    /// occured, and to only check if some optimizations have to be performed, such as
-    /// "fast quality switching", when the quality changes.
+    /// Media ID last considered with a usable playlist. A change invalidates initialization
+    /// segment state and requires recomputing the chronological cursor from inventory.
     last_media_id: Option<u32>,
 
     /// When `false`, previous state (e.g. `segment_cursor`) can be relied on to check for the
@@ -217,7 +205,7 @@ impl NextSegmentSelector {
             buffer_goal,
             last_media_id: None,
             needs_starting_position_recompute: true,
-            replacement_cursor: None,
+            validated_segments: ValidatedSegmentHistory::default(),
             init_status: InitializationSegmentSelectorStatus::Unchecked,
             skipped_segments: vec![],
         }
@@ -230,7 +218,7 @@ impl NextSegmentSelector {
         self.init_status = InitializationSegmentSelectorStatus::Unchecked;
         self.last_media_id = None;
         self.needs_starting_position_recompute = true;
-        self.replacement_cursor = None;
+        self.validated_segments = ValidatedSegmentHistory::default();
         self.segment_cursor = SegmentCursor::new(base_pos);
         self.skipped_segments.clear();
     }
@@ -239,17 +227,7 @@ impl NextSegmentSelector {
     pub(crate) fn advance_position(&mut self, base_pos: f64) {
         self.base_pos = f64::max(0., base_pos);
 
-        // If the new base position is further than our replacement cursor, we
-        // can reset it.
-        if let Some(cursor) = self.replacement_cursor.as_mut() {
-            cursor.inspected_until = cursor.inspected_until.max(self.base_pos);
-            if cursor
-                .pending_segment_end
-                .is_some_and(|end| end <= self.base_pos)
-            {
-                cursor.pending_segment_end = None;
-            }
-        }
+        self.validated_segments.evict_before(self.base_pos);
         self.clean_skipped_segments();
     }
 
@@ -258,10 +236,7 @@ impl NextSegmentSelector {
         self.base_pos = f64::max(0., base_pos);
         self.segment_cursor = SegmentCursor::new(base_pos);
         self.needs_starting_position_recompute = true;
-        if let Some(cursor) = self.replacement_cursor.as_mut() {
-            cursor.inspected_until = self.base_pos;
-            cursor.pending_segment_end = None;
-        }
+        self.validated_segments.clear();
         self.skipped_segments.clear();
     }
 
@@ -279,18 +254,11 @@ impl NextSegmentSelector {
         self.init_status = InitializationSegmentSelectorStatus::Validated(id);
     }
 
-    /// Calling this method indicates that the media segment ending at `pos` with `context` was
-    /// requested and no longer needs to be returned by this `NextSegmentSelector`.
-    pub(crate) fn validate_media_until(&mut self, pos: f64, context: &SegmentQualityContext) {
-        self.segment_cursor.move_cursor(pos);
-        if let Some(cursor) = self.replacement_cursor.as_mut() {
-            if cursor.pending_segment_end == Some(pos)
-                && cursor.context.media_id() == context.media_id()
-                && cursor.context.variant_score() == context.variant_score()
-            {
-                cursor.inspected_until = cursor.inspected_until.max(pos);
-                cursor.pending_segment_end = None;
-            }
+    /// Record media loaded and advance the `NextSegmentSelector` to the next segment.
+    pub(crate) fn validate_media(&mut self, media_id: u32, identity: SegmentIdentity, end: f64) {
+        self.segment_cursor.move_cursor(end);
+        if end > self.base_pos {
+            self.validated_segments.insert(media_id, identity, end);
         }
     }
 
@@ -305,28 +273,29 @@ impl NextSegmentSelector {
     /// do have been requested, to avoid just getting the same segment on the next
     /// `most_needed_segment` call.
     /// To "validate" a segment, you can call `validate_init` if we're talking about an
-    /// initialization segment, or `validate_media_until` if we're talking about a media segment.
+    /// initialization segment, or `validate_media` if we're talking about a media segment.
     pub(crate) fn most_needed_segment<'a>(
         &mut self,
         best: SegmentSelectionCandidate<'a>,
         safe: SegmentSelectionCandidate<'a>,
         inventory: &[BufferedChunk],
     ) -> MostNeededSegmentInfo<'a> {
-        let (selected, replacement_segment, playlist_to_follow) =
-            match self.find_safe_replacement(&safe, inventory) {
-                SafeReplacement::Segment(segment) => (safe, Some(segment), PlaylistToFollow::Safe),
-                SafeReplacement::NeedsUpdate => (best, None, PlaylistToFollow::Safe),
-                SafeReplacement::None => (best, None, PlaylistToFollow::Best),
-            };
+        let (selected_candidate, replacement_segment, playlist_to_refresh) = match self
+            .find_safe_replacement(&safe, inventory)
+        {
+            SegmentProposition::Segment(segment) => (safe, Some(segment), PlaylistToRefresh::Safe),
+            SegmentProposition::NeedsPlaylistUpdate => (best, None, PlaylistToRefresh::Safe),
+            SegmentProposition::None => (best, None, PlaylistToRefresh::Best),
+        };
 
-        let Some(segment_list) = selected.playlist.usable() else {
+        let Some(segment_list) = selected_candidate.playlist else {
             return MostNeededSegmentInfo {
                 needed_segments: None,
-                playlist_to_follow,
+                playlist_to_refresh,
             };
         };
 
-        let context = &selected.context;
+        let context = &selected_candidate.context;
         let selected_media_id = context.media_id();
         let previous_media_id = self.last_media_id;
         let has_quality_changed =
@@ -345,7 +314,6 @@ impl NextSegmentSelector {
             } else {
                 log_debug!("Selector: Recomputing starting position for the current media");
             }
-            self.segment_cursor.move_cursor(self.base_pos);
             self.skipped_segments.clear();
             let start_pos = match replacement_segment {
                 Some(segment) => segment.start(),
@@ -367,7 +335,7 @@ impl NextSegmentSelector {
             ) else {
                 return MostNeededSegmentInfo {
                     needed_segments: None,
-                    playlist_to_follow,
+                    playlist_to_refresh,
                 };
             };
             segment
@@ -386,41 +354,27 @@ impl NextSegmentSelector {
         };
         MostNeededSegmentInfo {
             needed_segments: Some(NeededSegmentInfo {
-                variant_id: selected.variant_id,
+                variant_id: selected_candidate.variant_id,
                 media_segment: Some(most_needed_segment),
                 init_segment,
             }),
-            playlist_to_follow,
+            playlist_to_refresh,
         }
     }
 
-    /// Find the first safe segment that can replace buffered media not yet inspected with the
-    /// current safe candidate. A cached live list can only rule out media before its first segment;
-    /// its segments cannot be requested until the list is updated.
+    /// Find the first safe segment that can replace buffered media and has not been validated.
+    /// Negative inspection results are not remembered: live lists and inventory may change.
+    /// Cached segments may be proposed while their playlist is refreshed.
     fn find_safe_replacement<'a>(
-        &mut self,
+        &self,
         safe: &SegmentSelectionCandidate<'a>,
         inventory: &[BufferedChunk],
-    ) -> SafeReplacement<'a> {
-        if !self
-            .replacement_cursor
-            .as_ref()
-            .is_some_and(|cursor| cursor.matches(safe))
-        {
-            self.replacement_cursor = Some(SafeInspectionCursor {
-                variant_id: safe.variant_id,
-                context: safe.context,
-                inspected_until: self.base_pos,
-                pending_segment_end: None,
-            });
-        }
-        let cursor = self.replacement_cursor.as_mut().unwrap();
-
+    ) -> SegmentProposition<'a> {
         let Some(first_index) = inventory
             .iter()
             .position(|chunk| chunk.playlist_end() > self.base_pos)
         else {
-            return SafeReplacement::None;
+            return SegmentProposition::None;
         };
         let mut previous_end = self.base_pos;
         let maximum_position = self.base_pos + self.buffer_goal;
@@ -435,47 +389,36 @@ impl NextSegmentSelector {
             }
 
             let chunk_end = chunk.playlist_end();
-            if chunk_end <= cursor.inspected_until {
-                previous_end = chunk_end;
-                continue;
-            }
-
             let required_lead =
                 MIN_FAST_QUALITY_SWITCH_LEAD_SECONDS.max(chunk_end - chunk.playlist_start());
             let can_replace =
                 chunk.is_worse_than(&safe.context) && previous_end - self.base_pos > required_lead;
             if can_replace {
-                match &safe.playlist {
-                    PlaylistView::NeedsUpdate { cached } => {
-                        let cached_starts_after_chunk = cached
-                            .and_then(|list| list.media().iter().find(|seg| seg.duration() > 0.))
-                            .is_some_and(|seg| seg.start() >= chunk_end);
-                        if !cached_starts_after_chunk {
-                            return SafeReplacement::NeedsUpdate;
-                        }
-                    }
-                    PlaylistView::Usable(list) => {
-                        if let Some(segment) = list.media().iter().find(|seg| {
-                            seg.duration() > 0.
-                                && seg.end() > previous_end
-                                && seg.end() > cursor.inspected_until
-                                && seg.start() < chunk_end
-                                && seg.start() <= maximum_position
-                        }) {
-                            cursor.pending_segment_end = Some(segment.end());
-                            return SafeReplacement::Segment(segment);
-                        }
-                    }
+                let Some(list) = safe.playlist else {
+                    return SegmentProposition::NeedsPlaylistUpdate;
+                };
+                if let Some(segment) = list.media().iter().find(|seg| {
+                    seg.duration() > 0.
+                        && seg.end() > previous_end
+                        && !self.was_segment_validated(safe.context.media_id(), seg)
+                        && seg.start() < chunk_end
+                        && seg.start() <= maximum_position
+                }) {
+                    return SegmentProposition::Segment(segment);
                 }
                 // TODO: If this replaceable range lies beyond the cached live playlist's window,
                 // ask to refresh the replacement playlist while continuing additions. Otherwise,
                 // unchanged candidates can leave newer replacement opportunities undiscovered.
             }
 
-            cursor.inspected_until = chunk_end;
             previous_end = chunk_end;
         }
-        SafeReplacement::None
+        SegmentProposition::None
+    }
+
+    fn was_segment_validated(&self, media_id: u32, segment: &MediaSegmentInfo) -> bool {
+        self.validated_segments
+            .contains(media_id, segment.identity())
     }
 
     /// Starts from `self.base_pos`, look at what is already buffered, and determine a new optimal
@@ -666,41 +609,34 @@ enum InitializationSegmentSelectorStatus {
     Validated(f64),
 }
 
-/// One variant the selector may use, with the status of its media playlist.
+/// One variant the selector may use, with its latest available media playlist.
 pub(crate) struct SegmentSelectionCandidate<'a> {
     pub(crate) variant_id: u32,
     pub(crate) context: SegmentQualityContext,
-    pub(crate) playlist: PlaylistView<'a>,
+    /// Cached segments may be selected without waiting for a live playlist refresh. `None` means
+    /// no playlist has been loaded; refresh timing remains the caller's responsibility.
+    ///
+    /// TODO: When integrating the dispatcher, recover from expired cached segment requests using
+    /// the failed segment's own media playlist. Refresh it with the normal reload timing and
+    /// reconsider selection on terminal 404/410 instead of stopping playable buffered content.
+    pub(crate) playlist: Option<&'a SegmentList>,
 }
 
-/// Whether a candidate's listed segments can be requested now.
-pub(crate) enum PlaylistView<'a> {
-    /// Listed segments may be requested. A live list can still receive normal later refreshes.
-    Usable(&'a SegmentList),
-    /// Fetch or refresh the list before requesting segments from this candidate. An old live list
-    /// may be supplied only to rule out replacement positions before its first segment.
-    NeedsUpdate { cached: Option<&'a SegmentList> },
-}
-
-impl<'a> PlaylistView<'a> {
-    fn usable(&self) -> Option<&'a SegmentList> {
-        match self {
-            Self::Usable(list) => Some(list),
-            Self::NeedsUpdate { .. } => None,
-        }
-    }
-}
-
-/// Which candidate's media playlist should be followed for this media type.
+/// Which media playlist should be refreshed for this media type.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum PlaylistToFollow {
+pub(crate) enum PlaylistToRefresh {
     Best,
     Safe,
 }
 
-enum SafeReplacement<'a> {
+/// Candidate for a segment that could be loaded for a given set of criteria.
+enum SegmentProposition<'a> {
+    /// None seems to match the given criteria currently.
     None,
-    NeedsUpdate,
+    /// A segment matching the criteria might be found if/when refreshing the corresponding
+    /// Media Playlist.
+    NeedsPlaylistUpdate,
+    /// There's a proposition matching given criteria.
     Segment(&'a MediaSegmentInfo),
 }
 
@@ -709,7 +645,7 @@ pub(crate) struct MostNeededSegmentInfo<'a> {
     needed_segments: Option<NeededSegmentInfo<'a>>,
     /// The candidate whose playlist should be fetched or normally refreshed. This can differ from
     /// the variant of `needed_segments`.
-    playlist_to_follow: PlaylistToFollow,
+    playlist_to_refresh: PlaylistToRefresh,
 }
 
 impl<'a> MostNeededSegmentInfo<'a> {
@@ -717,8 +653,8 @@ impl<'a> MostNeededSegmentInfo<'a> {
         self.needed_segments.as_ref()
     }
 
-    pub(crate) fn playlist_to_follow(&self) -> PlaylistToFollow {
-        self.playlist_to_follow
+    pub(crate) fn playlist_to_refresh(&self) -> PlaylistToRefresh {
+        self.playlist_to_refresh
     }
 }
 
@@ -747,17 +683,14 @@ impl<'a> NeededSegmentInfo<'a> {
         self.variant_id
     }
 
-    /// Returns initialization segment that should be loaded.
-    ///
-    /// `None` either if there's no needed initialization segment or if we consider that the last
-    /// validated one is still compatible.
+    /// Returns the media segment that should be loaded, if one is needed.
     pub(crate) fn media_segment(&self) -> Option<&MediaSegmentInfo> {
         self.media_segment
     }
 
-    /// Returns media segment that should be loaded, corresponding to the inner information.
+    /// Returns the initialization segment that should be loaded.
     ///
-    /// `None` if no media segment is currently needed.
+    /// `None` if no initialization segment exists or the last validated one is still compatible.
     pub(crate) fn init_segment(&self) -> Option<&InitSegmentInfo> {
         self.init_segment
     }
@@ -817,13 +750,13 @@ impl SegmentCursor {
 #[cfg(test)]
 mod tests {
     use super::{
-        NextSegmentSelector, NextSegmentSelectors, PlaylistToFollow, PlaylistView, SegmentCursor,
+        NextSegmentSelector, NextSegmentSelectors, PlaylistToRefresh, SegmentCursor,
         SegmentSelectionCandidate,
     };
     use crate::{
         bindings::MediaType,
         media_element::{BufferedChunk, SegmentQualityContext},
-        parser::{SegmentList, TopLevelPlaylist},
+        parser::{MediaSegmentInfo, SegmentList, TopLevelPlaylist},
         utils::url::Url,
     };
 
@@ -834,8 +767,16 @@ mod tests {
         SegmentSelectionCandidate {
             variant_id: context.media_id(),
             context: *context,
-            playlist: PlaylistView::Usable(list),
+            playlist: Some(list),
         }
+    }
+
+    fn validate(
+        selector: &mut NextSegmentSelector,
+        segment: &MediaSegmentInfo,
+        context: &SegmentQualityContext,
+    ) {
+        selector.validate_media(context.media_id(), segment.identity(), segment.end());
     }
 
     fn playlist_starting_at(start_second: u32, segment_count: u32) -> TopLevelPlaylist {
@@ -850,6 +791,116 @@ mod tests {
             Url::new("https://example.com/media.m3u8".to_owned()),
         )
         .unwrap()
+    }
+
+    #[test]
+    fn live_refresh_reconsiders_previously_unavailable_replacements() {
+        let TopLevelPlaylist::DirectMedia(initial) = playlist_starting_at(0, 2) else {
+            panic!("expected direct media playlist");
+        };
+        let TopLevelPlaylist::DirectMedia(updated) = playlist_starting_at(0, 10) else {
+            panic!("expected direct media playlist");
+        };
+        let best_list = updated.playlist().segment_list();
+        let safe_list = initial.playlist().segment_list();
+        let best = SegmentQualityContext::new(3., 3);
+        let safe = SegmentQualityContext::new(2., 2);
+        let inventory: Vec<_> = (0..6)
+            .map(|number| {
+                BufferedChunk::new_for_test(
+                    number as f64 * 4.,
+                    (number + 1) as f64 * 4.,
+                    SegmentQualityContext::new(1., 1),
+                )
+            })
+            .collect();
+        let mut selector = NextSegmentSelector::new(0., 40.);
+
+        let first = selector.most_needed_segment(
+            candidate(best_list, &best),
+            candidate(safe_list, &safe),
+            &inventory,
+        );
+        let first = first.needed_segments().unwrap();
+        assert_eq!(first.variant_id(), best.media_id());
+        validate(&mut selector, first.media_segment().unwrap(), &best);
+
+        let refreshed = selector.most_needed_segment(
+            candidate(best_list, &best),
+            candidate(best_list, &safe),
+            &inventory,
+        );
+        assert_eq!(refreshed.playlist_to_refresh(), PlaylistToRefresh::Safe);
+        assert_eq!(
+            refreshed
+                .needed_segments()
+                .unwrap()
+                .media_segment()
+                .unwrap()
+                .start(),
+            8.
+        );
+    }
+
+    #[test]
+    fn accepted_replacements_survive_missing_buffer_and_candidate_changes() {
+        let TopLevelPlaylist::DirectMedia(playlist) = playlist_starting_at(0, 10) else {
+            panic!("expected direct media playlist");
+        };
+        let list = playlist.playlist().segment_list();
+        let best = SegmentQualityContext::new(3., 3);
+        let safe = SegmentQualityContext::new(2., 2);
+        // Keep lower-quality inventory unchanged, as if every replacement failed to buffer.
+        let inventory: Vec<_> = (0..6)
+            .map(|number| {
+                BufferedChunk::new_for_test(
+                    number as f64 * 4.,
+                    (number + 1) as f64 * 4.,
+                    SegmentQualityContext::new(1., 1),
+                )
+            })
+            .collect();
+        let mut selector = NextSegmentSelector::new(0., 40.);
+        // Validate a later segment first: this must not suppress earlier untried segments.
+        validate(&mut selector, &list.media()[4], &safe);
+        for expected_start in [8., 12., 20.] {
+            let selected = selector.most_needed_segment(
+                candidate(list, &best),
+                candidate(list, &safe),
+                &inventory,
+            );
+            let segment = selected.needed_segments().unwrap().media_segment().unwrap();
+            assert_eq!(segment.start(), expected_start);
+            validate(&mut selector, segment, &safe);
+        }
+
+        let changed_best = SegmentQualityContext::new(4., 4);
+        let stale = selector.most_needed_segment(
+            candidate(list, &changed_best),
+            SegmentSelectionCandidate {
+                variant_id: 20,
+                context: SegmentQualityContext::new(2.5, safe.media_id()),
+                playlist: Some(list),
+            },
+            &inventory,
+        );
+        assert_eq!(stale.playlist_to_refresh(), PlaylistToRefresh::Best);
+
+        selector.restart_from_position(0.);
+        let retry = selector.most_needed_segment(
+            candidate(list, &best),
+            candidate(list, &safe),
+            &inventory,
+        );
+        assert_eq!(
+            retry
+                .needed_segments()
+                .unwrap()
+                .media_segment()
+                .unwrap()
+                .start(),
+            8.
+        );
     }
 
     #[test]
@@ -883,16 +934,16 @@ mod tests {
             SegmentSelectionCandidate {
                 variant_id: 30,
                 context: best,
-                playlist: PlaylistView::Usable(list),
+                playlist: Some(list),
             },
             SegmentSelectionCandidate {
                 variant_id: 20,
                 context: safe,
-                playlist: PlaylistView::Usable(list),
+                playlist: Some(list),
             },
             &inventory,
         );
-        assert_eq!(replacement.playlist_to_follow, PlaylistToFollow::Safe);
+        assert_eq!(replacement.playlist_to_refresh, PlaylistToRefresh::Safe);
         let replacement = replacement.needed_segments.unwrap();
         assert_eq!(replacement.variant_id, 20);
         assert_eq!(replacement.media_segment.unwrap().start(), 8.);
@@ -912,7 +963,7 @@ mod tests {
             8.
         );
 
-        selector.validate_media_until(replacement.media_segment.unwrap().end(), &safe);
+        validate(&mut selector, replacement.media_segment.unwrap(), &safe);
         let next = selector.most_needed_segment(
             candidate(list, &best),
             candidate(list, &safe),
@@ -928,12 +979,12 @@ mod tests {
             SegmentSelectionCandidate {
                 variant_id: 30,
                 context: best,
-                playlist: PlaylistView::Usable(list),
+                playlist: Some(list),
             },
             SegmentSelectionCandidate {
                 variant_id: 20,
                 context: safe,
-                playlist: PlaylistView::Usable(list),
+                playlist: Some(list),
             },
             &[],
         );
@@ -974,11 +1025,11 @@ mod tests {
             SegmentSelectionCandidate {
                 variant_id: 20,
                 context: safe,
-                playlist: PlaylistView::NeedsUpdate { cached: None },
+                playlist: None,
             },
             &inventory,
         );
-        assert_eq!(while_missing.playlist_to_follow(), PlaylistToFollow::Safe);
+        assert_eq!(while_missing.playlist_to_refresh(), PlaylistToRefresh::Safe);
         let best_segment = while_missing.needed_segments().unwrap();
         assert_eq!(best_segment.variant_id(), 3);
         assert_eq!(best_segment.media_segment().unwrap().start(), 24.);
@@ -990,11 +1041,11 @@ mod tests {
             SegmentSelectionCandidate {
                 variant_id: 20,
                 context: safe,
-                playlist: PlaylistView::NeedsUpdate { cached: None },
+                playlist: None,
             },
             &inventory,
         );
-        assert_eq!(while_full.playlist_to_follow(), PlaylistToFollow::Safe);
+        assert_eq!(while_full.playlist_to_refresh(), PlaylistToRefresh::Safe);
         assert!(while_full.needed_segments().is_none());
 
         selector.buffer_goal = 40.;
@@ -1004,18 +1055,18 @@ mod tests {
             SegmentSelectionCandidate {
                 variant_id: 20,
                 context: safe,
-                playlist: PlaylistView::Usable(list),
+                playlist: Some(list),
             },
             &inventory,
         );
-        assert_eq!(after_load.playlist_to_follow(), PlaylistToFollow::Safe);
+        assert_eq!(after_load.playlist_to_refresh(), PlaylistToRefresh::Safe);
         let safe_segment = after_load.needed_segments().unwrap();
         assert_eq!(safe_segment.variant_id(), 20);
         assert_eq!(safe_segment.media_segment().unwrap().start(), 8.);
     }
 
     #[test]
-    fn inspects_a_fresh_safe_list_once_before_following_best_again() {
+    fn cached_safe_window_rules_out_older_buffered_media() {
         let best_playlist = playlist_starting_at(0, 12);
         let safe_playlist = playlist_starting_at(28, 3);
         let TopLevelPlaylist::DirectMedia(best_playlist) = &best_playlist else {
@@ -1044,11 +1095,11 @@ mod tests {
             SegmentSelectionCandidate {
                 variant_id: 2,
                 context: safe,
-                playlist: PlaylistView::NeedsUpdate { cached: None },
+                playlist: None,
             },
             &inventory,
         );
-        assert_eq!(missing.playlist_to_follow(), PlaylistToFollow::Safe);
+        assert_eq!(missing.playlist_to_refresh(), PlaylistToRefresh::Safe);
         assert_eq!(missing.needed_segments().unwrap().variant_id(), 3);
 
         let inspected = selector.most_needed_segment(
@@ -1056,28 +1107,19 @@ mod tests {
             candidate(safe_list, &safe),
             &inventory,
         );
-        assert_eq!(inspected.playlist_to_follow(), PlaylistToFollow::Best);
-        assert_eq!(
-            selector
-                .replacement_cursor
-                .as_ref()
-                .unwrap()
-                .inspected_until,
-            24.
-        );
+        assert_eq!(inspected.playlist_to_refresh(), PlaylistToRefresh::Best);
+        assert!(!selector.was_segment_validated(safe.media_id(), &safe_list.media()[0]));
 
         let repeated = selector.most_needed_segment(
             candidate(best_list, &best),
             SegmentSelectionCandidate {
                 variant_id: 2,
                 context: safe,
-                playlist: PlaylistView::NeedsUpdate {
-                    cached: Some(safe_list),
-                },
+                playlist: Some(safe_list),
             },
             &inventory,
         );
-        assert_eq!(repeated.playlist_to_follow(), PlaylistToFollow::Best);
+        assert_eq!(repeated.playlist_to_refresh(), PlaylistToRefresh::Best);
 
         inventory.extend((6..8).map(|number| {
             BufferedChunk::new_for_test(
@@ -1087,24 +1129,34 @@ mod tests {
             )
         }));
         let new_opportunity = selector.most_needed_segment(
-            candidate(best_list, &best),
+            SegmentSelectionCandidate {
+                variant_id: best.media_id(),
+                context: best,
+                playlist: None,
+            },
             SegmentSelectionCandidate {
                 variant_id: 2,
                 context: safe,
-                playlist: PlaylistView::NeedsUpdate {
-                    cached: Some(safe_list),
-                },
+                playlist: Some(safe_list),
             },
             &inventory,
         );
-        assert_eq!(new_opportunity.playlist_to_follow(), PlaylistToFollow::Safe);
+        assert_eq!(
+            new_opportunity.playlist_to_refresh(),
+            PlaylistToRefresh::Safe
+        );
+        // Use the cached safe segment immediately, even without a best playlist, and refresh
+        // safe alongside the segment request. No fresh-playlist confirmation is required.
+        let cached_segment = new_opportunity.needed_segments().unwrap();
+        assert_eq!(cached_segment.variant_id(), safe.media_id());
+        assert_eq!(cached_segment.media_segment().unwrap().start(), 28.);
 
         let replacement = selector.most_needed_segment(
             candidate(best_list, &best),
             candidate(safe_list, &safe),
             &inventory,
         );
-        assert_eq!(replacement.playlist_to_follow(), PlaylistToFollow::Safe);
+        assert_eq!(replacement.playlist_to_refresh(), PlaylistToRefresh::Safe);
         assert_eq!(
             replacement
                 .needed_segments()
@@ -1147,7 +1199,7 @@ mod tests {
             ),
             &inventory,
         );
-        assert_eq!(result.playlist_to_follow(), PlaylistToFollow::Safe);
+        assert_eq!(result.playlist_to_refresh(), PlaylistToRefresh::Safe);
         assert_eq!(
             result
                 .needed_segments()
@@ -1167,7 +1219,7 @@ mod tests {
         let missing = |context: &SegmentQualityContext| SegmentSelectionCandidate {
             variant_id: context.media_id(),
             context: *context,
-            playlist: PlaylistView::NeedsUpdate { cached: None },
+            playlist: None,
         };
         let inventory = vec![
             BufferedChunk::new_for_test(0., 6., SegmentQualityContext::new(1., 1)),
@@ -1175,12 +1227,12 @@ mod tests {
         ];
 
         let replacement = selector.most_needed_segment(missing(&best), missing(&safe), &inventory);
-        assert_eq!(replacement.playlist_to_follow, PlaylistToFollow::Safe);
+        assert_eq!(replacement.playlist_to_refresh, PlaylistToRefresh::Safe);
         assert!(replacement.needed_segments.is_none());
         assert_eq!(selector.segment_cursor.current_cursor, 0.);
 
         let addition = selector.most_needed_segment(missing(&best), missing(&safe), &[]);
-        assert_eq!(addition.playlist_to_follow, PlaylistToFollow::Best);
+        assert_eq!(addition.playlist_to_refresh, PlaylistToRefresh::Best);
         assert!(addition.needed_segments.is_none());
         assert_eq!(selector.segment_cursor.current_cursor, 0.);
     }
@@ -1231,7 +1283,7 @@ mod tests {
                 .needed_segments
                 .unwrap();
             selector.validate_init(first.init_segment.unwrap().id());
-            selector.validate_media_until(first.media_segment.unwrap().end(), &context);
+            validate(selector, first.media_segment.unwrap(), &context);
 
             selector.restart_from_position(seek_position - 0.2);
             let context = SegmentQualityContext::new(2., if change_media { 3 } else { 2 });
@@ -1245,7 +1297,7 @@ mod tests {
                 .unwrap();
             assert_eq!(next.media_segment.unwrap().start(), expected_start);
             assert_eq!(next.init_segment.is_some(), change_media);
-            selector.validate_media_until(next.media_segment.unwrap().end(), &context);
+            validate(selector, next.media_segment.unwrap(), &context);
 
             let following = selector
                 .most_needed_segment(
@@ -1275,16 +1327,16 @@ mod tests {
             SegmentSelectionCandidate {
                 variant_id: 3,
                 context: SegmentQualityContext::new(3., 3),
-                playlist: PlaylistView::NeedsUpdate { cached: None },
+                playlist: None,
             },
             SegmentSelectionCandidate {
                 variant_id: 2,
                 context: higher_quality,
-                playlist: PlaylistView::NeedsUpdate { cached: None },
+                playlist: None,
             },
             &buffered,
         );
-        assert_eq!(result.playlist_to_follow(), PlaylistToFollow::Safe);
+        assert_eq!(result.playlist_to_refresh(), PlaylistToRefresh::Safe);
         assert_eq!(selector.recompute_starting_position(&buffered), 10.);
     }
 
@@ -1301,16 +1353,16 @@ mod tests {
             SegmentSelectionCandidate {
                 variant_id: 3,
                 context: SegmentQualityContext::new(3., 3),
-                playlist: PlaylistView::NeedsUpdate { cached: None },
+                playlist: None,
             },
             SegmentSelectionCandidate {
                 variant_id: 2,
                 context: higher_quality,
-                playlist: PlaylistView::NeedsUpdate { cached: None },
+                playlist: None,
             },
             &buffered,
         );
-        assert_eq!(result.playlist_to_follow(), PlaylistToFollow::Best);
+        assert_eq!(result.playlist_to_refresh(), PlaylistToRefresh::Best);
         assert_eq!(selector.recompute_starting_position(&buffered), 9.);
     }
 
