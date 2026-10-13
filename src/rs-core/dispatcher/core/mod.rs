@@ -137,6 +137,11 @@ impl Dispatcher {
                     }
 
                     self.check_segments_to_request();
+                    // XXX TODO: I think the agent completely broke variant event handling compared
+                    // to `main` here. Not sure it was needed. It's supposed to keep the same
+                    // ordering and be linked to the variant currently-considered for segment
+                    // requests
+
                     // XXX TODO: Doesn't this comment implies that w change event ordering?
                     // variantUpdate should be before `variantLockStatusChange` should be before
                     // segment requests linked to the locked variant.
@@ -223,6 +228,10 @@ impl Dispatcher {
             SetAudioTrackResponse::AudioMediaUpdate => {
                 self.announce_current_audio_track();
                 self.check_requested_segments_still_needed();
+
+                // XXX TODO: `main` had a `jsAnnounceVariantUpdate` case around here
+                // verify that it is not needed
+
                 // We want to abort and flush audio here, independently of the variant update, as
                 // we're in an audio-track-setting context.
                 self.handle_media_playlist_update(
@@ -1049,27 +1058,20 @@ impl Dispatcher {
                 continue;
             }
 
-            // XXX TODO: Is there any issue in moving that here?
-            let recommendation =
-                normalize_abr_selection(pl_store, self.compute_optimal_variant(), media_type);
-            if recommendation.is_some_and(|selection| !selection.urgent) {
-                continue; // not urgent & still matches the buffer goal, no need to abort
+            // Direct media has no variant choice; only the range check above applies.
+            if pl_store.direct_media_playlist().is_some() {
+                continue;
             }
 
-            let Some(addition_candidate) = segment_selection_candidate(
-                pl_store,
-                recommendation.map(|selection| selection.best_variant_id),
-                media_type,
-            ) else {
-                self.abort_segment_requests_with_type(media_type);
+            let Some(recommendation) = self.compute_optimal_variant() else {
                 continue;
             };
-            let Some(replacement_candidate) = segment_selection_candidate(
-                pl_store,
-                recommendation.map(|selection| selection.safe_variant_id),
-                media_type,
-            ) else {
-                self.abort_segment_requests_with_type(media_type);
+            if !recommendation.urgent {
+                continue;
+            }
+            let Some((addition_candidate, replacement_candidate)) =
+                segment_selection_candidates(pl_store, Some(recommendation), media_type)
+            else {
                 continue;
             };
 
@@ -1082,7 +1084,19 @@ impl Dispatcher {
                     replacement_candidate,
                     self.media_element_ref.inventory(media_type),
                 );
-            let still_needed = selected.needed_segments().is_some_and(|needed| {
+            let Some(needed) = selected.needed_segments() else {
+                let refresh_id = selected.playlist_to_refresh();
+                let waiting_for_playlist = pl_store.media_playlist(&refresh_id).is_none();
+                self.follow_media_playlist(media_type, refresh_id);
+                // Keep useful progress while loading the target playlist. Once it is loaded,
+                // an urgent switch can cancel even when it contains no suitable segment yet.
+                // TODO: consider staleness?
+                if !waiting_for_playlist {
+                    self.abort_segment_requests_with_type(media_type);
+                }
+                continue;
+            };
+            let still_needed = {
                 if let Some(init) = needed.init_segment() {
                     self.requester
                         .is_requesting_segment(media_type, init.url(), init.byte_range())
@@ -1095,7 +1109,7 @@ impl Dispatcher {
                 } else {
                     false
                 }
-            });
+            };
             if !still_needed {
                 self.abort_segment_requests_with_type(media_type);
             }
@@ -1119,21 +1133,9 @@ impl Dispatcher {
         let Some(pl_store) = self.playlist_store.as_ref() else {
             return;
         };
-        let recommendation = normalize_abr_selection(pl_store, recommendation, media_type);
-        let Some(addition_candidate) = segment_selection_candidate(
-            pl_store,
-            recommendation.map(|selection| selection.best_variant_id),
-            media_type,
-        ) else {
-            // XXX TODO: should we return here?
-            return;
-        };
-        let Some(replacement_candidate) = segment_selection_candidate(
-            pl_store,
-            recommendation.map(|selection| selection.safe_variant_id),
-            media_type,
-        ) else {
-            // XXX TODO: should we return here?
+        let Some((addition_candidate, replacement_candidate)) =
+            segment_selection_candidates(pl_store, recommendation, media_type)
+        else {
             return;
         };
         let addition_playlist_id = addition_candidate.context.playlist_id();
@@ -1199,6 +1201,7 @@ impl Dispatcher {
             || !pl_store.has_distinct_media_type(MediaType::Video)
             || pl_store.current_media_playlist_id(media_type) != Some(&playlist_id);
         if choose_variant && pl_store.current_variant_id() != Some(variant_id) {
+            // TODO: Verify transitions between separate and muxed audio in both directions.
             let changed_media_types = pl_store.set_variant(variant_id);
             for changed_type in changed_media_types {
                 self.ready_probe_segments.clear_media_type(changed_type);
@@ -1555,19 +1558,38 @@ impl Dispatcher {
     }
 }
 
-fn segment_selection_candidate(
-    pl_store: &PlaylistStore,
+fn segment_selection_candidates(
+    playlist_store: &PlaylistStore,
+    recommendation: Option<AdaptiveVariantSelection>,
+    media_type: MediaType,
+) -> Option<(SegmentSelectionCandidate<'_>, SegmentSelectionCandidate<'_>)> {
+    let recommendation = normalize_abr_selection(playlist_store, recommendation, media_type);
+    Some((
+        segment_selection_candidate_for_variant(
+            recommendation.map(|selection| selection.best_variant_id),
+            playlist_store,
+            media_type,
+        )?,
+        segment_selection_candidate_for_variant(
+            recommendation.map(|selection| selection.safe_variant_id),
+            playlist_store,
+            media_type,
+        )?,
+    ))
+}
+
+fn segment_selection_candidate_for_variant(
     variant_id: Option<u32>,
+    pl_store: &PlaylistStore,
     media_type: MediaType,
 ) -> Option<SegmentSelectionCandidate<'_>> {
     if let Some(variant_id) = variant_id {
-        let id = pl_store.media_playlist_id_for_variant(variant_id, media_type)?;
         let context = pl_store.variant_segment_quality_context(variant_id, media_type)?;
         Some(SegmentSelectionCandidate {
             variant_id,
             context,
             playlist: pl_store
-                .media_playlist(&id)
+                .media_playlist(&context.playlist_id())
                 .map(|playlist| playlist.segment_list()),
         })
     } else {
@@ -1618,7 +1640,7 @@ fn sync_media_source_duration(pl_store: &PlaylistStore) {
 
 #[cfg(test)]
 mod tests {
-    use super::{normalize_abr_selection, segment_selection_candidate, Dispatcher};
+    use super::{normalize_abr_selection, segment_selection_candidate_for_variant, Dispatcher};
     use crate::{
         bindings::MediaType,
         dispatcher::{JsTimeRanges, MediaObservation, PlaybackTickReason},
@@ -1661,9 +1683,9 @@ mod tests {
                 video_selection.best_variant_id,
                 if shared_audio { high } else { low }
             );
-            let safe = segment_selection_candidate(
-                &pl_store,
+            let safe = segment_selection_candidate_for_variant(
                 Some(video_selection.safe_variant_id),
+                &pl_store,
                 MediaType::Video,
             )
             .unwrap();
@@ -1764,7 +1786,9 @@ mod tests {
 
     #[test]
     fn adaptive_switches_preserve_useful_requests_and_position_jumps_cancel_obsolete_requests() {
-        for (buffer, urgent) in [(1., true), (8.1, false)] {
+        for (buffer, urgent, alternative_available) in
+            [(1., true, true), (1., true, false), (8.1, false, true)]
+        {
             let mut dispatcher = dispatcher_with_abr_playlists(Some(4), buffer);
             let playlist_store = dispatcher.playlist_store.as_mut().unwrap();
             let high = playlist_store.available_variants()[2].id();
@@ -1787,7 +1811,21 @@ mod tests {
             dispatcher
                 .requester
                 .request_media_segment(MediaType::Video, &segment, 123);
-            assert_eq!(dispatcher.compute_optimal_variant().unwrap().urgent, urgent);
+            let recommendation = dispatcher.compute_optimal_variant().unwrap();
+            assert_eq!(recommendation.urgent, urgent);
+            if !alternative_available {
+                let playlist_store = dispatcher.playlist_store.as_mut().unwrap();
+                let replacement_id = playlist_store
+                    .media_playlist_id_for_variant(recommendation.best_variant_id, MediaType::Video)
+                    .unwrap();
+                playlist_store
+                    .update_media_playlist(
+                        &replacement_id,
+                        b"#EXTM3U\n#EXT-X-TARGETDURATION:4\n#EXT-X-ENDLIST\n".as_slice(),
+                        Url::new("https://example.com/no-segment.m3u8".into()),
+                    )
+                    .unwrap();
+            }
             dispatcher.check_requested_segments_still_needed();
             assert_eq!(
                 dispatcher
@@ -1903,6 +1941,56 @@ mod tests {
                 .requester
                 .has_segment_request_pending(MediaType::Video));
         }
+    }
+
+    #[test]
+    fn direct_media_preserves_useful_requests_without_adaptive_reconsideration() {
+        let mut dispatcher = dispatcher_with_abr_playlists(Some(4), 8.1);
+        let playlist_store = dispatcher.playlist_store.as_mut().unwrap();
+        let direct_playlist = TopLevelPlaylist::parse(
+            b"#EXTM3U\n#EXT-X-TARGETDURATION:4\n#EXTINF:4,\nseg.ts\n#EXT-X-ENDLIST\n",
+            Url::new("https://example.com/direct.m3u8".into()),
+        )
+        .unwrap();
+        *playlist_store = PlaylistStore::try_new(direct_playlist).unwrap();
+        playlist_store.set_external_media_info(
+            crate::parser::ExternalMediaInfo {
+                mime_type: "video/mp4".into(),
+                codec: "avc1.42E01E".into(),
+                media_type: MediaType::Video,
+            },
+            MediaType::Video,
+        );
+        let segment = playlist_store
+            .direct_media_playlist()
+            .unwrap()
+            .1
+            .segment_list()
+            .media()[0]
+            .clone();
+        dispatcher
+            .media_element_ref
+            .on_observation(MediaObservation::new(
+                PlaybackTickReason::RegularInterval,
+                0.,
+                4,
+                JsTimeRanges::new(vec![0., 20.]),
+                false,
+                false,
+                false,
+                f64::MAX,
+                None,
+                Some(JsTimeRanges::new(vec![0., 20.])),
+            ));
+        dispatcher.requester.lock_segment_requests();
+        dispatcher
+            .requester
+            .request_media_segment(MediaType::Video, &segment, 123);
+        assert!(dispatcher.compute_optimal_variant().is_none());
+        dispatcher.check_requested_segments_still_needed();
+        assert!(dispatcher
+            .requester
+            .has_segment_request_pending(MediaType::Video));
     }
 
     #[test]
@@ -2068,9 +2156,11 @@ mod tests {
             .unwrap();
         pl_store.set_variant(best_variant);
         let best =
-            segment_selection_candidate(pl_store, Some(best_variant), MediaType::Video).unwrap();
+            segment_selection_candidate_for_variant(Some(best_variant), pl_store, MediaType::Video)
+                .unwrap();
         let safe =
-            segment_selection_candidate(pl_store, Some(safe_variant), MediaType::Video).unwrap();
+            segment_selection_candidate_for_variant(Some(safe_variant), pl_store, MediaType::Video)
+                .unwrap();
         let low_context = pl_store
             .variant_segment_quality_context(ids[0], MediaType::Video)
             .unwrap();
