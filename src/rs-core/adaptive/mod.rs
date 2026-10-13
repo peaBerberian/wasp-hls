@@ -112,14 +112,17 @@ impl AdaptiveQualitySelector {
             let best = variants
                 .iter()
                 .find(|variant| variant.id() == best_variant_id);
+            let safe = variants
+                .iter()
+                .find(|variant| variant.id() == safe_variant_id);
             let low_buffer = playback
                 .abr_reference_segment_duration
                 .filter(|duration| duration.is_finite() && *duration > 0.)
                 .map(|duration| (duration * 2.).clamp(BOLA_MIN_LOW_BUFFER, BOLA_MAX_LOW_BUFFER))
                 .unwrap_or(BOLA_MIN_LOW_BUFFER);
-            let urgent = match (current, best, playback.buffer_level) {
-                (Some(current), Some(best), Some(buffer)) => {
-                    best.bandwidth() < current.bandwidth()
+            let urgent = match (current, best, safe, playback.buffer_level) {
+                (Some(current), Some(best), Some(safe), Some(buffer)) => {
+                    best.bandwidth().max(safe.bandwidth()) < current.bandwidth()
                         && buffer.is_finite()
                         && playback.playback_speed.is_finite()
                         && playback.playback_speed > 0.
@@ -655,6 +658,45 @@ high.m3u8\n",
                 "current={current}, buffer={buffer}, speed={speed}"
             );
         }
+    }
+
+    #[test]
+    fn urgent_recommendations_reduce_bandwidth_for_either_choice_with_nonmonotonic_scores() {
+        let playlist = TopLevelPlaylist::parse(
+            b"#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=4000000,SCORE=1\nlow.m3u8\n#EXT-X-STREAM-INF:BANDWIDTH=2000000,SCORE=2\nmedium.m3u8\n#EXT-X-STREAM-INF:BANDWIDTH=6000000,SCORE=3\nhigh.m3u8\n",
+            Url::new("https://example.com/master.m3u8".into()),
+        ).unwrap();
+        let variants = variants(&playlist);
+        let mut saw_urgent = false;
+        let mut saw_distinct_choices = false;
+        for initial_bandwidth in [500_000., 3_125_000., 5_000_000., 8_000_000.] {
+            let selector = AdaptiveQualitySelector::new(initial_bandwidth);
+            for current in &variants {
+                for buffer in [0., 2., 8., 12., 30.] {
+                    for speed in [0., 1., 2., 4.] {
+                        let playback = PlaybackConditions {
+                            playback_speed: speed,
+                            ..playback_conditions(buffer, Some(4.))
+                        };
+                        let selected = selector
+                            .select_variant(&variants, Some(current.id()), &playback)
+                            .unwrap();
+                        saw_distinct_choices |=
+                            selected.best_variant_id != selected.safe_variant_id;
+                        if selected.urgent {
+                            saw_urgent = true;
+                            for id in [selected.best_variant_id, selected.safe_variant_id] {
+                                let choice =
+                                    variants.iter().find(|variant| variant.id() == id).unwrap();
+                                assert!(choice.bandwidth() < current.bandwidth());
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        assert!(saw_urgent);
+        assert!(saw_distinct_choices);
     }
 
     #[test]
