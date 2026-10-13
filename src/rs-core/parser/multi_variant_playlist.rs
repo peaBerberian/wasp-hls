@@ -344,6 +344,7 @@ impl MultivariantPlaylist {
         curr_variant: &VariantStream,
         curr_audio_track: Option<u32>,
     ) -> Option<MediaPlaylistPermanentId> {
+        // TODO: Resolve the variant's own URL for audio-only variants without an AUDIO group.
         if let Some(group_id) = curr_variant.audio_group() {
             if let Some(track_id) = curr_audio_track {
                 self.audio_tracks

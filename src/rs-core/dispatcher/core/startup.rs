@@ -78,6 +78,7 @@ fn ensure_ready_playlists(dispatcher: &mut Dispatcher, wanted_position: f64) -> 
             let variant_id = selection.safe_variant_id;
             // Probe the safe variant before normal segment selection can run.
             let changed_media_types = playlist_store.set_variant(variant_id);
+            // XXX TODO: No variant update?
             dispatcher.announce_current_audio_track();
             dispatcher.handle_media_playlist_update(
                 &changed_media_types,
@@ -208,6 +209,7 @@ fn advance_awaiting_playlist_info_state(dispatcher: &mut Dispatcher) {
         };
 
         jsAnnounceFetchedContent(playlist_kind, variants_info, audio_tracks_info);
+        // XXX TODO: No variant update?
         jsAnnounceTrackUpdate(MediaType::Audio, curr_audio_track, is_fixed);
 
         dispatcher.ready_state = PlayerReadyState::AwaitingPlaylistInfo {
