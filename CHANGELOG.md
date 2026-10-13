@@ -11,6 +11,7 @@
 - Actually send `audioTrackUpdate` if the audio track switched from one audio track to another (or none) on a `lockVariant` call
 - Don't needlessly send `audioTrackUpdate` if the audio track did not change on a `lockVariant` call
 - Be resilient to non-UTF-8 HLS playlists
+- Throw `MultivariantPlaylistInvalidValue` error code when a MultiVariant playlist refers to an AUDIO group which does not exist, as per the HLS specification
 
 ### Other
 
