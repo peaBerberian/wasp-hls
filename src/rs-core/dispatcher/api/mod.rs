@@ -29,7 +29,7 @@ impl Dispatcher {
         Dispatcher {
             ready_state: PlayerReadyState::Stopped,
             adaptive_selector: AdaptiveQualitySelector::new(initial_bandwidth),
-            loaded_variant_id: None,
+            announced_variant_id: None,
             playlist_store: None,
             requester: Requester::new(),
             media_element_ref: MediaElementReference::new(),

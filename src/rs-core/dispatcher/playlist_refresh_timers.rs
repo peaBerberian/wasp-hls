@@ -10,6 +10,8 @@ use crate::{
 /// - that only one timer is set at once for a particular media playlist
 /// - facilitating clean-up of the media playlists that are not of interest anymore
 pub(super) struct PlaylistRefreshTimers {
+    /// XXX TODO: Can this be refactored? Having these two concepts is impossible to follow
+    /// here, and we greatly simplified assumptions since
     timers: Vec<(TimerId, MediaPlaylistPermanentId)>,
     /// Playlist to refresh for each media type, as reported by segment selection.
     refresh_targets: Vec<(MediaType, MediaPlaylistPermanentId)>,
@@ -41,7 +43,6 @@ impl PlaylistRefreshTimers {
         self.refresh_targets.iter().any(|(_, target)| target == id)
     }
 
-    /// Before segment selection supplies a refresh target, use the current playlist.
     pub(super) fn refresh_media_type(
         &self,
         id: &MediaPlaylistPermanentId,
