@@ -975,7 +975,7 @@ impl Dispatcher {
                 continue;
             };
             let recommendation = segment_selection_for_type(store, recommendation, media_type);
-            let Some((_, best)) = segment_candidate(
+            let Some((_, addition_candidate)) = segment_candidate(
                 store,
                 recommendation.map(|selection| selection.best_variant_id),
                 media_type,
@@ -983,7 +983,7 @@ impl Dispatcher {
                 self.abort_segment_requests_with_type(media_type);
                 continue;
             };
-            let safe = segment_candidate(
+            let replacement_candidate = segment_candidate(
                 store,
                 recommendation.map(|selection| selection.safe_variant_id),
                 media_type,
@@ -992,7 +992,11 @@ impl Dispatcher {
             let selected = self
                 .segment_selectors
                 .get_mut(media_type)
-                .most_needed_segment(best, safe, self.media_element_ref.inventory(media_type));
+                .most_needed_segment(
+                    addition_candidate,
+                    replacement_candidate,
+                    self.media_element_ref.inventory(media_type),
+                );
             let still_needed = selected.needed_segments().is_some_and(|needed| {
                 if let Some(init) = needed.init_segment() {
                     self.requester
@@ -1025,42 +1029,47 @@ impl Dispatcher {
             return;
         };
         let recommendation = segment_selection_for_type(store, recommendation, media_type);
-        let Some((best_id, best)) = segment_candidate(
+        let Some((addition_playlist_id, addition_candidate)) = segment_candidate(
             store,
             recommendation.map(|selection| selection.best_variant_id),
             media_type,
         ) else {
             return;
         };
-        let safe = segment_candidate(
+        let replacement_candidate = segment_candidate(
             store,
             recommendation.map(|selection| selection.safe_variant_id),
             media_type,
         );
-        let best_variant_id = best.variant_id;
-        let best_context = best.context;
-        let safe_context = safe.as_ref().map(|(_, candidate)| candidate.context);
+        let addition_variant_id = addition_candidate.variant_id;
+        let addition_context = addition_candidate.context;
+        let replacement_context = replacement_candidate
+            .as_ref()
+            .map(|(_, candidate)| candidate.context);
         let selected = self
             .segment_selectors
             .get_mut(media_type)
             .most_needed_segment(
-                best,
-                safe.map(|(_, candidate)| candidate),
+                addition_candidate,
+                replacement_candidate.map(|(_, candidate)| candidate),
                 self.media_element_ref.inventory(media_type),
             );
         let refresh_id = match selected.playlist_to_refresh() {
-            PlaylistToRefresh::Best => best_id,
-            PlaylistToRefresh::Safe => safe.as_ref().unwrap().0,
+            PlaylistToRefresh::Addition => addition_playlist_id,
+            PlaylistToRefresh::Replacement => replacement_candidate.as_ref().unwrap().0,
         };
         let Some(needed) = selected.needed_segments() else {
             self.follow_media_playlist(media_type, refresh_id);
             return;
         };
         let variant_id = needed.variant_id();
-        let (playlist_id, quality_context) = if variant_id == best_variant_id {
-            (best_id, best_context)
+        let (playlist_id, quality_context) = if variant_id == addition_variant_id {
+            (addition_playlist_id, addition_context)
         } else {
-            (safe.as_ref().unwrap().0, safe_context.unwrap())
+            (
+                replacement_candidate.as_ref().unwrap().0,
+                replacement_context.unwrap(),
+            )
         };
 
         // Own just the proposed segment metadata so the store can record this choice and
