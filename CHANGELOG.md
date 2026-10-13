@@ -15,6 +15,8 @@
 ### Other
 
 - Make `bufferGoal` `30` by default.
+- Improve ABR's "urgent switch" categorization to only abort previous requests if there's a fair risk of rebuffering
+- Optimal fast-quality-switching coordination: continue in additive mode until the playlist linked to segment replacements is fetched
 - WebAssembly compilation now always target the initial WebAssembly browser release (a.k.a. "MVP") to maximize support
 - Embedded WebAssembly is now embedded through a Base64 string instead of number array for initialization performance reasons
 - tests: Begin automatically checking for performance regressions / improvements
