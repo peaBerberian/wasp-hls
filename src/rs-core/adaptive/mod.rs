@@ -112,13 +112,11 @@ impl AdaptiveQualitySelector {
             let best = variants
                 .iter()
                 .find(|variant| variant.id() == best_variant_id);
-            let segment_duration = playback
+            let low_buffer = playback
                 .abr_reference_segment_duration
                 .filter(|duration| duration.is_finite() && *duration > 0.)
-                // XXX TODO: Why would a segment_duration be fallbacked to a BOLA setting?
-                .unwrap_or(BOLA_MIN_LOW_BUFFER / 2.);
-            let low_buffer =
-                (segment_duration * 2.).clamp(BOLA_MIN_LOW_BUFFER, BOLA_MAX_LOW_BUFFER);
+                .map(|duration| (duration * 2.).clamp(BOLA_MIN_LOW_BUFFER, BOLA_MAX_LOW_BUFFER))
+                .unwrap_or(BOLA_MIN_LOW_BUFFER);
             let urgent = match (current, best, playback.buffer_level) {
                 (Some(current), Some(best), Some(buffer)) => {
                     best.bandwidth() < current.bandwidth()
