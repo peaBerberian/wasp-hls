@@ -381,9 +381,9 @@ fn consume_probe_segments(dispatcher: &mut Dispatcher) {
                     .playlist_store
                     .as_ref()
                     .unwrap()
-                    .current_variant_id_for_media_type(media_type)
+                    .current_variant_id()
                     .unwrap_or(DIRECT_MEDIA_VARIANT_ID);
-                dispatcher.announce_loaded_variant(variant_id);
+                dispatcher.announce_loaded_variant(variant_id, media_type);
                 dispatcher.on_media_segment_loaded(SegmentPushMetadata {
                     data,
                     media_type,

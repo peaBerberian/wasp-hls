@@ -265,7 +265,7 @@ impl NextSegmentSelector {
     /// Returns the current most needed segment(s) according to the current situation and to the
     /// last "validated" init and media segment.
     ///
-    /// `best` is used to extend the buffer; `safe` is used when replacing lower-quality media
+    /// `best` is used to extend the buffer; an optional `safe` is used when replacing lower-quality media
     /// already in the buffer. The playlist to follow may differ from the variant of the segment
     /// returned now: an available best segment can be requested while safe's list is updated.
     ///
@@ -277,15 +277,18 @@ impl NextSegmentSelector {
     pub(crate) fn most_needed_segment<'a>(
         &mut self,
         best: SegmentSelectionCandidate<'a>,
-        safe: SegmentSelectionCandidate<'a>,
+        safe: Option<SegmentSelectionCandidate<'a>>,
         inventory: &[BufferedChunk],
     ) -> MostNeededSegmentInfo<'a> {
-        let (selected_candidate, replacement_segment, playlist_to_refresh) = match self
-            .find_safe_replacement(&safe, inventory)
-        {
-            SegmentProposition::Segment(segment) => (safe, Some(segment), PlaylistToRefresh::Safe),
-            SegmentProposition::NeedsPlaylistUpdate => (best, None, PlaylistToRefresh::Safe),
-            SegmentProposition::None => (best, None, PlaylistToRefresh::Best),
+        let (selected_candidate, replacement_segment, playlist_to_refresh) = match safe {
+            Some(safe) => match self.find_safe_replacement(&safe, inventory) {
+                SegmentProposition::Segment(segment) => {
+                    (safe, Some(segment), PlaylistToRefresh::Safe)
+                }
+                SegmentProposition::NeedsPlaylistUpdate => (best, None, PlaylistToRefresh::Safe),
+                SegmentProposition::None => (best, None, PlaylistToRefresh::Best),
+            },
+            None => (best, None, PlaylistToRefresh::Best),
         };
 
         let Some(segment_list) = selected_candidate.playlist else {
@@ -610,6 +613,7 @@ enum InitializationSegmentSelectorStatus {
 }
 
 /// One variant the selector may use, with its latest available media playlist.
+#[derive(Clone, Copy)]
 pub(crate) struct SegmentSelectionCandidate<'a> {
     pub(crate) variant_id: u32,
     pub(crate) context: SegmentQualityContext,
@@ -818,7 +822,7 @@ mod tests {
 
         let first = selector.most_needed_segment(
             candidate(best_list, &best),
-            candidate(safe_list, &safe),
+            Some(candidate(safe_list, &safe)),
             &inventory,
         );
         let first = first.needed_segments().unwrap();
@@ -827,7 +831,7 @@ mod tests {
 
         let refreshed = selector.most_needed_segment(
             candidate(best_list, &best),
-            candidate(best_list, &safe),
+            Some(candidate(best_list, &safe)),
             &inventory,
         );
         assert_eq!(refreshed.playlist_to_refresh(), PlaylistToRefresh::Safe);
@@ -866,7 +870,7 @@ mod tests {
         for expected_start in [8., 12., 20.] {
             let selected = selector.most_needed_segment(
                 candidate(list, &best),
-                candidate(list, &safe),
+                Some(candidate(list, &safe)),
                 &inventory,
             );
             let segment = selected.needed_segments().unwrap().media_segment().unwrap();
@@ -877,11 +881,11 @@ mod tests {
         let changed_best = SegmentQualityContext::new(4., 4);
         let stale = selector.most_needed_segment(
             candidate(list, &changed_best),
-            SegmentSelectionCandidate {
+            Some(SegmentSelectionCandidate {
                 variant_id: 20,
                 context: SegmentQualityContext::new(2.5, safe.media_id()),
                 playlist: Some(list),
-            },
+            }),
             &inventory,
         );
         assert_eq!(stale.playlist_to_refresh(), PlaylistToRefresh::Best);
@@ -889,7 +893,7 @@ mod tests {
         selector.restart_from_position(0.);
         let retry = selector.most_needed_segment(
             candidate(list, &best),
-            candidate(list, &safe),
+            Some(candidate(list, &safe)),
             &inventory,
         );
         assert_eq!(
@@ -928,6 +932,21 @@ mod tests {
                 )
             })
             .collect();
+        let mut without_safe = NextSegmentSelector::new(0., 40.);
+        let addition = without_safe.most_needed_segment(
+            SegmentSelectionCandidate {
+                variant_id: 30,
+                context: best,
+                playlist: Some(list),
+            },
+            None,
+            &inventory,
+        );
+        assert_eq!(addition.playlist_to_refresh, PlaylistToRefresh::Best);
+        let addition = addition.needed_segments.unwrap();
+        assert_eq!(addition.variant_id, 30);
+        assert_eq!(addition.media_segment.unwrap().start(), 24.);
+
         let mut selector = NextSegmentSelector::new(0., 40.);
 
         let replacement = selector.most_needed_segment(
@@ -936,11 +955,11 @@ mod tests {
                 context: best,
                 playlist: Some(list),
             },
-            SegmentSelectionCandidate {
+            Some(SegmentSelectionCandidate {
                 variant_id: 20,
                 context: safe,
                 playlist: Some(list),
-            },
+            }),
             &inventory,
         );
         assert_eq!(replacement.playlist_to_refresh, PlaylistToRefresh::Safe);
@@ -950,7 +969,7 @@ mod tests {
 
         let repeated = selector.most_needed_segment(
             candidate(list, &best),
-            candidate(list, &safe),
+            Some(candidate(list, &safe)),
             &inventory,
         );
         assert_eq!(
@@ -966,7 +985,7 @@ mod tests {
         validate(&mut selector, replacement.media_segment.unwrap(), &safe);
         let next = selector.most_needed_segment(
             candidate(list, &best),
-            candidate(list, &safe),
+            Some(candidate(list, &safe)),
             &inventory,
         );
         assert_eq!(
@@ -981,11 +1000,11 @@ mod tests {
                 context: best,
                 playlist: Some(list),
             },
-            SegmentSelectionCandidate {
+            Some(SegmentSelectionCandidate {
                 variant_id: 20,
                 context: safe,
                 playlist: Some(list),
-            },
+            }),
             &[],
         );
         let addition = addition.needed_segments.unwrap();
@@ -1022,11 +1041,11 @@ mod tests {
 
         let while_missing = selector.most_needed_segment(
             candidate(list, &best),
-            SegmentSelectionCandidate {
+            Some(SegmentSelectionCandidate {
                 variant_id: 20,
                 context: safe,
                 playlist: None,
-            },
+            }),
             &inventory,
         );
         assert_eq!(while_missing.playlist_to_refresh(), PlaylistToRefresh::Safe);
@@ -1038,11 +1057,11 @@ mod tests {
         selector.restart_from_position(0.);
         let while_full = selector.most_needed_segment(
             candidate(list, &best),
-            SegmentSelectionCandidate {
+            Some(SegmentSelectionCandidate {
                 variant_id: 20,
                 context: safe,
                 playlist: None,
-            },
+            }),
             &inventory,
         );
         assert_eq!(while_full.playlist_to_refresh(), PlaylistToRefresh::Safe);
@@ -1052,11 +1071,11 @@ mod tests {
 
         let after_load = selector.most_needed_segment(
             candidate(list, &best),
-            SegmentSelectionCandidate {
+            Some(SegmentSelectionCandidate {
                 variant_id: 20,
                 context: safe,
                 playlist: Some(list),
-            },
+            }),
             &inventory,
         );
         assert_eq!(after_load.playlist_to_refresh(), PlaylistToRefresh::Safe);
@@ -1092,11 +1111,11 @@ mod tests {
 
         let missing = selector.most_needed_segment(
             candidate(best_list, &best),
-            SegmentSelectionCandidate {
+            Some(SegmentSelectionCandidate {
                 variant_id: 2,
                 context: safe,
                 playlist: None,
-            },
+            }),
             &inventory,
         );
         assert_eq!(missing.playlist_to_refresh(), PlaylistToRefresh::Safe);
@@ -1104,7 +1123,7 @@ mod tests {
 
         let inspected = selector.most_needed_segment(
             candidate(best_list, &best),
-            candidate(safe_list, &safe),
+            Some(candidate(safe_list, &safe)),
             &inventory,
         );
         assert_eq!(inspected.playlist_to_refresh(), PlaylistToRefresh::Best);
@@ -1112,11 +1131,11 @@ mod tests {
 
         let repeated = selector.most_needed_segment(
             candidate(best_list, &best),
-            SegmentSelectionCandidate {
+            Some(SegmentSelectionCandidate {
                 variant_id: 2,
                 context: safe,
                 playlist: Some(safe_list),
-            },
+            }),
             &inventory,
         );
         assert_eq!(repeated.playlist_to_refresh(), PlaylistToRefresh::Best);
@@ -1134,11 +1153,11 @@ mod tests {
                 context: best,
                 playlist: None,
             },
-            SegmentSelectionCandidate {
+            Some(SegmentSelectionCandidate {
                 variant_id: 2,
                 context: safe,
                 playlist: Some(safe_list),
-            },
+            }),
             &inventory,
         );
         assert_eq!(
@@ -1153,7 +1172,7 @@ mod tests {
 
         let replacement = selector.most_needed_segment(
             candidate(best_list, &best),
-            candidate(safe_list, &safe),
+            Some(candidate(safe_list, &safe)),
             &inventory,
         );
         assert_eq!(replacement.playlist_to_refresh(), PlaylistToRefresh::Safe);
@@ -1193,10 +1212,10 @@ mod tests {
                 best_playlist.playlist().segment_list(),
                 &SegmentQualityContext::new(3., 3),
             ),
-            candidate(
+            Some(candidate(
                 safe_playlist.playlist().segment_list(),
                 &SegmentQualityContext::new(2., 2),
-            ),
+            )),
             &inventory,
         );
         assert_eq!(result.playlist_to_refresh(), PlaylistToRefresh::Safe);
@@ -1226,12 +1245,13 @@ mod tests {
             BufferedChunk::new_for_test(6., 10., SegmentQualityContext::new(1., 1)),
         ];
 
-        let replacement = selector.most_needed_segment(missing(&best), missing(&safe), &inventory);
+        let replacement =
+            selector.most_needed_segment(missing(&best), Some(missing(&safe)), &inventory);
         assert_eq!(replacement.playlist_to_refresh, PlaylistToRefresh::Safe);
         assert!(replacement.needed_segments.is_none());
         assert_eq!(selector.segment_cursor.current_cursor, 0.);
 
-        let addition = selector.most_needed_segment(missing(&best), missing(&safe), &[]);
+        let addition = selector.most_needed_segment(missing(&best), Some(missing(&safe)), &[]);
         assert_eq!(addition.playlist_to_refresh, PlaylistToRefresh::Best);
         assert!(addition.needed_segments.is_none());
         assert_eq!(selector.segment_cursor.current_cursor, 0.);
@@ -1277,7 +1297,7 @@ mod tests {
             let first = selector
                 .most_needed_segment(
                     candidate(list, &context),
-                    candidate(list, &context),
+                    Some(candidate(list, &context)),
                     &inventory,
                 )
                 .needed_segments
@@ -1290,7 +1310,7 @@ mod tests {
             let next = selector
                 .most_needed_segment(
                     candidate(list, &context),
-                    candidate(list, &context),
+                    Some(candidate(list, &context)),
                     &inventory,
                 )
                 .needed_segments
@@ -1302,7 +1322,7 @@ mod tests {
             let following = selector
                 .most_needed_segment(
                     candidate(list, &context),
-                    candidate(list, &context),
+                    Some(candidate(list, &context)),
                     &inventory,
                 )
                 .needed_segments
@@ -1329,11 +1349,11 @@ mod tests {
                 context: SegmentQualityContext::new(3., 3),
                 playlist: None,
             },
-            SegmentSelectionCandidate {
+            Some(SegmentSelectionCandidate {
                 variant_id: 2,
                 context: higher_quality,
                 playlist: None,
-            },
+            }),
             &buffered,
         );
         assert_eq!(result.playlist_to_refresh(), PlaylistToRefresh::Safe);
@@ -1355,11 +1375,11 @@ mod tests {
                 context: SegmentQualityContext::new(3., 3),
                 playlist: None,
             },
-            SegmentSelectionCandidate {
+            Some(SegmentSelectionCandidate {
                 variant_id: 2,
                 context: higher_quality,
                 playlist: None,
-            },
+            }),
             &buffered,
         );
         assert_eq!(result.playlist_to_refresh(), PlaylistToRefresh::Best);
