@@ -1,4 +1,4 @@
-use crate::parser::SegmentIdentity;
+use crate::parser::{MediaPlaylistPermanentId, SegmentIdentity};
 
 /// When choosing which segment to load next, there's a need to understand which segments we already
 /// loaded.
@@ -16,7 +16,7 @@ pub(super) struct ValidatedSegmentHistory {
 
 struct ValidatedSegment {
     /// Identifier for the associated `media_playlist`.
-    media_id: u32,
+    playlist_id: MediaPlaylistPermanentId,
     /// Identifies unambiguously the segment.
     identity: SegmentIdentity,
     /// Playlist end time used only for eviction, not for identity comparisons.
@@ -28,31 +28,40 @@ impl ValidatedSegmentHistory {
     ///
     /// # Arguments
     ///
-    /// * `media_id` - Identifier of the segment's media playlist.
+    /// * `playlist_id` - Identifier of the segment's media playlist.
     /// * `identity` - Identity of the segment within that playlist.
-    pub(super) fn contains(&self, media_id: u32, identity: SegmentIdentity) -> bool {
+    pub(super) fn contains(
+        &self,
+        playlist_id: MediaPlaylistPermanentId,
+        identity: SegmentIdentity,
+    ) -> bool {
         self.entries
             .iter()
-            .any(|entry| entry.media_id == media_id && entry.identity == identity)
+            .any(|entry| entry.playlist_id == playlist_id && entry.identity == identity)
     }
 
     /// Adds the segment to the `ValidatedSegmentHistory`.
     ///
     /// # Arguments
     ///
-    /// * `media_id` - Identifier of the segment's media playlist.
+    /// * `playlist_id` - Identifier of the segment's media playlist.
     /// * `identity` - Identity of the segment within that playlist.
     /// * `end` - Segment end in playlist time. Used for eviction rather than identity.
-    pub(super) fn insert(&mut self, media_id: u32, identity: SegmentIdentity, end: f64) {
+    pub(super) fn insert(
+        &mut self,
+        playlist_id: MediaPlaylistPermanentId,
+        identity: SegmentIdentity,
+        end: f64,
+    ) {
         if let Some(entry) = self
             .entries
             .iter_mut()
-            .find(|entry| entry.media_id == media_id && entry.identity == identity)
+            .find(|entry| entry.playlist_id == playlist_id && entry.identity == identity)
         {
             entry.end = entry.end.max(end);
         } else {
             self.entries.push(ValidatedSegment {
-                media_id,
+                playlist_id,
                 identity,
                 end,
             });
@@ -77,24 +86,30 @@ impl ValidatedSegmentHistory {
 #[cfg(test)]
 mod tests {
     use super::ValidatedSegmentHistory;
-    use crate::parser::SegmentIdentity;
+    use crate::parser::{MediaPlaylistPermanentId, SegmentIdentity};
 
     #[test]
     fn identity_ignores_end_time_and_distinguishes_media_and_discontinuities() {
         let mut history = ValidatedSegmentHistory::default();
         let identity = SegmentIdentity::new(10, 2);
-        history.insert(1, identity, 12.);
-        history.insert(1, identity, 12.001);
+        history.insert(MediaPlaylistPermanentId::new_for_test(1), identity, 12.);
+        history.insert(MediaPlaylistPermanentId::new_for_test(1), identity, 12.001);
 
         assert_eq!(history.entries.len(), 1);
-        assert!(history.contains(1, identity));
-        assert!(!history.contains(2, identity));
-        assert!(!history.contains(1, SegmentIdentity::new(10, 3)));
-        assert!(!history.contains(1, SegmentIdentity::new(11, 2)));
+        assert!(history.contains(MediaPlaylistPermanentId::new_for_test(1), identity));
+        assert!(!history.contains(MediaPlaylistPermanentId::new_for_test(2), identity));
+        assert!(!history.contains(
+            MediaPlaylistPermanentId::new_for_test(1),
+            SegmentIdentity::new(10, 3)
+        ));
+        assert!(!history.contains(
+            MediaPlaylistPermanentId::new_for_test(1),
+            SegmentIdentity::new(11, 2)
+        ));
         history.evict_before(12.);
-        assert!(history.contains(1, identity));
+        assert!(history.contains(MediaPlaylistPermanentId::new_for_test(1), identity));
         history.evict_before(12.001);
-        assert!(!history.contains(1, identity));
+        assert!(!history.contains(MediaPlaylistPermanentId::new_for_test(1), identity));
     }
 
     #[test]
@@ -102,13 +117,13 @@ mod tests {
         let mut history = ValidatedSegmentHistory::default();
         let earlier = SegmentIdentity::new(1, 0);
         let later = SegmentIdentity::new(2, 0);
-        history.insert(1, later, 20.);
-        history.insert(1, earlier, 12.);
+        history.insert(MediaPlaylistPermanentId::new_for_test(1), later, 20.);
+        history.insert(MediaPlaylistPermanentId::new_for_test(1), earlier, 12.);
 
         history.evict_before(12.);
-        assert!(!history.contains(1, earlier));
-        assert!(history.contains(1, later));
+        assert!(!history.contains(MediaPlaylistPermanentId::new_for_test(1), earlier));
+        assert!(history.contains(MediaPlaylistPermanentId::new_for_test(1), later));
         history.clear();
-        assert!(!history.contains(1, later));
+        assert!(!history.contains(MediaPlaylistPermanentId::new_for_test(1), later));
     }
 }

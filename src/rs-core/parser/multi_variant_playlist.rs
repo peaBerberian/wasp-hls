@@ -787,6 +787,12 @@ impl MediaPlaylistPermanentId {
         self.id
     }
 
+    #[cfg(test)]
+    pub(crate) fn new_for_test(id: u32) -> Self {
+        Self::new(MediaPlaylistUrlLocation::Variant, id)
+    }
+
+    #[cfg(test)]
     pub(crate) fn as_u32(&self) -> u32 {
         self.id
     }
@@ -808,6 +814,20 @@ pub(crate) enum MediaPlaylistUrlLocation {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn quality_comparisons_distinguish_playlist_kinds_and_preserve_shared_media() {
+        use crate::media_element::{BufferedChunk, SegmentQualityContext};
+
+        let video = MediaPlaylistPermanentId::new(MediaPlaylistUrlLocation::Variant, 1);
+        let audio = MediaPlaylistPermanentId::new(MediaPlaylistUrlLocation::AudioTrack, 1);
+        let chunk = BufferedChunk::new_for_test(0., 4., SegmentQualityContext::new(1., video));
+        let shared_media = SegmentQualityContext::new(2., video);
+        assert!(chunk.is_quality_equal(&shared_media));
+        assert!(!chunk.is_worse_than(&shared_media));
+        assert!(chunk.is_worse_than(&SegmentQualityContext::new(2., audio)));
+    }
+
     use std::io::Cursor;
 
     #[test]
