@@ -192,6 +192,17 @@ impl MultivariantPlaylist {
             }
         }
 
+        // Renditions may be declared after the variants that reference them.
+        for variant in &variants {
+            if let Some(group_id) = variant.audio_group() {
+                if !audio_media.iter().any(|media| media.group_id() == group_id) {
+                    return Err(MultivariantPlaylistParsingError::MissingAudioGroup(
+                        group_id.to_owned(),
+                    ));
+                }
+            }
+        }
+
         use std::cmp::Ordering;
         variants.sort_by(|a, b| {
             let cmp = a
@@ -636,6 +647,7 @@ pub(crate) enum MultivariantPlaylistParsingError {
     MissingUriLineAfterVariant,
     UnableToReadVariantUri,
     VariantMissingBandwidth,
+    MissingAudioGroup(String),
     DuplicateTag,
     ConflictingPlaylistTagTypes,
 
@@ -668,6 +680,9 @@ impl fmt::Display for MultivariantPlaylistParsingError {
             }
             MultivariantPlaylistParsingError::VariantMissingBandwidth => {
                 write!(f, "A variant is missing its mandatory BANDWIDTH attribute")
+            }
+            MultivariantPlaylistParsingError::MissingAudioGroup(group_id) => {
+                write!(f, "A variant references undefined AUDIO group \"{}\"", group_id)
             }
             MultivariantPlaylistParsingError::DuplicateTag => {
                 write!(f, "A singleton tag was duplicated in the Multivariant Playlist")
@@ -829,6 +844,42 @@ mod tests {
     }
 
     use std::io::Cursor;
+
+    #[test]
+    fn rejects_audio_references_without_a_matching_audio_group() {
+        for rendition in [
+            "",
+            "#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID=\"other\",NAME=\"Other\"\n",
+            "#EXT-X-MEDIA:TYPE=VIDEO,GROUP-ID=\"english\",NAME=\"Video\"\n",
+        ] {
+            let playlist = format!(
+                "#EXTM3U\n{rendition}#EXT-X-STREAM-INF:BANDWIDTH=1000,AUDIO=\"english\"\nvideo.m3u8\n"
+            );
+            let result = MultivariantPlaylist::parse(
+                Cursor::new(playlist),
+                Url::new("https://example.com/master.m3u8".into()),
+            );
+            assert!(matches!(
+                result,
+                Err(MultivariantPlaylistParsingError::MissingAudioGroup(group_id))
+                    if group_id == "english"
+            ));
+        }
+    }
+
+    #[test]
+    fn accepts_audio_groups_declared_after_variants_with_or_without_uri() {
+        for uri in ["", ",URI=\"audio.m3u8\""] {
+            let playlist = format!(
+                "#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1000,AUDIO=\"english\"\nvideo.m3u8\n#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID=\"english\",NAME=\"English\"{uri}\n"
+            );
+            assert!(MultivariantPlaylist::parse(
+                Cursor::new(playlist),
+                Url::new("https://example.com/master.m3u8".into()),
+            )
+            .is_ok());
+        }
+    }
 
     #[test]
     fn keeps_invalid_utf8_in_variant_uri() {

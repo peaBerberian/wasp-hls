@@ -785,7 +785,8 @@ pub fn jsSendContentCompatibilityError(
 impl From<MultivariantPlaylistParsingError> for MultivariantPlaylistParsingErrorCode {
     fn from(value: MultivariantPlaylistParsingError) -> Self {
         match value {
-            MultivariantPlaylistParsingError::InvalidDecimalInteger => {
+            MultivariantPlaylistParsingError::InvalidDecimalInteger
+            | MultivariantPlaylistParsingError::MissingAudioGroup(_) => {
                 MultivariantPlaylistParsingErrorCode::InvalidValue
             }
             MultivariantPlaylistParsingError::MediaTagMissingType
