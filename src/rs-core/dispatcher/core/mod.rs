@@ -983,12 +983,14 @@ impl Dispatcher {
                 self.abort_segment_requests_with_type(media_type);
                 continue;
             };
-            let replacement_candidate = segment_candidate(
+            let Some((_, replacement_candidate)) = segment_candidate(
                 store,
                 recommendation.map(|selection| selection.safe_variant_id),
                 media_type,
-            )
-            .map(|(_, candidate)| candidate);
+            ) else {
+                self.abort_segment_requests_with_type(media_type);
+                continue;
+            };
             let selected = self
                 .segment_selectors
                 .get_mut(media_type)
@@ -1036,27 +1038,27 @@ impl Dispatcher {
         ) else {
             return;
         };
-        let replacement_candidate = segment_candidate(
+        let Some((replacement_playlist_id, replacement_candidate)) = segment_candidate(
             store,
             recommendation.map(|selection| selection.safe_variant_id),
             media_type,
-        );
+        ) else {
+            return;
+        };
         let addition_variant_id = addition_candidate.variant_id;
         let addition_context = addition_candidate.context;
-        let replacement_context = replacement_candidate
-            .as_ref()
-            .map(|(_, candidate)| candidate.context);
+        let replacement_context = replacement_candidate.context;
         let selected = self
             .segment_selectors
             .get_mut(media_type)
             .most_needed_segment(
                 addition_candidate,
-                replacement_candidate.map(|(_, candidate)| candidate),
+                replacement_candidate,
                 self.media_element_ref.inventory(media_type),
             );
         let refresh_id = match selected.playlist_to_refresh() {
             PlaylistToRefresh::Addition => addition_playlist_id,
-            PlaylistToRefresh::Replacement => replacement_candidate.as_ref().unwrap().0,
+            PlaylistToRefresh::Replacement => replacement_playlist_id,
         };
         let Some(needed) = selected.needed_segments() else {
             self.follow_media_playlist(media_type, refresh_id);
@@ -1066,10 +1068,7 @@ impl Dispatcher {
         let (playlist_id, quality_context) = if variant_id == addition_variant_id {
             (addition_playlist_id, addition_context)
         } else {
-            (
-                replacement_candidate.as_ref().unwrap().0,
-                replacement_context.unwrap(),
-            )
+            (replacement_playlist_id, replacement_context)
         };
 
         // Own just the proposed segment metadata so the store can record this choice and
@@ -1811,7 +1810,7 @@ mod tests {
         let selected = dispatcher
             .segment_selectors
             .get_mut(MediaType::Video)
-            .most_needed_segment(best, Some(safe), &inventory);
+            .most_needed_segment(best, safe, &inventory);
         let needed = selected.needed_segments().unwrap();
         assert_eq!(needed.variant_id(), safe_variant);
         assert_eq!(needed.media_segment().unwrap().start(), 8.);
