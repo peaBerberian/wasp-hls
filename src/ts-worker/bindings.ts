@@ -1816,6 +1816,7 @@ export function getWaspHostCapabilities(): HostBindings {
     announceVariantLockStatusChange,
     startRebuffering,
     stopRebuffering,
+    monotonicNow,
     getRandom,
     sendSegmentRequestError,
     sendMultivariantPlaylistRequestError,

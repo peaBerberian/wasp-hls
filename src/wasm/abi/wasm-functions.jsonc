@@ -269,6 +269,16 @@
       },
     },
     {
+      "wasmSymbol": "__js_func__monotonic_now",
+      "doc": ["Return monotonic time in milliseconds."],
+      "typescript": {
+        "methodName": "monotonicNow",
+        "args": [],
+        "returnType": "number",
+      },
+      "rust": { "args": [], "returnType": "f64" },
+    },
+    {
       "wasmSymbol": "__js_func__get_random",
       "doc": ["Return a random floating-point value."],
       "typescript": {

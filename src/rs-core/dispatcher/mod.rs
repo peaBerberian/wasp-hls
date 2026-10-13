@@ -1,7 +1,7 @@
 use crate::{
     adaptive::AdaptiveQualitySelector,
     bindings::MediaType,
-    dispatcher::playlist_refresh_timers::PlaylistRefreshTimers,
+    dispatcher::playlist_refresh_manager::PlaylistRefreshManager,
     media_element::MediaElementReference,
     parser::AudioTrack,
     playlist_store::{PlaylistStore, ProbeSegmentMetadata},
@@ -12,7 +12,7 @@ use crate::{
 mod api;
 mod core;
 mod event_listeners;
-mod playlist_refresh_timers;
+mod playlist_refresh_manager;
 mod segment_request_contexts;
 mod utils;
 
@@ -64,9 +64,8 @@ pub struct Dispatcher {
     /// Abstraction allowing to know which is the next segment to request.
     segment_selectors: NextSegmentSelectors,
 
-    /// Current set-up timers to notify about a needed playlist refresh, associated to the playlist
-    /// that needs to be refreshed.
-    playlist_refresh_timers: PlaylistRefreshTimers,
+    /// Per-playlist reload times and timers for playlists currently needed.
+    playlist_refresh_manager: PlaylistRefreshManager,
 
     /// Stores data on pending requests linked to init or media segments.
     /// Allowing to retreive them once finished.

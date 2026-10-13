@@ -320,6 +320,9 @@ export function createWasmImports(bindings: HostBindings): WebAssembly.Imports {
       __js_func__stop_rebuffering(): void {
         bindings.stopRebuffering();
       },
+      __js_func__monotonic_now(): number {
+        return bindings.monotonicNow();
+      },
       __js_func__get_random(): number {
         return bindings.getRandom();
       },
