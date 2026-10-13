@@ -20,7 +20,7 @@ use crate::{
     parser::{SegmentIdentity, TopLevelPlaylist, TopLevelPlaylistParsingError},
     playlist_store::{
         AudioTrackChange, LockVariantResponse, MediaPlaylistPermanentId, PlaylistStore,
-        ProbeSegmentMetadata, SetAudioTrackResponse, VariantUpdateResult,
+        ProbeSegmentMetadata, SetAudioTrackResponse,
     },
     requester::{
         FinishedRequestType, PlaylistFileType, PlaylistRequestInfo, RetryResult, SegmentRequestInfo,
@@ -88,7 +88,7 @@ impl Dispatcher {
                     );
                 }
                 LockVariantResponse::VariantLocked {
-                    updates,
+                    changed_media_types,
                     audio_track_change,
                 } => {
                     // XXX TODO: risks?
@@ -97,12 +97,6 @@ impl Dispatcher {
                         let is_audio_track_selected = pl_store.fixed_audio_track_id().is_some();
                         jsAnnounceTrackUpdate(MediaType::Audio, track_id, is_audio_track_selected);
                     }
-                    let changed_media_types = match updates {
-                        VariantUpdateResult::Improved(media_types)
-                        | VariantUpdateResult::EqualOrUnknown(media_types)
-                        | VariantUpdateResult::Worsened(media_types) => media_types,
-                        VariantUpdateResult::Unchanged => Vec::new(),
-                    };
                     for media_type in changed_media_types.iter().copied() {
                         log_info!("Core: {} MediaPlaylist changed", media_type);
                         self.ready_probe_segments.clear_media_type(media_type);
@@ -111,8 +105,8 @@ impl Dispatcher {
                         self.request_current_media_playlist_if_needed(media_type);
                     }
                     // TODO: Avoid flushing an unchanged media type when its buffer already only
-                    // contains data from the newly-locked variant. `VariantUpdateResult::Unchanged`
-                    // may still hide older-quality buffered data, but when it does not this causes
+                    // contains data from the newly-locked variant. An unchanged playlist
+                    // may still have older-quality buffered data, but when it does not this causes
                     // an unnecessary rebuffer and refetch.
                     for media_type in [MediaType::Audio, MediaType::Video] {
                         if self.media_element_ref.has_buffer(media_type)
@@ -1074,11 +1068,15 @@ impl Dispatcher {
         // currently loading segments from) might be different from the "refreshed playlist".
         // This is based on segment-selection heuristics (which may e.g. indicate that we can load a
         // segment of a quality A while waiting for the request of a playlist B).
-        self.playlist_store
-            .as_mut()
-            // XXX TODO: to remove the need to rely on unwrap
-            .unwrap()
-            .update_variant_for_type(variant_id, media_type);
+        let Some(store) = self.playlist_store.as_mut() else {
+            return;
+        };
+        if !store.update_variant_for_type(variant_id, media_type) {
+            // TODO: Should not happen or at least fix itself at next tick. But what if it doesn't?
+            // Do defensive programming around this?
+            log_warn!("Core: Playlist store refused the segment's variant choice");
+            return;
+        }
         self.follow_media_playlist(media_type, refresh_id);
 
         if !self.ready_to_load_segments() {
@@ -1529,6 +1527,35 @@ mod tests {
     }
 
     #[test]
+    fn refused_variant_choice_does_not_schedule_a_segment() {
+        let mut dispatcher = dispatcher_with_abr_playlists(Some(4), 30.);
+        let recommendation = dispatcher.compute_optimal_variant().unwrap();
+        let store = dispatcher.playlist_store.as_mut().unwrap();
+        let current = store.current_variant_id().unwrap();
+        assert_ne!(recommendation.best_variant_id, current);
+        assert!(matches!(
+            store.lock_variant(current),
+            crate::playlist_store::LockVariantResponse::VariantLocked { .. }
+        ));
+        // A previously computed recommendation must not bypass a newer lock.
+        dispatcher.check_segment_to_request_for_type(MediaType::Video, Some(recommendation));
+        assert!(!dispatcher
+            .requester
+            .has_segment_request_pending(MediaType::Video));
+        assert!(!dispatcher
+            .segment_request_contexts
+            .has(|context| context.is_media() || context.is_init()));
+        assert_eq!(
+            dispatcher
+                .playlist_store
+                .as_ref()
+                .unwrap()
+                .current_variant_id(),
+            Some(current)
+        );
+    }
+
+    #[test]
     fn missing_recommendation_does_not_fall_back_to_a_stored_variant() {
         let mut dispatcher = dispatcher_with_abr_playlists(Some(4), 30.);
         let current = dispatcher
@@ -1600,11 +1627,11 @@ mod tests {
         assert_eq!(dispatcher.loaded_variant_id, None);
 
         // A pending check must use the ABR pair, even if the stored choice differs.
-        dispatcher
+        assert!(dispatcher
             .playlist_store
             .as_mut()
             .unwrap()
-            .update_variant_for_type(previous_variant, MediaType::Video);
+            .update_variant_for_type(previous_variant, MediaType::Video));
         dispatcher.check_requested_segments_still_needed();
         assert!(dispatcher
             .requester
@@ -1756,7 +1783,7 @@ mod tests {
             assert_eq!(variant_id, high_id);
             assert_ne!(variant_id, selection.safe_variant_id);
             let pl_store = dispatcher.playlist_store.as_mut().unwrap();
-            pl_store.update_variant_for_type(variant_id, MediaType::Video);
+            assert!(pl_store.update_variant_for_type(variant_id, MediaType::Video));
             assert!(!pl_store.has_loaded_media_playlist(MediaType::Video));
             assert_eq!(pl_store.segment_target_duration(), None);
             assert_eq!(pl_store.max_observed_target_duration(), Some(4.));
@@ -1778,7 +1805,7 @@ mod tests {
                 .best_variant_id;
             assert_eq!(variant_id, medium_id);
             let pl_store = dispatcher.playlist_store.as_mut().unwrap();
-            pl_store.update_variant_for_type(variant_id, MediaType::Video);
+            assert!(pl_store.update_variant_for_type(variant_id, MediaType::Video));
             assert_eq!(pl_store.segment_target_duration(), Some(4.));
             assert_eq!(pl_store.max_observed_target_duration(), Some(6.));
         }
