@@ -65,7 +65,7 @@ impl Dispatcher {
         self.media_element_ref.reset();
         self.segment_selectors.reset_selectors(0.);
         self.playlist_store = None;
-        self.loaded_variant_id = None;
+        self.announced_variant_id = None;
         self.ready_probe_segments.clear();
         self.initial_audio_track_selection.clear();
         self.last_position = 0.;
@@ -91,7 +91,6 @@ impl Dispatcher {
                     changed_media_types,
                     audio_track_change,
                 } => {
-                    // XXX TODO: risks?
                     self.playlist_refresh_timers.clear_refresh_targets();
                     if let AudioTrackChange::Changed(track_id) = audio_track_change {
                         let is_audio_track_selected = pl_store.fixed_audio_track_id().is_some();
@@ -120,7 +119,10 @@ impl Dispatcher {
                         self.clean_up_playlist_refresh_timers();
                     }
                     self.check_segments_to_request();
-                    // XXX TODO: No variantUpdate?
+                    // XXX TODO: What? doesn't it change event ordering?
+                    // variantUpdate should be before `variantLockStatusChange` should be before
+                    // segment requests linked to the locked variant.
+                    // variantUpdate is emitted when a segment request uses the locked variant.
                     jsAnnounceVariantLockStatusChange(Some(variant_id));
                 }
             }
@@ -1113,6 +1115,9 @@ impl Dispatcher {
         if !self.ready_to_load_segments() {
             return;
         }
+        if init.is_some() || media.is_some() {
+            self.announce_loading_variant(variant_id, media_type);
+        }
         if let Some(init) = init {
             let req_id = self
                 .segment_request_contexts
@@ -1143,8 +1148,10 @@ impl Dispatcher {
         }
     }
 
-    /// Resume refreshes alongside cached segment requests. A retained timer is also a reload
-    /// cooldown: switching candidates must not make us reload the same list too frequently.
+    /// Set which playlist to refresh for this media type.
+    /// If it already has a refresh timer, wait for that timer. Otherwise, request it now unless
+    /// it cannot be refreshed or a request is already pending.
+    /// Timers remain when switching away; their callbacks fetch only playlists still needed.
     fn follow_media_playlist(&mut self, media_type: MediaType, id: MediaPlaylistPermanentId) {
         self.playlist_refresh_timers.follow(media_type, id);
         let Some(store) = self.playlist_store.as_ref() else {
@@ -1276,7 +1283,8 @@ impl Dispatcher {
 
         match req_ctxt {
             PendingSegmentRequest::Media {
-                variant_id,
+                // XXX TODO:  is `variant_id` still needed?
+                variant_id: _,
                 media_type: req_media_type,
                 init_segment_id,
                 quality_context,
@@ -1291,7 +1299,6 @@ impl Dispatcher {
                 if Some(req_media_type) != media_type {
                     log_warn!("Loaded media segment with mismatched media type context.");
                 }
-                self.announce_loaded_variant(variant_id, req_media_type);
                 self.on_media_segment_loaded(SegmentPushMetadata {
                     data: result,
                     media_type: req_media_type,
@@ -1321,9 +1328,10 @@ impl Dispatcher {
         }
     }
 
-    /// Report the loaded video variant, or the loaded audio variant for audio-only content.
+    /// Announce the variant before scheduling its first segment request.
+    /// Video determines the variant announcement, except for audio-only content.
     /// Shared audio cannot identify a video variant and must not change its announcement.
-    fn announce_loaded_variant(&mut self, variant_id: u32, media_type: MediaType) {
+    fn announce_loading_variant(&mut self, variant_id: u32, media_type: MediaType) {
         if media_type == MediaType::Audio
             && self
                 .playlist_store
@@ -1332,8 +1340,8 @@ impl Dispatcher {
         {
             return;
         }
-        if self.loaded_variant_id != Some(variant_id) {
-            self.loaded_variant_id = Some(variant_id);
+        if self.announced_variant_id != Some(variant_id) {
+            self.announced_variant_id = Some(variant_id);
             jsAnnounceVariantUpdate(Some(variant_id));
         }
     }
@@ -1427,8 +1435,8 @@ impl Dispatcher {
         }
     }
 
-    /// Remove timers for unknown playlists. Inactive playlists keep their timer as a cooldown;
-    /// when it expires, the callback only fetches playlists that are still being followed.
+    /// Cancel timers for playlists no longer known to the store.
+    /// Other timers remain; their callbacks check whether their playlist is still needed.
     fn clean_up_playlist_refresh_timers(&mut self) {
         if let Some(ref pl_store) = self.playlist_store {
             self.playlist_refresh_timers
@@ -1566,7 +1574,7 @@ mod tests {
     }
 
     #[test]
-    fn shared_audio_completion_does_not_announce_another_video_variant() {
+    fn shared_audio_request_does_not_announce_another_video_variant() {
         let mut dispatcher = dispatcher_with_abr_playlists(Some(4), 20.);
         let variants = dispatcher
             .playlist_store
@@ -1575,9 +1583,9 @@ mod tests {
             .available_variants();
         let low = variants[0].id();
         let high = variants[2].id();
-        dispatcher.loaded_variant_id = Some(high);
-        dispatcher.announce_loaded_variant(low, MediaType::Audio);
-        assert_eq!(dispatcher.loaded_variant_id, Some(high));
+        dispatcher.announced_variant_id = Some(high);
+        dispatcher.announce_loading_variant(low, MediaType::Audio);
+        assert_eq!(dispatcher.announced_variant_id, Some(high));
     }
 
     fn dispatcher_with_buffer_observation(
@@ -1724,6 +1732,8 @@ mod tests {
             )
             .unwrap();
         let expected_url = Url::new("https://example.com/best-seg.ts".into());
+        // This test covers request selection with the variant already announced.
+        dispatcher.announced_variant_id = Some(recommendation.best_variant_id);
         dispatcher.requester.lock_segment_requests();
         dispatcher.check_segment_to_request_for_type(MediaType::Video, Some(recommendation));
         assert!(dispatcher
@@ -1737,9 +1747,6 @@ mod tests {
                 .current_variant_id(),
             Some(recommendation.best_variant_id)
         );
-        // Scheduling a request must not announce its variant as loaded.
-        assert_eq!(dispatcher.loaded_variant_id, None);
-
         // A pending check must use the ABR pair, even if the stored choice differs.
         dispatcher
             .playlist_store

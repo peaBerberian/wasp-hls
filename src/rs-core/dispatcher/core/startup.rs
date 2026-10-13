@@ -295,6 +295,13 @@ fn start_probe_segment_request(
             probe_segment: probe_segment.clone(),
             requested_media_type,
         });
+    if let Some(store) = dispatcher.playlist_store.as_ref() {
+        let variant_id = store
+            .current_variant_id()
+            .unwrap_or(DIRECT_MEDIA_VARIANT_ID);
+        dispatcher
+            .announce_loading_variant(variant_id, requested_media_type.unwrap_or(MediaType::Video));
+    }
     match &probe_segment.context {
         ProbeSegmentContext::Init { .. } => dispatcher.requester.request_segment_immediately(
             lane_tag,
@@ -377,13 +384,6 @@ fn consume_probe_segments(dispatcher: &mut Dispatcher) {
                     .find(|seg| seg.sequence() == sequence)
                     .and_then(|seg| segment_list.init_for(seg))
                     .map(|init| init.id());
-                let variant_id = dispatcher
-                    .playlist_store
-                    .as_ref()
-                    .unwrap()
-                    .current_variant_id()
-                    .unwrap_or(DIRECT_MEDIA_VARIANT_ID);
-                dispatcher.announce_loaded_variant(variant_id, media_type);
                 dispatcher.on_media_segment_loaded(SegmentPushMetadata {
                     data,
                     media_type,
