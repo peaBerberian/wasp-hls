@@ -6,7 +6,7 @@ use crate::{
 /// Keeps playlist reload times and schedules refreshes only for playlists we need.
 pub(super) struct PlaylistRefreshManager {
     playlists: Vec<PlaylistRefresh>,
-    /// Explicit choices from segment selection. Before these are known, use selected playlists.
+    /// Playlists needed for playback or replacement inspection.
     followed_audio: Option<MediaPlaylistPermanentId>,
     followed_video: Option<MediaPlaylistPermanentId>,
 }
@@ -40,12 +40,10 @@ impl PlaylistRefreshManager {
             MediaType::Audio => self.followed_audio = Some(id),
             MediaType::Video => self.followed_video = Some(id),
         }
+        self.cancel_unused_timers();
     }
 
-    pub(super) fn followed_playlist(
-        &self,
-        media_type: MediaType,
-    ) -> Option<MediaPlaylistPermanentId> {
+    fn followed_playlist(&self, media_type: MediaType) -> Option<MediaPlaylistPermanentId> {
         match media_type {
             MediaType::Audio => self.followed_audio,
             MediaType::Video => self.followed_video,
@@ -57,38 +55,37 @@ impl PlaylistRefreshManager {
             MediaType::Audio => self.followed_audio = None,
             MediaType::Video => self.followed_video = None,
         }
+        self.cancel_unused_timers();
     }
 
     pub(super) fn clear_refresh_targets(&mut self) {
         self.followed_audio = None;
         self.followed_video = None;
+        self.cancel_unused_timers();
     }
 
     pub(super) fn is_following(&self, id: &MediaPlaylistPermanentId) -> bool {
         self.followed_audio == Some(*id) || self.followed_video == Some(*id)
     }
 
-    pub(super) fn refresh_media_type(
-        &self,
-        id: &MediaPlaylistPermanentId,
-        current_media_type: Option<MediaType>,
-    ) -> Option<MediaType> {
-        [MediaType::Audio, MediaType::Video]
-            .into_iter()
-            .find(|media_type| self.followed_playlist(*media_type) == Some(*id))
-            .or_else(|| {
-                current_media_type
-                    .filter(|media_type| self.followed_playlist(*media_type).is_none())
-            })
+    /// Record the reload time and schedule the next refresh if this playlist is being followed.
+    pub(super) fn on_playlist_loaded(
+        &mut self,
+        playlist_id: MediaPlaylistPermanentId,
+        refresh_interval: Option<f64>,
+    ) {
+        self.set_next_refresh_at(
+            playlist_id,
+            refresh_interval.map(|interval| jsMonotonicNow() + interval),
+        );
+        if self.is_following(&playlist_id) && refresh_interval.is_some() {
+            self.wait_for_refresh(&playlist_id);
+        }
     }
 
     /// Remember when a loaded playlist may next be refreshed, without necessarily setting a timer.
     /// None means the playlist no longer needs refreshing.
-    pub(super) fn set_next_refresh_at(
-        &mut self,
-        id: MediaPlaylistPermanentId,
-        next_refresh_at: Option<f64>,
-    ) {
+    fn set_next_refresh_at(&mut self, id: MediaPlaylistPermanentId, next_refresh_at: Option<f64>) {
         if let Some(entry) = self
             .playlists
             .iter_mut()
@@ -133,16 +130,24 @@ impl PlaylistRefreshManager {
     }
 
     /// A canceled timer's callback is ignored. Its playlist's next refresh time stays recorded.
-    pub(super) fn resolve_timer(&mut self, timer_id: TimerId) -> Option<MediaPlaylistPermanentId> {
+    pub(super) fn on_timer_ended(
+        &mut self,
+        timer_id: TimerId,
+    ) -> Option<(MediaPlaylistPermanentId, MediaType)> {
         let entry = self
             .playlists
             .iter_mut()
             .find(|entry| entry.timer_id == Some(timer_id))?;
         entry.timer_id = None;
-        Some(entry.playlist_id)
+        let playlist_id = entry.playlist_id;
+        let media_type = [MediaType::Audio, MediaType::Video]
+            .into_iter()
+            .find(|media_type| self.followed_playlist(*media_type) == Some(playlist_id))?;
+        Some((playlist_id, media_type))
     }
 
-    pub(super) fn cancel_unused_timers(&mut self, needed: &[Option<MediaPlaylistPermanentId>; 2]) {
+    fn cancel_unused_timers(&mut self) {
+        let needed = [self.followed_audio, self.followed_video];
         for entry in &mut self.playlists {
             if !needed.contains(&Some(entry.playlist_id)) {
                 entry.cancel_timer();
@@ -156,21 +161,6 @@ impl PlaylistRefreshManager {
             entry.cancel_timer();
         }
         self.playlists.clear();
-    }
-
-    /// Remove reload state for playlists no longer known to the store.
-    pub(super) fn retain<F>(&mut self, mut keep: F)
-    where
-        F: FnMut(&MediaPlaylistPermanentId) -> bool,
-    {
-        self.playlists.retain_mut(|entry| {
-            if keep(&entry.playlist_id) {
-                true
-            } else {
-                entry.cancel_timer();
-                false
-            }
-        });
     }
 }
 
@@ -188,7 +178,6 @@ mod tests {
         manager.set_next_refresh_at(first, Some(6000.));
         manager.follow(MediaType::Video, second);
         manager.set_next_refresh_at(second, Some(9000.));
-        manager.cancel_unused_timers(&[None, Some(second)]);
 
         manager.follow(MediaType::Video, first);
         let previous = manager
@@ -198,10 +187,23 @@ mod tests {
             .unwrap();
         assert_eq!(previous.next_refresh_at, 6000.);
         assert!(previous.timer_id.is_none());
-        assert_eq!(
-            manager.refresh_media_type(&second, Some(MediaType::Video)),
-            None
-        );
+        assert!(!manager.is_following(&second));
+
+        // A callback can only request a playlist that is still being followed.
+        manager
+            .playlists
+            .iter_mut()
+            .find(|entry| entry.playlist_id == second)
+            .unwrap()
+            .timer_id = Some(10.);
+        assert_eq!(manager.on_timer_ended(10.), None);
+        manager
+            .playlists
+            .iter_mut()
+            .find(|entry| entry.playlist_id == first)
+            .unwrap()
+            .timer_id = Some(11.);
+        assert_eq!(manager.on_timer_ended(11.), Some((first, MediaType::Video)));
 
         manager.set_next_refresh_at(first, None);
         assert!(!manager.wait_for_refresh(&first));
