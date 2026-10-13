@@ -644,7 +644,7 @@ impl PlaylistStore {
                     .map(|v| v.score().unwrap_or(v.bandwidth() as f64))
                     .unwrap_or(0.);
 
-                let context = SegmentQualityContext::new(score, wanted_id.as_u32());
+                let context = SegmentQualityContext::new(score, *wanted_id);
                 (m.segment_list(), context)
             })
         } else {
@@ -662,9 +662,9 @@ impl PlaylistStore {
             return None;
         };
         let variant = playlist.variant(variant_id)?;
-        let media_id = self.media_playlist_id_for_variant(variant_id, media_type)?;
+        let playlist_id = self.media_playlist_id_for_variant(variant_id, media_type)?;
         let score = variant.score().unwrap_or(variant.bandwidth() as f64);
-        Some(SegmentQualityContext::new(score, media_id.as_u32()))
+        Some(SegmentQualityContext::new(score, playlist_id))
     }
 
     /// Resolve a candidate's media playlist without changing the selected variant or track.

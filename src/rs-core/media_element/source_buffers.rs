@@ -6,7 +6,7 @@ use crate::bindings::{
     TimescaledTimestamp,
 };
 use crate::dispatcher::JsMemoryBlob;
-use crate::parser::SegmentTimeInfo;
+use crate::parser::{MediaPlaylistPermanentId, SegmentTimeInfo};
 use crate::utils::logger::*;
 
 /// Abstraction over the Media Source Extension's `SourceBuffer` concept.
@@ -351,14 +351,14 @@ pub(crate) struct PreparedPushData {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct MediaSequenceIdentity {
-    media_playlist_id: u32,
+    media_playlist_id: MediaPlaylistPermanentId,
     discontinuity_sequence: u32,
     init_segment_id: Option<u64>,
 }
 
 impl MediaSequenceIdentity {
     pub(crate) fn new(
-        media_playlist_id: u32,
+        media_playlist_id: MediaPlaylistPermanentId,
         discontinuity_sequence: u32,
         init_segment_id: Option<f64>,
     ) -> Self {
@@ -665,37 +665,46 @@ fn build_segment_hints(
 #[cfg(test)]
 mod tests {
     use super::{should_reset_transmuxer, MediaSequenceIdentity};
+    use crate::parser::MediaPlaylistPermanentId;
 
     #[test]
     fn transmuxer_reset_is_forced_when_requested() {
-        let identity = MediaSequenceIdentity::new(1, 2, Some(3.0));
+        let identity =
+            MediaSequenceIdentity::new(MediaPlaylistPermanentId::new_for_test(1), 2, Some(3.0));
         assert!(should_reset_transmuxer(Some(identity), identity, true));
     }
 
     #[test]
     fn transmuxer_reset_is_not_needed_for_same_sequence_identity() {
-        let identity = MediaSequenceIdentity::new(1, 2, Some(3.0));
+        let identity =
+            MediaSequenceIdentity::new(MediaPlaylistPermanentId::new_for_test(1), 2, Some(3.0));
         assert!(!should_reset_transmuxer(Some(identity), identity, false));
     }
 
     #[test]
     fn transmuxer_reset_happens_when_media_playlist_changes() {
-        let previous = MediaSequenceIdentity::new(1, 2, Some(3.0));
-        let next = MediaSequenceIdentity::new(2, 2, Some(3.0));
+        let previous =
+            MediaSequenceIdentity::new(MediaPlaylistPermanentId::new_for_test(1), 2, Some(3.0));
+        let next =
+            MediaSequenceIdentity::new(MediaPlaylistPermanentId::new_for_test(2), 2, Some(3.0));
         assert!(should_reset_transmuxer(Some(previous), next, false));
     }
 
     #[test]
     fn transmuxer_reset_happens_when_discontinuity_changes() {
-        let previous = MediaSequenceIdentity::new(1, 2, Some(3.0));
-        let next = MediaSequenceIdentity::new(1, 3, Some(3.0));
+        let previous =
+            MediaSequenceIdentity::new(MediaPlaylistPermanentId::new_for_test(1), 2, Some(3.0));
+        let next =
+            MediaSequenceIdentity::new(MediaPlaylistPermanentId::new_for_test(1), 3, Some(3.0));
         assert!(should_reset_transmuxer(Some(previous), next, false));
     }
 
     #[test]
     fn transmuxer_reset_happens_when_init_segment_changes() {
-        let previous = MediaSequenceIdentity::new(1, 2, Some(3.0));
-        let next = MediaSequenceIdentity::new(1, 2, Some(4.0));
+        let previous =
+            MediaSequenceIdentity::new(MediaPlaylistPermanentId::new_for_test(1), 2, Some(3.0));
+        let next =
+            MediaSequenceIdentity::new(MediaPlaylistPermanentId::new_for_test(1), 2, Some(4.0));
         assert!(should_reset_transmuxer(Some(previous), next, false));
     }
 }

@@ -1,6 +1,7 @@
 use crate::{
     bindings::{MediaType, TimescaledTimestamp},
     dispatcher::JsTimeRanges,
+    parser::MediaPlaylistPermanentId,
     utils::logger::*,
 };
 
@@ -22,16 +23,16 @@ pub(crate) struct SegmentQualityContext {
     /// Allows to indicate that this is the same quality than another `SegmentQualityContext` whose
     /// `variant_score` is higher/lower (e.g. the variant could have changed but the media of the
     /// current type, not).
-    media_id: u32,
+    playlist_id: MediaPlaylistPermanentId,
 }
 
 impl SegmentQualityContext {
     /// Create a new `SegmentQualityContext`, by giving a "quality score" of its corresponding
-    /// variant (higher is better) and a `media_id` to identify uniquely its linked MediaPlaylist.
-    pub(crate) fn new(variant_score: f64, media_id: u32) -> Self {
+    /// variant (higher is better) and a `playlist_id` to identify uniquely its linked MediaPlaylist.
+    pub(crate) fn new(variant_score: f64, playlist_id: MediaPlaylistPermanentId) -> Self {
         Self {
             variant_score,
-            media_id,
+            playlist_id,
         }
     }
 
@@ -39,15 +40,15 @@ impl SegmentQualityContext {
     /// desirability of the segment's linked variant - higher is better.
     ///
     /// Note that two segments could have a different linked `variant_score` but be of the same
-    /// quality. Please also call the `media_id` method to check if the segment comes from the
+    /// quality. Please also call the `playlist_id` method to check if the segment comes from the
     /// same `MediaPlaylist`.
     pub(crate) fn variant_score(&self) -> f64 {
         self.variant_score
     }
 
-    /// Returns a numeric identifier for the `MediaPlaylist` linked to this segment.
-    pub(crate) fn media_id(&self) -> u32 {
-        self.media_id
+    /// Returns the identifier for the `MediaPlaylist` linked to this segment.
+    pub(crate) fn playlist_id(&self) -> MediaPlaylistPermanentId {
+        self.playlist_id
     }
 }
 
@@ -106,7 +107,7 @@ pub(crate) struct BufferedChunk {
     variant_score: f64,
 
     /// Identifier for the corresponding quality
-    media_id: u32,
+    playlist_id: MediaPlaylistPermanentId,
 
     /// HLS discontinuity sequence associated to the segment.
     discontinuity_sequence: u32,
@@ -125,7 +126,7 @@ impl BufferedChunk {
             id,
             variant_score: metadata.context.variant_score,
             start: metadata.start,
-            media_id: metadata.context.media_id,
+            playlist_id: metadata.context.playlist_id,
             discontinuity_sequence: metadata.discontinuity_sequence,
             playlist_start: metadata.playlist_start,
             playlist_end: metadata.playlist_end,
@@ -186,22 +187,22 @@ impl BufferedChunk {
     }
 
     pub(crate) fn is_worse_than(&self, context: &SegmentQualityContext) -> bool {
-        context.variant_score > self.variant_score && context.media_id != self.media_id
+        context.variant_score > self.variant_score && context.playlist_id != self.playlist_id
     }
 
     pub(crate) fn is_better_than(&self, context: &SegmentQualityContext) -> bool {
-        context.variant_score < self.variant_score && context.media_id != self.media_id
+        context.variant_score < self.variant_score && context.playlist_id != self.playlist_id
     }
 
     pub(crate) fn is_quality_equal(&self, context: &SegmentQualityContext) -> bool {
-        context.variant_score == self.variant_score || context.media_id == self.media_id
+        context.variant_score == self.variant_score || context.playlist_id == self.playlist_id
     }
 
     /// Returns the `variant_score` of the linked segment, which is basically an hint of the
     /// desirability of the segment's linked variant - higher is better.
     ///
     /// Note that two segments could have a different linked `variant_score` but be of the same
-    /// quality. Please also call the `media_id` method to check if the segment comes from the
+    /// quality. Please also call the `playlist_id` method to check if the segment comes from the
     /// same `MediaPlaylist`.
     pub(crate) fn variant_score(&self) -> f64 {
         self.variant_score
@@ -212,8 +213,8 @@ impl BufferedChunk {
     /// Allows to indicate that this is the same quality than another `SegmentQualityContext` whose
     /// `variant_score` is higher/lower (e.g. the variant could have changed but the media of the
     /// current type, not).
-    pub(crate) fn media_id(&self) -> u32 {
-        self.media_id
+    pub(crate) fn playlist_id(&self) -> MediaPlaylistPermanentId {
+        self.playlist_id
     }
 
     pub(crate) fn discontinuity_sequence(&self) -> u32 {
@@ -773,7 +774,7 @@ impl SegmentInventory {
                         end: seg.end,
                         context: SegmentQualityContext {
                             variant_score: seg.variant_score,
-                            media_id: seg.media_id,
+                            playlist_id: seg.playlist_id,
                         },
                     };
                     let duplicated_after = BufferedChunk::new(duplicated, seg.id);
@@ -1281,7 +1282,10 @@ fn matches_discontinuity(seg: &BufferedChunk, discontinuity_sequence: u32) -> bo
 #[cfg(test)]
 mod tests {
     use super::{BufferedSegmentMetadata, SegmentInventory, SegmentQualityContext};
-    use crate::bindings::{MediaType, TimescaledTimestamp};
+    use crate::{
+        bindings::{MediaType, TimescaledTimestamp},
+        parser::MediaPlaylistPermanentId,
+    };
 
     fn metadata(start: f64, end: f64) -> BufferedSegmentMetadata {
         metadata_with_discontinuity(start, end, 0)
@@ -1298,7 +1302,7 @@ mod tests {
             discontinuity_sequence,
             start,
             end,
-            context: SegmentQualityContext::new(1.0, 1),
+            context: SegmentQualityContext::new(1.0, MediaPlaylistPermanentId::new_for_test(1)),
         }
     }
 

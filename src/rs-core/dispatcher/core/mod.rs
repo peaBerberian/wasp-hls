@@ -25,7 +25,7 @@ use crate::{
     requester::{
         FinishedRequestType, PlaylistFileType, PlaylistRequestInfo, RetryResult, SegmentRequestInfo,
     },
-    segment_selector::{PlaylistToRefresh, SegmentSelectionCandidate},
+    segment_selector::SegmentSelectionCandidate,
     utils::{logger::*, url::Url},
 };
 
@@ -975,7 +975,7 @@ impl Dispatcher {
                 continue;
             };
             let recommendation = segment_selection_for_type(store, recommendation, media_type);
-            let Some((_, addition_candidate)) = segment_candidate(
+            let Some(addition_candidate) = segment_candidate(
                 store,
                 recommendation.map(|selection| selection.best_variant_id),
                 media_type,
@@ -983,7 +983,7 @@ impl Dispatcher {
                 self.abort_segment_requests_with_type(media_type);
                 continue;
             };
-            let Some((_, replacement_candidate)) = segment_candidate(
+            let Some(replacement_candidate) = segment_candidate(
                 store,
                 recommendation.map(|selection| selection.safe_variant_id),
                 media_type,
@@ -1031,20 +1031,22 @@ impl Dispatcher {
             return;
         };
         let recommendation = segment_selection_for_type(store, recommendation, media_type);
-        let Some((addition_playlist_id, addition_candidate)) = segment_candidate(
+        let Some(addition_candidate) = segment_candidate(
             store,
             recommendation.map(|selection| selection.best_variant_id),
             media_type,
         ) else {
             return;
         };
-        let Some((replacement_playlist_id, replacement_candidate)) = segment_candidate(
+        let Some(replacement_candidate) = segment_candidate(
             store,
             recommendation.map(|selection| selection.safe_variant_id),
             media_type,
         ) else {
             return;
         };
+        let addition_playlist_id = addition_candidate.context.playlist_id();
+        let replacement_playlist_id = replacement_candidate.context.playlist_id();
         let addition_variant_id = addition_candidate.variant_id;
         let addition_context = addition_candidate.context;
         let replacement_context = replacement_candidate.context;
@@ -1056,10 +1058,7 @@ impl Dispatcher {
                 replacement_candidate,
                 self.media_element_ref.inventory(media_type),
             );
-        let refresh_id = match selected.playlist_to_refresh() {
-            PlaylistToRefresh::Addition => addition_playlist_id,
-            PlaylistToRefresh::Replacement => replacement_playlist_id,
-        };
+        let refresh_id = selected.playlist_to_refresh();
         let Some(needed) = selected.needed_segments() else {
             self.follow_media_playlist(media_type, refresh_id);
             return;
@@ -1343,7 +1342,7 @@ impl Dispatcher {
         let segment_start = push_md.time_info.start();
         let segment_end = push_md.time_info.end();
         let media_type = push_md.media_type;
-        let media_id = push_md.context.media_id();
+        let playlist_id = push_md.context.playlist_id();
         let identity =
             SegmentIdentity::new(push_md.sequence_number, push_md.discontinuity_sequence);
         let prepared_data = self
@@ -1355,9 +1354,11 @@ impl Dispatcher {
         //
         // We still announce the incoming segment first to ensure the `MediaElementReference`'s
         // inventory is up-to-date.
-        self.segment_selectors
-            .get_mut(media_type)
-            .validate_media(media_id, identity, segment_end);
+        self.segment_selectors.get_mut(media_type).validate_media(
+            playlist_id,
+            identity,
+            segment_end,
+        );
         self.check_segments_to_request();
 
         match self
@@ -1442,32 +1443,25 @@ fn segment_candidate(
     store: &PlaylistStore,
     variant_id: Option<u32>,
     media_type: MediaType,
-) -> Option<(MediaPlaylistPermanentId, SegmentSelectionCandidate<'_>)> {
+) -> Option<SegmentSelectionCandidate<'_>> {
     if let Some(variant_id) = variant_id {
         let id = store.media_playlist_id_for_variant(variant_id, media_type)?;
         let context = store.variant_segment_quality_context(variant_id, media_type)?;
-        Some((
-            id,
-            SegmentSelectionCandidate {
-                variant_id,
-                context,
-                playlist: store
-                    .media_playlist(&id)
-                    .map(|playlist| playlist.segment_list()),
-            },
-        ))
+        Some(SegmentSelectionCandidate {
+            variant_id,
+            context,
+            playlist: store
+                .media_playlist(&id)
+                .map(|playlist| playlist.segment_list()),
+        })
     } else {
         store.direct_media_playlist()?;
-        let id = *store.current_media_playlist_id(media_type)?;
         let (list, context) = store.loaded_media_playlist_segment_info(media_type)?;
-        Some((
-            id,
-            SegmentSelectionCandidate {
-                variant_id: crate::bindings::formatters::DIRECT_MEDIA_VARIANT_ID,
-                context,
-                playlist: Some(list),
-            },
-        ))
+        Some(SegmentSelectionCandidate {
+            variant_id: crate::bindings::formatters::DIRECT_MEDIA_VARIANT_ID,
+            context,
+            playlist: Some(list),
+        })
     }
 }
 
@@ -1547,7 +1541,7 @@ mod tests {
                 video_selection.best_variant_id,
                 if shared_audio { high } else { low }
             );
-            let (_, safe) = segment_candidate(
+            let safe = segment_candidate(
                 &store,
                 Some(video_selection.safe_variant_id),
                 MediaType::Video,
@@ -1793,8 +1787,8 @@ mod tests {
             )
             .unwrap();
         store.set_variant(best_variant);
-        let (_, best) = segment_candidate(store, Some(best_variant), MediaType::Video).unwrap();
-        let (_, safe) = segment_candidate(store, Some(safe_variant), MediaType::Video).unwrap();
+        let best = segment_candidate(store, Some(best_variant), MediaType::Video).unwrap();
+        let safe = segment_candidate(store, Some(safe_variant), MediaType::Video).unwrap();
         let low_context = store
             .variant_segment_quality_context(ids[0], MediaType::Video)
             .unwrap();

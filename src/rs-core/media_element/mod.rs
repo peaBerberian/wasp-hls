@@ -345,7 +345,7 @@ impl MediaElementReference {
         let metadata_start = md.time_info.start();
         let metadata_end = md.time_info.end();
         let media_sequence_identity = MediaSequenceIdentity::new(
-            md.context.media_id(),
+            md.context.playlist_id(),
             md.discontinuity_sequence,
             md.init_segment_id,
         );
@@ -809,7 +809,7 @@ mod tests {
         bindings::{MediaType, TimescaledTimestamp},
         dispatcher::{JsTimeRanges, MediaObservation, PlaybackTickReason},
         media_element::{segment_inventory::BufferedSegmentMetadata, SegmentQualityContext},
-        parser::SegmentTimeInfo,
+        parser::{MediaPlaylistPermanentId, SegmentTimeInfo},
     };
 
     fn metadata(start: f64, end: f64) -> BufferedSegmentMetadata {
@@ -819,7 +819,7 @@ mod tests {
             playlist_start: start,
             playlist_end: end,
             discontinuity_sequence: 0,
-            context: SegmentQualityContext::new(1.0, 1),
+            context: SegmentQualityContext::new(1.0, MediaPlaylistPermanentId::new_for_test(1)),
         }
     }
 
