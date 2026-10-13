@@ -16,6 +16,9 @@ pub(crate) use crate::parser::MediaPlaylistPermanentId;
 ///   - Information on the Multivariant Playlist itself.
 ///   - On the current variant selected.
 ///   - Information on the different audio and video Media Playlists selected.
+// TODO: Consider extracting PlaybackSelection with variant/rendition choices, track constraints,
+// and support verification. Keep playlist data here. Only do this if moving the behavior together
+// simplifies both PlaylistStore and the dispatcher, rather than adding an object for selected IDs.
 pub(crate) struct PlaylistStore {
     /// Representation of the top-level playlist of the currently loaded HLS content.
     playlist: TopLevelPlaylist,
