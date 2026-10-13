@@ -114,6 +114,10 @@ export interface HostBindings {
    */
   freeResource(resourceId: number): boolean;
   /**
+   * Return monotonic time in milliseconds.
+   */
+  monotonicNow(): number;
+  /**
    * Return a random floating-point value.
    */
   getRandom(): number;

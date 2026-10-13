@@ -94,6 +94,8 @@ unsafe extern "C" {
     pub(super) fn __js_func__flush();
     /// Release a JavaScript-side resource buffer.
     pub(super) fn __js_func__free_resource(resource_id: ResourceId) -> u32;
+    /// Return monotonic time in milliseconds.
+    pub(super) fn __js_func__monotonic_now() -> f64;
     /// Return a random floating-point value.
     pub(super) fn __js_func__get_random() -> f64;
     /// Return the byte length for a JavaScript-side resource buffer.

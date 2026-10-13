@@ -7,7 +7,7 @@ use crate::{
     bindings::{
         formatters::format_source_buffer_creation_err_for_js, jsAnnounceTrackUpdate,
         jsAnnounceVariantLockStatusChange, jsAnnounceVariantUpdate, jsInspectSegment,
-        jsSendMediaPlaylistParsingError, jsSendMediaPlaylistRequestError,
+        jsMonotonicNow, jsSendMediaPlaylistParsingError, jsSendMediaPlaylistRequestError,
         jsSendMultivariantPlaylistParsingError, jsSendMultivariantPlaylistRequestError,
         jsSendOtherError, jsSendPushedSegmentError, jsSendRemoveBufferError,
         jsSendSegmentParsingError, jsSendSegmentRequestError, jsSendSourceBufferCreationError,
@@ -69,7 +69,7 @@ impl Dispatcher {
         self.ready_probe_segments.clear();
         self.initial_audio_track_selection.clear();
         self.last_position = 0.;
-        self.clean_up_playlist_refresh_timers();
+        self.clean_up_playlist_refresh_manager();
         self.ready_state = PlayerReadyState::Stopped;
     }
 
@@ -91,7 +91,7 @@ impl Dispatcher {
                     changed_media_types,
                     audio_track_change,
                 } => {
-                    self.playlist_refresh_timers.clear_refresh_targets();
+                    self.playlist_refresh_manager.clear_refresh_targets();
                     if let AudioTrackChange::Changed(track_id) = audio_track_change {
                         let is_audio_track_selected = pl_store.fixed_audio_track_id().is_some();
                         jsAnnounceTrackUpdate(MediaType::Audio, track_id, is_audio_track_selected);
@@ -115,9 +115,7 @@ impl Dispatcher {
                             self.flush_media_buffer(media_type);
                         }
                     }
-                    if !changed_media_types.is_empty() {
-                        self.clean_up_playlist_refresh_timers();
-                    }
+                    self.clean_up_playlist_refresh_manager();
                     self.check_segments_to_request();
                     // XXX TODO: What? doesn't it change event ordering?
                     // variantUpdate should be before `variantLockStatusChange` should be before
@@ -143,13 +141,13 @@ impl Dispatcher {
     /// function, has finished, with the corrsonding `TimerId` as argument.
     pub(super) fn on_playlist_refresh_timer_ended(&mut self, id: TimerId) {
         let (Some(playlist_id), Some(playlist_store)) = (
-            self.playlist_refresh_timers.resolve_timer(id),
+            self.playlist_refresh_manager.resolve_timer(id),
             &self.playlist_store,
         ) else {
             return;
         };
 
-        let media_type = self.playlist_refresh_timers.refresh_media_type(
+        let media_type = self.playlist_refresh_manager.refresh_media_type(
             &playlist_id,
             playlist_store.selected_playlist_media_type(&playlist_id),
         );
@@ -752,7 +750,7 @@ impl Dispatcher {
                     .playlist_store
                     .as_ref()
                     .is_some_and(|store| store.is_current_media_playlist(id))
-                    && !self.playlist_refresh_timers.is_following(id)
+                    && !self.playlist_refresh_manager.is_following(id)
             }
         }
     }
@@ -834,8 +832,21 @@ impl Dispatcher {
         playlist_id: MediaPlaylistPermanentId,
         refresh_interval: Option<f64>,
     ) {
-        self.playlist_refresh_timers
-            .set_timer(playlist_id, refresh_interval);
+        self.playlist_refresh_manager.set_next_refresh_at(
+            playlist_id,
+            refresh_interval.map(|interval| jsMonotonicNow() + interval),
+        );
+        let is_needed = self.playlist_store.as_ref().is_some_and(|store| {
+            self.playlist_refresh_manager
+                .refresh_media_type(
+                    &playlist_id,
+                    store.selected_playlist_media_type(&playlist_id),
+                )
+                .is_some()
+        });
+        if is_needed && refresh_interval.is_some() {
+            self.playlist_refresh_manager.wait_for_refresh(&playlist_id);
+        }
 
         let Some(playlist_store) = self.playlist_store.as_ref() else {
             return;
@@ -1106,7 +1117,8 @@ impl Dispatcher {
             for changed_type in changed_media_types {
                 self.ready_probe_segments.clear_media_type(changed_type);
                 self.abort_segment_requests_with_type(changed_type);
-                self.playlist_refresh_timers.forget_media_type(changed_type);
+                self.playlist_refresh_manager
+                    .forget_media_type(changed_type);
                 self.request_current_media_playlist_if_needed(changed_type);
             }
         }
@@ -1149,18 +1161,19 @@ impl Dispatcher {
     }
 
     /// Set which playlist to refresh for this media type.
-    /// If it already has a refresh timer, wait for that timer. Otherwise, request it now unless
-    /// it cannot be refreshed or a request is already pending.
-    /// Timers remain when switching away; their callbacks fetch only playlists still needed.
+    /// Wait until its next reload time, or request it now if that time has passed.
+    /// Switching away cancels the timer but keeps the reload time.
+    /// Finished playlists and requests already in progress need no new request.
     fn follow_media_playlist(&mut self, media_type: MediaType, id: MediaPlaylistPermanentId) {
-        self.playlist_refresh_timers.follow(media_type, id);
+        self.playlist_refresh_manager.follow(media_type, id);
+        self.clean_up_playlist_refresh_manager();
         let Some(store) = self.playlist_store.as_ref() else {
             return;
         };
         let needs_reload = store
             .media_playlist(&id)
             .is_none_or(|playlist| playlist.may_be_refreshed());
-        if !needs_reload || self.playlist_refresh_timers.has_timer(&id) {
+        if !needs_reload || self.playlist_refresh_manager.wait_for_refresh(&id) {
             return;
         }
         let Some(url) = store.media_playlist_url(&id) else {
@@ -1203,7 +1216,7 @@ impl Dispatcher {
             self.ready_probe_segments.clear_media_type(media_type);
 
             if !matches!(mode, MediaPlaylistUpdateMode::Seamless) {
-                self.playlist_refresh_timers.forget_media_type(media_type);
+                self.playlist_refresh_manager.forget_media_type(media_type);
                 self.abort_segment_requests_with_type(media_type);
             }
             if matches!(mode, MediaPlaylistUpdateMode::AbortRequestsAndFlushBuffer) {
@@ -1213,7 +1226,7 @@ impl Dispatcher {
         }
 
         if has_updates {
-            self.clean_up_playlist_refresh_timers();
+            self.clean_up_playlist_refresh_manager();
         }
         self.check_segments_to_request();
     }
@@ -1435,14 +1448,19 @@ impl Dispatcher {
         }
     }
 
-    /// Cancel timers for playlists no longer known to the store.
-    /// Other timers remain; their callbacks check whether their playlist is still needed.
-    fn clean_up_playlist_refresh_timers(&mut self) {
+    /// Cancel unused timers while preserving their reload times. Remove unknown playlists.
+    fn clean_up_playlist_refresh_manager(&mut self) {
         if let Some(ref pl_store) = self.playlist_store {
-            self.playlist_refresh_timers
+            let needed = [MediaType::Audio, MediaType::Video].map(|media_type| {
+                self.playlist_refresh_manager
+                    .followed_playlist(media_type)
+                    .or_else(|| pl_store.current_media_playlist_id(media_type).copied())
+            });
+            self.playlist_refresh_manager.cancel_unused_timers(&needed);
+            self.playlist_refresh_manager
                 .retain(|id| pl_store.media_playlist_url(id).is_some())
         } else {
-            self.playlist_refresh_timers.clear_all_timers();
+            self.playlist_refresh_manager.clear_all_timers();
         }
     }
 }
@@ -1843,7 +1861,7 @@ mod tests {
         };
         assert!(dispatcher.is_obsolete_playlist_request(&request));
         dispatcher
-            .playlist_refresh_timers
+            .playlist_refresh_manager
             .follow(MediaType::Video, id);
         assert!(!dispatcher.is_obsolete_playlist_request(&request));
     }

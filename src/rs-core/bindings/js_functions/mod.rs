@@ -99,6 +99,11 @@ pub fn jsTimer(duration: f64, reason: TimerReason) -> TimerId {
     unsafe { __js_func__timer(duration, reason as u32) }
 }
 
+/// Returns monotonic time in milliseconds.
+pub fn jsMonotonicNow() -> f64 {
+    unsafe { __js_func__monotonic_now() }
+}
+
 /// Clear a timer started with `jsTimer`.
 pub fn jsClearTimer(id: TimerId) {
     unsafe { __js_func__clear_timer(id) }

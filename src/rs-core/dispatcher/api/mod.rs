@@ -3,7 +3,7 @@ use crate::{
     bindings::{jsSendOtherError, OtherErrorCode},
     dispatcher::{
         segment_request_contexts::SegmentRequestContexts, InitialAudioTrackSelection,
-        PlaylistRefreshTimers,
+        PlaylistRefreshManager,
     },
     media_element::MediaElementReference,
     requester::{PlaylistFileType, Requester},
@@ -37,7 +37,7 @@ impl Dispatcher {
             buffer_goal: 30.,
             segment_selectors: NextSegmentSelectors::new(0., 30.),
             segment_request_contexts: SegmentRequestContexts::new(),
-            playlist_refresh_timers: PlaylistRefreshTimers::new(),
+            playlist_refresh_manager: PlaylistRefreshManager::new(),
             ready_probe_segments: Default::default(),
             initial_audio_track_selection: Vec::new(),
         }

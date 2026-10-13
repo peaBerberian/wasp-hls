@@ -137,6 +137,11 @@ pub(super) unsafe fn __js_func__free_resource(_resource_id: ResourceId) -> u32 {
     non_wasm_binding_panic("__js_func__free_resource")
 }
 
+/// Return monotonic time in milliseconds.
+pub(super) unsafe fn __js_func__monotonic_now() -> f64 {
+    non_wasm_binding_panic("__js_func__monotonic_now")
+}
+
 /// Return a random floating-point value.
 pub(super) unsafe fn __js_func__get_random() -> f64 {
     non_wasm_binding_panic("__js_func__get_random")
