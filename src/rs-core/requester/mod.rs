@@ -443,12 +443,12 @@ impl Requester {
     pub(crate) fn request_init_segment(
         &mut self,
         media_type: MediaType,
-        url: Url,
+        url: &Url,
         byte_range: Option<&ByteRange>,
         caller_id: u32,
     ) {
         self.request_segment_now(
-            &url,
+            url,
             byte_range,
             RequestLaneTag::from_media_type(media_type),
             None,
@@ -543,6 +543,25 @@ impl Requester {
         self.check_segment_queue();
     }
 
+    /// Timing of the pending or queued media segment for this type.
+    /// Initialization requests have no timing information.
+    pub(crate) fn pending_segment_time_info(
+        &self,
+        media_type: MediaType,
+    ) -> Option<&SegmentTimeInfo> {
+        let lane_tag = RequestLaneTag::from_media_type(media_type);
+        self.pending_segment_requests
+            .iter()
+            .find(|request| request.lane_tag == lane_tag)
+            .and_then(|request| request.time_info.as_ref())
+            .or_else(|| {
+                self.segment_waiting_queue
+                    .iter()
+                    .find(|request| request.lane_tag == lane_tag)
+                    .and_then(|request| request.time_info.as_ref())
+            })
+    }
+
     pub(crate) fn has_segment_request_pending(&self, media_type: MediaType) -> bool {
         let lane_tag = RequestLaneTag::from_media_type(media_type);
         self.pending_segment_requests
@@ -568,7 +587,6 @@ impl Requester {
         host_id: RequestId,
         has_timeouted: bool,
         status: Option<u32>,
-        // TODO: closure instead?
         allow_retry: bool,
     ) -> RetryResult<'_> {
         let reason = match (has_timeouted, status) {

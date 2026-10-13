@@ -37,6 +37,7 @@ pub struct Dispatcher {
 
     /// Variant last announced when beginning segment loading. Recommendations and playlist
     /// requests alone do not change this value.
+    /// TODO: Is it "that" important? May be deduplicated later by env. To check.
     announced_variant_id: Option<u32>,
 
     /// Store the "Top level Playlist" (structure which describes the currently
