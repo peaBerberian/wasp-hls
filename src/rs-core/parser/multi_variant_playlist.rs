@@ -35,7 +35,7 @@ pub struct MultivariantPlaylist {
     primary_media: Vec<PrimaryMediaPlaylist>,
 
     /// Maps variant's id to index in `primary_media`
-    primary_id_by_variant: HashMap<u32, u32>,
+    primary_id_by_variant: HashMap<u32, usize>,
 
     /// Abstraction to simplify the management of tracks.
     ///
@@ -252,7 +252,7 @@ impl MultivariantPlaylist {
                 .entry(variant.url().get_ref())
                 .or_insert_with(|| {
                     // (id is the index in the `primary_media` array)
-                    let id = primary_media.len() as u32;
+                    let id = primary_media.len();
                     primary_media.push(PrimaryMediaPlaylist {
                         url: variant.url().clone(),
                         media_type,
@@ -262,7 +262,7 @@ impl MultivariantPlaylist {
                 });
 
             // For a shared URL, prefer a video declaration, then audio, then unknown.
-            let primary = &mut primary_media[primary_id as usize];
+            let primary = &mut primary_media[primary_id];
             if media_type == Some(MediaType::Video) || primary.media_type.is_none() {
                 primary.media_type = media_type;
             }
@@ -358,7 +358,9 @@ impl MultivariantPlaylist {
         if curr_variant.has_type(crate::bindings::MediaType::Video) {
             Some(MediaPlaylistPermanentId::new(
                 MediaPlaylistUrlLocation::Variant,
-                *self.primary_id_by_variant.get(&curr_variant.id())?,
+                (*self.primary_id_by_variant.get(&curr_variant.id())?)
+                    .try_into()
+                    .ok()?,
             ))
         } else {
             None
@@ -379,7 +381,9 @@ impl MultivariantPlaylist {
         curr_audio_track: Option<u32>,
     ) -> Option<MediaPlaylistPermanentId> {
         // TODO: Resolve the variant's own URL for audio-only variants without an AUDIO group.
-        let primary_id = *self.primary_id_by_variant.get(&curr_variant.id())?;
+        let primary_id: u32 = (*self.primary_id_by_variant.get(&curr_variant.id())?)
+            .try_into()
+            .ok()?;
         if let Some(group_id) = curr_variant.audio_group() {
             if let Some(track_id) = curr_audio_track {
                 self.audio_tracks
