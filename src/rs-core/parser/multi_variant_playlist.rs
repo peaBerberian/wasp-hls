@@ -32,7 +32,9 @@ pub struct MultivariantPlaylist {
     variants: Vec<VariantStream>,
 
     /// Primary media playlists. Variants with the same resolved URI share an entry.
-    primary_media: HashMap<u32, PrimaryMediaPlaylist>,
+    primary_media: Vec<PrimaryMediaPlaylist>,
+
+    /// Maps variant's id to index in `primary_media`
     primary_id_by_variant: HashMap<u32, u32>,
 
     /// Abstraction to simplify the management of tracks.
@@ -230,6 +232,7 @@ impl MultivariantPlaylist {
             }
         });
 
+        let mut primary_media = Vec::new();
         let mut primary_id_by_variant = HashMap::new();
         let mut primary_id_by_uri = HashMap::new();
         for variant in &variants {
@@ -245,28 +248,27 @@ impl MultivariantPlaylist {
                 None
             };
 
-            let (primary_id, primary) = primary_id_by_uri
+            let primary_id = *primary_id_by_uri
                 .entry(variant.url().get_ref())
                 .or_insert_with(|| {
-                    (
-                        // Just take the id of the first variant, we don't care much here
-                        variant.id(),
-                        PrimaryMediaPlaylist {
-                            url: variant.url().clone(),
-                            media_type,
-                            playlist: None,
-                        },
-                    )
+                    // (id is the index in the `primary_media` array)
+                    let id = primary_media.len() as u32;
+                    primary_media.push(PrimaryMediaPlaylist {
+                        url: variant.url().clone(),
+                        media_type,
+                        playlist: None,
+                    });
+                    id
                 });
 
             // For a shared URL, prefer a video declaration, then audio, then unknown.
+            let primary = &mut primary_media[primary_id as usize];
             if media_type == Some(MediaType::Video) || primary.media_type.is_none() {
                 primary.media_type = media_type;
             }
 
-            primary_id_by_variant.insert(variant.id(), *primary_id);
+            primary_id_by_variant.insert(variant.id(), primary_id);
         }
-        let primary_media = primary_id_by_uri.into_values().collect();
 
         Ok(MultivariantPlaylist {
             last_id,
@@ -297,7 +299,9 @@ impl MultivariantPlaylist {
     /// Returns None when the type is not known from the multivariant playlist.
     pub(crate) fn playlist_media_type(&self, id: &MediaPlaylistPermanentId) -> Option<MediaType> {
         match id.location() {
-            MediaPlaylistUrlLocation::Variant => self.primary_media.get(&id.id())?.media_type,
+            MediaPlaylistUrlLocation::Variant => {
+                self.primary_media.get(id.id() as usize)?.media_type
+            }
             MediaPlaylistUrlLocation::AudioTrack => self
                 .audio_tracks
                 .media_tag(id.id())
@@ -491,7 +495,7 @@ impl MultivariantPlaylist {
     pub(crate) fn media_playlist_url(&self, wanted_id: &MediaPlaylistPermanentId) -> Option<&Url> {
         match wanted_id.location() {
             MediaPlaylistUrlLocation::Variant => {
-                Some(&self.primary_media.get(&wanted_id.id())?.url)
+                Some(&self.primary_media.get(wanted_id.id() as usize)?.url)
             }
             MediaPlaylistUrlLocation::AudioTrack => self.audio_url(wanted_id.id()),
             MediaPlaylistUrlLocation::OtherMedia => self.other_media_url(wanted_id.id()),
@@ -506,9 +510,11 @@ impl MultivariantPlaylist {
         wanted_id: &MediaPlaylistPermanentId,
     ) -> Option<&MediaPlaylist> {
         match wanted_id.location() {
-            MediaPlaylistUrlLocation::Variant => {
-                self.primary_media.get(&wanted_id.id())?.playlist.as_ref()
-            }
+            MediaPlaylistUrlLocation::Variant => self
+                .primary_media
+                .get(wanted_id.id() as usize)?
+                .playlist
+                .as_ref(),
             MediaPlaylistUrlLocation::AudioTrack => self.audio_playlist(wanted_id.id()),
             MediaPlaylistUrlLocation::OtherMedia => self.other_media_playlist(wanted_id.id()),
             MediaPlaylistUrlLocation::Direct => None, // Should not happen
@@ -522,7 +528,7 @@ impl MultivariantPlaylist {
         match wanted_id.location() {
             MediaPlaylistUrlLocation::Variant => self
                 .primary_media
-                .get_mut(&wanted_id.id())
+                .get_mut(wanted_id.id() as usize)
                 .and_then(|media| media.playlist.as_mut()),
             MediaPlaylistUrlLocation::AudioTrack => self
                 .audio_tracks
@@ -540,7 +546,7 @@ impl MultivariantPlaylist {
     pub(crate) fn clear_media_playlist(&mut self, wanted_id: &MediaPlaylistPermanentId) {
         match wanted_id.location() {
             MediaPlaylistUrlLocation::Variant => {
-                if let Some(media) = self.primary_media.get_mut(&wanted_id.id()) {
+                if let Some(media) = self.primary_media.get_mut(wanted_id.id() as usize) {
                     media.playlist = None;
                 }
             }
@@ -602,7 +608,7 @@ impl MultivariantPlaylist {
     ) -> Result<&MediaPlaylist, MediaPlaylistUpdateError> {
         let media = self
             .primary_media
-            .get_mut(&primary_id)
+            .get_mut(primary_id as usize)
             .ok_or(MediaPlaylistUpdateError::NotFound)?;
         media.playlist = Some(MediaPlaylist::create(
             media_playlist_data,
@@ -875,6 +881,8 @@ mod tests {
 video.m3u8
 #EXT-X-STREAM-INF:BANDWIDTH=2000,CODECS="avc1.4D401F,mp4a.40.2",AUDIO="english"
 video.m3u8
+#EXT-X-STREAM-INF:BANDWIDTH=3000,CODECS="avc1.4D401F,mp4a.40.2",AUDIO="english"
+other-video.m3u8
 "#;
         let mut parsed = MultivariantPlaylist::parse(
             multivariant.as_bytes(),
@@ -883,6 +891,7 @@ video.m3u8
         .unwrap();
         let first = parsed.variant_from_idx(0).unwrap().id();
         let second = parsed.variant_from_idx(1).unwrap().id();
+        let third = parsed.variant_from_idx(2).unwrap().id();
         assert_ne!(first, second);
         let first_video = parsed
             .video_media_playlist_id_for(parsed.variant(first).unwrap())
@@ -891,6 +900,14 @@ video.m3u8
             .video_media_playlist_id_for(parsed.variant(second).unwrap())
             .unwrap();
         assert_eq!(first_video, second_video);
+        assert_eq!(first_video.id(), 0);
+        assert_eq!(
+            parsed
+                .video_media_playlist_id_for(parsed.variant(third).unwrap())
+                .unwrap()
+                .id(),
+            1
+        );
         assert_ne!(
             parsed.audio_media_playlist_id_for(parsed.variant(first).unwrap(), None),
             parsed.audio_media_playlist_id_for(parsed.variant(second).unwrap(), None)
