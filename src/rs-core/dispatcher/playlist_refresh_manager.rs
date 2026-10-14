@@ -64,6 +64,14 @@ impl PlaylistRefreshManager {
         self.cancel_unused_timers();
     }
 
+    pub(super) fn clear(&mut self) {
+        self.clear_refresh_targets();
+        for entry in &mut self.playlists {
+            entry.cancel_timer();
+        }
+        self.playlists.clear();
+    }
+
     pub(super) fn is_following(&self, id: &MediaPlaylistPermanentId) -> bool {
         self.followed_audio == Some(*id) || self.followed_video == Some(*id)
     }
@@ -154,14 +162,6 @@ impl PlaylistRefreshManager {
             }
         }
     }
-
-    pub(super) fn clear_all_timers(&mut self) {
-        self.clear_refresh_targets();
-        for entry in &mut self.playlists {
-            entry.cancel_timer();
-        }
-        self.playlists.clear();
-    }
 }
 
 #[cfg(test)]
@@ -207,7 +207,7 @@ mod tests {
 
         manager.set_next_refresh_at(first, None);
         assert!(!manager.wait_for_refresh(&first));
-        manager.clear_all_timers();
+        manager.clear();
         assert!(manager.playlists.is_empty());
     }
 }
