@@ -189,7 +189,17 @@ impl Dispatcher {
 
     /// Method to call once a timer for retrying a request, started with the jsTimer JavaScript
     /// function, has finished, with the corresponding `TimerId` as argument.
+    // TODO: Before retrying a media playlist, discard it if it became neither selected nor
+    // followed during backoff. Failure handling already makes that check.
     pub(super) fn on_retry_request(&mut self, id: TimerId) {
+        if let Some(media_type) = self.requester.media_type_for_timer(id) {
+            if !self.check_requested_segment_still_needed(media_type) {
+                // NOTE: `check_requested_segment_still_needed` already takes care of removing
+                // the now unneeded resource from the `requester`
+                self.check_segments_to_request();
+                return;
+            }
+        }
         self.requester.on_timer_finished(id);
     }
 
@@ -284,6 +294,8 @@ impl Dispatcher {
         has_timeouted: bool,
         status: Option<u32>,
     ) {
+        // TODO: Also recheck whether a failed segment is still needed; if obsolete, report its
+        // failure as nonfatal and skip retrying it/failing on it.
         let is_obsolete_playlist = self
             .requester
             .pending_playlist_type(request_id)
@@ -1030,104 +1042,109 @@ impl Dispatcher {
     /// needed segments.
     ///
     /// Always cancel media requests outside the wanted buffer window. For useful requests,
-    /// only an urgent adaptive switch may replace them with another variant.
+    /// only an urgent adaptive switch may replace a fetch in progress. Queued requests and
+    /// requests waiting for retry are reconsidered for every switch.
     ///
     /// Reconsider pending requests when playback conditions change, including seeks and
     /// regular ticks. Both candidates come from the same ABR recommendation.
     pub(super) fn check_requested_segments_still_needed(&mut self) {
         for media_type in [MediaType::Audio, MediaType::Video] {
-            if !self.requester.has_segment_request_pending(media_type) {
-                continue;
-            }
-            if self.segment_request_contexts.has(|context| {
-                matches!(
-                    context,
-                    PendingSegmentRequest::Probe {
-                        requested_media_type: Some(probe_type),
-                        ..
-                    } if *probe_type == media_type
-                )
-            }) {
-                // Probes establish the metadata needed to resume ordinary selection.
-                continue;
-            }
-
-            let Some(pl_store) = self.playlist_store.as_ref() else {
-                self.abort_segment_requests_with_type(media_type);
-                continue;
-            };
-
-            // Interrupt requests out of the wanted buffer window
-            // TODO: requester method like `retain_requests` or something taking a callback instead?
-            let wanted_position = self.media_element_ref.wanted_position();
-            if self
-                .requester
-                .pending_segment_time_info(media_type)
-                .is_some_and(|time_info| {
-                    time_info.end() <= wanted_position
-                        || time_info.start() >= wanted_position + self.buffer_goal.max(0.)
-                })
-            {
-                self.abort_segment_requests_with_type(media_type);
-                continue;
-            }
-
-            // Direct media has no variant choice; only the range check above applies.
-            if pl_store.direct_media_playlist().is_some() {
-                continue;
-            }
-
-            let Some(recommendation) = self.compute_optimal_variant() else {
-                continue;
-            };
-            if !recommendation.urgent {
-                continue;
-            }
-            let Some((addition_candidate, replacement_candidate)) =
-                segment_selection_candidates(pl_store, Some(recommendation), media_type)
-            else {
-                continue;
-            };
-
-            // Now just check that the current requests are still the ones we want
-            let selected = self
-                .segment_selectors
-                .get_mut(media_type)
-                .most_needed_segment(
-                    addition_candidate,
-                    replacement_candidate,
-                    self.media_element_ref.inventory(media_type),
-                );
-            let Some(needed) = selected.needed_segments() else {
-                let refresh_id = selected.playlist_to_refresh();
-                let waiting_for_playlist = pl_store.media_playlist(&refresh_id).is_none();
-                self.follow_media_playlist(media_type, refresh_id);
-                // Keep useful progress while loading the target playlist. Once it is loaded,
-                // an urgent switch can cancel even when it contains no suitable segment yet.
-                // TODO: consider staleness?
-                if !waiting_for_playlist {
-                    self.abort_segment_requests_with_type(media_type);
-                }
-                continue;
-            };
-            let still_needed = {
-                if let Some(init) = needed.init_segment() {
-                    self.requester
-                        .is_requesting_segment(media_type, init.url(), init.byte_range())
-                } else if let Some(media) = needed.media_segment() {
-                    self.requester.is_requesting_segment(
-                        media_type,
-                        media.url(),
-                        media.byte_range(),
-                    )
-                } else {
-                    false
-                }
-            };
-            if !still_needed {
-                self.abort_segment_requests_with_type(media_type);
-            }
+            self.check_requested_segment_still_needed(media_type);
         }
+    }
+
+    /// Return whether the pending request survives selection. Reconsider queued requests and
+    /// requests waiting for retry even when a switch is nonurgent.
+    fn check_requested_segment_still_needed(&mut self, media_type: MediaType) -> bool {
+        if !self.requester.has_segment_request_pending(media_type) {
+            return false;
+        }
+        if self.segment_request_contexts.has(|context| {
+            matches!(
+                context,
+                PendingSegmentRequest::Probe {
+                    requested_media_type: Some(probe_type),
+                    ..
+                } if *probe_type == media_type
+            )
+        }) {
+            // Probes establish the metadata needed to resume ordinary selection.
+            return true;
+        }
+
+        let Some(pl_store) = self.playlist_store.as_ref() else {
+            self.abort_segment_requests_with_type(media_type);
+            return false;
+        };
+
+        // Interrupt requests out of the wanted buffer window
+        // TODO: requester method like `retain_requests` or something taking a callback instead?
+        let wanted_position = self.media_element_ref.wanted_position();
+        if self
+            .requester
+            .pending_segment_time_info(media_type)
+            .is_some_and(|time_info| {
+                time_info.end() <= wanted_position
+                    || time_info.start() >= wanted_position + self.buffer_goal.max(0.)
+            })
+        {
+            self.abort_segment_requests_with_type(media_type);
+            return false;
+        }
+
+        // Direct media has no variant choice; only the range check above applies.
+        if pl_store.direct_media_playlist().is_some() {
+            return true;
+        }
+
+        let Some(recommendation) = self.compute_optimal_variant() else {
+            return true;
+        };
+        if !recommendation.urgent && self.requester.has_segment_in_flight(media_type) {
+            return true;
+        }
+        let Some((addition_candidate, replacement_candidate)) =
+            segment_selection_candidates(pl_store, Some(recommendation), media_type)
+        else {
+            return true;
+        };
+
+        // Now just check that the current requests are still the ones we want
+        let selected = self
+            .segment_selectors
+            .get_mut(media_type)
+            .most_needed_segment(
+                addition_candidate,
+                replacement_candidate,
+                self.media_element_ref.inventory(media_type),
+            );
+        let Some(needed) = selected.needed_segments() else {
+            let refresh_id = selected.playlist_to_refresh();
+            let waiting_for_playlist = pl_store.media_playlist(&refresh_id).is_none();
+            self.follow_media_playlist(media_type, refresh_id);
+            // Keep useful progress while loading the target playlist. Once it is loaded,
+            // an urgent switch can cancel even when it contains no suitable segment yet.
+            // TODO: consider staleness?
+            if !waiting_for_playlist {
+                self.abort_segment_requests_with_type(media_type);
+            }
+            return waiting_for_playlist;
+        };
+        let still_needed = {
+            if let Some(init) = needed.init_segment() {
+                self.requester
+                    .is_requesting_segment(media_type, init.url(), init.byte_range())
+            } else if let Some(media) = needed.media_segment() {
+                self.requester
+                    .is_requesting_segment(media_type, media.url(), media.byte_range())
+            } else {
+                false
+            }
+        };
+        if !still_needed {
+            self.abort_segment_requests_with_type(media_type);
+        }
+        return still_needed;
     }
 
     /// XXX TODO: Is that the right name? Also describe function's behavior with a comment
@@ -1238,7 +1255,7 @@ impl Dispatcher {
                     init_segment_id: init.id(),
                 });
             self.requester
-                .request_init_segment(media_type, &init.url(), init.byte_range(), req_id);
+                .request_init_segment(media_type, init.url(), init.byte_range(), req_id);
         } else if let Some(media) = media {
             let req_id = self
                 .segment_request_contexts
@@ -1864,7 +1881,7 @@ mod tests {
     }
 
     #[test]
-    fn adaptive_switches_preserve_useful_requests_and_position_jumps_cancel_obsolete_requests() {
+    fn adaptive_switches_replace_queued_requests_and_position_jumps_cancel_obsolete_requests() {
         for (buffer, urgent, alternative_available) in
             [(1., true, true), (1., true, false), (8.1, false, true)]
         {
@@ -1890,6 +1907,7 @@ mod tests {
             dispatcher
                 .requester
                 .request_media_segment(MediaType::Video, &segment, 123);
+            assert!(!dispatcher.requester.has_segment_in_flight(MediaType::Video));
             let recommendation = dispatcher.compute_optimal_variant().unwrap();
             assert_eq!(recommendation.urgent, urgent);
             if !alternative_available {
@@ -1906,12 +1924,9 @@ mod tests {
                     .unwrap();
             }
             dispatcher.check_requested_segments_still_needed();
-            assert_eq!(
-                dispatcher
-                    .requester
-                    .has_segment_request_pending(MediaType::Video),
-                !urgent
-            );
+            assert!(!dispatcher
+                .requester
+                .has_segment_request_pending(MediaType::Video));
             if !urgent {
                 for (position, buffer_goal) in [(50., 30.), (0., 5.)] {
                     if !dispatcher
@@ -2067,6 +2082,7 @@ mod tests {
             .request_media_segment(MediaType::Video, &segment, 123);
         assert!(dispatcher.compute_optimal_variant().is_none());
         dispatcher.check_requested_segments_still_needed();
+        assert!(dispatcher.check_requested_segment_still_needed(MediaType::Video));
         assert!(dispatcher
             .requester
             .has_segment_request_pending(MediaType::Video));

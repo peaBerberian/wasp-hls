@@ -1,7 +1,7 @@
 use crate::{
     bindings::{
-        formatters::format_range_for_js, jsAbortRequest, jsFetch, jsGetRandom, jsTimer, MediaType,
-        RequestErrorReason, RequestId, TimerId, TimerReason,
+        formatters::format_range_for_js, jsAbortRequest, jsClearTimer, jsFetch, jsGetRandom,
+        jsTimer, MediaType, RequestErrorReason, RequestId, TimerId, TimerReason,
     },
     parser::{ByteRange, MediaSegmentInfo, SegmentTimeInfo},
     playlist_store::MediaPlaylistPermanentId,
@@ -436,6 +436,15 @@ impl Requester {
             .map(|request| &request.playlist_type)
     }
 
+    /// Get the media type associated to the given TimerId backoff timer, if it exists
+    pub(crate) fn media_type_for_timer(&self, timer_id: TimerId) -> Option<MediaType> {
+        let host_id = self.retry_timers.iter().find(|(id, _)| *id == timer_id)?.1;
+        self.pending_segment_requests
+            .iter()
+            .find(|request| request.host_id == host_id && request.is_waiting_for_retry)
+            .and_then(SegmentRequestInfo::media_type)
+    }
+
     /// Fetch the initialization segment whose metadata is given here add its
     /// `host_id` to `pending_segment_requests`.
     ///
@@ -573,6 +582,13 @@ impl Requester {
                 .any(|r| r.lane_tag == lane_tag)
     }
 
+    pub(crate) fn has_segment_in_flight(&self, media_type: MediaType) -> bool {
+        let lane_tag = RequestLaneTag::from_media_type(media_type);
+        self.pending_segment_requests
+            .iter()
+            .any(|request| request.lane_tag == lane_tag && !request.is_waiting_for_retry)
+    }
+
     pub(crate) fn on_pending_request_success(
         &mut self,
         host_id: RequestId,
@@ -705,7 +721,7 @@ impl Requester {
     pub(crate) fn abort_all_segments(&mut self) {
         while let Some(last_req) = self.pending_segment_requests.pop() {
             log_segment_abort(&last_req);
-            jsAbortRequest(last_req.host_id);
+            self.cancel_segment_request(&last_req);
         }
         while let Some(last_req) = self.segment_waiting_queue.pop() {
             log_segment_abort(&last_req);
@@ -722,8 +738,8 @@ impl Requester {
             if next_req.lane_tag() == lane_tag {
                 log_segment_abort(next_req);
                 aborted_pending = true;
-                jsAbortRequest(next_req.host_id);
                 let removed = self.pending_segment_requests.remove(i);
+                self.cancel_segment_request(&removed);
                 aborted_requests.push(removed.caller_id);
             } else {
                 i += 1;
@@ -744,6 +760,21 @@ impl Requester {
             self.check_segment_queue();
         }
         aborted_requests
+    }
+
+    fn cancel_segment_request(&mut self, request: &SegmentRequestInfo) {
+        if request.is_waiting_for_retry {
+            self.retry_timers.retain(|(timer_id, host_id)| {
+                if *host_id == request.host_id {
+                    jsClearTimer(*timer_id);
+                    false
+                } else {
+                    true
+                }
+            });
+        } else {
+            jsAbortRequest(request.host_id);
+        }
     }
 
     fn end_pending_request(&mut self, host_id: RequestId) -> Option<FinishedRequestType> {
