@@ -1300,6 +1300,38 @@ mod tests {
         Url::new(url.to_string())
     }
 
+    #[test]
+    fn switching_variants_that_share_video_changes_only_audio_playlist() {
+        let playlist = TopLevelPlaylist::parse(
+            br#"#EXTM3U
+#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="french",NAME="French",URI="french.m3u8"
+#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="english",NAME="English",URI="english.m3u8"
+#EXT-X-STREAM-INF:BANDWIDTH=1000,CODECS="avc1.42E01E,mp4a.40.2",AUDIO="french"
+video.m3u8
+#EXT-X-STREAM-INF:BANDWIDTH=2000,CODECS="avc1.42E01E,mp4a.40.2",AUDIO="english"
+video.m3u8
+"#,
+            parse_url("https://example.com/master.m3u8"),
+        )
+        .unwrap();
+        let mut store = PlaylistStore::try_new(playlist).unwrap();
+        let first = store.available_variants()[0].id();
+        let second = store.available_variants()[1].id();
+        store.set_variant(first);
+        let video_id = *store.current_media_playlist_id(MediaType::Video).unwrap();
+        let audio_id = *store.current_media_playlist_id(MediaType::Audio).unwrap();
+
+        assert_eq!(store.set_variant(second), vec![MediaType::Audio]);
+        assert_eq!(
+            store.current_media_playlist_id(MediaType::Video),
+            Some(&video_id)
+        );
+        assert_ne!(
+            store.current_media_playlist_id(MediaType::Audio),
+            Some(&audio_id)
+        );
+    }
+
     fn store_with_timeline_references(video_loaded: bool, audio_loaded: bool) -> PlaylistStore {
         let playlist = TopLevelPlaylist::parse(
             br#"#EXTM3U

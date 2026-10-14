@@ -28,9 +28,12 @@ use std::{
 ///
 /// It is already pre-parsed to build useful concepts, such as audio tracks, on top of it.
 pub struct MultivariantPlaylist {
-    /// Describes and contains the default MediaPlaylist of all the variants announced in the
-    /// Multivariant Playlist.
+    /// Variant metadata, independent of the media playlists they reference.
     variants: Vec<VariantStream>,
+
+    /// Primary media playlists. Variants with the same resolved URI share an entry.
+    primary_media: HashMap<u32, PrimaryMediaPlaylist>,
+    primary_id_by_variant: HashMap<u32, u32>,
 
     /// Abstraction to simplify the management of tracks.
     ///
@@ -49,6 +52,16 @@ pub struct MultivariantPlaylist {
 
     /// Url of the Multivariant Playlist once it is fetched (post a potential HTTP redirect).
     url: Url,
+}
+
+/// MediaPlaylist information directly linked to a variant stream (EXT-X-STREAM-INF)
+struct PrimaryMediaPlaylist {
+    /// URL where to reach that playlist
+    url: Url,
+    /// Media type inferred from variant declarations, when known.
+    media_type: Option<MediaType>,
+    /// Playlist information, if fetched
+    playlist: Option<MediaPlaylist>,
 }
 
 impl MultivariantPlaylist {
@@ -217,10 +230,50 @@ impl MultivariantPlaylist {
             }
         });
 
+        let mut primary_id_by_variant = HashMap::new();
+        let mut primary_id_by_uri = HashMap::new();
+        for variant in &variants {
+            let media_type = if variant.codecs(MediaType::Video).is_none()
+                && variant.codecs(MediaType::Audio).is_none()
+            {
+                None
+            } else if variant.has_type(MediaType::Video) {
+                Some(MediaType::Video)
+            } else if variant.has_type(MediaType::Audio) {
+                Some(MediaType::Audio)
+            } else {
+                None
+            };
+
+            let (primary_id, primary) = primary_id_by_uri
+                .entry(variant.url().get_ref())
+                .or_insert_with(|| {
+                    (
+                        // Just take the id of the first variant, we don't care much here
+                        variant.id(),
+                        PrimaryMediaPlaylist {
+                            url: variant.url().clone(),
+                            media_type,
+                            playlist: None,
+                        },
+                    )
+                });
+
+            // For a shared URL, prefer a video declaration, then audio, then unknown.
+            if media_type == Some(MediaType::Video) || primary.media_type.is_none() {
+                primary.media_type = media_type;
+            }
+
+            primary_id_by_variant.insert(variant.id(), *primary_id);
+        }
+        let primary_media = primary_id_by_uri.into_values().collect();
+
         Ok(MultivariantPlaylist {
             last_id,
             url,
             variants,
+            primary_media,
+            primary_id_by_variant,
             audio_tracks: AudioTrackList::new(audio_media),
             other_media,
             context: MediaPlaylistContext {
@@ -244,21 +297,7 @@ impl MultivariantPlaylist {
     /// Returns None when the type is not known from the multivariant playlist.
     pub(crate) fn playlist_media_type(&self, id: &MediaPlaylistPermanentId) -> Option<MediaType> {
         match id.location() {
-            MediaPlaylistUrlLocation::Variant => {
-                let variant = self.variant(id.id())?;
-                if variant.codecs(MediaType::Video).is_none()
-                    && variant.codecs(MediaType::Audio).is_none()
-                {
-                    return None;
-                }
-                if variant.has_type(MediaType::Video) {
-                    Some(MediaType::Video)
-                } else if variant.has_type(MediaType::Audio) {
-                    Some(MediaType::Audio)
-                } else {
-                    None
-                }
-            }
+            MediaPlaylistUrlLocation::Variant => self.primary_media.get(&id.id())?.media_type,
             MediaPlaylistUrlLocation::AudioTrack => self
                 .audio_tracks
                 .media_tag(id.id())
@@ -303,15 +342,6 @@ impl MultivariantPlaylist {
         self.variants.iter().find(|v| v.id() == id)
     }
 
-    /// Returns the `MediaPlaylist` object of the default Media Playlist linked to the variant
-    /// whose `id` is given in argument
-    ///
-    /// Returns `None` either if the variant does not exist or if it does but its `MediaPlaylist`
-    /// hasn't been fetched yet.
-    pub(crate) fn variant_default_playlist(&self, id: u32) -> Option<&MediaPlaylist> {
-        self.variant(id).and_then(|v| v.media_playlist())
-    }
-
     /// Returns the `id` of the video media that should be chosen when loading the variant given
     /// in argument.
     ///
@@ -324,7 +354,7 @@ impl MultivariantPlaylist {
         if curr_variant.has_type(crate::bindings::MediaType::Video) {
             Some(MediaPlaylistPermanentId::new(
                 MediaPlaylistUrlLocation::Variant,
-                curr_variant.id().to_owned(),
+                *self.primary_id_by_variant.get(&curr_variant.id())?,
             ))
         } else {
             None
@@ -345,6 +375,7 @@ impl MultivariantPlaylist {
         curr_audio_track: Option<u32>,
     ) -> Option<MediaPlaylistPermanentId> {
         // TODO: Resolve the variant's own URL for audio-only variants without an AUDIO group.
+        let primary_id = *self.primary_id_by_variant.get(&curr_variant.id())?;
         if let Some(group_id) = curr_variant.audio_group() {
             if let Some(track_id) = curr_audio_track {
                 self.audio_tracks
@@ -362,7 +393,7 @@ impl MultivariantPlaylist {
                             // variant
                             MediaPlaylistPermanentId::new(
                                 MediaPlaylistUrlLocation::Variant,
-                                curr_variant.id().to_owned(),
+                                primary_id,
                             )
                         }
                     })
@@ -381,7 +412,7 @@ impl MultivariantPlaylist {
                                 // variant
                                 Some(MediaPlaylistPermanentId::new(
                                     MediaPlaylistUrlLocation::Variant,
-                                    curr_variant.id().to_owned(),
+                                    primary_id,
                                 ))
                             }
                         } else {
@@ -459,7 +490,9 @@ impl MultivariantPlaylist {
     /// `MediaPlaylist`.
     pub(crate) fn media_playlist_url(&self, wanted_id: &MediaPlaylistPermanentId) -> Option<&Url> {
         match wanted_id.location() {
-            MediaPlaylistUrlLocation::Variant => Some(self.variant(wanted_id.id())?.url()),
+            MediaPlaylistUrlLocation::Variant => {
+                Some(&self.primary_media.get(&wanted_id.id())?.url)
+            }
             MediaPlaylistUrlLocation::AudioTrack => self.audio_url(wanted_id.id()),
             MediaPlaylistUrlLocation::OtherMedia => self.other_media_url(wanted_id.id()),
             MediaPlaylistUrlLocation::Direct => None, // Should not happen
@@ -474,7 +507,7 @@ impl MultivariantPlaylist {
     ) -> Option<&MediaPlaylist> {
         match wanted_id.location() {
             MediaPlaylistUrlLocation::Variant => {
-                Some(self.variant(wanted_id.id())?.media_playlist()?)
+                self.primary_media.get(&wanted_id.id())?.playlist.as_ref()
             }
             MediaPlaylistUrlLocation::AudioTrack => self.audio_playlist(wanted_id.id()),
             MediaPlaylistUrlLocation::OtherMedia => self.other_media_playlist(wanted_id.id()),
@@ -488,10 +521,9 @@ impl MultivariantPlaylist {
     ) -> Option<&mut MediaPlaylist> {
         match wanted_id.location() {
             MediaPlaylistUrlLocation::Variant => self
-                .variants
-                .iter_mut()
-                .find(|v| v.id() == wanted_id.id())
-                .and_then(|v| v.media_playlist_mut()),
+                .primary_media
+                .get_mut(&wanted_id.id())
+                .and_then(|media| media.playlist.as_mut()),
             MediaPlaylistUrlLocation::AudioTrack => self
                 .audio_tracks
                 .media_tag_mut(wanted_id.id())
@@ -508,8 +540,8 @@ impl MultivariantPlaylist {
     pub(crate) fn clear_media_playlist(&mut self, wanted_id: &MediaPlaylistPermanentId) {
         match wanted_id.location() {
             MediaPlaylistUrlLocation::Variant => {
-                if let Some(variant) = self.variants.iter_mut().find(|v| v.id() == wanted_id.id()) {
-                    variant.clear_media_playlist();
+                if let Some(media) = self.primary_media.get_mut(&wanted_id.id()) {
+                    media.playlist = None;
                 }
             }
             MediaPlaylistUrlLocation::AudioTrack => {
@@ -563,20 +595,23 @@ impl MultivariantPlaylist {
 
     fn update_variant_media_playlist(
         &mut self,
-        variant_id: u32,
+        primary_id: u32,
         media_playlist_data: impl io::BufRead,
         url: Url,
         timeline_reference: Option<&TimelineReference>,
     ) -> Result<&MediaPlaylist, MediaPlaylistUpdateError> {
-        match self.variants.iter_mut().find(|v| v.id() == variant_id) {
-            Some(v) => Ok(v.update_media_playlist(
-                media_playlist_data,
-                url,
-                timeline_reference,
-                &self.context,
-            )?),
-            None => Err(MediaPlaylistUpdateError::NotFound),
-        }
+        let media = self
+            .primary_media
+            .get_mut(&primary_id)
+            .ok_or(MediaPlaylistUpdateError::NotFound)?;
+        media.playlist = Some(MediaPlaylist::create(
+            media_playlist_data,
+            url,
+            media.playlist.as_ref(),
+            timeline_reference,
+            &self.context,
+        )?);
+        Ok(media.playlist.as_ref().unwrap())
     }
 
     fn update_audio_media_playlist(
@@ -830,6 +865,50 @@ pub(crate) enum MediaPlaylistUrlLocation {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn variants_with_the_same_primary_video_uri_share_playlist_identity_and_state() {
+        let multivariant = r#"#EXTM3U
+#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="french",NAME="French",URI="french.m3u8"
+#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="english",NAME="English",URI="english.m3u8"
+#EXT-X-STREAM-INF:BANDWIDTH=1000,CODECS="avc1.42E01E,mp4a.40.2",AUDIO="french"
+video.m3u8
+#EXT-X-STREAM-INF:BANDWIDTH=2000,CODECS="avc1.4D401F,mp4a.40.2",AUDIO="english"
+video.m3u8
+"#;
+        let mut parsed = MultivariantPlaylist::parse(
+            multivariant.as_bytes(),
+            Url::new("https://example.com/master.m3u8".to_owned()),
+        )
+        .unwrap();
+        let first = parsed.variant_from_idx(0).unwrap().id();
+        let second = parsed.variant_from_idx(1).unwrap().id();
+        assert_ne!(first, second);
+        let first_video = parsed
+            .video_media_playlist_id_for(parsed.variant(first).unwrap())
+            .unwrap();
+        let second_video = parsed
+            .video_media_playlist_id_for(parsed.variant(second).unwrap())
+            .unwrap();
+        assert_eq!(first_video, second_video);
+        assert_ne!(
+            parsed.audio_media_playlist_id_for(parsed.variant(first).unwrap(), None),
+            parsed.audio_media_playlist_id_for(parsed.variant(second).unwrap(), None)
+        );
+
+        parsed
+            .update_media_playlist(
+                &first_video,
+                b"#EXTM3U\n#EXT-X-TARGETDURATION:4\n#EXTINF:4,\nsegment.ts\n#EXT-X-ENDLIST\n"
+                    .as_slice(),
+                Url::new("https://example.com/video.m3u8".to_owned()),
+                None,
+            )
+            .unwrap();
+        assert!(parsed.media_playlist(&second_video).is_some());
+        parsed.clear_media_playlist(&second_video);
+        assert!(parsed.media_playlist(&first_video).is_none());
+    }
 
     #[test]
     fn quality_comparisons_distinguish_playlist_kinds_and_preserve_shared_media() {

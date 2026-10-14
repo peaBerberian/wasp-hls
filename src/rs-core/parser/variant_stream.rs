@@ -1,9 +1,7 @@
 use super::{
     attribute_list::parse_enumerated_string,
     attribute_list::AttributeListIter,
-    media_playlist::{MediaPlaylist, MediaPlaylistParsingError},
     multi_variant_playlist::MediaPlaylistContext,
-    timeline_sync::TimelineReference,
     value_parsers::{parse_decimal_floating_point, parse_decimal_integer, parse_resolution},
     variable_substitution::VariableStore,
     variable_substitution::{
@@ -14,7 +12,6 @@ use crate::{
     bindings::MediaType,
     utils::{logger::*, url::Url},
 };
-use std::io::BufRead;
 
 /// Stucture representing the HLS concept of a "variant stream".
 #[derive(Debug)]
@@ -37,10 +34,6 @@ pub struct VariantStream {
     /// Url of the "Media Playlist" corresponding to the main rendition of this
     /// variant stream.
     url: Url,
-
-    /// Media Playlist associated to the main rendition of this variant stream.
-    /// `None` if not yet loaded.
-    media_playlist: Option<MediaPlaylist>,
 
     /// The value represents the peak segment bit rate of the Variant Stream.
     ///
@@ -288,40 +281,6 @@ impl VariantStream {
         self.bandwidth
     }
 
-    pub(super) fn media_playlist(&self) -> Option<&MediaPlaylist> {
-        self.media_playlist.as_ref()
-    }
-
-    pub(super) fn media_playlist_mut(&mut self) -> Option<&mut MediaPlaylist> {
-        self.media_playlist.as_mut()
-    }
-
-    pub(super) fn clear_media_playlist(&mut self) {
-        self.media_playlist = None;
-    }
-
-    pub(super) fn update_media_playlist(
-        &mut self,
-        playlist: impl BufRead,
-        url: Url,
-        timeline_reference: Option<&TimelineReference>,
-        context: &MediaPlaylistContext,
-    ) -> Result<&MediaPlaylist, MediaPlaylistParsingError> {
-        let new_mp = MediaPlaylist::create(
-            playlist,
-            url,
-            self.media_playlist.as_ref(),
-            timeline_reference,
-            context,
-        )?;
-        self.media_playlist = Some(new_mp);
-        Ok(self.media_playlist.as_ref().unwrap())
-    }
-
-    pub(super) fn get_url(&self) -> &Url {
-        &self.url
-    }
-
     pub(super) fn audio_group(&self) -> Option<&str> {
         self.audio.as_deref()
     }
@@ -525,7 +484,6 @@ impl VariantStream {
                 codecs,
                 frame_rate,
                 hdcp_level,
-                media_playlist: None,
                 pathway_id,
                 program_id,
                 resolution,
