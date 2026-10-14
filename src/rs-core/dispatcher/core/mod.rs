@@ -70,7 +70,7 @@ impl Dispatcher {
         self.ready_probe_segments.clear();
         self.initial_audio_track_selection.clear();
         self.last_position = 0.;
-        self.playlist_refresh_manager.clear_all_timers();
+        self.playlist_refresh_manager.clear();
         self.ready_state = PlayerReadyState::Stopped;
     }
 
@@ -95,6 +95,7 @@ impl Dispatcher {
                     changed_media_types,
                     audio_track_change,
                 } => {
+                    // XXX TODO: Why? This is the only call site of a pretty specific API
                     self.playlist_refresh_manager.clear_refresh_targets();
 
                     if let AudioTrackChange::Changed(track_id) = audio_track_change {
@@ -111,6 +112,7 @@ impl Dispatcher {
                         self.ready_probe_segments.clear_media_type(media_type);
                         self.abort_segment_requests_with_type(media_type);
                         self.flush_media_buffer(media_type);
+                        // XXX TODO: why not following the playlist here?
                         self.request_selected_media_playlist_if_needed(media_type);
                     }
 
@@ -1245,8 +1247,6 @@ impl Dispatcher {
             let req_id = self
                 .segment_request_contexts
                 .insert(PendingSegmentRequest::Media {
-                    variant_id,
-                    playlist_id,
                     media_type,
                     init_segment_id,
                     quality_context,
@@ -1285,8 +1285,8 @@ impl Dispatcher {
             .is_none_or(|playlist| playlist.may_be_refreshed());
 
         // XXX TODO: This looks to me like internal matters for the `playlist_refresh_manager`... I
-        // don't get why wait_for_refresh would be false when we just started "following" it?
-        // Its roles are unclear
+        // I would prefer that `follow` by itself implies `wait_for_refresh`. Why is it not the
+        // case?
         if !needs_reload || self.playlist_refresh_manager.wait_for_refresh(&id) {
             return;
         }
@@ -1349,10 +1349,9 @@ impl Dispatcher {
     }
 
     fn request_selected_media_playlist_if_needed(&mut self, media_type: MediaType) {
+        // XXX TODO: Don't we want to also follow in that method? It would make more sense
         let playlist_to_fetch = self.playlist_store.as_ref().and_then(|pl_store| {
             if pl_store.has_loaded_media_playlist(media_type) {
-                // XXX TODO: Oh? When does refresh scheduling happens then?
-                // Or is this method just badly named?
                 None
             } else {
                 let id = *pl_store.current_media_playlist_id(media_type)?;
@@ -1403,8 +1402,6 @@ impl Dispatcher {
         let media_type = segment_req.media_type();
         match req_ctxt {
             PendingSegmentRequest::Media {
-                // XXX TODO:  is `variant_id` still needed?
-                variant_id: _,
                 media_type: req_media_type,
                 init_segment_id,
                 quality_context,
@@ -1603,8 +1600,18 @@ fn segment_selection_candidate_for_variant(
     }
 }
 
-/// XXX TODO: finish comment
-/// Adaptive recommendations can sometimes
+/// Keep audio and video variant choices compatible whether segment selection uses Adaptive's
+/// "best" or "safe" candidate for any `media_type`.
+///
+/// If any of those candidates for one `media_type` leads to the need to select a different
+/// playlist for an other media type, use the safe variant also for "best".
+///
+/// This allows to ensure a single logical variant is considered at once for all media types,
+/// keeping the dispatcher's choices within declared HLS combinations and letting other modules
+/// track a single selected variant.
+///
+/// TODO: Abort in-flight requests for incompatible variant if not compatible with a new
+/// considered-one? Or maybe not, to ponder.
 fn normalize_abr_selection(
     pl_store: &PlaylistStore,
     recommendation: Option<AdaptiveVariantSelection>,
@@ -1623,6 +1630,10 @@ fn normalize_abr_selection(
     Some(selection)
 }
 
+/// Set the current MediaSource's duration according to the content stored in the given
+/// PlaylistStore.
+///
+/// If the content is EVENT/LIVE, set a very large value instead.
 fn sync_media_source_duration(pl_store: &PlaylistStore) {
     if pl_store.is_finalized() {
         if let Some(duration) = pl_store.current_estimated_duration() {
@@ -2230,8 +2241,6 @@ mod tests {
             Url::new("https://example.com/safe.m3u8".into())).unwrap();
         pl_store.set_variant(ids[2]);
         let context = crate::dispatcher::segment_request_contexts::PendingSegmentRequest::Media {
-            variant_id: ids[1],
-            playlist_id: safe_id,
             media_type: MediaType::Video,
             init_segment_id: None,
             quality_context: pl_store
