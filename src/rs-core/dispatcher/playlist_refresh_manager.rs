@@ -1,7 +1,11 @@
+#[cfg(not(test))]
+use crate::bindings::{jsClearTimer, jsMonotonicNow, jsTimer};
 use crate::{
-    bindings::{jsClearTimer, jsMonotonicNow, jsTimer, MediaType, TimerId, TimerReason},
+    bindings::{MediaType, TimerId, TimerReason},
     parser::MediaPlaylistPermanentId,
 };
+#[cfg(test)]
+use tests::{clear_timer as jsClearTimer, now as jsMonotonicNow, timer as jsTimer};
 
 /// Keeps playlist reload times and schedules refreshes only for playlists we need.
 pub(super) struct PlaylistRefreshManager {
@@ -35,12 +39,16 @@ impl PlaylistRefreshManager {
         }
     }
 
-    pub(super) fn follow(&mut self, media_type: MediaType, id: MediaPlaylistPermanentId) {
+    /// Follow this playlist and arm its reload timer, preserving any previous deadline.
+    /// Return true if it can be requested now; the caller still checks whether it is
+    /// finalized or already being requested.
+    pub(super) fn follow(&mut self, media_type: MediaType, id: MediaPlaylistPermanentId) -> bool {
         match media_type {
             MediaType::Audio => self.followed_audio = Some(id),
             MediaType::Video => self.followed_video = Some(id),
         }
         self.cancel_unused_timers();
+        !self.wait_for_refresh(&id)
     }
 
     fn followed_playlist(&self, media_type: MediaType) -> Option<MediaPlaylistPermanentId> {
@@ -58,14 +66,9 @@ impl PlaylistRefreshManager {
         self.cancel_unused_timers();
     }
 
-    pub(super) fn clear_refresh_targets(&mut self) {
+    pub(super) fn clear(&mut self) {
         self.followed_audio = None;
         self.followed_video = None;
-        self.cancel_unused_timers();
-    }
-
-    pub(super) fn clear(&mut self) {
-        self.clear_refresh_targets();
         for entry in &mut self.playlists {
             entry.cancel_timer();
         }
@@ -118,7 +121,7 @@ impl PlaylistRefreshManager {
 
     /// Return true if a timer is already running, or start one for the remaining wait.
     /// Return false when this playlist can be requested now.
-    pub(super) fn wait_for_refresh(&mut self, id: &MediaPlaylistPermanentId) -> bool {
+    fn wait_for_refresh(&mut self, id: &MediaPlaylistPermanentId) -> bool {
         let Some(entry) = self
             .playlists
             .iter_mut()
@@ -167,47 +170,102 @@ impl PlaylistRefreshManager {
 #[cfg(test)]
 mod tests {
     use super::PlaylistRefreshManager;
-    use crate::{bindings::MediaType, parser::MediaPlaylistPermanentId};
+    use crate::{
+        bindings::{MediaType, TimerId, TimerReason},
+        parser::MediaPlaylistPermanentId,
+    };
+    use std::cell::RefCell;
+
+    #[derive(Default)]
+    struct Clock {
+        now: f64,
+        timers: Vec<f64>,
+        canceled: Vec<TimerId>,
+    }
+
+    thread_local! {
+        static CLOCK: RefCell<Clock> = RefCell::new(Clock::default());
+    }
+
+    pub(super) fn now() -> f64 {
+        CLOCK.with_borrow(|clock| clock.now)
+    }
+
+    pub(super) fn timer(duration: f64, _reason: TimerReason) -> TimerId {
+        CLOCK.with_borrow_mut(|clock| {
+            clock.timers.push(duration);
+            clock.timers.len() as f64
+        })
+    }
+
+    pub(super) fn clear_timer(id: TimerId) {
+        CLOCK.with_borrow_mut(|clock| clock.canceled.push(id));
+    }
+
+    fn reset_clock() {
+        CLOCK.with_borrow_mut(|clock| *clock = Clock::default());
+    }
 
     #[test]
-    fn switching_away_preserves_reload_time_and_a_finished_playlist_discards_it() {
+    fn switching_back_waits_only_until_the_original_deadline() {
+        reset_clock();
         let first = MediaPlaylistPermanentId::new_for_test(1);
         let second = MediaPlaylistPermanentId::new_for_test(2);
         let mut manager = PlaylistRefreshManager::new();
-        manager.follow(MediaType::Video, first);
-        manager.set_next_refresh_at(first, Some(6000.));
+        assert!(manager.follow(MediaType::Video, first));
+        manager.on_playlist_loaded(first, Some(6000.));
+        assert!(manager.follow(MediaType::Video, second));
+        assert_eq!(manager.on_timer_ended(1.), None);
+        CLOCK.with_borrow(|clock| assert_eq!(clock.canceled, vec![1.]));
+
+        CLOCK.with_borrow_mut(|clock| clock.now = 2000.);
+        assert!(!manager.follow(MediaType::Video, first));
+        // Following again must neither duplicate the timer nor postpone its deadline.
+        assert!(!manager.follow(MediaType::Video, first));
+        CLOCK.with_borrow(|clock| assert_eq!(clock.timers, vec![6000., 4000.]));
+
         manager.follow(MediaType::Video, second);
-        manager.set_next_refresh_at(second, Some(9000.));
+        CLOCK.with_borrow_mut(|clock| clock.now = 7000.);
+        assert!(manager.follow(MediaType::Video, first));
+        CLOCK.with_borrow(|clock| assert_eq!(clock.timers.len(), 2));
+    }
 
-        manager.follow(MediaType::Video, first);
-        let previous = manager
-            .playlists
-            .iter()
-            .find(|entry| entry.playlist_id == first)
-            .unwrap();
-        assert_eq!(previous.next_refresh_at, 6000.);
-        assert!(previous.timer_id.is_none());
-        assert!(!manager.is_following(&second));
+    #[test]
+    fn shared_playlist_keeps_its_timer_until_both_types_stop_following() {
+        reset_clock();
+        let id = MediaPlaylistPermanentId::new_for_test(1);
+        let mut manager = PlaylistRefreshManager::new();
+        manager.follow(MediaType::Video, id);
+        manager.on_playlist_loaded(id, Some(6000.));
+        assert!(!manager.follow(MediaType::Audio, id));
+        manager.forget_media_type(MediaType::Video);
+        CLOCK.with_borrow(|clock| assert!(clock.canceled.is_empty()));
+        assert_eq!(manager.on_timer_ended(1.), Some((id, MediaType::Audio)));
 
-        // A callback can only request a playlist that is still being followed.
-        manager
-            .playlists
-            .iter_mut()
-            .find(|entry| entry.playlist_id == second)
-            .unwrap()
-            .timer_id = Some(10.);
-        assert_eq!(manager.on_timer_ended(10.), None);
-        manager
-            .playlists
-            .iter_mut()
-            .find(|entry| entry.playlist_id == first)
-            .unwrap()
-            .timer_id = Some(11.);
-        assert_eq!(manager.on_timer_ended(11.), Some((first, MediaType::Video)));
+        manager.on_playlist_loaded(id, Some(6000.));
+        manager.forget_media_type(MediaType::Audio);
+        CLOCK.with_borrow(|clock| assert_eq!(clock.canceled, vec![2.]));
+        assert_eq!(manager.on_timer_ended(2.), None);
+    }
 
-        manager.set_next_refresh_at(first, None);
-        assert!(!manager.wait_for_refresh(&first));
-        manager.clear();
+    #[test]
+    fn loading_inactive_playlists_defers_timers_and_endlist_cancels_refresh() {
+        reset_clock();
+        let id = MediaPlaylistPermanentId::new_for_test(1);
+        let mut manager = PlaylistRefreshManager::new();
+        manager.on_playlist_loaded(id, Some(6000.));
+        CLOCK.with_borrow(|clock| assert!(clock.timers.is_empty()));
+        assert!(!manager.follow(MediaType::Video, id));
+        manager.on_playlist_loaded(id, None);
         assert!(manager.playlists.is_empty());
+        assert_eq!(manager.on_timer_ended(1.), None);
+        CLOCK.with_borrow(|clock| assert_eq!(clock.canceled, vec![1.]));
+
+        manager.on_playlist_loaded(id, Some(6000.));
+        manager.clear();
+        assert!(!manager.is_following(&id));
+        assert!(manager.playlists.is_empty());
+        assert_eq!(manager.on_timer_ended(2.), None);
+        CLOCK.with_borrow(|clock| assert_eq!(clock.canceled, vec![1., 2.]));
     }
 }
