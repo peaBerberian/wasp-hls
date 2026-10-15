@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  getPlayerStateSnapshot,
   waitForLoadedState,
   waitForPlayerEvent,
 } from "../../utils/player_test_tools.js";
@@ -124,7 +125,47 @@ ${baseUrl}high.m3u8
           lockHighVariant ? "high-segments" : "low-segments",
         );
 
-        await ctx.player.resume();
+        let resumeTimeout;
+        try {
+          await Promise.race([
+            ctx.player.resume(),
+            new Promise((_, reject) => {
+              resumeTimeout = setTimeout(() => {
+                reject(
+                  new Error(
+                    "Playback did not resume after seeking: " +
+                      JSON.stringify({
+                        snapshot: getPlayerStateSnapshot(
+                          ctx.player,
+                          ctx.videoElement,
+                          ctx.getLastPlayerError(),
+                        ),
+                        playbackRate: ctx.videoElement.playbackRate,
+                        seeking: ctx.videoElement.seeking,
+                        buffered: Array.from(
+                          { length: ctx.videoElement.buffered.length },
+                          (_, i) => [
+                            ctx.videoElement.buffered.start(i),
+                            ctx.videoElement.buffered.end(i),
+                          ],
+                        ),
+                        recentRequests: ctx.workerHandle.telemetry
+                          .getEvents()
+                          .filter(
+                            (event) =>
+                              event.ruleId === "low-segments" ||
+                              event.ruleId === "high-segments",
+                          )
+                          .slice(-20),
+                      }),
+                  ),
+                );
+              }, 30_000);
+            }),
+          ]);
+        } finally {
+          clearTimeout(resumeTimeout);
+        }
         await expect
           .poll(() => ctx.videoElement.currentTime, { timeout: 10_000 })
           .toBeGreaterThan(seekPosition + 0.25);
