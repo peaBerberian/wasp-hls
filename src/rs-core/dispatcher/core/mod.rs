@@ -776,12 +776,12 @@ impl Dispatcher {
         match playlist_type {
             PlaylistFileType::TopLevelPlaylist => false,
             PlaylistFileType::MediaPlaylist { id, .. } => {
-                // XXX TODO: Double negation is impossible to read.
-                !self
+                let is_current_or_followed = self
                     .playlist_store
                     .as_ref()
                     .is_some_and(|pl_store| pl_store.is_current_media_playlist(id))
-                    && !self.playlist_refresh_manager.is_following(id)
+                    || self.playlist_refresh_manager.is_following(id);
+                !is_current_or_followed
             }
         }
     }
