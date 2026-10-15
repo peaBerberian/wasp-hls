@@ -271,12 +271,16 @@ The payload of that event is an object with the following self-explanatory prope
 
 ## Event: `variantUpdate`
 
-The `"variantUpdate` event is sent when the currently-loaded variant, which
-basically represents the video and audio qualities, has changed.
+The `variantUpdate` event is sent when the HLS variant chosen for loading
+subsequent segments changes.
 
-Note that the `variantUpdate` is only about the variant being loaded, which may
-be different than the one being currently played (you're generally playing
-already-loaded content).
+The event can occur before a segment request starts, while the player prepares
+the chosen variant. Requests already in progress may finish using the previous
+variant, and buffered media from previous variants may continue playing. Audio
+and video requests do not necessarily switch to the new variant simultaneously.
+
+[`getCurrentVariant`](./Variant_Selection/getCurrentVariant.md) returns this same
+loading choice, which may differ from the variant currently being played.
 
 The payload of that event contains the information available on that variant if
 known, or `undefined` if the characteristics of the variant is unknown.
@@ -370,7 +374,7 @@ for the `variantUpdate` event):
 
   `undefined` if there's no video data or if that property is not specified.
 
-If that change of lock status led to a change of currently-loaded variant,
+If that change of lock status led to a change of variant chosen for loading,
 you'll also receive a `variantUpdate` event.
 
 You can know at any time whether a variant is currently locked and which one

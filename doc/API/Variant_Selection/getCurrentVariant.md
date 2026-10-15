@@ -2,8 +2,14 @@
 
 ## Description
 
-Returns the information on the currently considered HLS variant.
+Returns information on the HLS variant chosen for loading subsequent segments,
+as announced through the [`variantUpdate` event](../Player_Events.md#event-variantupdate).
 Returns `undefined` if unknown or if no content is loaded.
+
+The player may still be preparing the chosen variant before starting a segment
+request. Requests already in progress may finish using the previous variant,
+and buffered media from previous variants may continue playing. Audio and video
+requests do not necessarily switch to the new variant simultaneously.
 
 A variant in HLS is basically a set of media rendition in a given quality. The
 `WaspHlsPlayer` may regularly switch between variant, for example because of
@@ -55,6 +61,6 @@ const currentVariant = player.getCurrentVariant();
 
 - **return value**:
 
-`Object`: Characteristics of the currently considered variant (see previous
+`Object`: Characteristics of the variant chosen for loading (see previous
 chapter). `undefined` if no content is loaded or if the current variant is
 unknown.

@@ -44,7 +44,6 @@ impl Dispatcher {
         self.media_element_ref.reset();
         self.segment_selectors.reset_selectors(0.);
         self.playlist_store = None;
-        self.announced_variant_id = None;
         self.ready_probe_segments.clear();
         self.initial_audio_track_selection.clear();
         self.last_position = 0.;
@@ -75,11 +74,11 @@ impl Dispatcher {
                 } => {
                     if let AudioTrackChange::Changed(track_id) = audio_track_change {
                         let is_audio_track_selected = pl_store.fixed_audio_track_id().is_some();
-                        // XXX TODO: In the API, which ordering should audioTrackUpdate have
-                        // relative to variantUpdate variantLockUpdate etc.? It should just be
-                        // coherent with other events and never change
                         jsAnnounceTrackUpdate(MediaType::Audio, track_id, is_audio_track_selected);
                     }
+
+                    self.announce_current_variant();
+                    jsAnnounceVariantLockStatusChange(Some(variant_id));
 
                     // Stop and clean all resources linked to media types whose playlist changed.
                     for media_type in changed_media_types.iter().copied() {
@@ -110,17 +109,6 @@ impl Dispatcher {
                     }
 
                     self.check_segments_to_request();
-                    // XXX TODO: I think the agent completely broke variant event handling compared
-                    // to `main` here. Not sure it was needed. It's supposed to keep the same
-                    // ordering and be linked to the variant currently-considered for segment
-                    // requests
-
-                    // XXX TODO: Doesn't this comment implies that w change event ordering?
-                    // variantUpdate should be before `variantLockStatusChange` should be before
-                    // segment requests linked to the locked variant.
-                    //
-                    // variantUpdate is emitted when a segment request uses the locked variant.
-                    jsAnnounceVariantLockStatusChange(Some(variant_id));
                 }
             }
         }
@@ -177,36 +165,37 @@ impl Dispatcher {
                 "Unable to select the audio track: no compatible variant",
             ),
 
-            SetAudioTrackResponse::VariantSelectionNeeded {
-                variant_lock_removed,
-            } => {
-                // Choose a compatible path to inspect without relying on the old track's buffer.
-                let variant_update = self.compute_optimal_variant().and_then(|selection| {
-                    let pl_store = self.playlist_store.as_mut()?;
-                    Some(pl_store.set_variant(selection.safe_variant_id))
-                });
-
-                // Second, now send event and do the actual dispatcher logic
-                self.announce_current_audio_track();
-                if let Some(changed_media_types) = variant_update {
-                    self.reset_on_selected_media_playlists(&changed_media_types);
+            update @ (SetAudioTrackResponse::VariantSelectionNeeded { .. }
+            | SetAudioTrackResponse::AudioMediaUpdate) => {
+                let variant_lock_removed = matches!(
+                    update,
+                    SetAudioTrackResponse::VariantSelectionNeeded {
+                        variant_lock_removed: true,
+                    }
+                );
+                // Choose the final compatible variant before requesting the new track's playlist.
+                // The old track's buffer should not justify an additive-only choice here.
+                let mut changed_media_types = self
+                    .compute_optimal_variant()
+                    .and_then(|selection| {
+                        let playlist_store = self.playlist_store.as_mut()?;
+                        Some(playlist_store.set_variant(selection.safe_variant_id))
+                    })
+                    .unwrap_or_default();
+                // The audio playlist may already have changed in set_audio_track. It must also
+                // be flushed when the final variant uses the same playlist as the previous one.
+                if !changed_media_types.contains(&MediaType::Audio) {
+                    changed_media_types.push(MediaType::Audio);
                 }
+
+                self.announce_current_audio_track();
+                self.announce_current_variant();
                 if variant_lock_removed {
                     jsAnnounceVariantLockStatusChange(None);
                 }
+                self.reset_on_selected_media_playlists(&changed_media_types);
             }
 
-            SetAudioTrackResponse::AudioMediaUpdate => {
-                self.announce_current_audio_track();
-                self.check_requested_segments_still_needed();
-
-                // XXX TODO: `main` had a `jsAnnounceVariantUpdate` case around here
-                // verify that it is not needed
-
-                // We want to abort and flush audio here, independently of the variant update, as
-                // we're in an audio-track-setting context.
-                self.reset_on_selected_media_playlists(&[MediaType::Audio]);
-            }
             SetAudioTrackResponse::NoUpdate => {
                 self.check_requested_segments_still_needed();
                 self.check_segments_to_request();
@@ -539,22 +528,12 @@ impl Dispatcher {
 
         let recommendation = self.compute_optimal_variant();
         let was_already_locked = self.requester.lock_segment_requests();
-        let mut scheduled_segment = false;
         for media_type in [MediaType::Video, MediaType::Audio] {
-            scheduled_segment |= self.schedule_next_segment_for_type(media_type, recommendation);
+            self.schedule_next_segment_for_type(media_type, recommendation);
         }
-
-        // XXX TODO: I think we could announce the loading variant regardless?
-        // See other variant anouncement XXX TODO comments
-        if scheduled_segment {
-            if let Some(variant_id) = self
-                .playlist_store
-                .as_ref()
-                .and_then(|store| store.current_variant_id())
-            {
-                self.announce_loading_variant(variant_id, MediaType::Video);
-            }
-        }
+        // Selection can change while waiting for codecs, without scheduling a segment.
+        // The API already filters unchanged variant announcements.
+        self.announce_current_variant();
         if !was_already_locked {
             self.requester.unlock_segment_requests();
         }
@@ -1098,25 +1077,21 @@ impl Dispatcher {
     /// Update the active variant when needed and follow the playlist chosen for refreshing,
     /// which may differ from the playlist supplying the selected segment. Playlist tracking
     /// can change even when no segment is scheduled.
-    ///
-    /// Return `true` if a segment request is scheduled or previously fetched probe data is
-    /// passed to the segment-loaded handler instead. Return `false` if no segment is handled,
-    /// including when selection or codec readiness prevents loading.
     fn schedule_next_segment_for_type(
         &mut self,
         media_type: MediaType,
         recommendation: Option<AdaptiveVariantSelection>,
-    ) -> bool {
+    ) {
         if self.requester.has_segment_request_pending(media_type) {
-            return false;
+            return;
         }
         let Some(pl_store) = self.playlist_store.as_ref() else {
-            return false;
+            return;
         };
         let Some((addition_candidate, replacement_candidate)) =
             segment_selection_candidates(pl_store, recommendation, media_type)
         else {
-            return false;
+            return;
         };
         let addition_playlist_id = addition_candidate.context.playlist_id();
         let replacement_playlist_id = replacement_candidate.context.playlist_id();
@@ -1150,7 +1125,7 @@ impl Dispatcher {
         self.follow_media_playlist(media_type, refresh_id);
         let Some((variant_id, init, media)) = needed else {
             self.ready_probe_segments.clear_media_type(media_type);
-            return false;
+            return;
         };
         let (playlist_id, quality_context) = if variant_id == addition_variant_id {
             (addition_playlist_id, addition_context)
@@ -1159,13 +1134,13 @@ impl Dispatcher {
         };
 
         let Some(pl_store) = self.playlist_store.as_mut() else {
-            return false;
+            return;
         };
         if pl_store.is_variant_locked() && pl_store.current_variant_id() != Some(variant_id) {
             // TODO: A recommendation should not contradict the lock. Report an internal error if
             // this becomes reachable instead of repeatedly skipping segment scheduling.
             log_warn!("Core: Segment selection contradicted the variant lock");
-            return false;
+            return;
         }
 
         // We could target a different variant but rely on the same playlist for the current media
@@ -1191,16 +1166,15 @@ impl Dispatcher {
         }
 
         if !self.ready_to_load_segments() {
-            return false;
+            return;
         }
 
-        let scheduled_segment = init.is_some() || media.is_some();
         if let Some(init) = init {
             if let Some(data) =
                 self.take_probe_segment_data(media_type, init.url(), init.byte_range())
             {
                 self.on_init_segment_loaded(data, media_type, init.id());
-                return true;
+                return;
             }
             let req_id = self
                 .segment_request_contexts
@@ -1223,7 +1197,7 @@ impl Dispatcher {
                     sequence_number: media.sequence(),
                     discontinuity_sequence: media.discontinuity_sequence(),
                 });
-                return true;
+                return;
             }
             let req_id = self
                 .segment_request_contexts
@@ -1237,7 +1211,6 @@ impl Dispatcher {
             self.requester
                 .request_media_segment(media_type, &media, req_id);
         }
-        scheduled_segment
     }
 
     /// Follow the playback playlist (the one we're loading segments for) when its configuration
@@ -1390,23 +1363,17 @@ impl Dispatcher {
         }
     }
 
-    /// XXX TODO: That method assumptions have been broken
-    /// Announce the variant before scheduling its first segment request.
-    /// Video determines the variant announcement, except for audio-only content.
-    /// Shared audio cannot identify a video variant and must not change its announcement.
-    fn announce_loading_variant(&mut self, variant_id: u32, media_type: MediaType) {
-        if media_type == MediaType::Audio
-            && self
-                .playlist_store
-                .as_ref()
-                .is_some_and(|pl_store| pl_store.has_distinct_media_type(MediaType::Video))
-        {
+    /// Announce the variant chosen for loading, independently of playlist and codec readiness.
+    fn announce_current_variant(&self) {
+        let Some(playlist_store) = self.playlist_store.as_ref() else {
             return;
-        }
-        if self.announced_variant_id != Some(variant_id) {
-            self.announced_variant_id = Some(variant_id);
-            jsAnnounceVariantUpdate(Some(variant_id));
-        }
+        };
+        let variant_id = if playlist_store.direct_media_playlist().is_some() {
+            Some(crate::bindings::formatters::DIRECT_MEDIA_VARIANT_ID)
+        } else {
+            playlist_store.current_variant_id()
+        };
+        jsAnnounceVariantUpdate(variant_id);
     }
 
     fn on_media_segment_loaded(&mut self, push_md: SegmentPushMetadata) {
@@ -1660,21 +1627,6 @@ mod tests {
                 shared_audio
             );
         }
-    }
-
-    #[test]
-    fn shared_audio_probe_does_not_announce_another_video_variant() {
-        let mut dispatcher = dispatcher_with_abr_playlists(Some(4), 20.);
-        let variants = dispatcher
-            .playlist_store
-            .as_ref()
-            .unwrap()
-            .available_variants();
-        let low = variants[0].id();
-        let high = variants[2].id();
-        dispatcher.announced_variant_id = Some(high);
-        dispatcher.announce_loading_variant(low, MediaType::Audio);
-        assert_eq!(dispatcher.announced_variant_id, Some(high));
     }
 
     #[test]
@@ -1932,7 +1884,6 @@ mod tests {
             let mut dispatcher = Dispatcher::new(3_125_000.);
             dispatcher.ready_state = PlayerReadyState::AwaitingSegments;
             dispatcher.playlist_store = Some(playlist_store);
-            dispatcher.announced_variant_id = Some(variant_ids[0]);
             dispatcher.requester.lock_segment_requests();
             dispatcher
                 .requester
@@ -2104,8 +2055,6 @@ mod tests {
             )
             .unwrap();
         let expected_url = Url::new("https://example.com/best-seg.ts".into());
-        // This test covers request selection with the variant already announced.
-        dispatcher.announced_variant_id = Some(recommendation.best_variant_id);
         dispatcher.requester.lock_segment_requests();
         dispatcher.schedule_next_segment_for_type(MediaType::Video, Some(recommendation));
         assert!(dispatcher
