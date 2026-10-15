@@ -132,8 +132,11 @@ impl Dispatcher {
     /// Remove an HLS variant previously put in place through `lock_variant_core`.
     pub(super) fn unlock_variant_core(&mut self) {
         if let Some(pl_store) = self.playlist_store.as_mut() {
+            let was_locked = pl_store.is_variant_locked();
             pl_store.unlock_variant();
-            // XXX TODO: Did I forget to emit a lock status change here? To check.
+            if was_locked {
+                jsAnnounceVariantLockStatusChange(None);
+            }
             self.check_requested_segments_still_needed();
             self.check_segments_to_request();
         }
