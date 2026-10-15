@@ -1,8 +1,5 @@
 use super::super::segment_request_contexts::PendingSegmentRequest;
-use super::{
-    sync_media_source_duration, utils, Dispatcher, JsMemoryBlob, MediaPlaylistUpdateMode,
-    PlayerReadyState,
-};
+use super::{sync_media_source_duration, utils, Dispatcher, JsMemoryBlob, PlayerReadyState};
 use crate::playlist_store::ProbeSegmentMetadata;
 use crate::{
     bindings::{
@@ -101,10 +98,12 @@ fn ensure_ready_playlists(dispatcher: &mut Dispatcher, wanted_position: f64) -> 
             let changed_media_types = playlist_store.set_variant(variant_id);
             // XXX TODO: No variant update?
             dispatcher.announce_current_audio_track();
-            dispatcher.handle_media_playlist_update(
-                &changed_media_types,
-                MediaPlaylistUpdateMode::Seamless,
-            );
+            for media_type in changed_media_types {
+                dispatcher.ready_probe_segments.clear_media_type(media_type);
+                dispatcher.follow_selected_media_playlist(media_type);
+                dispatcher.request_selected_media_playlist_if_needed(media_type);
+            }
+            dispatcher.check_segments_to_request();
             false
         }
         StartupStatus::NeedsProbes(probe_metadata) => {

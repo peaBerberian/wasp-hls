@@ -31,30 +31,6 @@ use crate::{
 
 mod startup;
 
-/// Describe the strategy that should be taken when switching from a video/text/audio media to
-/// another.
-#[derive(Clone, Copy)]
-enum MediaPlaylistUpdateMode {
-    /// Don't do anything with previous request and buffer linked to the previous media of the same
-    /// type.
-    Seamless,
-    /// Abort previous requests for that media type.
-    /// XXX TODO: Can be removed now? Maybe this whole type can be removed?
-    AbortRequests,
-    /// Both abort previous requests and flush buffer for that media type, so the change can be
-    /// taken into account as soon as possible.
-    AbortRequestsAndFlushBuffer,
-}
-
-/// Describe a change of media playlist for a given media type (audio/video/text) and how the
-/// player should handle the transition.
-struct MediaPlaylistUpdate {
-    /// Type concerned by the change.
-    media_type: MediaType,
-    /// How the player should handle that transition.
-    mode: MediaPlaylistUpdateMode,
-}
-
 impl Dispatcher {
     /// Completely stop playback of the current content if one and free all its associated
     /// resources.
@@ -227,10 +203,7 @@ impl Dispatcher {
                 // Second, now send event and do the actual dispatcher logic
                 self.announce_current_audio_track();
                 if let Some(changed_media_types) = variant_update {
-                    self.handle_media_playlist_update(
-                        &changed_media_types,
-                        MediaPlaylistUpdateMode::AbortRequestsAndFlushBuffer,
-                    );
+                    self.reset_on_selected_media_playlists(&changed_media_types);
                 }
                 if variant_lock_removed {
                     jsAnnounceVariantLockStatusChange(None);
@@ -246,10 +219,7 @@ impl Dispatcher {
 
                 // We want to abort and flush audio here, independently of the variant update, as
                 // we're in an audio-track-setting context.
-                self.handle_media_playlist_update(
-                    &[MediaType::Audio],
-                    MediaPlaylistUpdateMode::AbortRequestsAndFlushBuffer,
-                );
+                self.reset_on_selected_media_playlists(&[MediaType::Audio]);
             }
             SetAudioTrackResponse::NoUpdate => {
                 self.check_requested_segments_still_needed();
@@ -1324,37 +1294,25 @@ impl Dispatcher {
         }
     }
 
-    /// Perform all actions that should be commonly taken after one or multiple of the current Media
-    /// Playlists change.
-    /// XXX TODO: Should be renamed `handle_media_playlist_changed`? "Update" made me think the
-    /// playlist was updated but in this case this is not called. But even there, it doesn't seem to
-    /// be called in usual ABR scenarios... I don't understand this method.
-    /// `media_playlist_reset`?
-    fn handle_media_playlist_update(
-        &mut self,
-        changed_media_types: &[MediaType],
-        mode: MediaPlaylistUpdateMode,
-    ) {
+    /// Restart buffering from the selected playlists and types from scratch:
+    /// Discard previous probes, abort segment requests, and flush buffered data for each given
+    /// media type, even if its selected playlist has not changed.
+    /// Might thus lead to rebuffering.
+    ///
+    /// You might want to call this method when you want a direct and clean restart. E.g. at audio
+    /// track switch.
+    fn reset_on_selected_media_playlists(&mut self, media_types: &[MediaType]) {
         if self.playlist_store.is_none() {
             return;
         }
 
-        let updates = changed_media_types
-            .iter()
-            .copied()
-            .map(|media_type| MediaPlaylistUpdate { media_type, mode });
-
-        for MediaPlaylistUpdate { media_type, mode } in updates {
-            log_info!("Core: {} MediaPlaylist changed", media_type);
+        for media_type in media_types.iter().copied() {
+            log_info!("Core: Resetting selected {} MediaPlaylist", media_type);
             self.ready_probe_segments.clear_media_type(media_type);
 
             self.follow_selected_media_playlist(media_type);
-            if !matches!(mode, MediaPlaylistUpdateMode::Seamless) {
-                self.abort_segment_requests_with_type(media_type);
-            }
-            if matches!(mode, MediaPlaylistUpdateMode::AbortRequestsAndFlushBuffer) {
-                self.flush_media_buffer(media_type);
-            }
+            self.abort_segment_requests_with_type(media_type);
+            self.flush_media_buffer(media_type);
             self.request_selected_media_playlist_if_needed(media_type);
         }
 
