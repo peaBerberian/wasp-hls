@@ -363,7 +363,8 @@ impl NextSegmentSelector {
             };
             segment
         };
-        let init_segment = if let Some(i) = segment_list.init_for(most_needed_segment) {
+        let associated_init = segment_list.init_for(most_needed_segment);
+        let init_segment = if let Some(i) = associated_init {
             match self.init_status {
                 InitializationSegmentSelectorStatus::Validated(id) if id == i.id() => None,
                 _ => {
@@ -378,7 +379,7 @@ impl NextSegmentSelector {
         MostNeededSegmentInfo {
             needed_segments: Some(NeededSegmentInfo {
                 variant_id: selected_candidate.variant_id,
-                media_segment: Some(most_needed_segment),
+                media_segment: Some((most_needed_segment, associated_init.map(|init| init.id()))),
                 init_segment,
             }),
             playlist_to_refresh,
@@ -694,10 +695,10 @@ pub(crate) struct NeededSegmentInfo<'a> {
     /// `None` either if there's no needed initialization segment or if we consider that the last
     /// validated one is still compatible.
     init_segment: Option<&'a InitSegmentInfo>,
-    /// The media segment that should now be needed, corresponding to the inner information.
+    /// The media segment to load and its associated initialization ID, even if already validated.
     ///
     /// `None` if no media segment is currently needed.
-    media_segment: Option<&'a MediaSegmentInfo>,
+    media_segment: Option<(&'a MediaSegmentInfo, Option<f64>)>,
 }
 
 impl<'a> NeededSegmentInfo<'a> {
@@ -705,8 +706,8 @@ impl<'a> NeededSegmentInfo<'a> {
         self.variant_id
     }
 
-    /// Returns the media segment that should be loaded, if one is needed.
-    pub(crate) fn media_segment(&self) -> Option<&MediaSegmentInfo> {
+    /// Returns the media segment to load and its associated initialization ID, if needed.
+    pub(crate) fn media_segment(&self) -> Option<(&'a MediaSegmentInfo, Option<f64>)> {
         self.media_segment
     }
 
@@ -853,7 +854,7 @@ mod tests {
         );
         validate(
             &mut selector,
-            first.media_segment().unwrap(),
+            first.media_segment().unwrap().0,
             &addition_candidate,
         );
 
@@ -869,6 +870,7 @@ mod tests {
                 .unwrap()
                 .media_segment()
                 .unwrap()
+                .0
                 .start(),
             8.
         );
@@ -901,7 +903,12 @@ mod tests {
                 candidate(list, &replacement_candidate),
                 &inventory,
             );
-            let segment = selected.needed_segments().unwrap().media_segment().unwrap();
+            let segment = selected
+                .needed_segments()
+                .unwrap()
+                .media_segment()
+                .unwrap()
+                .0;
             assert_eq!(segment.start(), expected_start);
             validate(&mut selector, segment, &replacement_candidate);
         }
@@ -930,6 +937,7 @@ mod tests {
                 .unwrap()
                 .media_segment()
                 .unwrap()
+                .0
                 .start(),
             8.
         );
@@ -978,7 +986,7 @@ mod tests {
         assert_eq!(replacement.playlist_to_refresh, test_playlist_id(2));
         let replacement = replacement.needed_segments.unwrap();
         assert_eq!(replacement.variant_id, 20);
-        assert_eq!(replacement.media_segment.unwrap().start(), 8.);
+        assert_eq!(replacement.media_segment.unwrap().0.start(), 8.);
 
         let repeated = selector.most_needed_segment(
             candidate(list, &addition_candidate),
@@ -991,13 +999,14 @@ mod tests {
                 .unwrap()
                 .media_segment
                 .unwrap()
+                .0
                 .start(),
             8.
         );
 
         validate(
             &mut selector,
-            replacement.media_segment.unwrap(),
+            replacement.media_segment.unwrap().0,
             &replacement_candidate,
         );
         let next = selector.most_needed_segment(
@@ -1006,7 +1015,12 @@ mod tests {
             &inventory,
         );
         assert_eq!(
-            next.needed_segments.unwrap().media_segment.unwrap().start(),
+            next.needed_segments
+                .unwrap()
+                .media_segment
+                .unwrap()
+                .0
+                .start(),
             12.
         );
 
@@ -1026,7 +1040,7 @@ mod tests {
         );
         let addition = addition.needed_segments.unwrap();
         assert_eq!(addition.variant_id, 30);
-        assert_eq!(addition.media_segment.unwrap().start(), 0.);
+        assert_eq!(addition.media_segment.unwrap().0.start(), 0.);
     }
 
     #[test]
@@ -1068,7 +1082,7 @@ mod tests {
         assert_eq!(while_missing.playlist_to_refresh(), test_playlist_id(2));
         let best_segment = while_missing.needed_segments().unwrap();
         assert_eq!(best_segment.variant_id(), 3);
-        assert_eq!(best_segment.media_segment().unwrap().start(), 24.);
+        assert_eq!(best_segment.media_segment().unwrap().0.start(), 24.);
 
         selector.buffer_goal = 20.;
         selector.restart_from_position(0.);
@@ -1098,7 +1112,7 @@ mod tests {
         assert_eq!(after_load.playlist_to_refresh(), test_playlist_id(2));
         let safe_segment = after_load.needed_segments().unwrap();
         assert_eq!(safe_segment.variant_id(), 20);
-        assert_eq!(safe_segment.media_segment().unwrap().start(), 8.);
+        assert_eq!(safe_segment.media_segment().unwrap().0.start(), 8.);
     }
 
     #[test]
@@ -1186,7 +1200,7 @@ mod tests {
             cached_segment.variant_id(),
             replacement_candidate.playlist_id().as_u32()
         );
-        assert_eq!(cached_segment.media_segment().unwrap().start(), 28.);
+        assert_eq!(cached_segment.media_segment().unwrap().0.start(), 28.);
 
         let replacement = selector.most_needed_segment(
             candidate(best_list, &addition_candidate),
@@ -1200,6 +1214,7 @@ mod tests {
                 .unwrap()
                 .media_segment()
                 .unwrap()
+                .0
                 .start(),
             28.
         );
@@ -1243,6 +1258,7 @@ mod tests {
                 .unwrap()
                 .media_segment()
                 .unwrap()
+                .0
                 .start(),
             16.
         );
@@ -1335,8 +1351,10 @@ mod tests {
                 )
                 .needed_segments
                 .unwrap();
-            selector.validate_init(first.init_segment.unwrap().id());
-            validate(selector, first.media_segment.unwrap(), &context);
+            let init_segment_id = first.init_segment.unwrap().id();
+            assert_eq!(first.media_segment.unwrap().1, Some(init_segment_id));
+            selector.validate_init(init_segment_id);
+            validate(selector, first.media_segment.unwrap().0, &context);
 
             selector.restart_from_position(seek_position - 0.2);
             let context =
@@ -1349,9 +1367,10 @@ mod tests {
                 )
                 .needed_segments
                 .unwrap();
-            assert_eq!(next.media_segment.unwrap().start(), expected_start);
+            assert_eq!(next.media_segment.unwrap().0.start(), expected_start);
             assert_eq!(next.init_segment.is_some(), change_media);
-            validate(selector, next.media_segment.unwrap(), &context);
+            assert_eq!(next.media_segment.unwrap().1, Some(init_segment_id));
+            validate(selector, next.media_segment.unwrap().0, &context);
 
             let following = selector
                 .most_needed_segment(
@@ -1362,7 +1381,7 @@ mod tests {
                 .needed_segments
                 .unwrap();
             assert_eq!(
-                following.media_segment.unwrap().start(),
+                following.media_segment.unwrap().0.start(),
                 expected_start + 4.
             );
         }
