@@ -314,14 +314,6 @@ impl Dispatcher {
                 status,
             } => {
                 let req_ctxt = self.segment_request_contexts.take(s.id());
-                if let Some(media_type) = req_ctxt
-                    .as_ref()
-                    .and_then(|ctxt| ctxt.requested_media_type())
-                {
-                    // XXX TODO: why this?
-                    self.ready_probe_segments.clear_media_type(media_type);
-                }
-
                 // TODO: On terminal 404/410 for a still-listed cached segment, wait for the
                 // requested playlist's refresh before reporting a fatal failure. If its range is
                 // still playable, abandon the upgrade and exclude it from replacement selection
@@ -675,7 +667,7 @@ impl Dispatcher {
     ///
     /// This is what this method does: inspect the segment and update the playlist state
     /// accordingly.
-    fn do_probe_segment_inspection(
+    fn handle_probe_segment(
         &mut self,
         probe_segment: ProbeSegmentMetadata,
         requested_media_type: Option<MediaType>,
@@ -743,7 +735,6 @@ impl Dispatcher {
 
         self.refresh_terminal_buffer_state();
 
-        // Store segment for future playback
         self.ready_probe_segments.insert(ReadyProbeSegment {
             request: probe_segment,
             media_type: considered_media_type,
@@ -1179,9 +1170,10 @@ impl Dispatcher {
             );
         let refresh_id = selected.playlist_to_refresh();
         let Some(needed) = selected.needed_segments() else {
-            // XXX TODO: Is there any reason why we just don't do that one immediately for both
+            // XXX TODO: Is there any reason why we just don't follow immediately for both
             // cases?
             self.follow_media_playlist(media_type, refresh_id);
+            self.ready_probe_segments.clear_media_type(media_type);
             return false;
         };
 
@@ -1248,6 +1240,12 @@ impl Dispatcher {
 
         let scheduled_segment = init.is_some() || media.is_some();
         if let Some(init) = init {
+            if let Some(data) =
+                self.take_probe_segment_data(media_type, init.url(), init.byte_range())
+            {
+                self.on_init_segment_loaded(data, media_type, init.id());
+                return true;
+            }
             let req_id = self
                 .segment_request_contexts
                 .insert(PendingSegmentRequest::Init {
@@ -1257,6 +1255,20 @@ impl Dispatcher {
             self.requester
                 .request_init_segment(media_type, init.url(), init.byte_range(), req_id);
         } else if let Some(media) = media {
+            if let Some(data) =
+                self.take_probe_segment_data(media_type, media.url(), media.byte_range())
+            {
+                self.on_media_segment_loaded(SegmentPushMetadata {
+                    data,
+                    media_type,
+                    init_segment_id,
+                    time_info: media.time_info().clone(),
+                    context: quality_context,
+                    sequence_number: media.sequence(),
+                    discontinuity_sequence: media.discontinuity_sequence(),
+                });
+                return true;
+            }
             let req_id = self
                 .segment_request_contexts
                 .insert(PendingSegmentRequest::Media {
@@ -1453,7 +1465,7 @@ impl Dispatcher {
                 probe_segment,
                 requested_media_type,
             } => {
-                self.do_probe_segment_inspection(probe_segment, requested_media_type, result);
+                self.handle_probe_segment(probe_segment, requested_media_type, result);
                 self.recheck_player_state();
             }
         }
@@ -1554,18 +1566,11 @@ impl Dispatcher {
         self.check_segments_to_request();
     }
 
+    /// Abort pending and queued requests and remove their contexts.
     fn abort_segment_requests_with_type(&mut self, media_type: MediaType) {
         let aborted_reqs = self.requester.abort_segments_with_type(media_type);
         for req_id in aborted_reqs {
-            if let Some(media_type) = self
-                .segment_request_contexts
-                .take(req_id)
-                .and_then(|ctxt| ctxt.requested_media_type())
-            {
-                // XXX TODO: Why removing the ready probe segment(s) when what we want to do is
-                // abort segment requests?
-                self.ready_probe_segments.clear_media_type(media_type);
-            }
+            self.segment_request_contexts.take(req_id);
         }
     }
 }
@@ -1666,7 +1671,10 @@ fn sync_media_source_duration(pl_store: &PlaylistStore) {
 
 #[cfg(test)]
 mod tests {
-    use super::{normalize_abr_selection, segment_selection_candidate_for_variant, Dispatcher};
+    use super::{
+        normalize_abr_selection, segment_selection_candidate_for_variant, Dispatcher,
+        PlayerReadyState,
+    };
     use crate::{
         bindings::MediaType,
         dispatcher::{JsTimeRanges, MediaObservation, PlaybackTickReason},
@@ -1792,6 +1800,7 @@ mod tests {
             urgent: false,
         });
         let mut dispatcher = Dispatcher::new(3_125_000.);
+        dispatcher.ready_state = PlayerReadyState::AwaitingSegments;
         dispatcher.playlist_store = Some(store);
         dispatcher.requester.lock_segment_requests();
 
@@ -1825,6 +1834,7 @@ mod tests {
         video: Option<Vec<f64>>,
     ) -> Dispatcher {
         let mut dispatcher = Dispatcher::new(3_125_000.);
+        dispatcher.ready_state = PlayerReadyState::AwaitingSegments;
         dispatcher
             .media_element_ref
             .on_observation(MediaObservation::new(
@@ -2001,6 +2011,7 @@ mod tests {
                 .media()[0]
                 .clone();
             let mut dispatcher = Dispatcher::new(3_125_000.);
+            dispatcher.ready_state = PlayerReadyState::AwaitingSegments;
             dispatcher.playlist_store = Some(playlist_store);
             dispatcher.announced_variant_id = Some(variant_ids[0]);
             dispatcher.requester.lock_segment_requests();

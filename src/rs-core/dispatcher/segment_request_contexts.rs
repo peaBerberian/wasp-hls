@@ -113,14 +113,4 @@ impl PendingSegmentRequest {
     pub(crate) fn is_init(&self) -> bool {
         matches!(self, Self::Init { .. })
     }
-
-    pub(crate) fn requested_media_type(&self) -> Option<MediaType> {
-        match self {
-            Self::Init { media_type, .. } | Self::Media { media_type, .. } => Some(*media_type),
-            Self::Probe {
-                requested_media_type,
-                ..
-            } => *requested_media_type,
-        }
-    }
 }
