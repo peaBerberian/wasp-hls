@@ -1,7 +1,7 @@
 use crate::{
     bindings::{
         formatters::format_range_for_js, jsAbortRequest, jsClearTimer, jsFetch, jsGetRandom,
-        jsTimer, MediaType, RequestErrorReason, RequestId, TimerId, TimerReason,
+        jsMonotonicNow, jsTimer, MediaType, RequestErrorReason, RequestId, TimerId, TimerReason,
     },
     parser::{ByteRange, MediaSegmentInfo, SegmentTimeInfo},
     playlist_store::MediaPlaylistPermanentId,
@@ -142,6 +142,9 @@ pub(crate) struct PlaylistRequestInfo {
 
     /// Number of time the request has already been attempted.
     pub(crate) attempts_failed: u32,
+
+    /// Monotonic milliseconds at the start of the latest attempt.
+    pub(crate) started_at: f64,
 
     /// If `true` the request is not really pending, we're currently pending for some
     /// timer to finish before retrying it.
@@ -407,12 +410,14 @@ impl Requester {
             PlaylistFileType::MediaPlaylist { .. } => self.config.media_playlist_request_timeout,
         };
         let url_ref = url.get_ref();
+        let started_at = jsMonotonicNow();
         let host_id = jsFetch(url_ref, None, None, timeout);
         log_info!("Req: Fetching playlist u:{url_ref}, id:{host_id}");
         self.pending_playlist_requests.push(PlaylistRequestInfo {
             host_id,
             url,
             playlist_type,
+            started_at,
             attempts_failed: 0,
             is_waiting_for_retry: false,
         });
@@ -689,6 +694,7 @@ impl Requester {
                                 self.config.media_playlist_request_timeout
                             }
                         };
+                        pla.started_at = jsMonotonicNow();
                         let host_id = jsFetch(pla.url.get_ref(), None, None, timeout);
                         pla.host_id = host_id;
                     }
@@ -1122,6 +1128,7 @@ mod tests {
                         host_id,
                         url: Url::new(format!("https://example.com/{host_id}.m3u8")),
                         playlist_type: PlaylistFileType::TopLevelPlaylist,
+                        started_at: 0.,
                         attempts_failed: 0,
                         is_waiting_for_retry: false,
                     });
@@ -1193,6 +1200,7 @@ mod tests {
                 host_id: 1,
                 url: url.clone(),
                 playlist_type: PlaylistFileType::TopLevelPlaylist,
+                started_at: 0.,
                 attempts_failed: 0,
                 is_waiting_for_retry: false,
             }],
