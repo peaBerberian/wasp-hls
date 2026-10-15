@@ -12,7 +12,7 @@ mod variable_substitution;
 mod variant_stream;
 
 pub(crate) use audio_track_list::AudioTrack;
-pub(crate) use media_playlist::{MediaPlaylist, MediaPlaylistParsingError};
+pub(crate) use media_playlist::{MediaPlaylist, MediaPlaylistParsingError, PlaylistRefreshInfo};
 pub(crate) use media_tag::{MediaTag, MediaTagType};
 pub(crate) use multi_variant_playlist::{
     MediaPlaylistPermanentId, MediaPlaylistUpdateError, MultivariantPlaylistParsingError,

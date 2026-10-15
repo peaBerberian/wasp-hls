@@ -17,7 +17,9 @@ use crate::{
     },
     dispatcher::segment_request_contexts::PendingSegmentRequest,
     media_element::SegmentPushMetadata,
-    parser::{SegmentIdentity, TopLevelPlaylist, TopLevelPlaylistParsingError},
+    parser::{
+        PlaylistRefreshInfo, SegmentIdentity, TopLevelPlaylist, TopLevelPlaylistParsingError,
+    },
     playlist_store::{
         AudioTrackChange, LockVariantResponse, MediaPlaylistPermanentId, PlaylistStore,
         ProbeSegmentMetadata, SetAudioTrackResponse,
@@ -704,10 +706,14 @@ impl Dispatcher {
         final_url: Url,
     ) {
         let is_obsolete = self.is_obsolete_playlist_request(&pl_info.playlist_type);
-        let PlaylistRequestInfo { playlist_type, .. } = pl_info;
+        let PlaylistRequestInfo {
+            playlist_type,
+            started_at,
+            ..
+        } = pl_info;
         match playlist_type {
             PlaylistFileType::TopLevelPlaylist => {
-                self.on_top_level_playlist_loaded(data, final_url)
+                self.on_top_level_playlist_loaded(data, final_url, started_at)
             }
 
             PlaylistFileType::MediaPlaylist { id, media_type } => {
@@ -716,7 +722,7 @@ impl Dispatcher {
                     "Media playlist loaded successfully: {}",
                     final_url.get_ref(),
                 );
-                let refresh_interval = {
+                let refresh_info = {
                     let Some(pl_store) = self.playlist_store.as_mut() else {
                         jsSendOtherError(
                             true,
@@ -744,10 +750,10 @@ impl Dispatcher {
                             self.stop_current_content();
                             return;
                         }
-                        Ok(p) => p.refresh_interval(),
+                        Ok(p) => p.refresh_info(),
                     }
                 };
-                self.process_parsed_media_playlist(id, refresh_interval);
+                self.process_parsed_media_playlist(id, refresh_info, started_at);
             }
         }
     }
@@ -771,7 +777,7 @@ impl Dispatcher {
 
     /// Method called once the top-level Playlist was loaded with success, with its response data
     /// and url as argument.
-    fn on_top_level_playlist_loaded(&mut self, data: Vec<u8>, playlist_url: Url) {
+    fn on_top_level_playlist_loaded(&mut self, data: Vec<u8>, playlist_url: Url, started_at: f64) {
         log_info!("Core: top-level playlist loaded");
         match TopLevelPlaylist::parse(data.as_ref(), playlist_url) {
             Err(err) => {
@@ -809,15 +815,17 @@ impl Dispatcher {
                         }
 
                         // A top-level playlist may be a media playlist directly.
-                        // `direct_media_refresh` is in that case `(MediaPlaylistPermanentId, f64)`,
-                        // latter being refresh interval.
                         let direct_media_refresh = pl_store
                             .direct_media_playlist()
-                            .map(|(id, playlist)| (*id, playlist.refresh_interval()));
+                            .map(|(id, playlist)| (*id, playlist.refresh_info()));
 
                         self.playlist_store = Some(pl_store);
-                        if let Some((playlist_id, refresh_interval)) = direct_media_refresh {
-                            self.process_parsed_media_playlist(playlist_id, refresh_interval);
+                        if let Some((playlist_id, refresh_info)) = direct_media_refresh {
+                            self.process_parsed_media_playlist(
+                                playlist_id,
+                                refresh_info,
+                                started_at,
+                            );
                         }
                         self.recheck_player_state();
                     }
@@ -848,10 +856,11 @@ impl Dispatcher {
     fn process_parsed_media_playlist(
         &mut self,
         playlist_id: MediaPlaylistPermanentId,
-        refresh_interval: Option<f64>,
+        refresh_info: Option<PlaylistRefreshInfo>,
+        started_at: f64,
     ) {
         self.playlist_refresh_manager
-            .on_playlist_loaded(playlist_id, refresh_interval);
+            .on_playlist_loaded(playlist_id, refresh_info, started_at);
 
         let Some(pl_store) = self.playlist_store.as_ref() else {
             return;

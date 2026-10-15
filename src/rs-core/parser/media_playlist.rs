@@ -34,6 +34,22 @@ use std::{error, fmt, io::BufRead};
 //     can_block_reload: bool,
 // }
 
+/// Information allowing modules to make an estimate of when the playlist could be optimally
+/// refreshed
+#[derive(Clone, Copy)]
+pub(crate) struct PlaylistRefreshInfo {
+    /// Upper bound on the duration of all media segments in the Playlist, in seconds.
+    pub(crate) target_duration: f64,
+
+    /// Duration of the last segment anounced with a positive duration
+    /// Allows to setup heuristics to assume when the next segment might be available.
+    pub(crate) last_segment_duration: Option<f64>,
+
+    /// Identity of the last declared segment
+    /// If two iterations of a given media playlist have the same tail, it hadn't updated
+    pub(crate) tail: Option<(super::SegmentIdentity, f64)>,
+}
+
 /// Errors that may arise when parsing a Media Playlist
 ///
 /// See display implementation for more information on its variants.
@@ -506,26 +522,23 @@ impl MediaPlaylist {
             })
     }
 
-    /// Returns the amount of milliseconds at which the Media Playlist should probably be requested.
-    ///
-    /// This value may change each time the Media Playlist is updated.
-    ///
-    /// Returns `None` if this `MediaPlaylist` should never be refreshed.
-    pub(crate) fn refresh_interval(&self) -> Option<f64> {
-        if self.may_be_refreshed() {
-            Some(
-                self.segment_list
-                    .media()
-                    .iter()
-                    .rev()
-                    .find(|s| s.duration() > 0.)
-                    .map(|s| s.duration() * 1.1)
-                    .unwrap_or(f64::from(self.target_duration / 2))
-                    * 1000.,
-            )
-        } else {
-            None
-        }
+    /// Timing and media-tail metadata for refreshing a dynamic playlist.
+    pub(crate) fn refresh_info(&self) -> Option<PlaylistRefreshInfo> {
+        self.may_be_refreshed().then(|| PlaylistRefreshInfo {
+            target_duration: self.target_duration(),
+            last_segment_duration: self
+                .segment_list
+                .media()
+                .iter()
+                .rev()
+                .find(|segment| segment.duration() > 0.)
+                .map(|segment| segment.duration()),
+            tail: self
+                .segment_list
+                .media()
+                .last()
+                .map(|segment| (segment.identity(), segment.duration())),
+        })
     }
 
     /// Returns `SegmentList` associated to this `MediaPlaylist` allowing to check which
@@ -1200,7 +1213,34 @@ audio-512.ts
         assert_eq!(segments[2].end(), 12.);
     }
 
-    fn refresh_interval_ignores_trailing_zero_duration_segment() {
+    #[test]
+    fn refresh_info_handles_empty_zero_duration_and_finalized_playlists() {
+        for (suffix, dynamic) in [
+            ("", true),
+            ("#EXTINF:0,\nempty.m4s\n", true),
+            ("#EXT-X-ENDLIST\n", false),
+            ("#EXT-X-PLAYLIST-TYPE:VOD\n", false),
+        ] {
+            let text = format!("#EXTM3U\n#EXT-X-TARGETDURATION:5\n{suffix}");
+            let parsed = MediaPlaylist::create(
+                Cursor::new(text),
+                Url::new("https://example.com/media.m3u8".to_owned()),
+                None,
+                None,
+                &MediaPlaylistContext::default(),
+            )
+            .unwrap();
+            let info = parsed.refresh_info();
+            assert_eq!(info.is_some(), dynamic);
+            if let Some(info) = info {
+                assert_eq!(info.target_duration, 5.);
+                assert_eq!(info.last_segment_duration, None);
+            }
+        }
+    }
+
+    #[test]
+    fn refresh_info_ignores_trailing_zero_duration_for_cadence() {
         let playlist = r#"#EXTM3U
 #EXT-X-TARGETDURATION:3
 #EXT-X-MEDIA-SEQUENCE:90
@@ -1221,7 +1261,12 @@ seg-92.m4s
         )
         .unwrap();
 
-        let refresh_interval = parsed.refresh_interval().unwrap();
-        assert!((refresh_interval - (2986.67 * 1.1)).abs() < 0.001);
+        let info = parsed.refresh_info().unwrap();
+        assert_eq!(info.target_duration, 3.);
+        assert_eq!(info.last_segment_duration, Some(2.98667));
+        assert_eq!(
+            info.tail,
+            Some((super::super::SegmentIdentity::new(92, 0), 0.))
+        );
     }
 }
