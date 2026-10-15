@@ -76,7 +76,14 @@ ${baseUrl}high.m3u8
           .poll(() => bufferedEnd(ctx.videoElement), { timeout: 15_000 })
           .toBeGreaterThanOrEqual(20);
         const originalEnd = bufferedEnd(ctx.videoElement);
+        const unlocked = waitForPlayerEvent(
+          ctx.player,
+          "variantLockUpdate",
+          (variant) => variant === null,
+        );
         ctx.player.unlockVariant();
+        expect(await unlocked).toBeNull();
+        expect(ctx.player.getLockedVariant()).toBeNull();
         const highRequest = await ctx.workerHandle.telemetry.waitFor(
           (event) =>
             event.type === "fetch-start" && event.ruleId === "high-segments",

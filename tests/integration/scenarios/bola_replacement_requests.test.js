@@ -81,7 +81,14 @@ ${baseUrl}high.m3u8
           .toBeGreaterThanOrEqual(20);
         const originalEnd = bufferedEnd(ctx.videoElement);
 
+        const unlocked = waitForPlayerEvent(
+          ctx.player,
+          "variantLockUpdate",
+          (variant) => variant === null,
+        );
         ctx.player.unlockVariant();
+        expect(await unlocked).toBeNull();
+        expect(ctx.player.getLockedVariant()).toBeNull();
         const firstReplacement = await ctx.workerHandle.telemetry.waitFor(
           (event) =>
             event.type === "fetch-start" && event.ruleId === "high-segments",
