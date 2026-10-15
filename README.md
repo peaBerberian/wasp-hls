@@ -20,11 +20,15 @@ to be built on top of it) for the web which:
    for media buffering when APIs are available), to reduce the influence an
    heavy UI can have on playback (and in some situations vice-versa).
 
+I'm [Paul Berberian](https://peaberberian.github.io/), lead developer of the
+[RxPlayer](https://github.com/canalplus/rx-player). Wasp-hls is a separate
+project that I maintain, developed in the open since 2022.
+
 Note that this is still heavily in development. Plans are:
 
 - **Short-term goal**: Answer most web needs expected from an HLS media engine.
 
-  We're almost there with mainly subtitles handling missing
+  The library is almost there, with subtitle support the main missing feature.
 
 - **Long-term goals**: Optimal low-latency HLS handling. In-Rust transmuxing.
 
