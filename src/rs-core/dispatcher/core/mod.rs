@@ -637,7 +637,7 @@ impl Dispatcher {
     ///
     /// This is what this method does: inspect the segment and update the playlist state
     /// accordingly.
-    fn handle_probe_segment(
+    fn on_probe_segment_loaded(
         &mut self,
         probe_segment: ProbeSegmentMetadata,
         requested_media_type: Option<MediaType>,
@@ -710,6 +710,7 @@ impl Dispatcher {
             media_type: considered_media_type,
             data,
         });
+        self.recheck_player_state();
     }
 
     /// Method called once a playlist request ended with success
@@ -1430,8 +1431,7 @@ impl Dispatcher {
                 probe_segment,
                 requested_media_type,
             } => {
-                self.handle_probe_segment(probe_segment, requested_media_type, result);
-                self.recheck_player_state();
+                self.on_probe_segment_loaded(probe_segment, requested_media_type, result);
             }
         }
     }
