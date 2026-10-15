@@ -1125,7 +1125,7 @@ impl Dispatcher {
             if let Some(init) = needed.init_segment() {
                 self.requester
                     .is_requesting_segment(media_type, init.url(), init.byte_range())
-            } else if let Some(media) = needed.media_segment() {
+            } else if let Some((media, _)) = needed.media_segment() {
                 self.requester
                     .is_requesting_segment(media_type, media.url(), media.byte_range())
             } else {
@@ -1186,17 +1186,17 @@ impl Dispatcher {
 
         // Own just the proposed segment metadata so the store can record this choice and
         // check its codecs before a request is scheduled.
-        let init = needed.init_segment().cloned();
-        let media = needed.media_segment().cloned();
-
-        // XXX TODO: why is this needed and why extrapolating from `media` when `init` is right
-        // there?
-        let init_segment_id = media.as_ref().and_then(|media| {
-            pl_store
-                .media_playlist(&playlist_id)
-                .and_then(|playlist| playlist.segment_list().init_for(media))
-                .map(|init| init.id())
-        });
+        // NOTE: As we'll only load one resource at a time, clone init if needed, else clone media
+        let (init, media) = if let Some(init) = needed.init_segment() {
+            (Some(init.clone()), None)
+        } else {
+            (
+                None,
+                needed
+                    .media_segment()
+                    .map(|(media, init_segment_id)| (media.clone(), init_segment_id)),
+            )
+        };
 
         let Some(pl_store) = self.playlist_store.as_mut() else {
             return false;
@@ -1208,7 +1208,6 @@ impl Dispatcher {
             return false;
         }
 
-        // XXX TODO: Is my comment correct for that part?
         // We could target a different variant but rely on the same playlist for the current media
         // type.
         // In that case, we technically could stay in the same variant, we don't need to change it
@@ -1254,7 +1253,7 @@ impl Dispatcher {
                 });
             self.requester
                 .request_init_segment(media_type, init.url(), init.byte_range(), req_id);
-        } else if let Some(media) = media {
+        } else if let Some((media, init_segment_id)) = media {
             if let Some(data) =
                 self.take_probe_segment_data(media_type, media.url(), media.byte_range())
             {
@@ -2285,7 +2284,7 @@ mod tests {
             .most_needed_segment(best, safe, &inventory);
         let needed = selected.needed_segments().unwrap();
         assert_eq!(needed.variant_id(), safe_variant);
-        assert_eq!(needed.media_segment().unwrap().start(), 8.);
+        assert_eq!(needed.media_segment().unwrap().0.start(), 8.);
         assert_eq!(
             needed.init_segment().unwrap().url().get_ref(),
             "https://example.com/safe-init.mp4"
