@@ -6,7 +6,7 @@ use crate::{
         formatters::{
             format_audio_tracks_for_js, format_direct_media_audio_tracks_for_js,
             format_direct_media_variants_info_for_js, format_source_buffer_creation_err_for_js,
-            format_variants_info_for_js, DIRECT_MEDIA_AUDIO_TRACK_ID, DIRECT_MEDIA_VARIANT_ID,
+            format_variants_info_for_js, DIRECT_MEDIA_AUDIO_TRACK_ID,
         },
         jsAnnounceFetchedContent, jsAnnounceTrackUpdate, jsSendOtherError,
         jsSendSegmentParsingError, jsSendSourceBufferCreationError, jsStartObservingPlayback,
@@ -95,9 +95,14 @@ fn ensure_ready_playlists(dispatcher: &mut Dispatcher, wanted_position: f64) -> 
             };
             let variant_id = selection.safe_variant_id;
             // Probe the safe variant before normal segment selection can run.
+            let previous_audio_track = playlist_store.current_audio_track_id();
             let changed_media_types = playlist_store.set_variant(variant_id);
-            // XXX TODO: No variant update?
-            dispatcher.announce_current_audio_track();
+            let audio_track_changed =
+                previous_audio_track != playlist_store.current_audio_track_id();
+            dispatcher.announce_current_variant();
+            if audio_track_changed {
+                dispatcher.announce_current_audio_track();
+            }
             for media_type in changed_media_types {
                 dispatcher.ready_probe_segments.clear_media_type(media_type);
                 dispatcher.follow_selected_media_playlist(media_type);
@@ -205,7 +210,7 @@ fn advance_awaiting_playlist_info_state(dispatcher: &mut Dispatcher) {
         };
 
         jsAnnounceFetchedContent(playlist_kind, variants_info, audio_tracks_info);
-        // XXX TODO: No variant update?
+        dispatcher.announce_current_variant();
         jsAnnounceTrackUpdate(MediaType::Audio, curr_audio_track, is_fixed);
 
         dispatcher.ready_state = PlayerReadyState::AwaitingPlaylistInfo {
@@ -305,13 +310,6 @@ fn start_probe_segment_request(
             probe_segment: probe_segment.clone(),
             requested_media_type,
         });
-    if let Some(store) = dispatcher.playlist_store.as_ref() {
-        let variant_id = store
-            .current_variant_id()
-            .unwrap_or(DIRECT_MEDIA_VARIANT_ID);
-        dispatcher
-            .announce_loading_variant(variant_id, requested_media_type.unwrap_or(MediaType::Video));
-    }
     match &probe_segment.context {
         ProbeSegmentContext::Init { .. } => dispatcher.requester.request_segment_immediately(
             lane_tag,

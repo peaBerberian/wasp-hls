@@ -35,12 +35,6 @@ pub struct Dispatcher {
     /// mostly based on network metrics.
     adaptive_selector: AdaptiveQualitySelector,
 
-    /// Variant last announced when beginning segment loading. Recommendations and playlist
-    /// requests alone do not change this value.
-    /// XXX TODO: It was not needed before, I see no reason why it would be needed now.
-    /// If you see a reason, tell me
-    announced_variant_id: Option<u32>,
-
     /// Store the "Top level Playlist" (structure which describes the currently
     /// loaded content) alongside some state to keep track of the chosen... tracks.
     /// (More technically of variants and media streams).

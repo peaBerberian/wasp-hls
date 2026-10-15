@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Changes
+
+- Changes slightly the semantics of the `variantUpdate` event and `getCurrentVariant` method now that variant selection is internally much more flexible
+
 ### Features
 
 - Add buffer-based adaptive algorithm (BOLA)

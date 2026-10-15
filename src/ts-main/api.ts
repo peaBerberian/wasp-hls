@@ -130,7 +130,11 @@ interface WaspHlsPlayerEvents {
    */
   contentInfoUpdate: ContentInfoUpdatePayload;
   /**
-   * Sent when the current HLS variant loaded by the `WaspHlsPlayer` changed.
+   * Sent when the HLS variant chosen for loading subsequent segments changes.
+   * This can occur before a segment request starts, while the player prepares
+   * the chosen variant. Requests already in progress may finish using the
+   * previous variant, and buffered media from previous variants may continue
+   * playing. `getCurrentVariant()` returns the same choice.
    */
   variantUpdate: VariantInfo | undefined;
   /**
@@ -883,7 +887,10 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
   }
 
   /**
-   * Returns the information on the currently loaded HLS variant.
+   * Returns information on the HLS variant chosen for loading subsequent segments,
+   * as announced through `variantUpdate`. The player may still be preparing this
+   * variant before starting a segment request. Requests already in progress and
+   * buffered media being played may belong to previous variants.
    * Returns `undefined` if unknown or if no content is loaded.
    *
    * @returns {Object|undefined}

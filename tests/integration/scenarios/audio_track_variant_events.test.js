@@ -11,6 +11,128 @@ import {
   TEST_TIMEOUT_MS,
 } from "../utils/request_integration_test_tools.js";
 
+describe("Variant and audio-track event ordering", function () {
+  it.each(["fmp4-player-api", "fmp4-multivariant-no-codecs", "fmp4-alt-audio"])(
+    "announces lists, variant, then audio track at startup (%s)",
+    { timeout: TEST_TIMEOUT_MS },
+    async (scenario) => {
+      const ctx = await createPlayerHarness({ fetchRules: [] });
+      try {
+        const events = [];
+        for (const name of [
+          "variantListUpdate",
+          "audioTrackListUpdate",
+          "variantUpdate",
+          "audioTrackUpdate",
+        ]) {
+          ctx.player.addEventListener(name, () => events.push(name));
+        }
+        ctx.player.addEventListener("audioTrackUpdate", () => {
+          expect(ctx.player.getCurrentVariant()).toBeDefined();
+        });
+        ctx.player.load(getVodScenarioUrl(scenario));
+        await waitForLoadedState(
+          ctx.player,
+          ctx.videoElement,
+          ctx.getLastPlayerError,
+        );
+        expect(events).toEqual([
+          "variantListUpdate",
+          "audioTrackListUpdate",
+          "variantUpdate",
+          "audioTrackUpdate",
+        ]);
+      } finally {
+        ctx.dispose();
+      }
+    },
+  );
+
+  it(
+    "announces track, variant, and lock without waiting for the locked playlist",
+    { timeout: TEST_TIMEOUT_MS },
+    async () => {
+      const baseUrl = new URL(".", getVodScenarioUrl("fmp4-alt-audio"));
+      const alternativeVideoUrl = `${baseUrl}video.m3u8?rendition=locked`;
+      const ctx = await createPlayerHarness({
+        initialBandwidth: 2_500_000,
+        fetchRules: [
+          createTopLevelFetchRule([
+            {
+              type: "response",
+              status: 200,
+              body: `#EXTM3U
+#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="low",NAME="English",LANGUAGE="en",DEFAULT=YES,URI="${baseUrl}audio-en.m3u8"
+#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="high",NAME="English",LANGUAGE="en",URI="${baseUrl}audio-en.m3u8?rendition=high"
+#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="high",NAME="French",LANGUAGE="fr",DEFAULT=YES,URI="${baseUrl}audio-fr.m3u8"
+#EXT-X-STREAM-INF:BANDWIDTH=1900000,AUDIO="low"
+${baseUrl}video.m3u8
+#EXT-X-STREAM-INF:BANDWIDTH=4000000000,AUDIO="high"
+${alternativeVideoUrl}
+`,
+            },
+          ]),
+          {
+            id: "locked-playlist",
+            match: { urlEndsWith: "video.m3u8?rendition=locked" },
+            actions: [{ type: "passthrough", waitForRelease: true }],
+          },
+        ],
+      });
+      try {
+        ctx.player.load(getVodScenarioUrl("fmp4-multivariant-no-codecs"));
+        await waitForLoadedState(
+          ctx.player,
+          ctx.videoElement,
+          ctx.getLastPlayerError,
+        );
+        const initialVariant = ctx.player.getCurrentVariant();
+        const target = ctx.player
+          .getVariantList()
+          .find((variant) => variant.id !== initialVariant.id);
+        const events = [];
+        ctx.player.addEventListener("audioTrackUpdate", () => {
+          events.push("audioTrackUpdate");
+          expect(ctx.player.getCurrentAudioTrack()?.language).toBe("fr");
+          expect(ctx.player.getCurrentVariant()).toEqual(initialVariant);
+        });
+        ctx.player.addEventListener("variantUpdate", () => {
+          events.push("variantUpdate");
+          expect(ctx.player.getCurrentVariant()).toEqual(target);
+        });
+        ctx.player.addEventListener("variantLockUpdate", () => {
+          events.push("variantLockUpdate");
+          expect(ctx.player.getCurrentVariant()).toEqual(target);
+          expect(ctx.player.getLockedVariant()).toEqual(target);
+        });
+        const locked = waitForPlayerEvent(ctx.player, "variantLockUpdate");
+        ctx.player.lockVariant(target.id);
+        await locked;
+        const playlistRequest = await ctx.workerHandle.telemetry.waitFor(
+          (event) =>
+            event.type === "fetch-start" && event.url === alternativeVideoUrl,
+        );
+        expect(events).toEqual([
+          "audioTrackUpdate",
+          "variantUpdate",
+          "variantLockUpdate",
+        ]);
+        expect(
+          ctx.workerHandle.telemetry
+            .getEvents()
+            .some(
+              (event) =>
+                event.requestId === playlistRequest.requestId &&
+                event.type === "fetch-resolve",
+            ),
+        ).toBe(false);
+      } finally {
+        ctx.dispose();
+      }
+    },
+  );
+});
+
 describe("Audio track changes requiring a variant change", function () {
   it.each(["upgrade", "downgrade", "unchanged", "locked"])(
     "requests only the final audio rendition during a compatible track change (%s)",
