@@ -882,10 +882,10 @@ impl Dispatcher {
             return;
         };
 
-        // XXX TODO: Is that an HLS spec requirement?
         if let Some(duration) = pl_store.segment_target_duration() {
-            let mut min_buffer_time = f64::max(3., duration - 1.);
-            min_buffer_time = f64::min(8., min_buffer_time);
+            // TODO: low-latency exceptions and whatnot? Hls.js and shaka also do not seem to care
+            // weirdly enough
+            let min_buffer_time = (duration - 1.).clamp(2., 8.);
             log_debug!("Core: Updating min_buffer_time: {min_buffer_time}");
             self.media_element_ref
                 .update_min_buffer_time(min_buffer_time);
