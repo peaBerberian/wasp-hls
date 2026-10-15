@@ -701,7 +701,7 @@ impl Dispatcher {
             }
         }
 
-        self.refresh_terminal_buffer_state();
+        self.check_end_of_stream_after_playlist_update();
 
         self.ready_probe_segments.insert(ReadyProbeSegment {
             request: probe_segment,
@@ -897,15 +897,14 @@ impl Dispatcher {
             pl_store.uses_program_date_time(),
         );
         sync_media_source_duration(pl_store);
-        self.refresh_terminal_buffer_state();
+        self.check_end_of_stream_after_playlist_update();
         self.recheck_player_state();
     }
 
-    /// XXX TODO: what "became terminal" means? That method may need to be renamed
-    /// If a playlist only became terminal on a later refresh, its last segment
+    /// If a playlist only became finalized on a later refresh, its last segment
     /// may already have been appended. Re-check buffered tails so the
     /// corresponding SourceBuffer can still transition to end-of-stream.
-    fn refresh_terminal_buffer_state(&mut self) {
+    fn check_end_of_stream_after_playlist_update(&mut self) {
         let Some(pl_store) = self.playlist_store.as_ref() else {
             return;
         };
@@ -994,8 +993,6 @@ impl Dispatcher {
         if !was_already_locked {
             self.requester.unlock_segment_requests();
         }
-
-        // XXX TODO: why no gap jumping check? On purpose?
     }
 
     /// Check that all pending initialization and media requests still correspond to the most
