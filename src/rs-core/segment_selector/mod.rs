@@ -326,7 +326,9 @@ impl NextSegmentSelector {
         let should_recompute_starting_position = previous_playlist_id != Some(selected_playlist_id)
             || self.needs_starting_position_recompute;
         self.last_playlist_id = Some(selected_playlist_id);
-        self.needs_starting_position_recompute = false;
+        // A replacement moves the cursor inside the buffer. Recompute before returning to
+        // additions, even when both purposes use the same playlist.
+        self.needs_starting_position_recompute = replacement_segment.is_some();
 
         if should_recompute_starting_position {
             if has_quality_changed {
@@ -941,6 +943,68 @@ mod tests {
                 .start(),
             8.
         );
+    }
+
+    #[test]
+    fn additions_resume_after_buffer_when_replacements_stop_on_the_same_playlist() {
+        let mut text = String::from("#EXTM3U\n#EXT-X-TARGETDURATION:4\n");
+        for number in 0..10 {
+            text.push_str(&format!("#EXTINF:4,\nseg-{number}.m4s\n"));
+        }
+        let TopLevelPlaylist::DirectMedia(playlist) = TopLevelPlaylist::parse(
+            text.as_bytes(),
+            Url::new("https://example.com/media.m3u8".into()),
+        )
+        .unwrap() else {
+            panic!("expected direct media playlist");
+        };
+        let list = playlist.playlist().segment_list();
+        let low = SegmentQualityContext::new(1., test_playlist_id(1));
+        let high = SegmentQualityContext::new(2., test_playlist_id(2));
+        let inventory: Vec<_> = (0..6)
+            .map(|number| {
+                BufferedChunk::new_for_test(number as f64 * 4., (number + 1) as f64 * 4., low)
+            })
+            .collect();
+        let mut selector = NextSegmentSelector::new(0., 40.);
+        let replacement = selector
+            .most_needed_segment(candidate(list, &high), candidate(list, &high), &inventory)
+            .needed_segments
+            .unwrap()
+            .media_segment
+            .unwrap()
+            .0;
+        assert_eq!(replacement.start(), 8.);
+        validate(&mut selector, replacement, &high);
+
+        // Throughput no longer permits replacements, but BOLA still permits high additions.
+        let addition = selector
+            .most_needed_segment(candidate(list, &high), candidate(list, &low), &inventory)
+            .needed_segments
+            .unwrap()
+            .media_segment
+            .unwrap()
+            .0;
+        assert_eq!(addition.start(), 24.);
+        validate(&mut selector, addition, &high);
+        let following = selector
+            .most_needed_segment(candidate(list, &high), candidate(list, &low), &inventory)
+            .needed_segments
+            .unwrap()
+            .media_segment
+            .unwrap()
+            .0;
+        assert_eq!(following.start(), 28.);
+
+        // Recovery may resume replacements without losing the ability to return to additions.
+        let replacement = selector
+            .most_needed_segment(candidate(list, &high), candidate(list, &high), &inventory)
+            .needed_segments
+            .unwrap()
+            .media_segment
+            .unwrap()
+            .0;
+        assert_eq!(replacement.start(), 12.);
     }
 
     #[test]

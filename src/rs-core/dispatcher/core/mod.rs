@@ -33,6 +33,10 @@ use crate::{
 
 mod startup;
 
+// Select slightly before the playhead to tolerate segment timing differences. Pending-request
+// checks must use the same margin, or they can cancel the segment selection just requested.
+const SEGMENT_SELECTION_MARGIN: f64 = 0.2;
+
 impl Dispatcher {
     /// Completely stop playback of the current content if one and free all its associated
     /// resources.
@@ -447,7 +451,7 @@ impl Dispatcher {
                             self.media_element_ref.remove_data(mt, max_pos, f64::MAX),
                         ) {
                             self.segment_selectors
-                                .restart_from_position(wanted_pos - 0.2);
+                                .restart_from_position(wanted_pos - SEGMENT_SELECTION_MARGIN);
                             return;
                         }
                     }
@@ -905,7 +909,8 @@ impl Dispatcher {
         // wanted segments is scheduled - for better priorization
         let was_already_locked = self.requester.lock_segment_requests();
         self.requester.update_base_position(Some(wanted_pos));
-        self.segment_selectors.advance_position(wanted_pos - 0.2);
+        self.segment_selectors
+            .advance_position(wanted_pos - SEGMENT_SELECTION_MARGIN);
 
         self.check_requested_segments_still_needed();
         self.check_segments_to_request();
@@ -950,7 +955,7 @@ impl Dispatcher {
     fn on_seek(&mut self) {
         let wanted_pos = self.media_element_ref.wanted_position();
         self.segment_selectors
-            .restart_from_position(wanted_pos - 0.2);
+            .restart_from_position(wanted_pos - SEGMENT_SELECTION_MARGIN);
 
         let was_already_locked = self.requester.lock_segment_requests();
         self.requester.update_base_position(Some(wanted_pos));
@@ -1007,7 +1012,7 @@ impl Dispatcher {
             .requester
             .pending_segment_time_info(media_type)
             .is_some_and(|time_info| {
-                time_info.end() <= wanted_position
+                time_info.end() <= wanted_position - SEGMENT_SELECTION_MARGIN
                     || time_info.start() >= wanted_position + self.buffer_goal.max(0.)
             })
         {
@@ -1286,7 +1291,9 @@ impl Dispatcher {
         }
         self.segment_selectors
             .get_mut(media_type)
-            .restart_from_position(self.media_element_ref.wanted_position() - 0.2);
+            .restart_from_position(
+                self.media_element_ref.wanted_position() - SEGMENT_SELECTION_MARGIN,
+            );
     }
 
     /// Method called once a segment request ended with success
@@ -1915,6 +1922,67 @@ mod tests {
             assert!(dispatcher
                 .requester
                 .has_segment_request_pending(MediaType::Video));
+        }
+    }
+
+    #[test]
+    fn seek_keeps_the_segment_selected_by_the_look_back_margin() {
+        for (index, survives) in [(18, false), (19, true)] {
+            let mut dispatcher = dispatcher_with_abr_playlists(Some(4), 0.);
+            let playlist_store = dispatcher.playlist_store.as_mut().unwrap();
+            let id = *playlist_store
+                .current_media_playlist_id(MediaType::Video)
+                .unwrap();
+            let mut text = String::from("#EXTM3U\n#EXT-X-TARGETDURATION:2\n");
+            for number in 0..30 {
+                text.push_str(&format!("#EXTINF:2,\nseg-{number}.m4s\n"));
+            }
+            text.push_str("#EXT-X-ENDLIST\n");
+            playlist_store
+                .update_media_playlist(
+                    &id,
+                    text.as_bytes(),
+                    Url::new("https://example.com/low.m3u8".into()),
+                )
+                .unwrap();
+            let segment = playlist_store
+                .media_playlist(&id)
+                .unwrap()
+                .segment_list()
+                .media()[index]
+                .clone();
+            dispatcher
+                .media_element_ref
+                .on_observation(MediaObservation::new(
+                    PlaybackTickReason::Seeking,
+                    40.,
+                    1,
+                    JsTimeRanges::new(vec![0., 22.]),
+                    true,
+                    false,
+                    true,
+                    60.,
+                    None,
+                    Some(JsTimeRanges::new(vec![0., 22.])),
+                ));
+            dispatcher.segment_selectors.restart_from_position(39.8);
+            dispatcher.requester.lock_segment_requests();
+            dispatcher
+                .requester
+                .request_media_segment(MediaType::Video, &segment, 123);
+            assert_eq!(
+                dispatcher.check_requested_segment_still_needed(MediaType::Video),
+                survives
+            );
+            if survives {
+                // Repeated ticks must not keep cancelling and reselecting the 38–40 segment.
+                assert!(dispatcher.check_requested_segment_still_needed(MediaType::Video));
+                assert!(dispatcher.requester.is_requesting_segment(
+                    MediaType::Video,
+                    segment.url(),
+                    segment.byte_range(),
+                ));
+            }
         }
     }
 
