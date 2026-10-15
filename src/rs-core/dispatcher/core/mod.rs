@@ -556,8 +556,7 @@ impl Dispatcher {
         let was_already_locked = self.requester.lock_segment_requests();
         let mut scheduled_segment = false;
         for media_type in [MediaType::Video, MediaType::Audio] {
-            scheduled_segment |=
-                self.handle_adaptive_selection_for_type(media_type, recommendation);
+            scheduled_segment |= self.schedule_next_segment_for_type(media_type, recommendation);
         }
 
         // XXX TODO: I think we could announce the loading variant regardless?
@@ -1107,8 +1106,18 @@ impl Dispatcher {
         return still_needed;
     }
 
-    /// XXX TODO: Is that the right name? Also describe function's behavior with a comment
-    fn handle_adaptive_selection_for_type(
+    /// Select and schedule the next initialization or media segment for `media_type`, using
+    /// the variant recommendation and current buffer inventory. Skip selection if a segment
+    /// request is already pending for this type.
+    ///
+    /// Update the active variant when needed and follow the playlist chosen for refreshing,
+    /// which may differ from the playlist supplying the selected segment. Playlist tracking
+    /// can change even when no segment is scheduled.
+    ///
+    /// Return `true` if a segment request is scheduled or previously fetched probe data is
+    /// passed to the segment-loaded handler instead. Return `false` if no segment is handled,
+    /// including when selection or codec readiness prevents loading.
+    fn schedule_next_segment_for_type(
         &mut self,
         media_type: MediaType,
         recommendation: Option<AdaptiveVariantSelection>,
@@ -1760,7 +1769,7 @@ mod tests {
         dispatcher.playlist_store = Some(store);
         dispatcher.requester.lock_segment_requests();
 
-        dispatcher.handle_adaptive_selection_for_type(MediaType::Video, recommendation);
+        dispatcher.schedule_next_segment_for_type(MediaType::Video, recommendation);
         assert_eq!(
             dispatcher
                 .playlist_store
@@ -1769,7 +1778,7 @@ mod tests {
                 .current_variant_id(),
             Some(low)
         );
-        dispatcher.handle_adaptive_selection_for_type(MediaType::Audio, recommendation);
+        dispatcher.schedule_next_segment_for_type(MediaType::Audio, recommendation);
         assert_eq!(
             dispatcher
                 .playlist_store
@@ -1974,7 +1983,7 @@ mod tests {
             dispatcher
                 .requester
                 .request_media_segment(MediaType::Audio, &old_audio, 123);
-            dispatcher.handle_adaptive_selection_for_type(
+            dispatcher.schedule_next_segment_for_type(
                 MediaType::Video,
                 Some(crate::adaptive::AdaptiveVariantSelection {
                     best_variant_id: variant_ids[0],
@@ -2067,7 +2076,7 @@ mod tests {
             crate::playlist_store::LockVariantResponse::VariantLocked { .. }
         ));
         // A previously computed recommendation must not bypass a newer lock.
-        dispatcher.handle_adaptive_selection_for_type(MediaType::Video, Some(recommendation));
+        dispatcher.schedule_next_segment_for_type(MediaType::Video, Some(recommendation));
         assert!(!dispatcher
             .requester
             .has_segment_request_pending(MediaType::Video));
@@ -2092,7 +2101,7 @@ mod tests {
             .as_ref()
             .unwrap()
             .current_variant_id();
-        dispatcher.handle_adaptive_selection_for_type(MediaType::Video, None);
+        dispatcher.schedule_next_segment_for_type(MediaType::Video, None);
         assert!(!dispatcher
             .requester
             .has_segment_request_pending(MediaType::Video));
@@ -2144,7 +2153,7 @@ mod tests {
         // This test covers request selection with the variant already announced.
         dispatcher.announced_variant_id = Some(recommendation.best_variant_id);
         dispatcher.requester.lock_segment_requests();
-        dispatcher.handle_adaptive_selection_for_type(MediaType::Video, Some(recommendation));
+        dispatcher.schedule_next_segment_for_type(MediaType::Video, Some(recommendation));
         assert!(dispatcher
             .requester
             .is_requesting_segment(MediaType::Video, &expected_url, None));
