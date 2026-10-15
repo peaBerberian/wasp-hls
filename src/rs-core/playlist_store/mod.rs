@@ -251,9 +251,9 @@ impl PlaylistStore {
                 self.curr_multivariant_media_info(media_type)
                     .map(|info| info.mime_type.clone())
                     .or_else(|| {
-                        self.current_media_playlist(media_type).map(|playlist| {
-                            playlist.mime_type(media_type).unwrap_or("").to_string()
-                        })
+                        self.current_media_playlist(media_type)
+                            .and_then(|playlist| playlist.mime_type(media_type))
+                            .map(str::to_string)
                     })
             }
             TopLevelPlaylist::DirectMedia(playlist) => playlist
@@ -303,7 +303,8 @@ impl PlaylistStore {
                     .into_iter()
                     .filter(|media_type| {
                         self.has_distinct_media_type(*media_type)
-                            && self.current_codec(*media_type).is_none()
+                            && (self.current_codec(*media_type).is_none()
+                                || self.current_mime_type(*media_type).is_none())
                     })
                     .map(|media_type| {
                         self.next_media_playlist_probe(media_type, wanted_position)
@@ -923,6 +924,8 @@ impl PlaylistStore {
         playlist: &MediaPlaylist,
         wanted_position: f64,
     ) -> Option<ProbeSegmentMetadata> {
+        // TODO: Choose probes through normal segment selection so buffered coverage is
+        // considered too. The first-segment fallback below may be outside the wanted window.
         let media_segment = playlist
             .segment_list()
             .segment_from_pos(wanted_position)
@@ -2027,6 +2030,37 @@ video.m3u8
             store.startup_status(0.),
             Ok(StartupStatus::AwaitingPlaylists)
         ));
+    }
+
+    #[test]
+    fn startup_probes_unknown_container_even_with_manifest_codecs() {
+        let playlist = TopLevelPlaylist::parse(
+            b"#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1000,CODECS=\"avc1.42E01E\"\nvideo.m3u8\n",
+            parse_url("https://example.com/master.m3u8"),
+        )
+        .unwrap();
+        let mut store = playlist_store_with_variant(playlist, 10_000.);
+        let video_id = *store.current_media_playlist_id(MediaType::Video).unwrap();
+        store
+            .update_media_playlist(
+                &video_id,
+                b"#EXTM3U\n#EXT-X-TARGETDURATION:4\n#EXTINF:4,\nsegment\n#EXT-X-ENDLIST\n"
+                    .as_slice(),
+                parse_url("https://example.com/video.m3u8"),
+            )
+            .unwrap();
+
+        assert_eq!(
+            store.current_codec(MediaType::Video).as_deref(),
+            Some("avc1.42E01E")
+        );
+        assert!(store.current_mime_type(MediaType::Video).is_none());
+        let Ok(StartupStatus::NeedsProbes(probes)) = store.startup_status(0.) else {
+            panic!("Unknown container should require inspection");
+        };
+        assert_eq!(probes.len(), 1);
+        assert_eq!(probes[0].1, Some(MediaType::Video));
+        assert_eq!(probes[0].0.url, parse_url("https://example.com/segment"));
     }
 
     #[test]

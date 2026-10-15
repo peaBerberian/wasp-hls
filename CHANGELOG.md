@@ -12,6 +12,7 @@
 - Don't needlessly send `audioTrackUpdate` if the audio track did not change on a `lockVariant` call
 - Be resilient to non-UTF-8 HLS playlists
 - Throw `MultivariantPlaylistInvalidValue` error code when a MultiVariant playlist refers to an AUDIO group which does not exist, as per the HLS specification
+- Known codecs but unknown mime-type now trigger segment probing instead of passing an empty MIME type to SourceBuffers
 
 ### Other
 
@@ -20,6 +21,7 @@
 - Optimal fast-quality-switching coordination: continue in additive mode until the playlist linked to segment replacements is fetched
 - Multiple primary media playlists sharing the same URL yet associated to multiple variants are now considered the same resource to optimize some playlist management logic (e.g. playlist refresh)
 - Switch quality faster if previous awaited segment for that type (audio/video) was in a backoff or waiting (due to low priority) phase
+- Optimization: "Probe segments" can now be "consumed" later than at startup if they coincide with the next segment needed
 - WebAssembly compilation now always target the initial WebAssembly browser release (a.k.a. "MVP") to maximize support
 - Embedded WebAssembly is now embedded through a Base64 string instead of number array for initialization performance reasons
 - tests: Begin automatically checking for performance regressions / improvements

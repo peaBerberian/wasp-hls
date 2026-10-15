@@ -1,9 +1,8 @@
 use super::super::segment_request_contexts::PendingSegmentRequest;
 use super::{
-    sync_media_source_duration, utils, Dispatcher, MediaPlaylistUpdateMode, PlayerReadyState,
-    ReadyProbeSegment,
+    sync_media_source_duration, utils, Dispatcher, JsMemoryBlob, MediaPlaylistUpdateMode,
+    PlayerReadyState,
 };
-use crate::media_element::SegmentPushMetadata;
 use crate::playlist_store::ProbeSegmentMetadata;
 use crate::{
     bindings::{
@@ -20,6 +19,7 @@ use crate::{
     playlist_store::{ProbeSegmentContext, StartupStatus},
     requester::{PlaylistFileType, RequestLaneTag},
 };
+use crate::{parser::ByteRange, utils::url::Url};
 
 impl Dispatcher {
     /// Look if progress can be made in playing the current content by checking the full state
@@ -39,7 +39,28 @@ impl Dispatcher {
     }
 
     pub(super) fn ready_to_load_segments(&mut self) -> bool {
-        ensure_ready_playlists(self, self.media_element_ref.wanted_position())
+        // Earlier states discover metadata and set up SourceBuffers through
+        // recheck_player_state.
+        matches!(
+            self.ready_state,
+            PlayerReadyState::AwaitingSegments | PlayerReadyState::Playing
+        ) && ensure_ready_playlists(self, self.media_element_ref.wanted_position())
+    }
+
+    /// Reuse a completed probe when normal selection needs those exact bytes. Taking
+    /// it first also prevents segment-loaded callbacks from reusing it recursively.
+    /// A probe which no longer matches selection releases its resource here.
+    pub(super) fn take_probe_segment_data(
+        &mut self,
+        media_type: MediaType,
+        url: &Url,
+        byte_range: Option<&ByteRange>,
+    ) -> Option<JsMemoryBlob> {
+        let probe = self.ready_probe_segments.take(media_type)?;
+        if probe.request.url != *url || probe.request.byte_range.as_ref() != byte_range {
+            return None;
+        }
+        Some(probe.data)
     }
 }
 
@@ -241,16 +262,24 @@ fn advance_awaiting_media_source_state(dispatcher: &mut Dispatcher) {
         }
     };
 
+    let wanted_start = {
+        let Some(playlist_store) = dispatcher.playlist_store.as_ref() else {
+            return;
+        };
+        utils::get_initial_position(playlist_store, starting_pos)
+    };
+    // Selection may have changed while waiting for the MediaSource. Discover any
+    // newly required metadata before creating the buffers for that selection.
+    if !ensure_ready_playlists(dispatcher, wanted_start) {
+        return;
+    }
     let Some(playlist_store) = dispatcher.playlist_store.as_ref() else {
         return;
     };
-
-    let wanted_start = utils::get_initial_position(playlist_store, starting_pos);
     if wanted_start > 0. {
         dispatcher.media_element_ref.seek(wanted_start);
     }
 
-    dispatcher.ready_state = PlayerReadyState::AwaitingSegments;
     sync_media_source_duration(playlist_store);
 
     if let Some(Err(e)) = init_source_buffer(dispatcher, MediaType::Audio) {
@@ -265,8 +294,12 @@ fn advance_awaiting_media_source_state(dispatcher: &mut Dispatcher) {
         dispatcher.stop_current_content();
         return;
     }
+    dispatcher
+        .segment_selectors
+        .restart_from_position(wanted_start);
+    dispatcher.ready_state = PlayerReadyState::AwaitingSegments;
     jsStartObservingPlayback();
-    consume_probe_segments(dispatcher);
+    dispatcher.check_segments_to_request();
 }
 
 fn start_probe_segment_request(
@@ -340,62 +373,4 @@ fn init_source_buffer(
             .media_element_ref
             .create_source_buffer(media_type, &mime_type, &codec),
     )
-}
-
-/// In certain conditions, a "probe segment" may be fetched initially to gather more
-/// metadata on the content to play.
-///
-/// As it is usable data and should anyway correspond to the initial segment to load, this
-/// method allows to both reset that state and to push it to the buffers.
-fn consume_probe_segments(dispatcher: &mut Dispatcher) {
-    for media_type in [MediaType::Audio, MediaType::Video] {
-        let Some(ReadyProbeSegment {
-            request,
-            media_type,
-            data,
-        }) = dispatcher.ready_probe_segments.take(media_type)
-        else {
-            continue;
-        };
-
-        match request.context {
-            ProbeSegmentContext::Init { id } => {
-                dispatcher.on_init_segment_loaded(data, media_type, id);
-            }
-            ProbeSegmentContext::Media {
-                sequence,
-                discontinuity_sequence,
-                time_info,
-            } => {
-                let Some((segment_list, context)) = dispatcher
-                    .playlist_store
-                    .as_ref()
-                    .and_then(|store| store.loaded_media_playlist_segment_info(media_type))
-                else {
-                    jsSendOtherError(
-                        true,
-                        OtherErrorCode::Unknown,
-                        "No media context could be resolved after probing",
-                    );
-                    dispatcher.stop_current_content();
-                    return;
-                };
-                let init_segment_id = segment_list
-                    .media()
-                    .iter()
-                    .find(|seg| seg.sequence() == sequence)
-                    .and_then(|seg| segment_list.init_for(seg))
-                    .map(|init| init.id());
-                dispatcher.on_media_segment_loaded(SegmentPushMetadata {
-                    data,
-                    media_type,
-                    time_info,
-                    context,
-                    init_segment_id,
-                    sequence_number: sequence,
-                    discontinuity_sequence,
-                });
-            }
-        }
-    }
 }
