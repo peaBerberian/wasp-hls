@@ -103,8 +103,6 @@ impl Dispatcher {
                         if self.media_element_ref.has_buffer(media_type)
                             && !changed_media_types.contains(&media_type)
                         {
-                            // XXX TODO: flushing the buffer I get but why aborting a segment
-                            // request needed at all here (check thoroughly)?
                             self.abort_segment_requests_with_type(media_type);
                             self.flush_media_buffer(media_type);
                         }
@@ -989,12 +987,13 @@ impl Dispatcher {
         self.segment_selectors
             .restart_from_position(wanted_pos - 0.2);
 
-        // XXX TODO: why no `was_already_locked` trick here? Was it done on purpose?
-        self.requester.lock_segment_requests();
+        let was_already_locked = self.requester.lock_segment_requests();
         self.requester.update_base_position(Some(wanted_pos));
         self.check_requested_segments_still_needed();
         self.check_segments_to_request();
-        self.requester.unlock_segment_requests();
+        if !was_already_locked {
+            self.requester.unlock_segment_requests();
+        }
 
         // XXX TODO: why no gap jumping check? On purpose?
     }
