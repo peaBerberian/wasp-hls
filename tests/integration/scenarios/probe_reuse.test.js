@@ -1,8 +1,7 @@
 import { expect, it } from "vitest";
 import EmbeddedWasm from "../../../build/embedded/wasm.js";
-import {
+import initializeWasm, {
   Dispatcher,
-  initSync,
   JsTimeRanges,
   MediaSourceReadyState,
   MediaType,
@@ -113,7 +112,7 @@ it.each([
       },
     );
     const wasm = await (await fetch(EmbeddedWasm)).arrayBuffer();
-    initSync(new WebAssembly.Module(wasm), bindings);
+    await initializeWasm(wasm, bindings);
     const dispatcher = new Dispatcher(1_000_000);
 
     function finishBufferOperations() {

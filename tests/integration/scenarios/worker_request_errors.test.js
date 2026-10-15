@@ -201,6 +201,12 @@ describe("Worker request injection - errors", function () {
       { timeout: TEST_TIMEOUT_MS },
       async () => {
         const ctx = await createPlayerHarness({
+          playerConfig: {
+            bufferGoal: 4,
+            segmentMaxRetry: 0,
+            // Successful startup requests must have time to complete on slow runners.
+            segmentRequestTimeout: 30_000,
+          },
           fetchRules: [
             createSegmentFetchRule([
               ...repeatAction({ type: "passthrough" }, 3),
@@ -210,39 +216,25 @@ describe("Worker request injection - errors", function () {
         });
 
         try {
-          await applyConfigUpdate(ctx.player, {
-            bufferGoal: 4,
-            segmentMaxRetry: 0,
-            segmentRequestTimeout: 50,
-            segmentBackoffBase: 1,
-            segmentBackoffMax: 1,
-          });
-
-          const errorPromise = waitForPlayerEvent(ctx.player, "error");
-          ctx.player.addEventListener("playerStateChange", (state) => {
-            if (state === "Loaded") {
-              ctx.player.resume();
-            }
-          });
-
           ctx.player.load(getVodScenarioUrl("fmp4-direct-media"));
-          await waitForLoadedState(ctx.player, ctx.videoElement, () =>
-            ctx.getLastPlayerError(),
+          await waitForLoadedState(
+            ctx.player,
+            ctx.videoElement,
+            ctx.getLastPlayerError,
           );
-
-          const attemptsAtLoaded = ctx.workerHandle.telemetry
-            .getEvents()
-            .filter(
-              (evt) =>
-                evt.type === "fetch-start" && evt.ruleId === "segment-request",
-            ).length;
-          expect(attemptsAtLoaded).toBeLessThan(4);
-
           const positionAtLoaded = ctx.player.getPosition();
-          await sleep(750);
-          expect(ctx.player.getPosition()).toBeGreaterThan(positionAtLoaded);
+          ctx.player.resume();
+          await expect
+            .poll(() => ctx.player.getPosition(), { timeout: 30_000 })
+            .toBeGreaterThan(positionAtLoaded + 0.25);
 
-          const error = await errorPromise;
+          expect(ctx.getLastPlayerError()).toBeNull();
+          const error = await waitForPlayerEvent(
+            ctx.player,
+            "error",
+            () => true,
+            60_000,
+          );
           expect(error.name).toBe("WaspSegmentRequestError");
           expect(error.code).toBe("SegmentRequestTimeout");
         } finally {

@@ -43,7 +43,14 @@ ${baseUrl}high.m3u8
           ]),
           ...["low", "high"].map((quality) => ({
             match: { urlEndsWith: `${quality}.m3u8` },
-            actions: [{ type: "response", body: mediaPlaylist(quality) }],
+            actions: [
+              {
+                type: "response",
+                body: mediaPlaylist(quality),
+                // Keep startup from making adaptive requests before the main thread locks low.
+                waitForRelease: quality === "low",
+              },
+            ],
           })),
           {
             id: "low-segments",
@@ -66,7 +73,18 @@ ${baseUrl}high.m3u8
         ctx.player.load(masterUrl);
         const lowVariant = await initial;
         expect(lowVariant.bandwidth).toBe(1_000_000);
+        const lowPlaylistRequest = await ctx.workerHandle.telemetry.waitFor(
+          (event) =>
+            event.type === "fetch-start" && event.url === `${baseUrl}low.m3u8`,
+        );
+        const lockedLow = waitForPlayerEvent(
+          ctx.player,
+          "variantLockUpdate",
+          (variant) => variant?.id === lowVariant.id,
+        );
         ctx.player.lockVariant(lowVariant.id);
+        await lockedLow;
+        ctx.workerHandle.telemetry.releaseFetch(lowPlaylistRequest.requestId);
         await waitForLoadedState(
           ctx.player,
           ctx.videoElement,
