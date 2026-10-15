@@ -71,9 +71,6 @@ impl Dispatcher {
                     changed_media_types,
                     audio_track_change,
                 } => {
-                    // XXX TODO: Why? This is the only call site of a pretty specific API
-                    self.playlist_refresh_manager.clear_refresh_targets();
-
                     if let AudioTrackChange::Changed(track_id) = audio_track_change {
                         let is_audio_track_selected = pl_store.fixed_audio_track_id().is_some();
                         // XXX TODO: In the API, which ordering should audioTrackUpdate have
@@ -88,8 +85,6 @@ impl Dispatcher {
                         self.ready_probe_segments.clear_media_type(media_type);
                         self.abort_segment_requests_with_type(media_type);
                         self.flush_media_buffer(media_type);
-                        // XXX TODO: why not following the playlist here?
-                        self.request_selected_media_playlist_if_needed(media_type);
                     }
 
                     // Now iterate on unchanged media types which are in the buffer.
@@ -149,19 +144,7 @@ impl Dispatcher {
         else {
             return;
         };
-        let Some(pl_store) = self.playlist_store.as_ref() else {
-            return;
-        };
-        let Some(url) = pl_store.media_playlist_url(&playlist_id) else {
-            return;
-        };
-        let playlist_type = PlaylistFileType::MediaPlaylist {
-            id: playlist_id,
-            media_type,
-        };
-        if !self.requester.is_requesting_playlist(url, &playlist_type) {
-            self.requester.fetch_playlist(url.clone(), playlist_type);
-        }
+        self.follow_media_playlist(media_type, playlist_id);
     }
 
     /// Method to call once a timer for retrying a request, started with the jsTimer JavaScript
@@ -832,14 +815,6 @@ impl Dispatcher {
                             .direct_media_playlist()
                             .map(|(id, playlist)| (*id, playlist.refresh_interval()));
 
-                        for media_type in [MediaType::Audio, MediaType::Video] {
-                            if let Some(playlist_id) =
-                                pl_store.current_media_playlist_id(media_type)
-                            {
-                                self.playlist_refresh_manager
-                                    .follow(media_type, *playlist_id);
-                            }
-                        }
                         self.playlist_store = Some(pl_store);
                         if let Some((playlist_id, refresh_interval)) = direct_media_refresh {
                             self.process_parsed_media_playlist(playlist_id, refresh_interval);
@@ -1148,33 +1123,30 @@ impl Dispatcher {
                 self.media_element_ref.inventory(media_type),
             );
         let refresh_id = selected.playlist_to_refresh();
-        let Some(needed) = selected.needed_segments() else {
-            // XXX TODO: Is there any reason why we just don't follow immediately for both
-            // cases?
-            self.follow_media_playlist(media_type, refresh_id);
+        // Own the proposed metadata before following, which may request another playlist.
+        // Only one resource is loaded at a time: initialization first, otherwise media.
+        let needed = selected.needed_segments().map(|needed| {
+            let (init, media) = if let Some(init) = needed.init_segment() {
+                (Some(init.clone()), None)
+            } else {
+                (
+                    None,
+                    needed
+                        .media_segment()
+                        .map(|(media, init_segment_id)| (media.clone(), init_segment_id)),
+                )
+            };
+            (needed.variant_id(), init, media)
+        });
+        self.follow_media_playlist(media_type, refresh_id);
+        let Some((variant_id, init, media)) = needed else {
             self.ready_probe_segments.clear_media_type(media_type);
             return false;
         };
-
-        let variant_id = needed.variant_id();
         let (playlist_id, quality_context) = if variant_id == addition_variant_id {
             (addition_playlist_id, addition_context)
         } else {
             (replacement_playlist_id, replacement_context)
-        };
-
-        // Own just the proposed segment metadata so the store can record this choice and
-        // check its codecs before a request is scheduled.
-        // NOTE: As we'll only load one resource at a time, clone init if needed, else clone media
-        let (init, media) = if let Some(init) = needed.init_segment() {
-            (Some(init.clone()), None)
-        } else {
-            (
-                None,
-                needed
-                    .media_segment()
-                    .map(|(media, init_segment_id)| (media.clone(), init_segment_id)),
-            )
         };
 
         let Some(pl_store) = self.playlist_store.as_mut() else {
@@ -1201,16 +1173,13 @@ impl Dispatcher {
                 if recommendation.is_some_and(|selection| selection.urgent) {
                     self.abort_segment_requests_with_type(changed_type);
                 }
-                self.follow_selected_media_playlist(changed_type);
-                self.request_selected_media_playlist_if_needed(changed_type);
+                // Selection already chose this type's refresh target. It may differ from
+                // the playlist supplying the segment; only retarget the other type here.
+                if changed_type != media_type {
+                    self.follow_selected_media_playlist(changed_type);
+                }
             }
         }
-
-        // NOTE: The "active variant" (which is the one enabled in the `PlaylistStore` that we're
-        // currently loading segments from) might be different from the "refreshed playlist".
-        // This is based on segment-selection heuristics (which may e.g. indicate that we can load a
-        // segment of a quality A while waiting for the request of a playlist B).
-        self.follow_media_playlist(media_type, refresh_id);
 
         if !self.ready_to_load_segments() {
             return false;
@@ -1280,7 +1249,9 @@ impl Dispatcher {
     /// Wait until its next reload time, or request it now if that time has passed.
     /// Finished playlists and requests already in progress need no new request.
     fn follow_media_playlist(&mut self, media_type: MediaType, id: MediaPlaylistPermanentId) {
-        self.playlist_refresh_manager.follow(media_type, id);
+        if !self.playlist_refresh_manager.follow(media_type, id) {
+            return;
+        }
         let Some(pl_store) = self.playlist_store.as_ref() else {
             return;
         };
@@ -1288,10 +1259,7 @@ impl Dispatcher {
             .media_playlist(&id)
             .is_none_or(|playlist| playlist.may_be_refreshed());
 
-        // XXX TODO: This looks to me like internal matters for the `playlist_refresh_manager`... I
-        // I would prefer that `follow` by itself implies `wait_for_refresh`. Why is it not the
-        // case?
-        if !needs_reload || self.playlist_refresh_manager.wait_for_refresh(&id) {
+        if !needs_reload {
             return;
         }
         let Some(url) = pl_store.media_playlist_url(&id) else {
@@ -1322,7 +1290,6 @@ impl Dispatcher {
             self.follow_selected_media_playlist(media_type);
             self.abort_segment_requests_with_type(media_type);
             self.flush_media_buffer(media_type);
-            self.request_selected_media_playlist_if_needed(media_type);
         }
 
         self.check_segments_to_request();
@@ -1338,28 +1305,6 @@ impl Dispatcher {
         self.segment_selectors
             .get_mut(media_type)
             .restart_from_position(self.media_element_ref.wanted_position() - 0.2);
-    }
-
-    fn request_selected_media_playlist_if_needed(&mut self, media_type: MediaType) {
-        // XXX TODO: Don't we want to also follow in that method? It would make more sense
-        let playlist_to_fetch = self.playlist_store.as_ref().and_then(|pl_store| {
-            if pl_store.has_loaded_media_playlist(media_type) {
-                None
-            } else {
-                let id = *pl_store.current_media_playlist_id(media_type)?;
-                let url = pl_store.media_playlist_url(&id)?.clone();
-                Some((id, url))
-            }
-        });
-
-        if let Some((id, url)) = playlist_to_fetch {
-            use PlaylistFileType::*;
-            log_debug!("Core: Media changed, requesting its media playlist");
-            let playlist_type = MediaPlaylist { id, media_type };
-            if !self.requester.is_requesting_playlist(&url, &playlist_type) {
-                self.requester.fetch_playlist(url, playlist_type);
-            }
-        }
     }
 
     /// Method called once a segment request ended with success

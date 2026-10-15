@@ -14,7 +14,7 @@ use crate::{
     },
     media_element::SourceBufferCreationError,
     playlist_store::{ProbeSegmentContext, StartupStatus},
-    requester::{PlaylistFileType, RequestLaneTag},
+    requester::RequestLaneTag,
 };
 use crate::{parser::ByteRange, utils::url::Url};
 
@@ -101,7 +101,6 @@ fn ensure_ready_playlists(dispatcher: &mut Dispatcher, wanted_position: f64) -> 
             for media_type in changed_media_types {
                 dispatcher.ready_probe_segments.clear_media_type(media_type);
                 dispatcher.follow_selected_media_playlist(media_type);
-                dispatcher.request_selected_media_playlist_if_needed(media_type);
             }
             dispatcher.check_segments_to_request();
             false
@@ -149,31 +148,8 @@ fn advance_awaiting_playlist_info_state(dispatcher: &mut Dispatcher) {
         utils::get_initial_position(playlist_store, starting_position)
     };
 
-    // Start fetching initial media playlists if needed
-    {
-        let Some(playlist_store) = dispatcher.playlist_store.as_mut() else {
-            return;
-        };
-        for mt in [MediaType::Video, MediaType::Audio] {
-            if playlist_store.has_loaded_media_playlist(mt) {
-                continue; // Already fetched
-            }
-            if let Some(id) = playlist_store.current_media_playlist_id(mt) {
-                if let Some(url) = playlist_store.media_playlist_url(id) {
-                    let url = url.clone();
-                    let playlist_type = PlaylistFileType::MediaPlaylist {
-                        id: *id,
-                        media_type: mt,
-                    };
-                    if !dispatcher
-                        .requester
-                        .is_requesting_playlist(&url, &playlist_type)
-                    {
-                        dispatcher.requester.fetch_playlist(url, playlist_type);
-                    }
-                }
-            }
-        }
+    for media_type in [MediaType::Video, MediaType::Audio] {
+        dispatcher.follow_selected_media_playlist(media_type);
     }
 
     if !lifecycle_announced {
