@@ -288,36 +288,30 @@ describe("Generated VoD content - playback", function () {
     );
   });
 
-  it(
-    "sends ended event when stream ends",
-    { timeout: VOD_TEST_TIMEOUT_MS },
-    async () => {
-      ctx.player.addEventListener("playerStateChange", (state) => {
-        if (state === "Loaded") {
-          ctx.player.resume();
-        }
-      });
-      ctx.player.load(getVodScenarioUrl("fmp4-player-api"), {
-        startingPosition: { startType: "FromEnd", position: 2 },
-      });
-      await waitForLoadedState(
-        ctx.player,
-        ctx.videoElement,
-        () => ctx.lastPlayerError,
-      );
-      let receivedEndedEvent = 0;
-      ctx.player.addEventListener("ended", () => {
-        receivedEndedEvent++;
-      });
-      await checkAfterSleepWithBackoff(
-        { minTimeMs: 2300, maxTimeMs: 15000, stepMs: 500 },
-        () => {
-          expect(ctx.player.isEnded()).toEqual(true);
-          expect(receivedEndedEvent).toEqual(1);
-        },
-      );
-    },
-  );
+  it("sends ended event when stream ends", { timeout: 180_000 }, async () => {
+    let receivedEndedEvent = 0;
+    ctx.player.addEventListener("ended", () => {
+      receivedEndedEvent++;
+    });
+    ctx.player.load(getVodScenarioUrl("fmp4-player-api"), {
+      startingPosition: { startType: "FromEnd", position: 2 },
+    });
+    await waitForLoadedState(
+      ctx.player,
+      ctx.videoElement,
+      () => ctx.lastPlayerError,
+    );
+    // Separate loading from playback so slow startup does not consume the end-event wait.
+    ctx.player.resume();
+    await checkAfterSleepWithBackoff(
+      { minTimeMs: 100, maxTimeMs: 30000, stepMs: 500 },
+      () => {
+        expect(ctx.videoElement.ended).toEqual(true);
+        expect(ctx.player.isEnded()).toEqual(true);
+        expect(receivedEndedEvent).toEqual(1);
+      },
+    );
+  });
 
   it(
     "uses media time as playlist time when EXT-X-PROGRAM-DATE-TIME is absent",
