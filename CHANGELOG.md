@@ -17,6 +17,7 @@
 - Be resilient to non-UTF-8 HLS playlists
 - Throw `MultivariantPlaylistInvalidValue` error code when a MultiVariant playlist refers to an AUDIO group which does not exist, as per the HLS specification
 - Known codecs but unknown mime-type now trigger segment probing instead of passing an empty MIME type to SourceBuffers
+- Don't be stuck rebuffering if the buffer goal is lower than what our internal `min_buffer_time`, one of the threshold controlling rebuffering
 
 ### Other
 

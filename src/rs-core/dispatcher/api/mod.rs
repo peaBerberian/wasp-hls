@@ -109,6 +109,7 @@ impl Dispatcher {
     /// This can for example be used to limit memory and network bandwidth usage.
     pub fn set_buffer_goal(&mut self, buffer_goal: f64) {
         self.buffer_goal = buffer_goal;
+        self.update_min_buffer_time();
         self.segment_selectors.update_buffer_goal(buffer_goal);
         self.check_requested_segments_still_needed();
         self.check_segments_to_request();
