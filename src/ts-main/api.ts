@@ -50,6 +50,7 @@ import {
   onRemoveBufferMessage,
   onSeekMessage,
   onStartPlaybackObservationMessage,
+  onRequestPlaybackObservationMessage,
   onStopPlaybackObservationMessage,
   onUpdateMediaSourceDurationMessage,
   onUpdatePlaybackRateMessage,
@@ -1209,6 +1210,9 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
           break;
         case WorkerMessageType.RemoveBuffer:
           onRemoveBufferMessage(data, this.__contentMetadata__, worker);
+          break;
+        case WorkerMessageType.RequestPlaybackObservation:
+          onRequestPlaybackObservationMessage(data, this.__contentMetadata__);
           break;
         case WorkerMessageType.StartPlaybackObservation:
           onStartPlaybackObservationMessage(

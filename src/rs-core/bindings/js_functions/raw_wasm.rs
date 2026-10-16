@@ -245,6 +245,8 @@ unsafe extern "C" {
     pub(super) fn __js_func__set_playback_rate(playback_rate: f64);
     /// Start periodic playback observation callbacks.
     pub(super) fn __js_func__start_observing_playback();
+    /// Request a fresh playback observation after a buffer update.
+    pub(super) fn __js_func__request_playback_observation();
     /// Notify the host that rebuffering started.
     pub(super) fn __js_func__start_rebuffering();
     /// Stop periodic playback observation callbacks.

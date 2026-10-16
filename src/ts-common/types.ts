@@ -100,6 +100,7 @@ export type WorkerMessage =
   | AreTypesSupportedWorkerMessage
 
   // Playback conditions
+  | RequestPlaybackObservationWorkerMessage
   | StartPlaybackObservationWorkerMessage
   | StopPlaybackObservationWorkerMessage
   | RebufferingStartedWorkerMessage
@@ -135,6 +136,7 @@ export const enum WorkerMessageType {
   CreateSourceBuffer = "creat-sb",
   AppendBuffer = "push-sb",
   RemoveBuffer = "rem-sb",
+  RequestPlaybackObservation = "request-obs",
   StartPlaybackObservation = "start-obs",
   StopPlaybackObservation = "stop-obs",
   EndOfStream = "eos",
@@ -761,6 +763,12 @@ export interface RemoveBufferWorkerMessage {
     /** Range end, in seconds, of the data that should be removed. */
     end: number;
   };
+}
+
+/** Ask for one fresh observation of the current MediaSource. */
+export interface RequestPlaybackObservationWorkerMessage {
+  type: WorkerMessageType.RequestPlaybackObservation;
+  value: { mediaSourceId: string };
 }
 
 /**

@@ -360,6 +360,11 @@ pub(super) unsafe fn __js_func__start_observing_playback() {
     non_wasm_binding_panic("__js_func__start_observing_playback")
 }
 
+/// Request a fresh playback observation after a buffer update.
+pub(super) unsafe fn __js_func__request_playback_observation() {
+    non_wasm_binding_panic("__js_func__request_playback_observation")
+}
+
 /// Notify the host that rebuffering started.
 pub(super) unsafe fn __js_func__start_rebuffering() {
     non_wasm_binding_panic("__js_func__start_rebuffering")

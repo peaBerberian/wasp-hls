@@ -114,6 +114,11 @@ export default class PlaybackObserver extends EventEmitter<PlaybackObserverEvent
     this._generateObservation(PlaybackTickReason.Init);
   }
 
+  /** Take a fresh observation now. */
+  public requestObservation(): void {
+    this._generateObservation(PlaybackTickReason.Requested);
+  }
+
   /**
    * Update the minimum interval, in milliseconds, at which playback
    * observations are produced.

@@ -484,6 +484,11 @@ pub fn jsStartObservingPlayback() {
     unsafe { __js_func__start_observing_playback() }
 }
 
+/// Ask the main thread to sample all playback properties again.
+pub fn jsRequestPlaybackObservation() {
+    unsafe { __js_func__request_playback_observation() }
+}
+
 /// If playback observations were being regularly sent to this
 /// `WaspHlsPlayer` instance, stop emitting them until `startObservingPlayback` is
 /// called again.

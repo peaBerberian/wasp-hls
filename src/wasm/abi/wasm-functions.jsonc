@@ -748,6 +748,16 @@
       "rust": { "args": [], "returnType": "void" },
     },
     {
+      "wasmSymbol": "__js_func__request_playback_observation",
+      "doc": ["Request a fresh playback observation after a buffer update."],
+      "typescript": {
+        "methodName": "requestPlaybackObservation",
+        "args": [],
+        "returnType": "void",
+      },
+      "rust": { "args": [], "returnType": "void" },
+    },
+    {
       "wasmSymbol": "__js_func__start_rebuffering",
       "doc": ["Notify the host that rebuffering started."],
       "typescript": {

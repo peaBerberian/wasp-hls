@@ -600,6 +600,8 @@ pub enum PlaybackTickReason {
     Stalled = 13,
     /// The HTMLMediaElement's "waiting" event has just been triggered
     Waiting = 14,
+    /// A fresh playback observation was explicitly requested.
+    Requested = 16,
     /// The HTMLMediaElement's "error" event has just been triggered
     Error = 15,
 }
@@ -622,6 +624,7 @@ impl PlaybackTickReason {
             12 => Self::RateChange,
             13 => Self::Stalled,
             14 => Self::Waiting,
+            16 => Self::Requested,
             15 => Self::Error,
             _ => Self::Init,
         }

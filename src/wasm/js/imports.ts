@@ -245,6 +245,9 @@ export function createWasmImports(bindings: HostBindings): WebAssembly.Imports {
           errDescLenOut,
         );
       },
+      __js_func__request_playback_observation(): void {
+        bindings.requestPlaybackObservation();
+      },
       __js_func__start_observing_playback(): void {
         bindings.startObservingPlayback();
       },
