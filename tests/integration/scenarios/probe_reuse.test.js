@@ -99,6 +99,19 @@ it.each([
         },
         isTypeSupported: () => true,
         appendBuffer(_bufferId, resourceId) {
+          if (
+            !hasInit &&
+            startingIndex === 0 &&
+            !switchBeforeBuffer &&
+            inspected.includes(resourceId)
+          ) {
+            expect(
+              requests.some((request) =>
+                request.url.endsWith(mediaUrl("low", 1)),
+              ),
+              "next fetch must start before the reused media probe is prepared",
+            ).toBe(true);
+          }
           appended.push(resourceId);
           bufferOperations.push("append");
           return success({

@@ -285,6 +285,44 @@ fn advance_awaiting_media_source_state(dispatcher: &mut Dispatcher) {
         .restart_from_position(wanted_start);
     dispatcher.ready_state = PlayerReadyState::AwaitingSegments;
     jsStartObservingPlayback();
+
+    // A probe is a segment we already downloaded to learn what the content contains.
+    // We may now be able to use those same bytes for playback. Preparing them can be
+    // slow, especially when converting MPEG-TS to MP4 (transmuxing).
+    //
+    // The usual scheduling pass below holds back new segment fetches until it has
+    // checked both audio and video, so it can choose which request should go first.
+    // If that pass also consumes a cached probe, its preparation delays those fetches.
+    // With only one media playlist, we can avoid that wait: run selection for that
+    // type first, without holding back requests. If it selects the cached probe,
+    // the segment-loaded handler starts the next fetch before preparing its bytes.
+    // Selection still checks which segment is needed; an outdated probe is discarded.
+    // Keep the usual path when both playlists are loaded to preserve their priority.
+    //
+    // TODO: That's an ugly exception, which only is a start-up optimization here.
+    // Generalize behavior?
+    let media_type = dispatcher.playlist_store.as_ref().and_then(|store| {
+        match (
+            store.has_loaded_media_playlist(MediaType::Video),
+            store.has_loaded_media_playlist(MediaType::Audio),
+        ) {
+            (true, false) => Some(MediaType::Video),
+            (false, true) => Some(MediaType::Audio),
+            _ => None,
+        }
+    });
+    if let Some(media_type) = media_type {
+        if dispatcher
+            .ready_probe_segments
+            .get(media_type)
+            .is_some_and(|probe| {
+                matches!(&probe.request.context, ProbeSegmentContext::Media { .. })
+            })
+        {
+            let recommendation = dispatcher.compute_optimal_variant();
+            dispatcher.schedule_next_segment_for_type(media_type, recommendation);
+        }
+    }
     dispatcher.check_segments_to_request();
 }
 
