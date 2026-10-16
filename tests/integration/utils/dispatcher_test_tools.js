@@ -18,6 +18,7 @@ export async function createDispatcher({
   const aborted = [];
   const variants = [];
   const announcedVariants = [];
+  const variantLockUpdates = [];
   const rebufferingEvents = [];
   const errors = [];
   const resources = new Map();
@@ -43,6 +44,7 @@ export async function createDispatcher({
         }
       },
       announceVariantUpdate: (id) => announcedVariants.push(id),
+      announceVariantLockStatusChange: (id) => variantLockUpdates.push(id),
       addSourceBuffer: () => ({ value: nextBuffer++ }),
       appendBuffer: () => ({
         value: {
@@ -140,6 +142,7 @@ export async function createDispatcher({
     aborted,
     variants,
     announcedVariants,
+    variantLockUpdates,
     rebufferingEvents,
     errors,
   };

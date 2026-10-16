@@ -60,5 +60,7 @@ export function optionalIdToRaw(value: number | undefined): number {
 }
 
 export function rawOptionalId(value: number): number | undefined {
+  // WebAssembly passes i32 imports as signed numbers, including the u32 sentinel.
+  value = value >>> 0;
   return value === OPTIONAL_ID_NONE ? undefined : value;
 }

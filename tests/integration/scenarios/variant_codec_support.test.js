@@ -2,10 +2,6 @@ import { expect, it } from "vitest";
 import { createDispatcher } from "../utils/dispatcher_test_tools.js";
 import { MediaSourceReadyState } from "../../../build/es6/wasm/js/index.js";
 
-// XXX TODO: A variant without CODECS is offered before probing. Locking it and
-// then probing an unsupported codec triggers support recovery. Recovery chooses
-// that same locked variant again, recursively, until WASM traps. Recover or
-// report an unsupported-content error instead of repeatedly selecting it.
 it("handles an unsupported codec discovered after locking an unprobed variant", async () => {
   const ctx = await createDispatcher({
     unsupportedCodec: "hev1.1.6.L153.B0",
@@ -20,15 +16,13 @@ it("handles an unsupported codec discovered after locking an unprobed variant", 
   ctx.dispatcher.on_media_source_state_change(MediaSourceReadyState.Open);
   ctx.observe(8.1);
   ctx.dispatcher.lock_variant(ctx.variants[1]);
+  expect(ctx.variantLockUpdates.at(-1)).toBe(ctx.variants[1]);
   ctx.finish("high-video.m3u8", ctx.playlist("high-video"));
 
   expect(() => ctx.finish("high-video-0.ts")).not.toThrow();
-  // Both a supported fallback and a graceful fatal error are acceptable here;
-  // this regression test does not prescribe how an invalid lock is resolved.
-  expect(
-    ctx.announcedVariants.at(-1) === ctx.variants[0] ||
-      ctx.errors.some((error) => error.args[0] === true),
-  ).toBe(true);
+  expect(ctx.announcedVariants.at(-1)).toBe(ctx.variants[0]);
+  expect(ctx.variantLockUpdates).toEqual([ctx.variants[1], undefined]);
+  expect(ctx.errors).toEqual([]);
   ctx.dispatcher.stop();
   ctx.dispatcher.free();
 });
