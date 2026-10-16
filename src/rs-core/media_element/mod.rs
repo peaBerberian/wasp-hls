@@ -139,7 +139,10 @@ impl MediaElementReference {
     /// This is a necessary step before creating media buffers on it.
     pub(crate) fn attach_media_source(&mut self) -> Result<(), AttachMediaSourceError> {
         self.reset();
-        Ok(jsAttachMediaSource()?)
+        jsAttachMediaSource()?;
+        self.is_rebuffering = true;
+        jsStartRebuffering();
+        Ok(())
     }
 
     /// Returns the currently wanted playlist position.
@@ -518,8 +521,13 @@ impl MediaElementReference {
         if !self.check_queued_seek() {
             let last_observation = self.last_observation.as_ref().unwrap();
             let buffer_gap = get_buffer_gap(last_observation);
+            // At EOF the browser may be able to play the remaining data even when the
+            // decoded buffer end falls slightly short of the reported duration.
+            let can_play_to_end = last_observation.ready_state() >= 3
+                && self.is_buffer_ended(MediaType::Audio)
+                && self.is_buffer_ended(MediaType::Video);
             if !self.is_rebuffering {
-                if !last_observation.ended() {
+                if !last_observation.ended() && !can_play_to_end {
                     match buffer_gap {
                         None => {
                             log_info!("Starting rebuffering period due to no buffer gap");
@@ -553,7 +561,7 @@ impl MediaElementReference {
                     }
                 }
 
-                if quit_rebuffering || last_observation.ended() {
+                if quit_rebuffering || last_observation.ended() || can_play_to_end {
                     self.is_rebuffering = false;
                     jsStopRebuffering();
                 }

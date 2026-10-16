@@ -200,7 +200,7 @@ export const enum PlayerState {
   Stopped = "Stopped",
   /** A content is currently being loaded but not ready for playback yet. */
   Loading = "Loading",
-  /** A content is loaded. */
+  /** A content is ready for playback after initial buffering has finished. */
   Loaded = "Loaded",
   /** The last content loaded failed on error. */
   Error = "Error",

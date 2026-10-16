@@ -1226,13 +1226,6 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
           break;
         case WorkerMessageType.MediaOffsetUpdate:
           onMediaOffsetUpdateMessage(data, this.__contentMetadata__);
-          if (
-            this.__contentMetadata__?.loadingAborter !== undefined &&
-            this.getPlayerState() === PlayerState.Loading &&
-            this.usesProgramDateTime()
-          ) {
-            this._scheduleLoadedStateTransition();
-          }
           break;
         case WorkerMessageType.TopLevelPlaylistParsed:
           if (
@@ -1407,6 +1400,7 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
     if (
       contentMetadata === null ||
       contentMetadata.loadingAborter === undefined ||
+      contentMetadata.isRebuffering ||
       contentMetadata.loadFinalizationPending
     ) {
       return;
@@ -1426,6 +1420,9 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
           return;
         }
         currentContentMetadata.loadFinalizationPending = false;
+        if (currentContentMetadata.isRebuffering) {
+          return;
+        }
         currentContentMetadata.loadingAborter = undefined;
         this.trigger("playerStateChange", PlayerState.Loaded);
       },
