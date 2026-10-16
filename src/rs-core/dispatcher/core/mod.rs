@@ -1028,9 +1028,6 @@ impl Dispatcher {
                     || time_info.start() >= wanted_position + self.buffer_goal.max(0.)
             })
         {
-            // XXX TODO: When playback advances past the cursor without a Seeking event,
-            // forward selection must advance too. Otherwise each tick cancels this request
-            // and selects the same segment behind playback again.
             self.abort_segment_requests_with_type(media_type);
             return false;
         }
@@ -1998,6 +1995,64 @@ mod tests {
                     segment.byte_range(),
                 ));
             }
+        }
+    }
+
+    #[test]
+    fn regular_playback_replaces_obsolete_requests_with_media_near_playback() {
+        let mut text = String::from("#EXTM3U\n#EXT-X-TARGETDURATION:4\n");
+        for number in 0..10 {
+            text.push_str(&format!("#EXTINF:4,\nseg-{number}.m4s\n"));
+        }
+        text.push_str("#EXT-X-ENDLIST\n");
+        let mut dispatcher = dispatcher_with_abr_playlists(Some(4), 8.1);
+        let store = dispatcher.playlist_store.as_mut().unwrap();
+        let variant_ids: Vec<_> = store.available_variants().iter().map(|v| v.id()).collect();
+        for variant_id in variant_ids {
+            let id = store
+                .media_playlist_id_for_variant(variant_id, MediaType::Video)
+                .unwrap();
+            store
+                .update_media_playlist(
+                    &id,
+                    text.as_bytes(),
+                    Url::new("https://example.com/media.m3u8".into()),
+                )
+                .unwrap();
+        }
+        dispatcher.requester.lock_segment_requests();
+
+        for (position, expected_start) in [(0., 0.), (12., 8.), (12., 8.), (16.2, 16.)] {
+            dispatcher
+                .media_element_ref
+                .on_observation(MediaObservation::new(
+                    PlaybackTickReason::RegularInterval,
+                    position,
+                    4,
+                    JsTimeRanges::new(vec![0., 40.]),
+                    false,
+                    false,
+                    false,
+                    40.,
+                    None,
+                    Some(JsTimeRanges::new(vec![0., 40.])),
+                ));
+            // Run the tick's selection steps without browser-only variant notifications.
+            dispatcher
+                .segment_selectors
+                .advance_position(position - super::SEGMENT_SELECTION_MARGIN);
+            dispatcher.check_requested_segments_still_needed();
+            let recommendation = dispatcher.compute_optimal_variant();
+            dispatcher.schedule_next_segment_for_type(MediaType::Video, recommendation);
+            assert_eq!(
+                dispatcher
+                    .requester
+                    .pending_segment_time_info(MediaType::Video)
+                    .unwrap()
+                    .start(),
+                expected_start
+            );
+            assert!(dispatcher.check_requested_segment_still_needed(MediaType::Video));
         }
     }
 

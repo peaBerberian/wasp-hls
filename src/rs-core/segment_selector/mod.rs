@@ -524,6 +524,10 @@ impl NextSegmentSelector {
         context: &SegmentQualityContext,
         inventory: &[BufferedChunk],
     ) -> Option<&'a MediaSegmentInfo> {
+        // Never select media ending before the wanted window, even if a late validation or
+        // skipped segment moved the cursor back.
+        self.segment_cursor
+            .move_cursor(self.segment_cursor.current_cursor.max(self.base_pos));
         let maximum_position = self.buffer_goal + self.base_pos;
         let si = self
             .segment_cursor
@@ -822,6 +826,80 @@ mod tests {
             Url::new("https://example.com/media.m3u8".to_owned()),
         )
         .unwrap()
+    }
+
+    #[test]
+    fn forward_selection_keeps_up_with_playback_without_validation() {
+        let TopLevelPlaylist::DirectMedia(playlist) = playlist_starting_at(0, 10) else {
+            panic!("expected direct media playlist");
+        };
+        let list = playlist.playlist().segment_list();
+        let context = SegmentQualityContext::new(1., test_playlist_id(1));
+        let mut selector = NextSegmentSelector::new(0., 30.);
+
+        for (position, expected_start) in [(0., 0.), (3.8, 0.), (4., 4.), (12.1, 12.), (12.1, 12.)]
+        {
+            selector.advance_position(position);
+            let selected = selector.most_needed_segment(
+                candidate(list, &context),
+                candidate(list, &context),
+                &[],
+            );
+            assert_eq!(
+                selected
+                    .needed_segments()
+                    .unwrap()
+                    .media_segment()
+                    .unwrap()
+                    .0
+                    .start(),
+                expected_start
+            );
+        }
+    }
+
+    #[test]
+    fn forward_selection_preserves_progress_and_handles_late_validation() {
+        let TopLevelPlaylist::DirectMedia(playlist) = playlist_starting_at(0, 10) else {
+            panic!("expected direct media playlist");
+        };
+        let list = playlist.playlist().segment_list();
+        let context = SegmentQualityContext::new(1., test_playlist_id(1));
+        let mut selector = NextSegmentSelector::new(0., 30.);
+        // Establish the playlist before validating media, as during playback.
+        selector.most_needed_segment(candidate(list, &context), candidate(list, &context), &[]);
+        for (validated_index, expected_start) in [(5, 24.), (0, 8.)] {
+            selector.advance_position(10.);
+            validate(&mut selector, &list.media()[validated_index], &context);
+            let selected = selector.most_needed_segment(
+                candidate(list, &context),
+                candidate(list, &context),
+                &[],
+            );
+            assert_eq!(
+                selected
+                    .needed_segments()
+                    .unwrap()
+                    .media_segment()
+                    .unwrap()
+                    .0
+                    .start(),
+                expected_start
+            );
+        }
+        selector.restart_from_position(0.);
+        let selected =
+            selector.most_needed_segment(candidate(list, &context), candidate(list, &context), &[]);
+        assert_eq!(
+            selected
+                .needed_segments()
+                .unwrap()
+                .media_segment()
+                .unwrap()
+                .0
+                .start(),
+            0.
+        );
     }
 
     #[test]
