@@ -415,6 +415,9 @@ impl NextSegmentSelector {
             }
 
             let chunk_end = chunk.playlist_end();
+            // TODO: Check the replacement segment's own start and duration as well. With
+            // different segment boundaries, replacing this distant chunk may select a segment
+            // which starts near the playhead and defeats the required lead below.
             let required_lead =
                 MIN_FAST_QUALITY_SWITCH_LEAD_SECONDS.max(chunk_end - chunk.playlist_start());
             let can_replace = chunk.is_worse_than(&replacement_candidate.context)
