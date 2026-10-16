@@ -549,7 +549,8 @@ impl MediaElementReference {
             } else {
                 let mut quit_rebuffering = false;
                 if let Some(buffer_gap) = buffer_gap {
-                    if buffer_gap > self.min_buffer_time {
+                    // Even a zero threshold requires playable data.
+                    if buffer_gap > 0. && buffer_gap >= self.min_buffer_time {
                         log_info!("Quitting rebuffering period. bg: {}", buffer_gap);
                         quit_rebuffering = true;
                     } else {

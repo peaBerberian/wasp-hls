@@ -48,6 +48,7 @@ impl Dispatcher {
         self.media_element_ref.reset();
         self.segment_selectors.reset_selectors(0.);
         self.playlist_store = None;
+        self.update_min_buffer_time();
         self.ready_probe_segments.clear();
         self.initial_audio_track_selection.clear();
         self.last_position = 0.;
@@ -838,6 +839,21 @@ impl Dispatcher {
         pl_store.set_audio_track(Some(track_id));
     }
 
+    /// Keep playback's resume threshold reachable by the segment scheduler.
+    pub(super) fn update_min_buffer_time(&mut self) {
+        // TODO: account for low-latency playlists.
+        let normal_threshold = self
+            .playlist_store
+            .as_ref()
+            .and_then(|store| store.segment_target_duration())
+            .map(|duration| (duration - 1.).clamp(2., 8.))
+            .unwrap_or(5.);
+        let min_buffer_time = normal_threshold.min(self.buffer_goal.max(0.));
+        log_debug!("Core: Updating min_buffer_time: {min_buffer_time}");
+        self.media_element_ref
+            .update_min_buffer_time(min_buffer_time);
+    }
+
     /// Method called once a Media Playlist was parsed with success
     fn process_parsed_media_playlist(
         &mut self,
@@ -848,18 +864,11 @@ impl Dispatcher {
         self.playlist_refresh_manager
             .on_playlist_loaded(playlist_id, refresh_info, started_at);
 
+        self.update_min_buffer_time();
+
         let Some(pl_store) = self.playlist_store.as_ref() else {
             return;
         };
-
-        if let Some(duration) = pl_store.segment_target_duration() {
-            // TODO: low-latency exceptions and whatnot? Hls.js and shaka also do not seem to care
-            // weirdly enough
-            let min_buffer_time = (duration - 1.).clamp(2., 8.);
-            log_debug!("Core: Updating min_buffer_time: {min_buffer_time}");
-            self.media_element_ref
-                .update_min_buffer_time(min_buffer_time);
-        }
 
         // That might have led to more timing-related information
         jsUpdateContentInfo(
