@@ -1472,6 +1472,10 @@ impl Dispatcher {
             segment_end,
         );
         self.check_segments_to_request();
+        // Preceding check could have led to a fatal error
+        if matches!(self.ready_state, PlayerReadyState::Stopped) {
+            return;
+        }
 
         match self
             .media_element_ref
