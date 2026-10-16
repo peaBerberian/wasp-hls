@@ -28,9 +28,6 @@ pub(crate) struct AdaptiveVariantSelection {
     /// quickly). "Safe" because we're unlikely to enter a rebuffering period
     /// under that variant.
     pub(crate) safe_variant_id: u32,
-    /// Whether this adaptive switch should interrupt pending requests for other
-    /// media qualities.
-    pub(crate) urgent: bool,
 }
 
 /// Playback information used to choose an adaptive variant.
@@ -69,6 +66,28 @@ const BOLA_DOWNLOAD_BUFFER_FRACTION: f64 = 1.;
 /// Minimum playback lead after allowing for an overlapping segment at a rendition switch.
 const BOLA_MIN_SWITCH_LEAD_SECONDS: f64 = 5.;
 
+/// Whether a download from `downloading_variant` may be interrupted for this recommendation.
+/// Evaluate against the request's origin even if another media type has already switched variants.
+pub(crate) fn should_interrupt_download(
+    downloading_variant: &VariantStream,
+    best_variant: &VariantStream,
+    safe_variant: &VariantStream,
+    playback: &PlaybackConditions,
+) -> bool {
+    let low_buffer = playback
+        .abr_reference_segment_duration
+        .filter(|duration| duration.is_finite() && *duration > 0.)
+        .map(|duration| (duration * 2.).clamp(BOLA_MIN_LOW_BUFFER, BOLA_MAX_LOW_BUFFER))
+        .unwrap_or(BOLA_MIN_LOW_BUFFER);
+    best_variant.bandwidth().max(safe_variant.bandwidth()) < downloading_variant.bandwidth()
+        && playback.buffer_level.is_some_and(|buffer| {
+            buffer.is_finite()
+                && playback.playback_speed.is_finite()
+                && playback.playback_speed > 0.
+                && buffer / playback.playback_speed <= low_buffer
+        })
+}
+
 impl AdaptiveQualitySelector {
     /// Creates new `AdaptiveQualitySelector`.
     pub(crate) fn new(initial_bandwidth: f64) -> Self {
@@ -105,41 +124,13 @@ impl AdaptiveQualitySelector {
         current_variant_id: Option<u32>,
         playback: &PlaybackConditions,
     ) -> Option<AdaptiveVariantSelection> {
-        let selection = |best_variant_id, safe_variant_id| {
-            let current = variants
-                .iter()
-                .find(|variant| Some(variant.id()) == current_variant_id);
-            let best = variants
-                .iter()
-                .find(|variant| variant.id() == best_variant_id);
-            let safe = variants
-                .iter()
-                .find(|variant| variant.id() == safe_variant_id);
-            let low_buffer = playback
-                .abr_reference_segment_duration
-                .filter(|duration| duration.is_finite() && *duration > 0.)
-                .map(|duration| (duration * 2.).clamp(BOLA_MIN_LOW_BUFFER, BOLA_MAX_LOW_BUFFER))
-                .unwrap_or(BOLA_MIN_LOW_BUFFER);
-            let urgent = match (current, best, safe, playback.buffer_level) {
-                (Some(current), Some(best), Some(safe), Some(buffer)) => {
-                    best.bandwidth().max(safe.bandwidth()) < current.bandwidth()
-                        && buffer.is_finite()
-                        && playback.playback_speed.is_finite()
-                        && playback.playback_speed > 0.
-                        && buffer / playback.playback_speed <= low_buffer
-                }
-                _ => false,
-            };
-            AdaptiveVariantSelection {
-                best_variant_id,
-                safe_variant_id,
-                urgent,
-            }
-        };
         match variants {
             [] => return None,
             [variant] => {
-                return Some(selection(variant.id(), variant.id()));
+                return Some(AdaptiveVariantSelection {
+                    best_variant_id: variant.id(),
+                    safe_variant_id: variant.id(),
+                });
             }
             _ => {}
         }
@@ -155,13 +146,19 @@ impl AdaptiveQualitySelector {
             .or_else(|| fallback_variant_id(variants.iter().copied()))?;
 
         let Some(buffer_level) = playback.buffer_level else {
-            return Some(selection(throughput_id, throughput_id));
+            return Some(AdaptiveVariantSelection {
+                best_variant_id: throughput_id,
+                safe_variant_id: throughput_id,
+            });
         };
         let segment_duration = playback.abr_reference_segment_duration.unwrap_or(0.);
         if !segment_duration.is_finite() || segment_duration <= 0. {
             // Missing enough information for the buffer-based estimate, exiting with throughput
             // choice
-            return Some(selection(throughput_id, throughput_id));
+            return Some(AdaptiveVariantSelection {
+                best_variant_id: throughput_id,
+                safe_variant_id: throughput_id,
+            });
         }
 
         let qmax = playback.buffer_goal.max(segment_duration);
@@ -170,11 +167,17 @@ impl AdaptiveQualitySelector {
             .min((qmax - 0.1).max(segment_duration));
         let clamped_buffer = buffer_level.max(0.).min(qmax);
         if clamped_buffer < qlow {
-            return Some(selection(throughput_id, throughput_id));
+            return Some(AdaptiveVariantSelection {
+                best_variant_id: throughput_id,
+                safe_variant_id: throughput_id,
+            });
         }
 
         let Some(bola) = BolaModel::new(variants, qlow, qmax) else {
-            return Some(selection(throughput_id, throughput_id));
+            return Some(AdaptiveVariantSelection {
+                best_variant_id: throughput_id,
+                safe_variant_id: throughput_id,
+            });
         };
         let mut bola_id = bola.variant_id(clamped_buffer)?;
         if let Some(current_position) =
@@ -222,7 +225,10 @@ impl AdaptiveQualitySelector {
             })?
             .id();
 
-        Some(selection(best_id, throughput_id))
+        Some(AdaptiveVariantSelection {
+            best_variant_id: best_id,
+            safe_variant_id: throughput_id,
+        })
     }
 
     /// Reset internal state kept by the `AdaptiveQualitySelector`.
@@ -374,7 +380,10 @@ impl BolaModel {
 
 #[cfg(test)]
 mod tests {
-    use super::{AdaptiveQualitySelector, BolaModel, PlaybackConditions, VariantStream};
+    use super::{
+        should_interrupt_download, AdaptiveQualitySelector, BolaModel, PlaybackConditions,
+        VariantStream,
+    };
     use crate::{parser::TopLevelPlaylist, utils::url::Url};
 
     fn compute_bola_variant_id(
@@ -654,7 +663,19 @@ high.m3u8\n",
                 .select_variant(&variants, Some(variants[current].id()), &playback)
                 .unwrap();
             assert_eq!(
-                selected.urgent, expected,
+                should_interrupt_download(
+                    variants[current],
+                    variants
+                        .iter()
+                        .find(|v| v.id() == selected.best_variant_id)
+                        .unwrap(),
+                    variants
+                        .iter()
+                        .find(|v| v.id() == selected.safe_variant_id)
+                        .unwrap(),
+                    &playback,
+                ),
+                expected,
                 "current={current}, buffer={buffer}, speed={speed}"
             );
         }
@@ -683,7 +704,15 @@ high.m3u8\n",
                             .unwrap();
                         saw_distinct_choices |=
                             selected.best_variant_id != selected.safe_variant_id;
-                        if selected.urgent {
+                        let best = variants
+                            .iter()
+                            .find(|v| v.id() == selected.best_variant_id)
+                            .unwrap();
+                        let safe = variants
+                            .iter()
+                            .find(|v| v.id() == selected.safe_variant_id)
+                            .unwrap();
+                        if should_interrupt_download(current, best, safe, &playback) {
                             saw_urgent = true;
                             for id in [selected.best_variant_id, selected.safe_variant_id] {
                                 let choice =

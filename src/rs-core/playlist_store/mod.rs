@@ -374,6 +374,14 @@ impl PlaylistStore {
         }
     }
 
+    /// Look up a variant independently of the current track choice or support filtering.
+    pub(crate) fn variant(&self, variant_id: u32) -> Option<&VariantStream> {
+        match &self.playlist {
+            TopLevelPlaylist::Multivariant(playlist) => playlist.variant(variant_id),
+            TopLevelPlaylist::DirectMedia(_) => None,
+        }
+    }
+
     /// Returns vec describing all variant streams in the current `MultivariantPlaylist`,
     /// excluding variants known to be unsupported.
     pub(crate) fn available_variants(&self) -> Vec<&VariantStream> {
