@@ -3,8 +3,10 @@ import EmbeddedWasm from "../../../build/embedded/wasm.js";
 import initializeWasm, {
   Dispatcher,
   JsTimeRanges,
+  MediaObservation,
   MediaSourceReadyState,
   MediaType,
+  PlaybackTickReason,
   StartingPosition,
   StartingPositionType,
 } from "../../../build/es6/wasm/js/index.js";
@@ -18,6 +20,19 @@ it.each([
   { hasInit: false, manifestCodecs: true, opaqueUrls: false },
   { hasInit: true, manifestCodecs: true, opaqueUrls: true },
   { hasInit: false, manifestCodecs: true, opaqueUrls: true },
+  {
+    hasInit: true,
+    manifestCodecs: true,
+    opaqueUrls: false,
+    lateFirstObservation: true,
+  },
+  {
+    hasInit: true,
+    manifestCodecs: true,
+    opaqueUrls: false,
+    lateFirstObservation: true,
+    startCase: "fromEnd",
+  },
   {
     hasInit: true,
     manifestCodecs: false,
@@ -39,6 +54,7 @@ it.each([
     manifestCodecs,
     opaqueUrls,
     switchBeforeBuffer,
+    lateFirstObservation,
     startCase,
   }) => {
     const success = (value) => ({ value });
@@ -49,6 +65,8 @@ it.each([
     const createdBuffers = [];
     const freed = [];
     const bufferOperations = [];
+    const rebufferingEvents = [];
+    let streamEnded = false;
     let variants;
     let nextResourceId = 1;
     const bindings = new Proxy(
@@ -96,6 +114,12 @@ it.each([
         monotonicNow: () => 1000,
         getRandom: () => 0.5,
         timer: () => 1,
+        startRebuffering: () => rebufferingEvents.push("start"),
+        stopRebuffering: () => rebufferingEvents.push("stop"),
+        endOfStream() {
+          streamEnded = true;
+          return success(true);
+        },
       },
       {
         get(target, name) {
@@ -168,7 +192,10 @@ it.each([
         startCase === "absolute"
           ? new StartingPosition(StartingPositionType.Absolute, 4)
           : startCase === "fromEnd"
-            ? new StartingPosition(StartingPositionType.FromEnd, 4)
+            ? new StartingPosition(
+                StartingPositionType.FromEnd,
+                lateFirstObservation ? 2 : 4,
+              )
             : undefined;
       dispatcher.load_content(
         "https://example.com/master.m3u8",
@@ -224,6 +251,39 @@ it.each([
       finishBufferOperations();
       expect(freed).toContain(initialProbe);
       expect(requestCount(probeSuffix("low"))).toBe(1);
+
+      if (lateFirstObservation) {
+        finish(mediaUrl("low", startingIndex), "media bytes");
+        finishBufferOperations();
+        const nearEnd = startCase === "fromEnd";
+        if (nearEnd) {
+          expect(streamEnded).toBe(true);
+        }
+        // A slow main thread may first report playback after data is already buffered.
+        // Startup must still announce buffering completion so the API can become Loaded.
+        // At EOF, decoded buffer ends can differ slightly from the media duration.
+        const buffered = new Float64Array(nearEnd ? [4, 7.98] : [0, 4]);
+        for (const readyState of nearEnd ? [2, 2, 4, 4] : [4]) {
+          dispatcher.on_playback_tick(
+            new MediaObservation(
+              PlaybackTickReason.RegularInterval,
+              nearEnd ? 6 : 0,
+              readyState,
+              new JsTimeRanges(buffered),
+              true,
+              false,
+              false,
+              nearEnd ? 8.03 : 8,
+              new JsTimeRanges([]),
+              new JsTimeRanges(buffered),
+            ),
+          );
+          expect(rebufferingEvents).toEqual(
+            readyState < 3 ? ["start"] : ["start", "stop"],
+          );
+        }
+        return;
+      }
 
       if (startCase) {
         // No observation has advanced the selectors yet. Startup itself must select

@@ -288,6 +288,31 @@ describe("Generated VoD content - playback", function () {
     );
   });
 
+  it.each(["fmp4-player-api", "fmp4-player-api-program-date-time"])(
+    "finishes startup buffering before Loaded: %s",
+    { timeout: 180_000 },
+    async (scenario) => {
+      const events = [];
+      ctx.player.addEventListener("playerStateChange", (state) => {
+        if (state === "Loaded") {
+          events.push({ name: state, rebuffering: ctx.player.isRebuffering() });
+        }
+      });
+      for (const name of ["rebufferingStarted", "rebufferingEnded"]) {
+        ctx.player.addEventListener(name, () => events.push({ name }));
+      }
+      ctx.player.load(getVodScenarioUrl(scenario));
+      await waitForLoadedState(
+        ctx.player,
+        ctx.videoElement,
+        () => ctx.lastPlayerError,
+      );
+      // Startup buffering completion must not leak out as a later public event.
+      await sleep(1000);
+      expect(events).toEqual([{ name: "Loaded", rebuffering: false }]);
+    },
+  );
+
   it("sends ended event when stream ends", { timeout: 180_000 }, async () => {
     let receivedEndedEvent = 0;
     ctx.player.addEventListener("ended", () => {
