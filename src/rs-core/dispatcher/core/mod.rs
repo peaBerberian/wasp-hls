@@ -3,7 +3,7 @@ use super::{
     MediaSourceReadyState, PlaybackTickReason, PlayerReadyState, ReadyProbeSegment,
 };
 use crate::{
-    adaptive::{AdaptiveVariantSelection, PlaybackConditions},
+    adaptive::{should_interrupt_download, AdaptiveVariantSelection, PlaybackConditions},
     bindings::{
         formatters::format_source_buffer_creation_err_for_js, jsAnnounceTrackUpdate,
         jsAnnounceVariantLockStatusChange, jsAnnounceVariantUpdate, jsInspectSegment,
@@ -573,7 +573,6 @@ impl Dispatcher {
             return Some(AdaptiveVariantSelection {
                 best_variant_id: variant_id,
                 safe_variant_id: variant_id,
-                urgent: false,
             });
         }
         let compatible_variants = pl_store.compatible_variants();
@@ -1040,7 +1039,9 @@ impl Dispatcher {
         let Some(recommendation) = self.compute_optimal_variant() else {
             return true;
         };
-        if !recommendation.urgent && self.requester.has_segment_in_flight(media_type) {
+        if self.requester.has_segment_in_flight(media_type)
+            && !self.should_interrupt_download(media_type, recommendation)
+        {
             return true;
         }
         let Some((addition_candidate, replacement_candidate)) =
@@ -1085,6 +1086,52 @@ impl Dispatcher {
             self.abort_segment_requests_with_type(media_type);
         }
         return still_needed;
+    }
+
+    // If `true`, the current pending request for the given `MediaType` should be interrupted.
+    // Takes the `MediaType` and the current adaptive logic estimates of what the current variants
+    // to target are.
+    fn should_interrupt_download(
+        &self,
+        media_type: MediaType,
+        recommendation: AdaptiveVariantSelection,
+    ) -> bool {
+        let Some(pl_store) = self.playlist_store.as_ref() else {
+            return false;
+        };
+        if pl_store.is_variant_locked() {
+            return false;
+        }
+        let playback = self.playback_conditions(pl_store);
+        self.segment_request_contexts.has(|context| {
+            // TODO: Should we cancel init requests more often? They don't add playable media,
+            // but they're small, so maybe just finishing them is better? The variant's bitrate
+            // doesn't help much here. Also check seeks needing another init: init requests have
+            // no timing, so the buffer-window check won't cancel them.
+            let variant_id = match context {
+                PendingSegmentRequest::Init {
+                    media_type: request_type,
+                    variant_id,
+                    ..
+                }
+                | PendingSegmentRequest::Media {
+                    media_type: request_type,
+                    variant_id,
+                    ..
+                } if *request_type == media_type => *variant_id,
+                _ => return false,
+            };
+            match (
+                pl_store.variant(variant_id),
+                pl_store.variant(recommendation.best_variant_id),
+                pl_store.variant(recommendation.safe_variant_id),
+            ) {
+                (Some(downloading), Some(best), Some(safe)) => {
+                    should_interrupt_download(downloading, best, safe, &playback)
+                }
+                _ => false,
+            }
+        })
     }
 
     /// Select and schedule the next initialization or media segment for `media_type`, using
@@ -1171,7 +1218,9 @@ impl Dispatcher {
             let changed_media_types = pl_store.set_variant(variant_id);
             for changed_type in changed_media_types {
                 self.ready_probe_segments.clear_media_type(changed_type);
-                if recommendation.is_some_and(|selection| selection.urgent) {
+                if recommendation.is_some_and(|selection| {
+                    self.should_interrupt_download(changed_type, selection)
+                }) {
                     self.abort_segment_requests_with_type(changed_type);
                 }
                 // Selection already chose this type's refresh target. It may differ from
@@ -1196,6 +1245,7 @@ impl Dispatcher {
             let req_id = self
                 .segment_request_contexts
                 .insert(PendingSegmentRequest::Init {
+                    variant_id,
                     media_type,
                     init_segment_id: init.id(),
                 });
@@ -1219,6 +1269,7 @@ impl Dispatcher {
             let req_id = self
                 .segment_request_contexts
                 .insert(PendingSegmentRequest::Media {
+                    variant_id,
                     media_type,
                     init_segment_id,
                     quality_context,
@@ -1367,6 +1418,7 @@ impl Dispatcher {
             PendingSegmentRequest::Init {
                 media_type: req_media_type,
                 init_segment_id,
+                ..
             } => {
                 if Some(req_media_type) != media_type {
                     log_warn!("Loaded init segment with mismatched media type context.");
@@ -1613,7 +1665,6 @@ mod tests {
             let recommendation = Some(crate::adaptive::AdaptiveVariantSelection {
                 best_variant_id: high,
                 safe_variant_id: low,
-                urgent: false,
             });
             let video_selection =
                 normalize_abr_selection(&pl_store, recommendation, MediaType::Video).unwrap();
@@ -1687,7 +1738,6 @@ mod tests {
         let recommendation = Some(crate::adaptive::AdaptiveVariantSelection {
             best_variant_id: high,
             safe_variant_id: low,
-            urgent: false,
         });
         let mut dispatcher = Dispatcher::new(3_125_000.);
         dispatcher.ready_state = PlayerReadyState::AwaitingSegments;
@@ -1782,9 +1832,7 @@ mod tests {
 
     #[test]
     fn adaptive_switches_replace_queued_requests_and_position_jumps_cancel_obsolete_requests() {
-        for (buffer, urgent, alternative_available) in
-            [(1., true, true), (1., true, false), (8.1, false, true)]
-        {
+        for (buffer, alternative_available) in [(1., true), (1., false), (8.1, true)] {
             let mut dispatcher = dispatcher_with_abr_playlists(Some(4), buffer);
             let playlist_store = dispatcher.playlist_store.as_mut().unwrap();
             let high = playlist_store.available_variants()[2].id();
@@ -1809,7 +1857,6 @@ mod tests {
                 .request_media_segment(MediaType::Video, &segment, 123);
             assert!(!dispatcher.requester.has_segment_in_flight(MediaType::Video));
             let recommendation = dispatcher.compute_optimal_variant().unwrap();
-            assert_eq!(recommendation.urgent, urgent);
             if !alternative_available {
                 let playlist_store = dispatcher.playlist_store.as_mut().unwrap();
                 let replacement_id = playlist_store
@@ -1827,7 +1874,7 @@ mod tests {
             assert!(!dispatcher
                 .requester
                 .has_segment_request_pending(MediaType::Video));
-            if !urgent {
+            if buffer == 8.1 {
                 for (position, buffer_goal) in [(50., 30.), (0., 5.)] {
                     if !dispatcher
                         .requester
@@ -1853,7 +1900,6 @@ mod tests {
                             Some(JsTimeRanges::new(vec![0., 70.])),
                         ));
                     // No seek handler or cursor restart, and no urgent quality switch.
-                    assert!(!dispatcher.compute_optimal_variant().unwrap().urgent);
                     dispatcher.check_requested_segments_still_needed();
                     assert!(!dispatcher
                         .requester
@@ -1864,8 +1910,8 @@ mod tests {
     }
 
     #[test]
-    fn coordinated_non_urgent_switch_preserves_the_other_media_request() {
-        for urgent in [false, true] {
+    fn coordinated_switch_cancels_only_urgent_requests() {
+        for (buffer, origin, urgent) in [(8.1, 1, false), (1., 1, true), (1., 0, false)] {
             let mut playlist_store = selected_playlist(
                 b"#EXTM3U\n#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID=\"low\",NAME=\"English\",DEFAULT=YES,URI=\"low-audio.m3u8\"\n#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID=\"high\",NAME=\"English\",DEFAULT=YES,URI=\"high-audio.m3u8\"\n#EXT-X-STREAM-INF:BANDWIDTH=1000000,CODECS=\"avc1.42E01E,mp4a.40.2\",AUDIO=\"low\"\nlow-video.m3u8\n#EXT-X-STREAM-INF:BANDWIDTH=2000000,CODECS=\"avc1.42E01E,mp4a.40.2\",AUDIO=\"high\"\nhigh-video.m3u8\n",
             );
@@ -1892,27 +1938,40 @@ mod tests {
             }
             playlist_store.set_variant(variant_ids[1]);
             let audio_id = playlist_store
-                .current_media_playlist_id(MediaType::Audio)
+                .media_playlist_id_for_variant(variant_ids[origin], MediaType::Audio)
                 .unwrap();
             let old_audio = playlist_store
-                .media_playlist(audio_id)
+                .media_playlist(&audio_id)
                 .unwrap()
                 .segment_list()
                 .media()[0]
                 .clone();
-            let mut dispatcher = Dispatcher::new(3_125_000.);
+            let quality_context = playlist_store
+                .variant_segment_quality_context(variant_ids[origin], MediaType::Audio)
+                .unwrap();
+            let mut dispatcher =
+                dispatcher_with_buffer_observation(None, Some(vec![0., 10. + buffer]));
             dispatcher.ready_state = PlayerReadyState::AwaitingSegments;
             dispatcher.playlist_store = Some(playlist_store);
             dispatcher.requester.lock_segment_requests();
+            let request_id = dispatcher.segment_request_contexts.insert(
+                crate::dispatcher::segment_request_contexts::PendingSegmentRequest::Media {
+                    variant_id: variant_ids[origin],
+                    media_type: MediaType::Audio,
+                    init_segment_id: None,
+                    quality_context,
+                    sequence_number: old_audio.sequence(),
+                    discontinuity_sequence: old_audio.discontinuity_sequence(),
+                },
+            );
             dispatcher
                 .requester
-                .request_media_segment(MediaType::Audio, &old_audio, 123);
+                .request_media_segment(MediaType::Audio, &old_audio, request_id);
             dispatcher.schedule_next_segment_for_type(
                 MediaType::Video,
                 Some(crate::adaptive::AdaptiveVariantSelection {
                     best_variant_id: variant_ids[0],
                     safe_variant_id: variant_ids[0],
-                    urgent,
                 }),
             );
             assert_eq!(
@@ -2342,6 +2401,7 @@ mod tests {
             Url::new("https://example.com/safe.m3u8".into())).unwrap();
         pl_store.set_variant(ids[2]);
         let context = crate::dispatcher::segment_request_contexts::PendingSegmentRequest::Media {
+            variant_id: ids[1],
             media_type: MediaType::Video,
             init_segment_id: None,
             quality_context: pl_store

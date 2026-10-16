@@ -76,6 +76,8 @@ impl SegmentRequestContexts {
 pub(crate) enum PendingSegmentRequest {
     /// This request concerns an initialization segment
     Init {
+        /// Variant selected when scheduling this request, retained across later switches.
+        variant_id: u32,
         /// The `MediaType` the initialization segment is linked to.
         media_type: MediaType,
         /// Unique identifier identifying that initialization segment for the
@@ -84,6 +86,8 @@ pub(crate) enum PendingSegmentRequest {
     },
     /// This request concerns a media segment
     Media {
+        /// Variant selected when scheduling this request, retained across later switches.
+        variant_id: u32,
         /// The `MediaType` the media segment is linked to.
         media_type: MediaType,
         /// Unique identifier of the initialization segment applying to that media segment, if any.
