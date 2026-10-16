@@ -626,6 +626,10 @@
             "The HTMLMediaElement's \"waiting\" event has just been triggered"
           ]
         },
+        "Requested": {
+          "value": 16,
+          "doc": ["A fresh playback observation was explicitly requested."]
+        },
         "Error": {
           "value": 15,
           "doc": [

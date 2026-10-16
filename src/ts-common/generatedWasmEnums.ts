@@ -512,6 +512,10 @@ export const PlaybackTickReason = Object.freeze({
    */
   Waiting: 14,
   /**
+   * A fresh playback observation was explicitly requested.
+   */
+  Requested: 16,
+  /**
    * The HTMLMediaElement's "error" event has just been triggered
    */
   Error: 15,

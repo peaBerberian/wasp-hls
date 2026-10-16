@@ -7,12 +7,12 @@ use crate::{
     bindings::{
         formatters::format_source_buffer_creation_err_for_js, jsAnnounceTrackUpdate,
         jsAnnounceVariantLockStatusChange, jsAnnounceVariantUpdate, jsInspectSegment,
-        jsSendMediaPlaylistParsingError, jsSendMediaPlaylistRequestError,
-        jsSendMultivariantPlaylistRequestError, jsSendOtherError, jsSendPushedSegmentError,
-        jsSendRemoveBufferError, jsSendSegmentParsingError, jsSendSegmentRequestError,
-        jsSendSourceBufferCreationError, jsSetMediaSourceDuration, jsStopObservingPlayback,
-        jsUpdateContentInfo, AddSourceBufferErrorCode, MediaType, OtherErrorCode,
-        PushedSegmentErrorCode, RequestId, SourceBufferId, TimerId,
+        jsRequestPlaybackObservation, jsSendMediaPlaylistParsingError,
+        jsSendMediaPlaylistRequestError, jsSendMultivariantPlaylistRequestError, jsSendOtherError,
+        jsSendPushedSegmentError, jsSendRemoveBufferError, jsSendSegmentParsingError,
+        jsSendSegmentRequestError, jsSendSourceBufferCreationError, jsSetMediaSourceDuration,
+        jsStopObservingPlayback, jsUpdateContentInfo, AddSourceBufferErrorCode, MediaType,
+        OtherErrorCode, PushedSegmentErrorCode, RequestId, SourceBufferId, TimerId,
     },
     dispatcher::segment_request_contexts::PendingSegmentRequest,
     media_element::SegmentPushMetadata,
@@ -413,6 +413,11 @@ impl Dispatcher {
     ) {
         self.media_element_ref
             .on_source_buffer_update(source_buffer_id, buffered, true);
+        // More playable data does not necessarily cause a media-element event.
+        // Request an observation now if it means we could go out of rebuffering faster
+        if self.media_element_ref.is_rebuffering() {
+            jsRequestPlaybackObservation();
+        }
     }
 
     /// Method to call when a `SourceBuffer`'s `appendBuffer` call led to an `error` event.

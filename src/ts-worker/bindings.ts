@@ -1395,8 +1395,16 @@ export function startObservingPlayback(): void {
   });
 }
 
-/**
- */
+export function requestPlaybackObservation(): void {
+  const mediaSourceObj = getMediaSourceObj();
+  if (mediaSourceObj !== undefined) {
+    postMessageToMain({
+      type: WorkerMessageType.RequestPlaybackObservation,
+      value: { mediaSourceId: mediaSourceObj.mediaSourceId },
+    });
+  }
+}
+
 export function stopObservingPlayback() {
   const contentInfo = playerInstance.getContentInfo();
   if (contentInfo === null) {
@@ -1803,6 +1811,7 @@ export function getWaspHostCapabilities(): HostBindings {
     removeBuffer,
     endOfStream,
     startObservingPlayback,
+    requestPlaybackObservation,
     stopObservingPlayback,
     freeResource,
     setPlaybackRate,

@@ -19,6 +19,7 @@ import type {
   SeekWorkerMessage,
   SetMediaSourceDurationWorkerMessage,
   StartPlaybackObservationWorkerMessage,
+  RequestPlaybackObservationWorkerMessage,
   StopPlaybackObservationWorkerMessage,
   UpdatePlaybackRateWorkerMessage,
   MediaOffsetUpdateWorkerMessage,
@@ -614,6 +615,16 @@ export function onStartPlaybackObservationMessage(
     },
   );
   contentMetadata.playbackObserver.start();
+}
+
+/** Request a full sample only for the MediaSource that still owns playback. */
+export function onRequestPlaybackObservationMessage(
+  msg: RequestPlaybackObservationWorkerMessage,
+  contentMetadata: ContentMetadata | null,
+): void {
+  if (contentMetadata?.mediaSourceId === msg.value.mediaSourceId) {
+    contentMetadata.playbackObserver?.requestObservation();
+  }
 }
 
 /**

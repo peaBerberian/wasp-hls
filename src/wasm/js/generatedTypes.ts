@@ -268,6 +268,10 @@ export interface HostBindings {
    */
   startObservingPlayback(): void;
   /**
+   * Request a fresh playback observation after a buffer update.
+   */
+  requestPlaybackObservation(): void;
+  /**
    * Notify the host that rebuffering started.
    */
   startRebuffering(): void;
