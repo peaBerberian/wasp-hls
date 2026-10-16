@@ -5,6 +5,37 @@ import {
   MediaSourceReadyState,
 } from "../../../build/es6/wasm/js/index.js";
 
+it.each([
+  { segmentDuration: 2, goal: 6, threshold: 2 },
+  { segmentDuration: 8, goal: 10, threshold: 7 },
+  { segmentDuration: 8, goal: 3, threshold: 3 },
+])(
+  "uses the probed direct playlist's resume threshold with $segmentDuration-second segments and buffer goal $goal",
+  async ({ segmentDuration, goal, threshold }) => {
+    const ctx = await createDispatcher({ segmentDuration });
+    try {
+      ctx.dispatcher.set_buffer_goal(goal);
+      ctx.dispatcher.load_content("https://example.com/direct.m3u8");
+      ctx.finish("direct.m3u8", ctx.playlist("direct"));
+      ctx.dispatcher.on_media_source_state_change(MediaSourceReadyState.Open);
+      ctx.finish("direct-0.ts");
+      ctx.dispatcher.on_source_buffer_update(
+        1,
+        new JsTimeRanges(new Float64Array([0, segmentDuration])),
+      );
+
+      ctx.observe(threshold - 0.1);
+      expect(ctx.rebufferingEvents).toEqual(["start"]);
+      ctx.observe(threshold);
+      expect(ctx.rebufferingEvents).toEqual(["start", "stop"]);
+      expect(ctx.errors).toEqual([]);
+    } finally {
+      ctx.dispatcher.stop();
+      ctx.dispatcher.free();
+    }
+  },
+);
+
 // Scheduling can stop before the usual rebuffering threshold is exceeded.
 it.each([
   { goal: 1, shouldResumePlayback: true },
