@@ -315,6 +315,9 @@ impl Dispatcher {
                 }
                 match x.playlist_type {
                     PlaylistFileType::MediaPlaylist { media_type, .. } => {
+                        // TODO: A playlist followed only to inspect replacements can fail while
+                        // additions and buffered media remain playable. Keep that failure
+                        // nonfatal instead of stopping playback solely because it is followed.
                         jsSendMediaPlaylistRequestError(
                             true,
                             x.url.get_ref(),
@@ -1016,6 +1019,9 @@ impl Dispatcher {
                     || time_info.start() >= wanted_position + self.buffer_goal.max(0.)
             })
         {
+            // XXX TODO: When playback advances past the cursor without a Seeking event,
+            // forward selection must advance too. Otherwise each tick cancels this request
+            // and selects the same segment behind playback again.
             self.abort_segment_requests_with_type(media_type);
             return false;
         }
