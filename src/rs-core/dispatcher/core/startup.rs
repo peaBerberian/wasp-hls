@@ -8,9 +8,9 @@ use crate::{
             format_direct_media_variants_info_for_js, format_source_buffer_creation_err_for_js,
             format_variants_info_for_js, DIRECT_MEDIA_AUDIO_TRACK_ID,
         },
-        jsAnnounceFetchedContent, jsAnnounceTrackUpdate, jsSendOtherError,
-        jsSendSegmentParsingError, jsSendSourceBufferCreationError, jsStartObservingPlayback,
-        MediaSourceReadyState, MediaType, OtherErrorCode, PlaylistType,
+        jsAnnounceFetchedContent, jsAnnounceTrackUpdate, jsAnnounceVariantLockStatusChange,
+        jsSendOtherError, jsSendSegmentParsingError, jsSendSourceBufferCreationError,
+        jsStartObservingPlayback, MediaSourceReadyState, MediaType, OtherErrorCode, PlaylistType,
     },
     media_element::SourceBufferCreationError,
     playlist_store::{ProbeSegmentContext, StartupStatus},
@@ -79,6 +79,12 @@ fn ensure_ready_playlists(dispatcher: &mut Dispatcher, wanted_position: f64) -> 
         StartupStatus::AwaitingPlaylists => false,
         StartupStatus::AwaitingSupportCheck => false,
         StartupStatus::VariantSelectionNeeded => {
+            // Support recovery must be allowed to replace an unsupported locked variant.
+            // Otherwise the lock makes selection return that same variant recursively.
+            if playlist_store.is_variant_locked() {
+                playlist_store.unlock_variant();
+                jsAnnounceVariantLockStatusChange(None);
+            }
             let Some(selection) = dispatcher.compute_optimal_variant() else {
                 // NOTE: Should normally never happen, we should have ensured this was not possible
                 // before

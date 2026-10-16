@@ -14,6 +14,10 @@
 
 - Actually send `audioTrackUpdate` if the audio track switched from one audio track to another (or none) on a `lockVariant` call
 - Don't needlessly send `audioTrackUpdate` if the audio track did not change on a `lockVariant` call
+- Don't crash if a variant selected through `lockVariant` is found to have unsupported codecs after probing. Remove the lock, send `variantLockUpdate` and fall back to a compatible variant
+- Return `undefined` instead of `-1` for unknown `status` properties on `WaspMultivariantPlaylistRequestError` and `WaspMediaPlaylistRequestError`
+- Return `undefined` instead of `-1` for unknown `mediaType` properties on `WaspMediaPlaylistRequestError`, `WaspMediaPlaylistParsingError` and `WaspSegmentParsingError`
+- Correctly report failed segment downloads as `WaspSegmentRequestError` through `error` or `warning` events even when the player does not yet know whether the segment contains audio or video
 - Be resilient to non-UTF-8 HLS playlists
 - Throw `MultivariantPlaylistInvalidValue` error code when a MultiVariant playlist refers to an AUDIO group which does not exist, as per the HLS specification
 - Known codecs but unknown mime-type now trigger segment probing instead of passing an empty MIME type to SourceBuffers
