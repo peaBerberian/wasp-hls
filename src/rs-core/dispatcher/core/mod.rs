@@ -8,18 +8,15 @@ use crate::{
         formatters::format_source_buffer_creation_err_for_js, jsAnnounceTrackUpdate,
         jsAnnounceVariantLockStatusChange, jsAnnounceVariantUpdate, jsInspectSegment,
         jsSendMediaPlaylistParsingError, jsSendMediaPlaylistRequestError,
-        jsSendMultivariantPlaylistParsingError, jsSendMultivariantPlaylistRequestError,
-        jsSendOtherError, jsSendPushedSegmentError, jsSendRemoveBufferError,
-        jsSendSegmentParsingError, jsSendSegmentRequestError, jsSendSourceBufferCreationError,
-        jsSetMediaSourceDuration, jsStopObservingPlayback, jsUpdateContentInfo,
-        AddSourceBufferErrorCode, MediaType, MultivariantPlaylistParsingErrorCode, OtherErrorCode,
+        jsSendMultivariantPlaylistRequestError, jsSendOtherError, jsSendPushedSegmentError,
+        jsSendRemoveBufferError, jsSendSegmentParsingError, jsSendSegmentRequestError,
+        jsSendSourceBufferCreationError, jsSetMediaSourceDuration, jsStopObservingPlayback,
+        jsUpdateContentInfo, AddSourceBufferErrorCode, MediaType, OtherErrorCode,
         PushedSegmentErrorCode, RequestId, SourceBufferId, TimerId,
     },
     dispatcher::segment_request_contexts::PendingSegmentRequest,
     media_element::SegmentPushMetadata,
-    parser::{
-        PlaylistRefreshInfo, SegmentIdentity, TopLevelPlaylist, TopLevelPlaylistParsingError,
-    },
+    parser::{PlaylistRefreshInfo, SegmentIdentity},
     playlist_store::{
         AudioTrackChange, LockVariantResponse, MediaPlaylistPermanentId, PlaylistStore,
         ProbeSegmentMetadata, SetAudioTrackResponse,
@@ -768,61 +765,34 @@ impl Dispatcher {
     /// and url as argument.
     fn on_top_level_playlist_loaded(&mut self, data: Vec<u8>, playlist_url: Url, started_at: f64) {
         log_info!("Core: top-level playlist loaded");
-        match TopLevelPlaylist::parse(data.as_ref(), playlist_url) {
-            Err(err) => {
-                let message = err.to_string();
-                match err {
-                    TopLevelPlaylistParsingError::Multivariant(err) => {
-                        jsSendMultivariantPlaylistParsingError(true, err.into(), &message);
-                    }
-                    TopLevelPlaylistParsingError::Media(err) => {
-                        jsSendMediaPlaylistParsingError(true, err.into(), None, &message);
-                    }
-                    TopLevelPlaylistParsingError::NotAPlaylist => {
-                        jsSendMultivariantPlaylistParsingError(
-                            true,
-                            MultivariantPlaylistParsingErrorCode::NotAPlaylist,
-                            &message,
-                        );
-                    }
-                }
-                self.stop_current_content();
-            }
-            Ok(pl) => {
+        match PlaylistStore::try_new(data.as_ref(), playlist_url) {
+            Ok(mut pl_store) => {
                 log_info!("Core: top-level playlist parsed successfully");
-                match PlaylistStore::try_new(pl) {
-                    Ok(mut pl_store) => {
-                        self.apply_initial_audio_track_selection(&mut pl_store);
-                        // Inspect the safe variant at startup. Later recommendations go straight
-                        // to segment selection.
-                        if let Some(selection) = self.adaptive_selector.select_variant(
-                            &pl_store.compatible_variants(),
-                            None,
-                            &self.playback_conditions(&pl_store),
-                        ) {
-                            pl_store.set_variant(selection.safe_variant_id);
-                        }
-
-                        // A top-level playlist may be a media playlist directly.
-                        let direct_media_refresh = pl_store
-                            .direct_media_playlist()
-                            .map(|(id, playlist)| (*id, playlist.refresh_info()));
-
-                        self.playlist_store = Some(pl_store);
-                        if let Some((playlist_id, refresh_info)) = direct_media_refresh {
-                            self.process_parsed_media_playlist(
-                                playlist_id,
-                                refresh_info,
-                                started_at,
-                            );
-                        }
-                        self.recheck_player_state();
-                    }
-                    Err(err) => {
-                        utils::handle_playlist_store_error(err);
-                        self.stop_current_content();
-                    }
+                self.apply_initial_audio_track_selection(&mut pl_store);
+                // Inspect the safe variant at startup. Later recommendations go straight
+                // to segment selection.
+                if let Some(selection) = self.adaptive_selector.select_variant(
+                    &pl_store.compatible_variants(),
+                    None,
+                    &self.playback_conditions(&pl_store),
+                ) {
+                    pl_store.set_variant(selection.safe_variant_id);
                 }
+
+                // A top-level playlist may be a media playlist directly.
+                let direct_media_refresh = pl_store
+                    .direct_media_playlist()
+                    .map(|(id, playlist)| (*id, playlist.refresh_info()));
+
+                self.playlist_store = Some(pl_store);
+                if let Some((playlist_id, refresh_info)) = direct_media_refresh {
+                    self.process_parsed_media_playlist(playlist_id, refresh_info, started_at);
+                }
+                self.recheck_player_state();
+            }
+            Err(err) => {
+                utils::handle_playlist_store_error(err);
+                self.stop_current_content();
             }
         }
     }
@@ -1642,18 +1612,16 @@ mod tests {
     use crate::{
         bindings::MediaType,
         dispatcher::{JsTimeRanges, MediaObservation, PlaybackTickReason},
-        parser::TopLevelPlaylist,
         playlist_store::PlaylistStore,
         utils::url::Url,
     };
 
     fn selected_playlist(manifest: &[u8]) -> PlaylistStore {
-        let playlist = TopLevelPlaylist::parse(
+        let mut pl_store = PlaylistStore::try_new(
             manifest,
             Url::new("https://example.com/master.m3u8".to_string()),
         )
         .unwrap();
-        let mut pl_store = PlaylistStore::try_new(playlist).unwrap();
         let variant_id = pl_store.available_variants()[0].id();
         pl_store.set_variant(variant_id);
         pl_store
@@ -2126,12 +2094,11 @@ mod tests {
     fn direct_media_preserves_useful_requests_without_adaptive_reconsideration() {
         let mut dispatcher = dispatcher_with_abr_playlists(Some(4), 8.1);
         let playlist_store = dispatcher.playlist_store.as_mut().unwrap();
-        let direct_playlist = TopLevelPlaylist::parse(
+        *playlist_store = PlaylistStore::try_new(
             b"#EXTM3U\n#EXT-X-TARGETDURATION:4\n#EXTINF:4,\nseg.ts\n#EXT-X-ENDLIST\n",
             Url::new("https://example.com/direct.m3u8".into()),
         )
         .unwrap();
-        *playlist_store = PlaylistStore::try_new(direct_playlist).unwrap();
         playlist_store.set_external_media_info(
             crate::parser::ExternalMediaInfo {
                 mime_type: "video/mp4".into(),
