@@ -674,6 +674,9 @@ impl Dispatcher {
             }
         }
 
+        // Probe segment may have provided information helping us to determine how much to
+        // buffer (e.g. media type)
+        self.update_min_buffer_time();
         self.check_end_of_stream_after_playlist_update();
 
         self.ready_probe_segments.insert(ReadyProbeSegment {
