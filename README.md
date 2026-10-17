@@ -20,9 +20,9 @@ to be built on top of it) for the web which:
    for media buffering when APIs are available), to reduce the influence an
    heavy UI can have on playback (and in some situations vice-versa).
 
-I'm [Paul Berberian](https://peaberberian.github.io/), lead developer of the
-[RxPlayer](https://github.com/canalplus/rx-player). Wasp-hls is a separate
-project that I maintain, developed in the open since 2022.
+I develop Wasp-hls as an independent personal project, drawing on my
+professional experience as lead developer of the [RxPlayer](https://github.com/canalplus/rx-player).
+Developed in the open since 2022, Wasp-hls is unaffiliated with RxPlayer or Canal+.
 
 Note that this is still heavily in development. Plans are:
 
