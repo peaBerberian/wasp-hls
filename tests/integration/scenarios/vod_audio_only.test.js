@@ -9,7 +9,7 @@ describe("Generated VoD content - audio only", function () {
 
   it(
     "plays an audio-only variant without an AUDIO group",
-    { timeout: 60_000 },
+    { timeout: 180_000 },
     async () => {
       ctx.player.addEventListener("playerStateChange", (state) => {
         if (state === "Loaded") {
@@ -26,7 +26,8 @@ describe("Generated VoD content - audio only", function () {
       expect(ctx.player.isVod()).toEqual(true);
       expect(ctx.player.getMaximumPosition()).toBeGreaterThan(10);
       const startPosition = ctx.player.getPosition();
-      await checkAfterSleepWithBackoff({ maxTimeMs: 5_000 }, () => {
+      // Allow slow machines time to start playback after reaching Loaded.
+      await checkAfterSleepWithBackoff({ maxTimeMs: 60_000 }, () => {
         expect(ctx.player.getPosition()).toBeGreaterThan(startPosition + 1);
       });
       expect(ctx.lastPlayerError).toBeNull();

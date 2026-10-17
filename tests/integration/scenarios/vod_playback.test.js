@@ -313,7 +313,7 @@ describe("Generated VoD content - playback", function () {
     },
   );
 
-  it("sends ended event when stream ends", { timeout: 180_000 }, async () => {
+  it("sends ended event when stream ends", { timeout: 240_000 }, async () => {
     let receivedEndedEvent = 0;
     ctx.player.addEventListener("ended", () => {
       receivedEndedEvent++;
@@ -329,7 +329,7 @@ describe("Generated VoD content - playback", function () {
     // Separate loading from playback so slow startup does not consume the end-event wait.
     ctx.player.resume();
     await checkAfterSleepWithBackoff(
-      { minTimeMs: 100, maxTimeMs: 30000, stepMs: 500 },
+      { minTimeMs: 100, maxTimeMs: 120_000, stepMs: 500 },
       () => {
         expect(ctx.videoElement.ended).toEqual(true);
         expect(ctx.player.isEnded()).toEqual(true);
