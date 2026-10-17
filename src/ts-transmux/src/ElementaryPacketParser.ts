@@ -15,9 +15,7 @@ export interface MetadataElementaryPacket {
 }
 
 export type MediaElementaryPacket =
-  | AudioElementaryPacket
-  | VideoElementaryPacket
-  | TimedMetadataElementaryPacket;
+  AudioElementaryPacket | VideoElementaryPacket | TimedMetadataElementaryPacket;
 
 export interface AudioElementaryPacket extends ElementaryPacketBase {
   type: "audio";

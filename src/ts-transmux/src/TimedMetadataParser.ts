@@ -97,7 +97,7 @@ export default class TimedMetadataParser {
       pts: (this._buffer[0] as any).pts,
       dts: (this._buffer[0] as any).dts,
     };
-    for (let i = 0; i < this._tagSize; ) {
+    for (let i = 0; i < this._tagSize;) {
       tag.data.set(this._buffer[0].data.subarray(0, this._tagSize - i), i);
       i += this._buffer[0].data.byteLength;
       this._bufferSize -= this._buffer[0].data.byteLength;

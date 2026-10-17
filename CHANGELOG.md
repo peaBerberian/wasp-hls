@@ -4,11 +4,12 @@
 
 ### Changes
 
-- Changes slightly the semantics of the `variantUpdate` event and `getCurrentVariant` method now that variant selection is internally much more flexible
+- Slightly change the semantics of the `variantUpdate` event and `getCurrentVariant` method now that variant selection is internally much more flexible
+- Make `bufferGoal` `30` by default (can be changed at any time)
 
 ### Features
 
-- Add buffer-based adaptive algorithm (BOLA)
+- Add a buffer-based adaptive algorithm (BOLA)
 
 ### Bug fixes
 
@@ -20,25 +21,24 @@
 - Return `undefined` instead of `-1` for unknown `mediaType` properties on `WaspMediaPlaylistRequestError`, `WaspMediaPlaylistParsingError` and `WaspSegmentParsingError`
 - Correctly report failed segment downloads as `WaspSegmentRequestError` through `error` or `warning` events even when the player does not yet know whether the segment contains audio or video
 - Be resilient to non-UTF-8 HLS playlists
-- Throw `MultivariantPlaylistInvalidValue` error code when a MultiVariant playlist refers to an AUDIO group which does not exist, as per the HLS specification
+- Throw error with code `MultivariantPlaylistInvalidValue` when a Multivariant playlist refers to an AUDIO group which does not exist, as per the HLS specification
 - Known codecs but unknown mime-type now trigger segment probing instead of passing an empty MIME type to SourceBuffers
-- Don't be stuck rebuffering if the buffer goal is lower than what our internal `min_buffer_time`, one of the threshold controlling rebuffering
-- Don't load older segment if current playback position already moved past it
-- For `AUTOSELECT`, `FORCED` and `DEFAULT` `EXT-X-MEDIA` attributes, do not assume there are `true` just by their presence
+- Don't get stuck rebuffering if the buffer goal is lower than our internal `min_buffer_time`, one of the thresholds controlling rebuffering
+- Don't load older segments if current playback position already moved past them
+- For `AUTOSELECT`, `FORCED` and `DEFAULT` `EXT-X-MEDIA` attributes, do not assume they are set just by their presence
 - Ignore unknown DEFINE attributes before parsing their values
 - Validate variable references even in GAP URIs
 
 ### Other
 
-- Make `bufferGoal` `30` by default (can be changed at any time)
-- Automatically fallback to full playlist if given initially a delta playlist URL
+- Automatically fall back to full playlist if initially given a delta playlist URL
 - Improve ABR's "urgent switch" categorization to only abort previous requests if there's a fair risk of rebuffering
-- Optimal fast-quality-switching coordination: continue in additive mode until the playlist linked to segment replacements is fetched
-- Multiple primary media playlists sharing the same URL yet associated to multiple variants are now considered the same resource to optimize some playlist management logic (e.g. playlist refresh)
-- Switch quality faster if previous awaited segment for that type (audio/video) was in a backoff or waiting (due to low priority) phase
-- Optimization: "Probe segments" can now be "consumed" later than at startup if they coincide with the next segment needed
-- WebAssembly compilation now always target the initial WebAssembly browser release (a.k.a. "MVP") to maximize support
-- Embedded WebAssembly is now embedded through a Base64 string instead of number array for initialization performance reasons
+- Better fast-quality-switching coordination: continue in additive mode until the playlist linked to segment replacements is fetched
+- Multiple primary media playlists sharing the same URL yet associated with multiple variants are now considered the same resource to optimize some playlist management logic (e.g. playlist refresh)
+- Switch quality faster if the previously awaited segment for that type (audio/video) was in a backoff or waiting (due to low priority) phase
+- "Probe segments" can now be "consumed" later than at startup if they coincide with the next segment needed
+- WebAssembly compilation now always targets the initial WebAssembly browser release (a.k.a. "MVP") to maximize support
+- WebAssembly is now embedded through a Base64 string instead of a number array for initialization performance reasons
 - tests: Begin automatically checking for performance regressions / improvements
 
 ## v0.5.0 (2025-06-01)
@@ -59,7 +59,7 @@
 - Add optional `videoRange` property to `getVariantList`, `getLockedVariant`, `getCurrentVariant` as well as `variantUpdate`, `variantLockUpdate` and `variantListUpdate` events to reflect its video's dynamic range
 - Add `NotAPlaylist` error code for when the given resource URL does not seem to be a valid HLS playlist URL
 - Add `WaspContentCompatibilityError` with the `NoSupportedVariant` error code for contents with no playable variant on the current platform
-- Add `MultivariantPlaylistVariableDefinitionError` and `MediaPlaylistVariableDefinitionError` error codes for when an `#EXT-X-DEFINE` tag or usage is not compliant to the HLS specification respectively on the MultiVariant Playlist or the Media Playlist.
+- Add `MultivariantPlaylistVariableDefinitionError` and `MediaPlaylistVariableDefinitionError` error codes for when an `#EXT-X-DEFINE` tag or usage is not compliant to the HLS specification respectively on the Multivariant Playlist or the Media Playlist.
 - Add `MultivariantPlaylistDuplicateTag`, `MultivariantPlaylistConflictingTagTypes`, `MediaPlaylistDuplicateTag`, and `MediaPlaylistConflictingTagTypes` error codes for duplicate singleton tags and invalid mixes of playlist tag classes.
 - Add `SourceBufferEmptyMimeType`, `SourceBufferMediaSourceIsClosed`, `SourceBufferNoMediaSourceAttached` and `SourceBufferQuotaExceededError` error codes on a `WaspSourceBufferCreationError` error type.
 - Add `getSeekableMinimumPosition` and `getSeekableMaximumPosition` methods to expose the currently known seekable bounds in playlist time

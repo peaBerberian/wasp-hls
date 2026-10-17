@@ -157,9 +157,7 @@ export interface MainMediaSourceInstanceInfo {
 export interface ContentInfo {
   contentId: string;
   mediaSourceObj:
-    | WorkerMediaSourceInstanceInfo
-    | MainMediaSourceInstanceInfo
-    | null;
+    WorkerMediaSourceInstanceInfo | MainMediaSourceInstanceInfo | null;
   observationsObj: {
     removeEventListeners: () => void;
     timeoutId: number | undefined;
@@ -233,9 +231,7 @@ export function updateDispatcherConfig(
 }
 
 export function getMediaSourceObj():
-  | MainMediaSourceInstanceInfo
-  | WorkerMediaSourceInstanceInfo
-  | undefined {
+  MainMediaSourceInstanceInfo | WorkerMediaSourceInstanceInfo | undefined {
   const contentInfo = playerInstance.getContentInfo();
   if (contentInfo === null) {
     return undefined;

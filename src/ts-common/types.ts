@@ -517,8 +517,7 @@ export interface InitialAudioTrackSelection {
  * single selector or as an ordered list of selectors.
  */
 export type InitialAudioTrackPreference =
-  | InitialAudioTrackSelection
-  | InitialAudioTrackSelection[];
+  InitialAudioTrackSelection | InitialAudioTrackSelection[];
 
 /**
  * Message sent when the Worker has succesfully stopped a content.

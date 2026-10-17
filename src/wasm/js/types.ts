@@ -55,11 +55,7 @@ export interface HostResult<Value, ErrorCode extends number> {
 }
 
 export type InitInput =
-  | RequestInfo
-  | URL
-  | Response
-  | BufferSource
-  | WebAssembly.Module;
+  RequestInfo | URL | Response | BufferSource | WebAssembly.Module;
 
 export type InitOutput = WaspWasmExports;
 

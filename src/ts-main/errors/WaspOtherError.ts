@@ -14,9 +14,7 @@ export default class WaspOtherError extends Error {
 
   /** Specifies the exact error encountered. */
   public readonly code:
-    | "MediaSourceAttachmentError"
-    | "UnfoundLockedVariant"
-    | "Unknown";
+    "MediaSourceAttachmentError" | "UnfoundLockedVariant" | "Unknown";
 
   /**
    * Specifies the exact error encountered.
