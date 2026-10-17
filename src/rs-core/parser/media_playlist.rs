@@ -55,7 +55,6 @@ pub(crate) struct PlaylistRefreshInfo {
 /// See display implementation for more information on its variants.
 #[derive(Debug)]
 pub(crate) enum MediaPlaylistParsingError {
-    DeltaUpdate,
     UnparsableExtInf,
     UnparsableByteRange,
     UriMissingInMap,
@@ -70,9 +69,6 @@ pub(crate) enum MediaPlaylistParsingError {
 impl fmt::Display for MediaPlaylistParsingError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            MediaPlaylistParsingError::DeltaUpdate => {
-                write!(f, "Received EXT-X-SKIP but need a complete Media Playlist")
-            }
             MediaPlaylistParsingError::UnparsableExtInf => {
                 write!(f, "One of the #EXTINF value could not be parsed")
             }
@@ -248,18 +244,6 @@ impl MediaPlaylist {
                         match parse_decimal_integer(&str_line, colon_idx + 1).0 {
                             Ok(t) if t <= (u32::MAX as u64) => target_duration = Some(t as u32),
                             _ => log_warn!("Unparsable TARGETDURATION value"),
-                        }
-                    }
-                    "-X-SKIP" => {
-                        let skipped = AttributeListIter::new(&str_line, colon_idx + 1)
-                            .find(|item| item.name == "SKIPPED-SEGMENTS")
-                            .and_then(|item| {
-                                parse_decimal_integer(&str_line, item.value_start_offset)
-                                    .0
-                                    .ok()
-                            });
-                        if skipped != Some(0) {
-                            return Err(MediaPlaylistParsingError::DeltaUpdate);
                         }
                     }
                     "-X-GAP" => {
@@ -779,21 +763,6 @@ mod tests {
             None,
             &MediaPlaylistContext::default(),
         )
-    }
-
-    #[test]
-    fn zero_skipped_segments_need_no_history() {
-        let playlist = "#EXTM3U\n#EXT-X-TARGETDURATION:4\n#EXT-X-MEDIA-SEQUENCE:10\n#EXT-X-SKIP:SKIPPED-SEGMENTS=0\n#EXTINF:4,\nseg.ts\n";
-        let parsed = parse_media_playlist(playlist).unwrap();
-        assert_eq!(parsed.segment_list.media()[0].sequence(), 10);
-    }
-
-    #[test]
-    fn delta_playlist_requires_a_full_copy_before_accepting_segments() {
-        assert!(matches!(
-            parse_media_playlist("#EXTM3U\n#EXT-X-SKIP:SKIPPED-SEGMENTS=2\n"),
-            Err(MediaPlaylistParsingError::DeltaUpdate)
-        ));
     }
 
     #[test]

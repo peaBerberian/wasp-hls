@@ -853,8 +853,7 @@ impl From<MediaPlaylistUpdateError> for MediaPlaylistParsingErrorCode {
             MediaPlaylistUpdateError::ParsingError(MediaPlaylistParsingError::UnableToReadLine) => {
                 MediaPlaylistParsingErrorCode::Unknown
             }
-            MediaPlaylistUpdateError::ParsingError(MediaPlaylistParsingError::DeltaUpdate)
-            | MediaPlaylistUpdateError::NotFound => MediaPlaylistParsingErrorCode::Unknown,
+            MediaPlaylistUpdateError::NotFound => MediaPlaylistParsingErrorCode::Unknown,
         }
     }
 }

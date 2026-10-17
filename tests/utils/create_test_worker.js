@@ -19,7 +19,6 @@ import EmbeddedWorker from "../../build/embedded/worker.js";
  * @property {number} [delayMs]
  * @property {boolean} [waitForRelease] Hold the response and request timeout until releaseFetch.
  * @property {number} [status]
- * @property {string} [finalUrl] Response URL after simulated redirects.
  * @property {string} [body]
  * @property {Record<string, string>} [headers]
  * @property {string} [message]

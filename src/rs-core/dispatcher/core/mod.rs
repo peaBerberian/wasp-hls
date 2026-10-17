@@ -16,13 +16,10 @@ use crate::{
     },
     dispatcher::segment_request_contexts::PendingSegmentRequest,
     media_element::SegmentPushMetadata,
-    parser::{
-        MediaPlaylistParsingError, MediaPlaylistUpdateError, PlaylistRefreshInfo, SegmentIdentity,
-        TopLevelPlaylistParsingError,
-    },
+    parser::{PlaylistRefreshInfo, SegmentIdentity},
     playlist_store::{
         AudioTrackChange, LockVariantResponse, MediaPlaylistPermanentId, PlaylistStore,
-        PlaylistStoreError, ProbeSegmentMetadata, SetAudioTrackResponse,
+        ProbeSegmentMetadata, SetAudioTrackResponse,
     },
     requester::{
         FinishedRequestType, PlaylistFileType, PlaylistRequestInfo, RetryResult, SegmentRequestInfo,
@@ -692,24 +689,6 @@ impl Dispatcher {
         self.recheck_player_state();
     }
 
-    fn retry_playlist_without_skip(
-        &mut self,
-        requested_url: Url,
-        final_url: Url,
-        playlist_type: PlaylistFileType,
-    ) -> bool {
-        let Some(clean_url) = requested_url.without_hls_skip() else {
-            return false;
-        };
-        let clean_url = if requested_url == final_url {
-            clean_url
-        } else {
-            final_url.without_hls_skip().unwrap_or(final_url)
-        };
-        self.requester.fetch_playlist(clean_url, playlist_type);
-        true
-    }
-
     /// Called when a playlist request succeeds.
     ///
     /// # Arguments
@@ -727,12 +706,11 @@ impl Dispatcher {
         let PlaylistRequestInfo {
             playlist_type,
             started_at,
-            url: requested_url,
             ..
         } = pl_info;
         match playlist_type {
             PlaylistFileType::TopLevelPlaylist => {
-                self.on_top_level_playlist_loaded(data, final_url, started_at, requested_url)
+                self.on_top_level_playlist_loaded(data, final_url, started_at)
             }
 
             PlaylistFileType::MediaPlaylist { id, media_type } => {
@@ -751,24 +729,12 @@ impl Dispatcher {
                         self.stop_current_content();
                         return;
                     };
-                    match pl_store.update_media_playlist(&id, data.as_ref(), final_url.clone()) {
+                    match pl_store.update_media_playlist(&id, data.as_ref(), final_url) {
                         Err(e) => {
                             if is_obsolete {
                                 log_info!(
                                     "Core: Ignoring parse failure of a deselected media playlist"
                                 );
-                                return;
-                            }
-                            if matches!(
-                                e,
-                                MediaPlaylistUpdateError::ParsingError(
-                                    MediaPlaylistParsingError::DeltaUpdate
-                                )
-                            ) && self.retry_playlist_without_skip(
-                                requested_url,
-                                final_url,
-                                PlaylistFileType::MediaPlaylist { id, media_type },
-                            ) {
                                 return;
                             }
                             let err_message = e.to_string();
@@ -811,18 +777,11 @@ impl Dispatcher {
     /// # Arguments
     ///
     /// * `data` - Downloaded playlist bytes.
-    /// * `final_url` - Response URL after redirects. Use it to resolve relative URLs.
+    /// * `playlist_url` - Response URL after redirects. Use it to resolve relative URLs.
     /// * `started_at` - Time the request started, in monotonic milliseconds.
-    /// * `requested_url` - URL before redirects.
-    fn on_top_level_playlist_loaded(
-        &mut self,
-        data: Vec<u8>,
-        final_url: Url,
-        started_at: f64,
-        requested_url: Url,
-    ) {
+    fn on_top_level_playlist_loaded(&mut self, data: Vec<u8>, playlist_url: Url, started_at: f64) {
         log_info!("Core: top-level playlist loaded");
-        match PlaylistStore::try_new(data.as_ref(), final_url.clone()) {
+        match PlaylistStore::try_new(data.as_ref(), playlist_url) {
             Ok(mut pl_store) => {
                 log_info!("Core: top-level playlist parsed successfully");
                 self.apply_initial_audio_track_selection(&mut pl_store);
@@ -848,18 +807,6 @@ impl Dispatcher {
                 self.recheck_player_state();
             }
             Err(err) => {
-                if matches!(
-                    err,
-                    PlaylistStoreError::Parsing(TopLevelPlaylistParsingError::Media(
-                        MediaPlaylistParsingError::DeltaUpdate
-                    ))
-                ) && self.retry_playlist_without_skip(
-                    requested_url,
-                    final_url,
-                    PlaylistFileType::TopLevelPlaylist,
-                ) {
-                    return;
-                }
                 utils::handle_playlist_store_error(err);
                 self.stop_current_content();
             }
