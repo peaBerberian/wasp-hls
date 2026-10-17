@@ -102,6 +102,10 @@ const DEFAULT_CONTENT_LIST = [
     name: "China documentary Arte (mpeg-ts, ABR, no playlist codec)",
     url: "https://test-streams.mux.dev/test_001/stream.m3u8",
   },
+  {
+    name: "Angel One (fmp4, multi-audio, ABR)",
+    url: "https://storage.googleapis.com/shaka-demo-assets/angel-one-hls/hls.m3u8",
+  },
 ];
 
 function ContentList({
