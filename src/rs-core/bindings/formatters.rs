@@ -88,7 +88,7 @@ pub(crate) fn format_source_buffer_creation_err_for_js(
     }
 }
 
-pub(crate) unsafe fn format_audio_tracks_for_js(tracks: &[AudioTrack]) -> Vec<u32> {
+pub(crate) unsafe fn format_audio_tracks_for_js(tracks: &[&AudioTrack]) -> Vec<u32> {
     let selectable_tracks = tracks
         .iter()
         .filter(|track| track.is_selectable())

@@ -10,7 +10,7 @@ use super::{
 };
 use crate::{
     bindings::MediaType,
-    utils::{logger::*, url::Url},
+    utils::{codecs::guess_media_type_from_codec, logger::*, url::Url},
 };
 
 /// Stucture representing the HLS concept of a "variant stream".
@@ -501,28 +501,5 @@ impl VariantStream {
 
     pub(super) fn communicate_context(&mut self, context: MediaPlaylistContext) {
         self.context = Some(context);
-    }
-}
-
-fn guess_media_type_from_codec(codec: &str) -> Option<MediaType> {
-    let (base, _) = split_codec(codec);
-
-    match base {
-        "mp4a" => Some(MediaType::Audio),
-        "ec-3" | "ac-3" => Some(MediaType::Audio),
-        "avc1" | "avc3" => Some(MediaType::Video),
-        "hvc1" | "hev1" => Some(MediaType::Video),
-        "dvh1" | "dvhe" => Some(MediaType::Video),
-        _ => None,
-    }
-}
-
-fn split_codec(codec: &str) -> (&str, &str) {
-    let position = codec.find('.');
-    if let Some(position) = position {
-        let both_parts = codec.split_at(position);
-        (both_parts.0, both_parts.1.split_at(0).1)
-    } else {
-        (codec, "")
     }
 }

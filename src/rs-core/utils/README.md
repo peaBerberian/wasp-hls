@@ -3,6 +3,8 @@
 This directory regroups small helpers used by the Rust code. There's no central
 object coordinating them; `mod.rs` just exposes the individual modules.
 
+- `codecs.rs` infers audio or video media types from recognized codec base names.
+
 - `url.rs` provides an owned URL string with helpers to combine a base and a
   relative URL, recognize absolute URLs and extract parts such as the filename
   or extension. This is lightweight string handling, not a full URL parser or

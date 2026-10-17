@@ -36,6 +36,12 @@ grouping of playlists appearing to be different renditions of the same content.
 Playlists containing both audio and video are handled as video here, without a
 separate audio playlist selection.
 
+The caller can restrict the allowed variant/audio-track combinations for a
+content. The store applies that restriction to available choices and selection
+requests, separately from codec support. It retains the restriction across track
+changes. The caller determines the policy; the store only provides playlist and
+codec metadata and enforces the resulting allowed combinations.
+
 ## Where it stops
 
 The store is fed playlist data and probe results by its caller. In return, its

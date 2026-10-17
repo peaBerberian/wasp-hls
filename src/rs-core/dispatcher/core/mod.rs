@@ -31,6 +31,7 @@ use crate::{
     utils::{logger::*, url::Url},
 };
 
+mod buffer_layout;
 mod startup;
 
 // Select slightly before the playhead to tolerate segment timing differences. Pending-request
@@ -1256,7 +1257,13 @@ impl Dispatcher {
         if Some(&playlist_id) != pl_store.current_media_playlist_id(media_type)
             && Some(variant_id) != pl_store.current_variant_id()
         {
-            // TODO: Verify transitions between separate and muxed audio in both directions.
+            // TODO: Handle transitions between separate and muxed audio in both directions.
+            // Muxed audio/video currently shares one SourceBuffer, whereas separate playlists
+            // use two. Flushing does not change that layout, and cycling MediaSource during ABR
+            // would interrupt playback. Startup currently restricts the allowed selections
+            // to those compatible with the initial buffer layout.
+            // Seamless support would need a consistent output layout for both TS and fMP4;
+            // splitting only transmuxed TS would leave multiplexed fMP4 transitions unsupported.
             let changed_media_types = pl_store.set_variant(variant_id);
             for changed_type in changed_media_types {
                 self.ready_probe_segments.clear_media_type(changed_type);

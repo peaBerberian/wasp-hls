@@ -65,9 +65,9 @@ describe("Variant and audio-track event ordering", function () {
 #EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="low",NAME="English",LANGUAGE="en",DEFAULT=YES,URI="${baseUrl}audio-en.m3u8"
 #EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="high",NAME="English",LANGUAGE="en",URI="${baseUrl}audio-en.m3u8?rendition=high"
 #EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="high",NAME="French",LANGUAGE="fr",DEFAULT=YES,URI="${baseUrl}audio-fr.m3u8"
-#EXT-X-STREAM-INF:BANDWIDTH=1900000,AUDIO="low"
+#EXT-X-STREAM-INF:BANDWIDTH=1900000,CODECS="avc1.42E01E,mp4a.40.2",AUDIO="low"
 ${baseUrl}video.m3u8
-#EXT-X-STREAM-INF:BANDWIDTH=4000000000,AUDIO="high"
+#EXT-X-STREAM-INF:BANDWIDTH=4000000000,CODECS="avc1.42E01E,mp4a.40.2",AUDIO="high"
 ${alternativeVideoUrl}
 `,
             },
@@ -164,9 +164,9 @@ describe("Audio track changes requiring a variant change", function () {
 #EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="current",NAME="English",LANGUAGE="en",DEFAULT=YES,URI="${baseUrl}audio-en.m3u8"
 #EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="current",NAME="French",LANGUAGE="fr",URI="${currentAudioUrl}"
 #EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="alternative",NAME="French",LANGUAGE="fr",DEFAULT=YES,URI="${alternativeAudioUrl}"
-#EXT-X-STREAM-INF:BANDWIDTH=${currentBandwidth}${currentScore},AUDIO="current"
+#EXT-X-STREAM-INF:BANDWIDTH=${currentBandwidth}${currentScore},CODECS="avc1.42E01E,mp4a.40.2",AUDIO="current"
 ${baseUrl}video.m3u8
-#EXT-X-STREAM-INF:BANDWIDTH=${alternativeBandwidth}${alternativeScore},AUDIO="alternative"
+#EXT-X-STREAM-INF:BANDWIDTH=${alternativeBandwidth}${alternativeScore},CODECS="avc1.42E01E,mp4a.40.2",AUDIO="alternative"
 ${alternativeVideoUrl}
 `,
             },
@@ -298,7 +298,7 @@ ${alternativeVideoUrl}
   );
 
   it(
-    "rejects tracks without a variant asynchronously and preserves playback and locking",
+    "omits tracks without a variant and rejects unavailable track IDs without changing playback",
     { timeout: TEST_TIMEOUT_MS },
     async () => {
       const baseUrl = new URL(".", getVodScenarioUrl("fmp4-alt-audio"));
@@ -311,7 +311,7 @@ ${alternativeVideoUrl}
               body: `#EXTM3U
 #EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="en",NAME="English",LANGUAGE="en",DEFAULT=YES,URI="${baseUrl}audio-en.m3u8"
 #EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="unused",NAME="French",LANGUAGE="fr",URI="unused.m3u8"
-#EXT-X-STREAM-INF:BANDWIDTH=1900000,AUDIO="en"
+#EXT-X-STREAM-INF:BANDWIDTH=1900000,CODECS="avc1.42E01E,mp4a.40.2",AUDIO="en"
 ${baseUrl}video.m3u8
 `,
             },
@@ -334,9 +334,11 @@ ${baseUrl}video.m3u8
         ctx.player.lockVariant(initialVariant.id);
         await locked;
 
-        const frenchTrack = ctx.player
-          .getAudioTrackList()
-          .find((track) => track.language === "fr");
+        expect(
+          ctx.player
+            .getAudioTrackList()
+            .some((track) => track.language === "fr"),
+        ).toBe(false);
         const warnings = eventListener(ctx.player, "warning");
         const trackUpdates = eventListener(ctx.player, "audioTrackUpdate");
         const variantUpdates = eventListener(ctx.player, "variantUpdate");
@@ -345,7 +347,7 @@ ${baseUrl}video.m3u8
         // The following warning-producing track request acts as a worker-ordering barrier for
         // this repeated lock request.
         ctx.player.lockVariant(initialVariant.id);
-        for (const trackId of [frenchTrack.id, frenchTrack.id, 0xfffffffe]) {
+        for (const trackId of [0xfffffffd, 0xfffffffd, 0xfffffffe]) {
           const previousWarningCount = warnings.getCurrentCount();
           const warningPromise = warnings.awaitNext();
           expect(ctx.player.setAudioTrack(trackId)).toBeUndefined();
@@ -403,9 +405,9 @@ ${baseUrl}video.m3u8
               body: `#EXTM3U
 #EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="en",NAME="English",LANGUAGE="en",DEFAULT=YES,URI="${baseUrl}audio-en.m3u8"
 #EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="fr",NAME="French",LANGUAGE="fr",DEFAULT=YES,URI="${baseUrl}audio-fr.m3u8"
-#EXT-X-STREAM-INF:BANDWIDTH=1900000,AUDIO="en"
+#EXT-X-STREAM-INF:BANDWIDTH=1900000,CODECS="avc1.42E01E,mp4a.40.2",AUDIO="en"
 ${baseUrl}video.m3u8
-#EXT-X-STREAM-INF:BANDWIDTH=2000000,AUDIO="fr"
+#EXT-X-STREAM-INF:BANDWIDTH=2000000,CODECS="avc1.42E01E,mp4a.40.2",AUDIO="fr"
 ${baseUrl}video.m3u8
 `,
             },

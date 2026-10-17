@@ -36,6 +36,20 @@ the playlists currently needed and manages their timers.
 `segment_request_contexts.rs` stores information about pending segment requests,
 so we know what to do with them once they finish.
 
+Before announcing the available choices, startup uses `core/buffer_layout.rs` to
+restrict selection to the initial buffering configuration. With the current
+append pipeline, muxed audio/video shares one SourceBuffer, while separate audio
+and video playlists use separate buffers. Changing between those configurations
+would interrupt playback. The dispatcher derives compatible selections from the
+store's metadata and supplies them as a selection restriction; PlaylistStore
+does not decide buffer compatibility or manage buffers.
+
+This policy applies to TS and fMP4. Probe results take precedence over manifest
+codecs. A distinct AUDIO rendition is assumed audio-only when codecs are missing;
+a primary playlist with unknown codecs is excluded until its layout is known.
+These are metadata-based decisions, not observations of browser buffer state.
+Loading another content starts selection afresh.
+
 ## Where it stops
 
 This code decides what to do next and keeps the state needed between events.

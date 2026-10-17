@@ -7,7 +7,10 @@ use crate::{
     },
     utils::{logger::*, url::Url},
 };
-use std::{collections::HashMap, io::BufRead};
+use std::{
+    collections::{HashMap, HashSet},
+    io::BufRead,
+};
 
 use crate::parser::ByteRange;
 pub(crate) use crate::parser::MediaPlaylistPermanentId;
@@ -60,6 +63,11 @@ pub(crate) struct PlaylistStore {
     /// Key is the variant id, bool is `true` if supported, `false` if not.
     variant_support: HashMap<u32, bool>,
 
+    /// Variant/audio-track combinations allowed by the caller for this content.
+    /// `None` as the track id selects the variant's default audio rendition.
+    /// Independent of codec support; retained across track selection changes.
+    allowed_selections: Option<HashSet<(u32, Option<u32>)>>,
+
     /// Probe metadata inferred for currently known multivariant media playlists.
     multivariant_media_info: HashMap<MediaPlaylistPermanentId, ExternalMediaInfo>,
 
@@ -92,6 +100,7 @@ impl PlaylistStore {
             is_variant_locked: false,
             selected_media_support_resolved: false,
             variant_support: HashMap::new(),
+            allowed_selections: None,
             multivariant_media_info: HashMap::new(),
             max_observed_target_duration,
         })
@@ -227,13 +236,26 @@ impl PlaylistStore {
     /// Get the codec string of the current playlist associated to this media type if known.
     pub(crate) fn current_codec(&self, media_type: MediaType) -> Option<String> {
         match &self.playlist {
-            TopLevelPlaylist::Multivariant(_) => {
+            TopLevelPlaylist::Multivariant(playlist) => {
                 if !self.has_distinct_media_type(media_type) {
                     return None;
                 }
                 self.curr_multivariant_media_info(media_type)
                     .map(|info| info.codec.clone())
-                    .or_else(|| self.current_variant()?.codecs(media_type))
+                    .or_else(|| {
+                        let variant = self.current_variant()?;
+                        let mut codec = variant.codecs(media_type)?;
+                        if media_type == MediaType::Video
+                            && playlist.audio_media_playlist_id_for(variant, self.fixed_audio_track)
+                                == self.current_video_id
+                        {
+                            if let Some(audio_codec) = variant.codecs(MediaType::Audio) {
+                                codec.push(',');
+                                codec.push_str(&audio_codec);
+                            }
+                        }
+                        Some(codec)
+                    })
             }
             TopLevelPlaylist::DirectMedia(playlist) => playlist
                 .external_media_info()
@@ -383,14 +405,33 @@ impl PlaylistStore {
         }
     }
 
+    /// All declared variants, before runtime support checks or selection restrictions.
+    pub(crate) fn all_variants(&self) -> &[VariantStream] {
+        match &self.playlist {
+            TopLevelPlaylist::Multivariant(playlist) => playlist.all_variants(),
+            TopLevelPlaylist::DirectMedia(_) => &[],
+        }
+    }
+
     /// Returns vec describing all variant streams in the current `MultivariantPlaylist`,
-    /// excluding variants known to be unsupported.
+    /// excluding variants known to be unsupported or disallowed by the caller
+    /// with every audio rendition. The reported list remains usable after audio track changes.
     pub(crate) fn available_variants(&self) -> Vec<&VariantStream> {
         match &self.playlist {
             TopLevelPlaylist::Multivariant(playlist) => playlist
                 .all_variants()
                 .iter()
                 .filter(|v| self.variant_support(v.id()) != Some(false))
+                .filter(|v| {
+                    self.selection_is_allowed(v, None)
+                        || playlist.audio_tracks().iter().any(|track| {
+                            playlist
+                                .variants_for_audio(track.id())
+                                .iter()
+                                .any(|candidate| candidate.id() == v.id())
+                                && self.selection_is_allowed(v, Some(track.id()))
+                        })
+                })
                 .collect(),
             TopLevelPlaylist::DirectMedia(_) => vec![],
         }
@@ -407,6 +448,7 @@ impl PlaylistStore {
                         .variants_for_audio(track_id)
                         .into_iter()
                         .filter(|v| self.variant_support(v.id()) != Some(false))
+                        .filter(|v| self.selection_is_allowed(v, self.fixed_audio_track))
                         .collect()
                 } else if let Some(track_id) = self.current_audio_track_id() {
                     // Else do in function of the current audio track
@@ -414,6 +456,7 @@ impl PlaylistStore {
                         .variants_for_audio(track_id)
                         .into_iter()
                         .filter(|v| self.variant_support(v.id()) != Some(false))
+                        .filter(|v| self.selection_is_allowed(v, self.fixed_audio_track))
                         .collect()
                 } else {
                     // No current audio track: choose from anything
@@ -421,6 +464,7 @@ impl PlaylistStore {
                         .all_variants()
                         .iter()
                         .filter(|v| self.variant_support(v.id()) != Some(false))
+                        .filter(|v| self.selection_is_allowed(v, self.fixed_audio_track))
                         .collect()
                 }
             }
@@ -533,6 +577,12 @@ impl PlaylistStore {
         let Some(current_variant_id) = self.current_variant_id else {
             return LockVariantResponse::NoVariantWithId;
         };
+        if self
+            .variant(variant_id)
+            .is_some_and(|variant| !self.selection_is_allowed(variant, self.fixed_audio_track))
+        {
+            return LockVariantResponse::NoVariantWithId;
+        }
         let variants = self.compatible_variants();
         let pos = variants.iter().find(|x| x.id() == variant_id);
 
@@ -814,6 +864,79 @@ impl PlaylistStore {
         }
     }
 
+    /// Tracks that have at least one rendition allowed by the caller.
+    pub(crate) fn available_audio_tracks(&self) -> Vec<&AudioTrack> {
+        self.audio_tracks()
+            .iter()
+            .filter(|track| self.audio_track_is_allowed(track.id()))
+            .collect()
+    }
+
+    fn audio_track_is_allowed(&self, track_id: u32) -> bool {
+        let TopLevelPlaylist::Multivariant(playlist) = &self.playlist else {
+            return false;
+        };
+        playlist
+            .variants_for_audio(track_id)
+            .iter()
+            .any(|variant| self.selection_is_allowed(variant, Some(track_id)))
+    }
+
+    /// Restrict choices to the variant/audio-track combinations supplied by the caller.
+    pub(crate) fn restrict_selections(&mut self, allowed: HashSet<(u32, Option<u32>)>) {
+        self.allowed_selections = Some(allowed);
+    }
+
+    fn selection_is_allowed(&self, variant: &VariantStream, track_id: Option<u32>) -> bool {
+        self.allowed_selections
+            .as_ref()
+            .is_none_or(|allowed| allowed.contains(&(variant.id(), track_id)))
+    }
+
+    pub(crate) fn variants_for_audio_track(&self, track_id: u32) -> Vec<&VariantStream> {
+        match &self.playlist {
+            TopLevelPlaylist::Multivariant(playlist) => playlist.variants_for_audio(track_id),
+            TopLevelPlaylist::DirectMedia(_) => vec![],
+        }
+    }
+
+    /// Codecs for each selected media playlist, preferring probe results when available.
+    /// A missing codec string means that playlist's codecs are not known yet.
+    pub(crate) fn variant_media_codecs(
+        &self,
+        variant: &VariantStream,
+        track_id: Option<u32>,
+    ) -> Vec<(MediaType, Option<String>)> {
+        let TopLevelPlaylist::Multivariant(playlist) = &self.playlist else {
+            return vec![];
+        };
+        let raw_audio = playlist.audio_media_playlist_id_for(variant, track_id);
+        let video = playlist.video_media_playlist_id_for(variant);
+        let (audio, video) = Self::normalize_current_media_ids(raw_audio, video);
+        [(audio, MediaType::Audio), (video, MediaType::Video)]
+            .into_iter()
+            .filter_map(|(id, media_type)| {
+                let id = id?;
+                let codec = self
+                    .multivariant_media_info
+                    .get(&id)
+                    .map(|info| info.codec.clone())
+                    .or_else(|| {
+                        let mut codec = variant.codecs(media_type)?;
+                        // URI-less AUDIO renditions are carried by the primary playlist.
+                        if media_type == MediaType::Video && raw_audio == Some(id) {
+                            if let Some(audio_codec) = variant.codecs(MediaType::Audio) {
+                                codec.push(',');
+                                codec.push_str(&audio_codec);
+                            }
+                        }
+                        Some(codec)
+                    });
+                Some((media_type, codec))
+            })
+            .collect()
+    }
+
     /// Explicitely select an `AudioTrack` based on its `id` property or disable the explicit
     /// selection of one (by giving `None` as argument).
     ///
@@ -825,12 +948,25 @@ impl PlaylistStore {
             self.fixed_audio_track = track_id;
             return SetAudioTrackResponse::NoUpdate;
         }
+        if track_id.is_none() && self.allowed_selections.is_some() {
+            if let TopLevelPlaylist::Multivariant(playlist) = &self.playlist {
+                if !playlist
+                    .all_variants()
+                    .iter()
+                    .any(|variant| self.selection_is_allowed(variant, None))
+                {
+                    return SetAudioTrackResponse::NoCompatibleVariant;
+                }
+            }
+        }
         if let (TopLevelPlaylist::Multivariant(playlist), Some(track_id)) =
             (&self.playlist, track_id)
         {
             // Support depends on the chosen track and will be checked again after a change.
-            // Here, only reject tracks for which the manifest provides no candidate at all.
-            if playlist.variants_for_audio(track_id).is_empty() {
+            // Reject tracks without a candidate allowed by the caller too.
+            if playlist.variants_for_audio(track_id).is_empty()
+                || !self.audio_track_is_allowed(track_id)
+            {
                 return SetAudioTrackResponse::NoCompatibleVariant;
             }
         }
@@ -847,7 +983,9 @@ impl PlaylistStore {
             let (new_audio_id, _) =
                 Self::normalize_current_media_ids(raw_new_audio_id, self.current_video_id);
 
-            if new_audio_id.is_none() && self.current_audio_id.is_some() {
+            if (new_audio_id.is_none() && self.current_audio_id.is_some())
+                || !self.selection_is_allowed(variant, self.fixed_audio_track)
+            {
                 // We may be in a case where the choosen track is not available in the
                 // current variant, re-check the best variant to have with the new track.
                 let variant_lock_removed = self.is_variant_locked;
@@ -869,6 +1007,13 @@ impl PlaylistStore {
     /// Apply a specific variant selection and return the media types whose selected playlist
     /// changed as a consequence.
     pub(crate) fn set_variant(&mut self, variant_id: u32) -> Vec<MediaType> {
+        if self
+            .variant(variant_id)
+            .is_some_and(|variant| !self.selection_is_allowed(variant, self.fixed_audio_track))
+        {
+            log_warn!("PlaylistStore: Variant requires an disallowed selection");
+            return vec![];
+        }
         let prev_audio_id = self.current_audio_id;
         let prev_video_id = self.current_video_id;
         self.set_curr_variant_and_media_id(variant_id);

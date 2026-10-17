@@ -163,6 +163,13 @@ fn advance_awaiting_playlist_info_state(dispatcher: &mut Dispatcher) {
         dispatcher.follow_selected_media_playlist(media_type);
     }
 
+    if !ensure_ready_playlists(dispatcher, wanted_position) {
+        return;
+    }
+    if let Some(store) = dispatcher.playlist_store.as_mut() {
+        super::buffer_layout::restrict_to_startup_buffer_layout(store);
+    }
+
     if !lifecycle_announced {
         let (playlist_kind, variants_info, audio_tracks_info, curr_audio_track, is_fixed) = {
             let Some(playlist_store) = dispatcher.playlist_store.as_mut() else {
@@ -191,7 +198,7 @@ fn advance_awaiting_playlist_info_state(dispatcher: &mut Dispatcher) {
                     unsafe {
                         format_variants_info_for_js(playlist_store.available_variants().as_slice())
                     },
-                    unsafe { format_audio_tracks_for_js(playlist_store.audio_tracks()) },
+                    unsafe { format_audio_tracks_for_js(&playlist_store.available_audio_tracks()) },
                 )
             };
             let fixed_audio_track = playlist_store.fixed_audio_track_id();
@@ -223,10 +230,6 @@ fn advance_awaiting_playlist_info_state(dispatcher: &mut Dispatcher) {
             starting_position,
             lifecycle_announced: true,
         };
-    }
-
-    if !ensure_ready_playlists(dispatcher, wanted_position) {
-        return;
     }
 
     dispatcher.ready_state = PlayerReadyState::AwaitingMediaSource { starting_position };
