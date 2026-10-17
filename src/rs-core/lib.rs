@@ -10,6 +10,7 @@ mod parser;
 mod playlist_store;
 mod requester;
 mod segment_selector;
+mod transmux;
 mod utils;
 
 #[unsafe(no_mangle)]
