@@ -547,3 +547,16 @@ Each object should contain the following keys (same than for the
 
 You can also know at any time the list of available audio tracks by calling the
 [`getAudioTrackList`](./Audio_Track_Selection/getAudioTrackList.md) method.
+
+## Event: `subtitleTrackUpdate`
+
+Sent when the active subtitle track changes. The payload contains the track's
+information, or `null` when subtitles are disabled.
+See [`getSubtitleTrackList`](./Subtitle_Track_Selection/getSubtitleTrackList.md)
+for the track's properties.
+
+## Event: `subtitleTrackListUpdate`
+
+Sent when the list of available subtitle tracks changes. The payload is an array
+of track objects, with the same properties as those returned by
+[`getSubtitleTrackList`](./Subtitle_Track_Selection/getSubtitleTrackList.md).

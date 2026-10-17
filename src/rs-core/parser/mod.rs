@@ -5,6 +5,7 @@ mod media_tag;
 mod multi_variant_playlist;
 mod playlist_lines;
 mod segment_list;
+mod subtitle_track_list;
 mod timeline_sync;
 mod top_level_playlist;
 mod value_parsers;
@@ -20,6 +21,7 @@ pub(crate) use multi_variant_playlist::{
 pub(crate) use segment_list::{
     InitSegmentInfo, MediaSegmentInfo, SegmentIdentity, SegmentList, SegmentTimeInfo,
 };
+pub(crate) use subtitle_track_list::SubtitleTrack;
 pub(crate) use top_level_playlist::{
     ExternalMediaInfo, TopLevelPlaylist, TopLevelPlaylistParsingError,
 };

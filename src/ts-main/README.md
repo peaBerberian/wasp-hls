@@ -20,6 +20,8 @@ Its job is to:
   the worker. When they run in the worker, we still attach its media source to
   the media element here.
 
+- Render timestamped subtitle cues against the media element clock.
+
 - Remove listeners, stop observations and free the resources created for a
   content or player when they are no longer needed.
 

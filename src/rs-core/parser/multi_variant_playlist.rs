@@ -3,6 +3,7 @@ use super::{
     media_playlist::{MediaPlaylist, MediaPlaylistParsingError},
     media_tag::{MediaTag, MediaTagParsingError},
     playlist_lines::read_playlist_line,
+    subtitle_track_list::SubtitleTrackList,
     timeline_sync::TimelineReference,
     top_level_playlist::{
         is_media_playlist_tag_name, is_media_segment_tag_name,
@@ -37,13 +38,20 @@ pub struct MultivariantPlaylist {
     /// Maps variant's id to index in `primary_media`
     primary_id_by_variant: HashMap<u32, usize>,
 
-    /// Abstraction to simplify the management of tracks.
+    /// Abstraction to simplify the management of audio tracks.
     ///
     /// It actually corresponds to pre-parsed Media tags in the Multivariant Playlist with their
-    /// `TYPE` set to `"audio"`.
+    /// `TYPE` set to `AUDIO`.
     audio_tracks: AudioTrackList,
 
-    /// Parsed Media tags in the Multivariant Playlist which are not of `TYPE` `"audio"`
+    /// Abstraction to simplify the management of subtitles tracks.
+    ///
+    /// It actually corresponds to pre-parsed Media tags in the Multivariant Playlist with their
+    /// `TYPE` set to `SUBTITLES`.
+    subtitle_tracks: SubtitleTrackList,
+
+    /// Parsed Media tags in the Multivariant Playlist which are not of `TYPE` `AUDIO` nor
+    /// `SUBTITLES`.
     other_media: Vec<MediaTag>,
 
     /// Supplementary information that will need to be communicated to other Media Playlists
@@ -77,6 +85,7 @@ impl MultivariantPlaylist {
         let playlist_base_url = url.pathname();
         let mut variants: Vec<VariantStream> = vec![];
         let mut audio_media: Vec<MediaTag> = vec![];
+        let mut subtitle_media: Vec<MediaTag> = vec![];
         let mut other_media: Vec<MediaTag> = vec![];
         let mut start = None;
         let mut independent_segments = None;
@@ -177,6 +186,8 @@ impl MultivariantPlaylist {
                         last_id += 1;
                         if media.typ() == MediaTagType::Audio {
                             audio_media.push(media);
+                        } else if media.typ() == MediaTagType::Subtitles {
+                            subtitle_media.push(media);
                         } else {
                             other_media.push(media);
                         }
@@ -258,6 +269,7 @@ impl MultivariantPlaylist {
             primary_media,
             primary_id_by_variant,
             audio_tracks: AudioTrackList::new(audio_media),
+            subtitle_tracks: SubtitleTrackList::new(subtitle_media),
             other_media,
             context: MediaPlaylistContext {
                 start,
@@ -287,7 +299,19 @@ impl MultivariantPlaylist {
                 .audio_tracks
                 .media_tag(id.id())
                 .map(|_| MediaType::Audio),
-            MediaPlaylistUrlLocation::OtherMedia | MediaPlaylistUrlLocation::Direct => None,
+            MediaPlaylistUrlLocation::SubtitleTrack => self
+                .subtitle_tracks
+                .media_tag(id.id())
+                .map(|_| MediaType::Text),
+            MediaPlaylistUrlLocation::OtherMedia => self
+                .other_media
+                .iter()
+                .find(|media| media.id() == id.id())
+                .and_then(|media| match media.typ() {
+                    MediaTagType::Video => Some(MediaType::Video),
+                    _ => None,
+                }),
+            MediaPlaylistUrlLocation::Direct => None,
         }
     }
 
@@ -303,6 +327,19 @@ impl MultivariantPlaylist {
                 } else {
                     false
                 }
+            })
+            .collect()
+    }
+
+    /// Returns variants linked to a playlist-backed rendition of the chosen subtitle track.
+    pub(crate) fn variants_for_subtitle(&self, track_id: u32) -> Vec<&VariantStream> {
+        let group_ids = self.subtitle_tracks.groups_for_track_id(track_id);
+        self.variants
+            .iter()
+            .filter(|variant| {
+                variant
+                    .subtitle_group()
+                    .is_some_and(|group| group_ids.contains(&group))
             })
             .collect()
     }
@@ -359,14 +396,7 @@ impl MultivariantPlaylist {
             .filter(move |(_, media)| Some(media.group_id()) == group)
     }
 
-    /// Returns the `id` of the audio media that should be chosen when loading the variant given
-    /// in argument.
-    ///
-    /// If an audio track is currently selected, you also should communicate its own `id` as
-    /// argument, as it media influence which audio media will be choosen.
-    ///
-    /// Returns `None` if there's no specific audio media that can be loaded because none
-    /// are compatible with the given characteristics.
+    /// Resolve a chosen audio track, or the variant's own audio when no track is provided.
     pub(crate) fn audio_media_playlist_id_for(
         &self,
         variant: &VariantStream,
@@ -426,6 +456,22 @@ impl MultivariantPlaylist {
             .and_then(|x| x.media_playlist())
     }
 
+    fn subtitle_url(&self, media_id: u32) -> Option<&Url> {
+        self.subtitle_tracks.media_tag(media_id).and_then(|media| {
+            if let Some(playlist) = media.media_playlist() {
+                Some(playlist.url())
+            } else {
+                media.url()
+            }
+        })
+    }
+
+    fn subtitle_playlist(&self, media_id: u32) -> Option<&MediaPlaylist> {
+        self.subtitle_tracks
+            .media_tag(media_id)
+            .and_then(|media| media.media_playlist())
+    }
+
     fn other_media_playlist(&self, media_id: u32) -> Option<&MediaPlaylist> {
         self.other_media
             .iter()
@@ -475,6 +521,7 @@ impl MultivariantPlaylist {
                 )
             }
             MediaPlaylistUrlLocation::AudioTrack => self.audio_url(wanted_id.id()),
+            MediaPlaylistUrlLocation::SubtitleTrack => self.subtitle_url(wanted_id.id()),
             MediaPlaylistUrlLocation::OtherMedia => self.other_media_url(wanted_id.id()),
             MediaPlaylistUrlLocation::Direct => None, // Should not happen
         }
@@ -493,6 +540,7 @@ impl MultivariantPlaylist {
                 .playlist
                 .as_ref(),
             MediaPlaylistUrlLocation::AudioTrack => self.audio_playlist(wanted_id.id()),
+            MediaPlaylistUrlLocation::SubtitleTrack => self.subtitle_playlist(wanted_id.id()),
             MediaPlaylistUrlLocation::OtherMedia => self.other_media_playlist(wanted_id.id()),
             MediaPlaylistUrlLocation::Direct => None, // Should not happen
         }
@@ -511,6 +559,10 @@ impl MultivariantPlaylist {
                 .audio_tracks
                 .media_tag_mut(wanted_id.id())
                 .and_then(|m| m.media_playlist_mut()),
+            MediaPlaylistUrlLocation::SubtitleTrack => self
+                .subtitle_tracks
+                .media_tag_mut(wanted_id.id())
+                .and_then(|media| media.media_playlist_mut()),
             MediaPlaylistUrlLocation::OtherMedia => self
                 .other_media
                 .iter_mut()
@@ -529,6 +581,11 @@ impl MultivariantPlaylist {
             }
             MediaPlaylistUrlLocation::AudioTrack => {
                 if let Some(media_tag) = self.audio_tracks.media_tag_mut(wanted_id.id()) {
+                    media_tag.clear_media_playlist();
+                }
+            }
+            MediaPlaylistUrlLocation::SubtitleTrack => {
+                if let Some(media_tag) = self.subtitle_tracks.media_tag_mut(wanted_id.id()) {
                     media_tag.clear_media_playlist();
                 }
             }
@@ -568,6 +625,9 @@ impl MultivariantPlaylist {
             MediaPlaylistUrlLocation::AudioTrack => {
                 self.update_audio_media_playlist(id.id(), data, url, timeline_reference.as_ref())
             }
+            MediaPlaylistUrlLocation::SubtitleTrack => {
+                self.update_subtitle_media_playlist(id.id(), data, url, timeline_reference.as_ref())
+            }
             MediaPlaylistUrlLocation::OtherMedia => {
                 self.update_other_media_playlist(id.id(), data, url, timeline_reference.as_ref())
             }
@@ -587,14 +647,14 @@ impl MultivariantPlaylist {
             .primary_media
             .get_mut(primary_id as usize)
             .ok_or(MediaPlaylistUpdateError::NotFound)?;
-        media.playlist = Some(MediaPlaylist::create(
+        let playlist = MediaPlaylist::create(
             media_playlist_data,
             url,
             media.playlist.as_ref(),
             timeline_reference,
             &self.context,
-        )?);
-        Ok(media.playlist.as_ref().unwrap())
+        )?;
+        Ok(media.playlist.insert(playlist))
     }
 
     fn update_audio_media_playlist(
@@ -610,6 +670,21 @@ impl MultivariantPlaylist {
         }
     }
 
+    fn update_subtitle_media_playlist(
+        &mut self,
+        id: u32,
+        media_playlist_data: impl io::BufRead,
+        url: Url,
+        timeline_reference: Option<&TimelineReference>,
+    ) -> Result<&MediaPlaylist, MediaPlaylistUpdateError> {
+        match self.subtitle_tracks.media_tag_mut(id) {
+            Some(media) => {
+                Ok(media.update(media_playlist_data, url, timeline_reference, &self.context)?)
+            }
+            None => Err(MediaPlaylistUpdateError::NotFound),
+        }
+    }
+
     fn update_other_media_playlist(
         &mut self,
         media_tag_id: u32,
@@ -620,6 +695,48 @@ impl MultivariantPlaylist {
         match self.other_media.iter_mut().find(|v| v.id() == media_tag_id) {
             Some(m) => Ok(m.update(media_playlist_data, url, timeline_reference, &self.context)?),
             None => Err(MediaPlaylistUpdateError::NotFound),
+        }
+    }
+
+    /// Return subtitle renditions with a playlist in the variant's declared group.
+    pub(crate) fn subtitle_renditions_for<'a>(
+        &'a self,
+        variant: &'a VariantStream,
+    ) -> impl Iterator<Item = (&'a super::SubtitleTrack, &'a MediaTag)> {
+        let group = variant.subtitle_group();
+        self.subtitle_tracks
+            .iter_tracks_media()
+            .filter(move |(_, media)| Some(media.group_id()) == group && media.url().is_some())
+    }
+
+    /// Resolve a chosen subtitle track within the variant's declared group.
+    pub(crate) fn subtitle_media_playlist_id_for(
+        &self,
+        variant: &VariantStream,
+        track_id: u32,
+    ) -> Option<MediaPlaylistPermanentId> {
+        let (_, media) = self
+            .subtitle_renditions_for(variant)
+            .find(|(track, _)| track.id() == track_id)?;
+        Some(MediaPlaylistPermanentId::new(
+            MediaPlaylistUrlLocation::SubtitleTrack,
+            media.id(),
+        ))
+    }
+
+    pub(crate) fn subtitle_tracks(&self) -> &[super::SubtitleTrack] {
+        self.subtitle_tracks.as_slice()
+    }
+
+    pub(crate) fn subtitle_track_for_media_id(
+        &self,
+        id: &MediaPlaylistPermanentId,
+    ) -> Option<&super::SubtitleTrack> {
+        match id.location() {
+            MediaPlaylistUrlLocation::SubtitleTrack => {
+                self.subtitle_tracks.track_for_media_tag(id.id())
+            }
+            _ => None,
         }
     }
 
@@ -827,6 +944,8 @@ pub(crate) enum MediaPlaylistUrlLocation {
     Variant,
     /// This Media Playlist's URL is an audio-specific track in the `MultivariantPlaylist` object.
     AudioTrack,
+    /// This Media Playlist's URL is a subtitle rendition in the `MultivariantPlaylist` object.
+    SubtitleTrack,
     /// This Media Playlist's URL is defined as another media in the `MultivariantPlaylist` object.
     OtherMedia,
     /// This Media Playlist was directly loaded as the top-level playlist.
@@ -839,8 +958,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn audio_tracks_preserve_declaration_order_and_first_rendition_ids() {
-        let manifest = b"#EXTM3U\n#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID=\"a\",NAME=\"English\",URI=\"a-en.m3u8\"\n#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID=\"a\",NAME=\"French\",URI=\"a-fr.m3u8\"\n#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID=\"b\",NAME=\"English\",URI=\"b-en.m3u8\"\n#EXT-X-STREAM-INF:BANDWIDTH=100000,AUDIO=\"a\"\na.m3u8\n#EXT-X-STREAM-INF:BANDWIDTH=200000,AUDIO=\"b\"\nb.m3u8\n";
+    fn track_lists_preserve_declaration_order_and_first_rendition_ids() {
+        let manifest = b"#EXTM3U\n#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID=\"a\",NAME=\"English\",URI=\"a-en.m3u8\"\n#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID=\"a\",NAME=\"French\",URI=\"a-fr.m3u8\"\n#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID=\"b\",NAME=\"English\",URI=\"b-en.m3u8\"\n#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID=\"s\",NAME=\"English\",URI=\"s-en.m3u8\"\n#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID=\"s\",NAME=\"French\",URI=\"s-fr.m3u8\"\n#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID=\"t\",NAME=\"English\",URI=\"t-en.m3u8\"\n#EXT-X-STREAM-INF:BANDWIDTH=100000,AUDIO=\"a\",SUBTITLES=\"s\"\na.m3u8\n#EXT-X-STREAM-INF:BANDWIDTH=200000,AUDIO=\"b\",SUBTITLES=\"t\"\nb.m3u8\n";
         let parsed = MultivariantPlaylist::parse(
             &manifest[..],
             Url::new("https://example.com/master.m3u8".into()),
@@ -854,7 +973,16 @@ mod tests {
                 .collect::<Vec<_>>(),
             vec![Some("English"), Some("French")]
         );
+        assert_eq!(
+            parsed
+                .subtitle_tracks()
+                .iter()
+                .map(|track| track.name())
+                .collect::<Vec<_>>(),
+            vec![Some("English"), Some("French")]
+        );
         assert_eq!(parsed.audio_tracks()[0].id(), 0);
+        assert_eq!(parsed.subtitle_tracks()[0].id(), 3);
         assert_eq!(
             parsed.audio_tracks()[0]
                 .medias()
@@ -863,29 +991,251 @@ mod tests {
                 .collect::<Vec<_>>(),
             vec![0, 2]
         );
+        assert_eq!(
+            parsed.subtitle_tracks()[0]
+                .medias()
+                .iter()
+                .map(|media| media.id())
+                .collect::<Vec<_>>(),
+            vec![3, 5]
+        );
     }
 
     #[test]
-    fn missing_audio_names_remain_distinct_from_explicitly_empty_names() {
-        let manifest = b"#EXTM3U\n#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID=\"audio\",LANGUAGE=\"en\",URI=\"audio.m3u8\"\n#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID=\"audio\",NAME=\"\",LANGUAGE=\"en\",URI=\"empty-audio.m3u8\"\n#EXT-X-STREAM-INF:BANDWIDTH=100000,AUDIO=\"audio\"\nvideo.m3u8\n";
+    fn classifies_text_codecs_separately_from_muxed_audio_and_video() {
+        let input = b"#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=100000,CODECS=\"avc1.42E01E,mp4a.40.2,stpp.ttml.im1t\"\nvideo.m3u8\n";
+        let parsed = MultivariantPlaylist::parse(
+            &input[..],
+            Url::new("https://example.com/master.m3u8".into()),
+        )
+        .unwrap();
+        let variant = parsed.variant_from_idx(0).unwrap();
+        assert!(variant.has_type(MediaType::Text));
+        assert_eq!(
+            variant.codecs(MediaType::Text).as_deref(),
+            Some("stpp.ttml.im1t")
+        );
+        let video = variant.codecs(MediaType::Video).unwrap();
+        assert!(video.contains("mp4a.40.2"));
+        assert!(!video.contains("stpp"));
+    }
+
+    #[test]
+    fn subtitle_renditions_resolve_groups_and_parse_independent_playlists() {
+        let input = r#"#EXTM3U
+#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID="subs",NAME="English",LANGUAGE="en",ASSOC-LANGUAGE="en-US",DEFAULT=YES,AUTOSELECT=YES,FORCED=YES,CHARACTERISTICS="public.accessibility.transcribes-spoken-dialog",URI="subs/en.m3u8"
+#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID="other",NAME="Other",URI="other.m3u8"
+#EXT-X-MEDIA:TYPE=CLOSED-CAPTIONS,GROUP-ID="cc",NAME="CC",INSTREAM-ID="CC1"
+#EXT-X-STREAM-INF:BANDWIDTH=100000,SUBTITLES="subs"
+video.m3u8
+#EXT-X-STREAM-INF:BANDWIDTH=200000,SUBTITLES="other"
+video2.m3u8
+"#;
+        let mut parsed = MultivariantPlaylist::parse(
+            input.as_bytes(),
+            Url::new("https://example.com/master.m3u8".into()),
+        )
+        .unwrap();
+        let tracks = parsed.subtitle_tracks();
+        assert_eq!(tracks.len(), 2);
+        let english = tracks.iter().find(|t| t.language() == Some("en")).unwrap();
+        assert_eq!(english.assoc_language(), Some("en-US"));
+        let rendition = parsed.subtitle_tracks.media_tag(english.id()).unwrap();
+        assert!(rendition.is_default() && rendition.is_autoselect() && english.is_forced());
+        assert_eq!(
+            english.characteristics(),
+            &["public.accessibility.transcribes-spoken-dialog"]
+        );
+        let track_id = english.id();
+        let variant = parsed
+            .all_variants()
+            .iter()
+            .find(|v| v.subtitle_group() == Some("subs"))
+            .unwrap();
+        let playlist_id = parsed
+            .subtitle_media_playlist_id_for(variant, track_id)
+            .unwrap();
+        let other = parsed
+            .all_variants()
+            .iter()
+            .find(|v| v.subtitle_group() == Some("other"))
+            .unwrap();
+        assert!(parsed
+            .subtitle_media_playlist_id_for(other, track_id)
+            .is_none());
+        assert_eq!(
+            parsed.playlist_media_type(&playlist_id),
+            Some(crate::bindings::MediaType::Text)
+        );
+        assert_eq!(
+            parsed.media_playlist_url(&playlist_id).unwrap().get_ref(),
+            "https://example.com/subs/en.m3u8"
+        );
+        let media = b"#EXTM3U\n#EXT-X-TARGETDURATION:6\n#EXT-X-MEDIA-SEQUENCE:901\n#EXT-X-MAP:URI=\"header.vtt\"\n#EXTINF:6,\nsegment.vtt\n#EXT-X-ENDLIST\n";
+        parsed
+            .update_media_playlist(
+                &playlist_id,
+                &media[..],
+                Url::new("https://example.com/subs/en.m3u8".into()),
+                None,
+            )
+            .unwrap();
+        assert!(parsed.media_playlist(&playlist_id).is_some());
+        parsed.clear_media_playlist(&playlist_id);
+        assert!(parsed.media_playlist(&playlist_id).is_none());
+    }
+
+    #[test]
+    fn equivalent_subtitle_renditions_own_independent_playlist_state() {
+        let manifest = b"#EXTM3U\n#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID=\"a\",NAME=\"English\",DEFAULT=YES,URI=\"a.m3u8\"\n#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID=\"b\",NAME=\"English\",DEFAULT=YES,URI=\"b.m3u8\"\n#EXT-X-STREAM-INF:BANDWIDTH=100000,SUBTITLES=\"a\"\na-video.m3u8\n#EXT-X-STREAM-INF:BANDWIDTH=200000,SUBTITLES=\"b\"\nb-video.m3u8\n";
+        let mut parsed = MultivariantPlaylist::parse(
+            &manifest[..],
+            Url::new("https://example.com/master.m3u8".into()),
+        )
+        .unwrap();
+        assert_eq!(parsed.subtitle_tracks().len(), 1);
+        assert!(parsed.other_media.is_empty());
+        let track_id = parsed.subtitle_tracks()[0].id();
+        let ids: Vec<_> = parsed
+            .all_variants()
+            .iter()
+            .map(|variant| {
+                let explicit = parsed
+                    .subtitle_media_playlist_id_for(variant, track_id)
+                    .unwrap();
+                assert_eq!(explicit.location(), MediaPlaylistUrlLocation::SubtitleTrack);
+                assert_eq!(
+                    parsed.subtitle_track_for_media_id(&explicit).unwrap().id(),
+                    track_id
+                );
+                explicit
+            })
+            .collect();
+        assert_ne!(ids[0], ids[1]);
+        let media = b"#EXTM3U\n#EXT-X-TARGETDURATION:4\n#EXTINF:4,\nsegment.vtt\n#EXT-X-ENDLIST\n";
+        for (index, id) in ids.iter().enumerate() {
+            parsed
+                .update_media_playlist(
+                    id,
+                    &media[..],
+                    Url::new(format!("https://cdn.example.com/{index}.m3u8")),
+                    None,
+                )
+                .unwrap();
+            assert_eq!(
+                parsed.media_playlist_url(id).unwrap().get_ref(),
+                format!("https://cdn.example.com/{index}.m3u8")
+            );
+            assert!(parsed.media_playlist_mut(id).is_some());
+        }
+        parsed.clear_media_playlist(&ids[0]);
+        assert!(parsed.media_playlist(&ids[0]).is_none());
+        assert_eq!(
+            parsed.media_playlist_url(&ids[0]).unwrap().get_ref(),
+            "https://example.com/a.m3u8"
+        );
+        assert!(parsed.media_playlist(&ids[1]).is_some());
+        assert_eq!(
+            parsed.media_playlist_url(&ids[1]).unwrap().get_ref(),
+            "https://cdn.example.com/1.m3u8"
+        );
+    }
+
+    #[test]
+    fn subtitle_variant_query_matches_groups_and_requires_a_playlist() {
+        let manifest = b"#EXTM3U\n#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID=\"a\",NAME=\"English\",URI=\"a-en.m3u8\"\n#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID=\"b\",NAME=\"English\",URI=\"b-en.m3u8\"\n#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID=\"a\",NAME=\"French\",URI=\"a-fr.m3u8\"\n#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID=\"c\",NAME=\"Missing URI\"\n#EXT-X-STREAM-INF:BANDWIDTH=100000,SUBTITLES=\"a\"\na.m3u8\n#EXT-X-STREAM-INF:BANDWIDTH=200000,SUBTITLES=\"b\"\nb.m3u8\n#EXT-X-STREAM-INF:BANDWIDTH=300000,SUBTITLES=\"c\"\nc.m3u8\n#EXT-X-STREAM-INF:BANDWIDTH=400000\nd.m3u8\n";
         let parsed = MultivariantPlaylist::parse(
             &manifest[..],
             Url::new("https://example.com/master.m3u8".into()),
         )
         .unwrap();
-        assert_eq!(
-            parsed
-                .audio_tracks()
+        for (name, expected_bandwidths) in
+            [("English", vec![100000, 200000]), ("French", vec![100000])]
+        {
+            let track_id = parsed
+                .subtitle_tracks()
                 .iter()
-                .map(|track| track.name())
-                .collect::<Vec<_>>(),
-            vec![None, Some("")]
-        );
+                .find(|track| track.name() == Some(name))
+                .unwrap()
+                .id();
+            let variants = parsed.variants_for_subtitle(track_id);
+            assert_eq!(
+                variants
+                    .iter()
+                    .map(|variant| variant.bandwidth())
+                    .collect::<Vec<_>>(),
+                expected_bandwidths
+            );
+            for variant in parsed.all_variants() {
+                assert_eq!(
+                    variants
+                        .iter()
+                        .any(|candidate| candidate.id() == variant.id()),
+                    parsed
+                        .subtitle_media_playlist_id_for(variant, track_id)
+                        .is_some(),
+                );
+            }
+        }
+        assert_eq!(parsed.subtitle_tracks().len(), 2);
+        assert!(parsed.variants_for_subtitle(u32::MAX).is_empty());
+    }
+
+    #[test]
+    fn missing_subtitle_uri_is_skipped_before_grouping_without_affecting_embedded_audio() {
+        let manifest = b"#EXTM3U\n#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID=\"invalid\",NAME=\"English\"\n#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID=\"valid\",NAME=\"English\",URI=\"en.m3u8\"\n#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID=\"invalid\",NAME=\"French\"\n#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID=\"audio\",NAME=\"English\"\n#EXT-X-STREAM-INF:BANDWIDTH=100000,AUDIO=\"audio\",SUBTITLES=\"valid\"\nvideo.m3u8\n";
+        let parsed = MultivariantPlaylist::parse(
+            &manifest[..],
+            Url::new("https://example.com/master.m3u8".into()),
+        )
+        .unwrap();
+        let tracks = parsed.subtitle_tracks();
+        assert_eq!(tracks.len(), 1);
+        assert_eq!(tracks[0].id(), 1);
+        assert_eq!(tracks[0].name(), Some("English"));
+        assert_eq!(tracks[0].medias().len(), 1);
         let variant = parsed.variant_from_idx(0).unwrap();
-        for track in parsed.audio_tracks() {
-            assert!(parsed
-                .audio_media_playlist_id_for(variant, Some(track.id()))
-                .is_some());
+        assert!(parsed
+            .subtitle_media_playlist_id_for(variant, tracks[0].id())
+            .is_some());
+        let audio = &parsed.audio_tracks()[0];
+        assert!(audio.medias()[0].url().is_none());
+        let audio_id = parsed
+            .audio_media_playlist_id_for(variant, Some(audio.id()))
+            .unwrap();
+        assert_eq!(audio_id.location(), MediaPlaylistUrlLocation::Variant);
+    }
+
+    #[test]
+    fn empty_subtitle_uri_is_skipped_before_resolution() {
+        for uri in ["", "{$empty}"] {
+            let manifest = format!(
+                r#"#EXTM3U
+#EXT-X-DEFINE:NAME="empty",VALUE=""
+#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID="invalid",NAME="English",URI="{uri}"
+#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID="valid",NAME="English",URI="en.m3u8"
+#EXT-X-STREAM-INF:BANDWIDTH=100000,SUBTITLES="valid"
+video.m3u8
+"#
+            );
+            let parsed = MultivariantPlaylist::parse(
+                manifest.as_bytes(),
+                Url::new("https://example.com/master.m3u8".into()),
+            )
+            .unwrap();
+            let tracks = parsed.subtitle_tracks();
+            assert_eq!(tracks.len(), 1);
+            assert_eq!(tracks[0].id(), 1);
+            assert_eq!(tracks[0].medias().len(), 1);
+            assert_eq!(tracks[0].medias()[0].group_id(), "valid");
+            let variant = parsed.variant_from_idx(0).unwrap();
+            let playlist_id = parsed
+                .subtitle_media_playlist_id_for(variant, tracks[0].id())
+                .unwrap();
+            assert_eq!(
+                parsed.media_playlist_url(&playlist_id).unwrap().get_ref(),
+                "https://example.com/en.m3u8"
+            );
         }
     }
 

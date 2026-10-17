@@ -55,6 +55,9 @@ export function getFmp4Type(mediaType: MediaType, codecP: string): string {
     case MediaType.Video:
       mimeTypePrefix = "video/";
       break;
+    case MediaType.Text:
+      mimeTypePrefix = "application/";
+      break;
     default:
       logger.error("Unknown MediaType");
       mimeTypePrefix = "video/";

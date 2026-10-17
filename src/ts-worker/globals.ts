@@ -6,7 +6,11 @@ import type {
   WaspHlsPlayerConfig,
 } from "../ts-common/types.ts";
 import type Transmuxer from "../ts-transmux/index.ts";
-import { Dispatcher, type InitOutput, type MediaType } from "../wasm/index.js";
+import {
+  Dispatcher,
+  type InitOutput,
+  type AvPlaybackMediaType,
+} from "../wasm/index.js";
 
 export interface WorkerInitializationOptions {
   hasMseInWorker: boolean;
@@ -133,7 +137,7 @@ export interface SourceBufferInstanceInfo<HasMseInWorker extends boolean> {
         }
       >
     | undefined;
-  mediaType: MediaType;
+  mediaType: AvPlaybackMediaType;
   sourceBuffer: HasMseInWorker extends true ? QueuedSourceBuffer : null;
   transmuxer: null | Transmuxer;
 }

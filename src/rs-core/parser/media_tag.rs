@@ -323,6 +323,11 @@ impl MediaTag {
         } else {
             return Err(MediaTagParsingError::MissingGroupId);
         };
+
+        if typ == MediaTagType::Subtitles {
+            // Check before URL resolution, which would turn an empty URI into the base directory.
+            url = url.filter(|uri| !uri.get_ref().is_empty());
+        }
         url = url.map(|u| {
             if u.is_absolute() {
                 u
@@ -401,6 +406,10 @@ impl MediaTag {
 
     pub(crate) fn is_autoselect(&self) -> bool {
         self.autoselect
+    }
+
+    pub(crate) fn is_forced(&self) -> bool {
+        self.forced
     }
 
     pub(crate) fn is_default(&self) -> bool {
