@@ -1127,7 +1127,7 @@ impl Dispatcher {
         if !still_needed {
             self.abort_segment_requests_with_type(media_type);
         }
-        return still_needed;
+        still_needed
     }
 
     // If `true`, the current pending request for the given `MediaType` should be interrupted.
