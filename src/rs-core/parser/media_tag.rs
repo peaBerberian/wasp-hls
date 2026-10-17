@@ -225,6 +225,8 @@ impl MediaTag {
                     );
                 }
                 "DEFAULT" => {
+                    // TODO: Parse YES/NO for DEFAULT, AUTOSELECT and FORCED instead of treating
+                    // attribute presence as YES.
                     default = true;
                 }
                 "AUTOSELECT" => {
@@ -234,6 +236,9 @@ impl MediaTag {
                     forced = true;
                 }
                 "CHANNELS" => {
+                    // TODO: Preserve recognition of CHANNELS parameters so selection can prefer an
+                    // equivalent rendition with recognized parameters, while keeping unknown ones
+                    // playable when CODECS is supported (HLS section 6.3.1 SHOULD).
                     let val = parse_substituted_quoted_string(
                         media_line,
                         item.value_start_offset,

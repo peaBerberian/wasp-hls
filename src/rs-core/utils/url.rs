@@ -8,6 +8,10 @@ pub struct Url {
 
 impl Url {
     pub fn new(url: String) -> Self {
+        // TODO: HLS section 6.3.1 requires stopping playback if any playlist URI has an unsupported
+        // scheme, including URIs never selected for loading.
+        // Validate resolved playlist URIs against supported schemes and surface a fatal
+        // UnsupportedScheme error instead of relying on fetch failures.
         Self { inner: url }
     }
 

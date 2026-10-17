@@ -232,6 +232,9 @@ impl MediaPlaylist {
                         }
                         Err(err) => return Err(err.into()),
                     },
+                    // TODO: Validate EXT-X-VERSION against supported protocol versions and reject
+                    // unsupported values before using the playlist (HLS section 6.3.1 MUST, even
+                    // if hls.js and shaka-player do not respect it).
                     "-X-VERSION" => match parse_decimal_integer(&str_line, colon_idx + 1).0 {
                         Ok(v) if v <= (u32::MAX as u64) => version = Some(v as u32),
                         _ => log_warn!("Unparsable VERSION value"),
@@ -353,6 +356,9 @@ impl MediaPlaylist {
             } else if str_line.starts_with('#') {
                 continue;
             } else if skip_next_segment {
+                // TODO: Substitute variables in GAP URIs before skipping them.
+                // HLS section 6.3.1 requires a parsing error for an undefined variable reference,
+                // including in a URI we will not request.
                 skip_next_segment = false;
                 if let Some(duration) = next_segment_duration {
                     discontinuity_sequence =

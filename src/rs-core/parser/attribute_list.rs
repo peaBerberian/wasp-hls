@@ -1,3 +1,8 @@
+// TODO: HLS section 6.3.1 requires ignoring the whole tag for an unknown REQ-*
+// attribute or an unknown recognized enumerated-string value, unless its
+// definition says otherwise. Propagate a skipped-tag result to callers; for
+// EXT-X-STREAM-INF, also skip the following URI line.
+//
 // Some tags contain an attribute list, with a special K1=V1,K2=V2 syntax
 // This struct is an Iterator allowing to simplify their parsing, by generating
 // `AttributeListItem` elements for each of those key/value couples.

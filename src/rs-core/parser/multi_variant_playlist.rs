@@ -112,6 +112,8 @@ impl MultivariantPlaylist {
                         }
                     }
 
+                    // TODO: Remove this whitelist assertion: HLS section 6.3.1 requires ignoring
+                    // unknown tags, including in debug builds.
                     debug_assert!(
                         is_multivariant_playlist_tag_name(tag_name)
                             || matches!(
@@ -130,6 +132,8 @@ impl MultivariantPlaylist {
                     Some(idx) => idx + 4,
                 };
                 match &str_line[4..colon_idx] {
+                    // TODO: Validate EXT-X-VERSION against supported protocol versions and reject
+                    // unsupported values before using the playlist (HLS section 6.3.1 MUST).
                     "-X-VERSION" => {}
                     "-X-DEFINE" => match parse_define_tag(&str_line) {
                         Ok(VariableDefinition::Name { name, value }) => {
