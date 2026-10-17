@@ -236,8 +236,12 @@ impl VariantStream {
             .codecs
             .iter()
             .filter(|c| match c.0 {
-                Some(MediaType::Audio) => media_type == MediaType::Audio || self.audio.is_none(),
+                Some(MediaType::Audio) => {
+                    media_type == MediaType::Audio
+                        || (media_type == MediaType::Video && self.audio.is_none())
+                }
                 Some(MediaType::Video) => media_type == MediaType::Video,
+                Some(MediaType::Text) => media_type == MediaType::Text,
                 _ => false,
             })
             .map(|c| c.1.as_ref())
@@ -279,6 +283,10 @@ impl VariantStream {
 
     pub(crate) fn bandwidth(&self) -> u64 {
         self.bandwidth
+    }
+
+    pub(super) fn subtitle_group(&self) -> Option<&str> {
+        self.subtitles.as_deref()
     }
 
     pub(super) fn audio_group(&self) -> Option<&str> {
@@ -508,6 +516,7 @@ fn guess_media_type_from_codec(codec: &str) -> Option<MediaType> {
     let (base, _) = split_codec(codec);
 
     match base {
+        "stpp" | "wvtt" => Some(MediaType::Text),
         "mp4a" => Some(MediaType::Audio),
         "ec-3" | "ac-3" => Some(MediaType::Audio),
         "avc1" | "avc3" => Some(MediaType::Video),

@@ -1,4 +1,4 @@
-import type { MediaType } from "../../wasm/index.js";
+import type { AvPlaybackMediaType } from "../../wasm/index.js";
 import { SourceBufferCreationErrorCode } from "../../wasm/index.js";
 import type { WaspErrorCode } from "./common.ts";
 
@@ -33,7 +33,7 @@ export default class WaspSourceBufferCreationError extends Error {
    *
    * `undefined` if unknown or if the concept cannot be applied here.
    */
-  public readonly mediaType: MediaType | undefined;
+  public readonly mediaType: AvPlaybackMediaType | undefined;
 
   /**
    * @param {number} code
@@ -42,7 +42,7 @@ export default class WaspSourceBufferCreationError extends Error {
    */
   constructor(
     code: SourceBufferCreationErrorCode,
-    mediaType: MediaType,
+    mediaType: AvPlaybackMediaType,
     message?: string | undefined,
   ) {
     super();

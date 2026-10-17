@@ -13,6 +13,7 @@ pub(super) struct PlaylistRefreshManager {
     /// Playlists needed for playback or replacement inspection.
     followed_audio: Option<MediaPlaylistPermanentId>,
     followed_video: Option<MediaPlaylistPermanentId>,
+    followed_text: Option<MediaPlaylistPermanentId>,
 }
 
 struct PlaylistRefresh {
@@ -37,6 +38,7 @@ impl PlaylistRefreshManager {
             playlists: Vec::new(),
             followed_audio: None,
             followed_video: None,
+            followed_text: None,
         }
     }
 
@@ -47,6 +49,7 @@ impl PlaylistRefreshManager {
         match media_type {
             MediaType::Audio => self.followed_audio = Some(id),
             MediaType::Video => self.followed_video = Some(id),
+            MediaType::Text => self.followed_text = Some(id),
         }
         self.cancel_unused_timers();
         !self.wait_for_refresh(&id)
@@ -56,6 +59,7 @@ impl PlaylistRefreshManager {
         match media_type {
             MediaType::Audio => self.followed_audio,
             MediaType::Video => self.followed_video,
+            MediaType::Text => self.followed_text,
         }
     }
 
@@ -63,6 +67,7 @@ impl PlaylistRefreshManager {
         match media_type {
             MediaType::Audio => self.followed_audio = None,
             MediaType::Video => self.followed_video = None,
+            MediaType::Text => self.followed_text = None,
         }
         self.cancel_unused_timers();
     }
@@ -70,6 +75,7 @@ impl PlaylistRefreshManager {
     pub(super) fn clear(&mut self) {
         self.followed_audio = None;
         self.followed_video = None;
+        self.followed_text = None;
         for entry in &mut self.playlists {
             entry.cancel_timer();
         }
@@ -77,7 +83,9 @@ impl PlaylistRefreshManager {
     }
 
     pub(super) fn is_following(&self, id: &MediaPlaylistPermanentId) -> bool {
-        self.followed_audio == Some(*id) || self.followed_video == Some(*id)
+        self.followed_audio == Some(*id)
+            || self.followed_video == Some(*id)
+            || self.followed_text == Some(*id)
     }
 
     /// Record a deadline relative to the latest request attempt, including download and
@@ -125,7 +133,10 @@ impl PlaylistRefreshManager {
                 refresh_info,
                 timer_id: None,
             });
-            self.playlists.last_mut().unwrap()
+            let Some(entry) = self.playlists.last_mut() else {
+                return;
+            };
+            entry
         };
         if followed {
             // Even an overdue response needs a callback: waiting a full interval here adds
@@ -167,14 +178,14 @@ impl PlaylistRefreshManager {
             .find(|entry| entry.timer_id == Some(timer_id))?;
         entry.timer_id = None;
         let playlist_id = entry.playlist_id;
-        let media_type = [MediaType::Audio, MediaType::Video]
+        let media_type = [MediaType::Audio, MediaType::Video, MediaType::Text]
             .into_iter()
             .find(|media_type| self.followed_playlist(*media_type) == Some(playlist_id))?;
         Some((playlist_id, media_type))
     }
 
     fn cancel_unused_timers(&mut self) {
-        let needed = [self.followed_audio, self.followed_video];
+        let needed = [self.followed_audio, self.followed_video, self.followed_text];
         for entry in &mut self.playlists {
             if !needed.contains(&Some(entry.playlist_id)) {
                 entry.cancel_timer();
@@ -228,6 +239,25 @@ mod tests {
 
     fn reset_clock() {
         CLOCK.with_borrow_mut(|clock| *clock = Clock::default());
+    }
+
+    #[test]
+    fn text_refresh_is_independent_of_audio_and_video() {
+        reset_clock();
+        let mut manager = PlaylistRefreshManager::new();
+        let video = MediaPlaylistPermanentId::new_for_test(1);
+        let text = MediaPlaylistPermanentId::new_for_test(2);
+        manager.follow(MediaType::Video, video);
+        manager.follow(MediaType::Text, text);
+        manager.on_playlist_loaded(video, refresh_info(), 0.);
+        manager.on_playlist_loaded(text, refresh_info(), 0.);
+        assert!(manager.is_following(&video));
+        assert!(manager.is_following(&text));
+        assert_eq!(manager.on_timer_ended(2.), Some((text, MediaType::Text)));
+        manager.forget_media_type(MediaType::Text);
+        assert!(manager.is_following(&video));
+        assert!(!manager.is_following(&text));
+        assert_eq!(manager.on_timer_ended(1.), Some((video, MediaType::Video)));
     }
 
     #[test]

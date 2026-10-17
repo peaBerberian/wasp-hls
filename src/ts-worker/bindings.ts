@@ -7,6 +7,7 @@ import QueuedSourceBuffer, {
 import timeRangesToFloat64Array from "../ts-common/timeRangesToFloat64Array.ts";
 import type {
   AudioTrackInfo,
+  SubtitleTrackInfo,
   SourceBufferId,
   VariantInfo,
 } from "../ts-common/types.js";
@@ -33,6 +34,7 @@ import {
   SegmentParsingErrorCode,
 } from "../wasm/index.js";
 import type {
+  AvPlaybackMediaType,
   ContentCompatibilityErrorCode,
   SegmentHints,
   HostBindings,
@@ -174,7 +176,7 @@ export function sendMediaPlaylistRequestError(
 export function sendPushedSegmentError(
   fatal: boolean,
   code: PushedSegmentErrorCode,
-  mediaType: MediaType,
+  mediaType: AvPlaybackMediaType,
   message: string,
 ): void {
   const contentId = playerInstance.getContentInfo()?.contentId;
@@ -202,7 +204,7 @@ export function sendPushedSegmentError(
 
 export function sendRemoveBufferError(
   fatal: boolean,
-  mediaType: MediaType,
+  mediaType: AvPlaybackMediaType,
   message: string,
 ): void {
   const contentId = playerInstance.getContentInfo()?.contentId;
@@ -363,7 +365,7 @@ export function sendMediaPlaylistParsingError(
 export function sendSourceBufferCreationError(
   fatal: boolean,
   code: SourceBufferCreationErrorCode,
-  mediaType: MediaType,
+  mediaType: AvPlaybackMediaType,
   message: string,
 ): void {
   const contentId = playerInstance.getContentInfo()?.contentId;
@@ -827,7 +829,7 @@ export function setMediaSourceDuration(
  * @returns {Object}
  */
 export function addSourceBuffer(
-  mediaType: MediaType,
+  mediaType: AvPlaybackMediaType,
   typ: string,
 ): AddSourceBufferResult {
   const contentInfo = playerInstance.getContentInfo();
@@ -1203,7 +1205,11 @@ function inspectProbeSegment(
     const mediaType = inferMediaTypeFromCodecs(codecs);
     return {
       mediaType,
-      mimeType: mediaType === MediaType.Audio ? "audio/mp4" : "video/mp4",
+      mimeType: {
+        [MediaType.Audio]: "audio/mp4",
+        [MediaType.Video]: "video/mp4",
+        [MediaType.Text]: "application/mp4",
+      }[mediaType],
       codec: codecs.join(","),
     };
   }
@@ -1236,9 +1242,13 @@ function inspectProbeSegment(
 }
 
 function inferMediaTypeFromCodecs(codecs: string[]): MediaType {
-  return codecs.some((codec) => !isAudioCodec(codec))
-    ? MediaType.Video
-    : MediaType.Audio;
+  if (codecs.every(isAudioCodec)) {
+    return MediaType.Audio;
+  }
+  if (codecs.every((codec) => /^(stpp|wvtt)\b/i.test(codec))) {
+    return MediaType.Text;
+  }
+  return MediaType.Video;
 }
 
 function isAudioCodec(codec: string): boolean {
@@ -1535,6 +1545,7 @@ export function announceFetchedContent(
   playlistType: PlaylistType,
   variantInfo: Uint32Array,
   audioTracksInfo: Uint32Array,
+  subtitleTracksInfo: Uint32Array,
 ): void {
   const contentInfo = playerInstance.getContentInfo();
   const memory = playerInstance.getCurrentWasmMemory();
@@ -1588,13 +1599,14 @@ export function announceFetchedContent(
       playlistType,
       variants: variantInfoObj,
       audioTracks: decodeAudioTracks(audioTracksInfo, memory),
+      subtitleTracks: decodeSubtitleTracks(subtitleTracksInfo, memory),
     },
   });
 }
 
 export function announceTrackUpdate(
   mediaType: MediaType,
-  currentAudioTrack: number | undefined,
+  trackId: number | undefined,
 ): void {
   const contentInfo = playerInstance.getContentInfo();
   const memory = playerInstance.getCurrentWasmMemory();
@@ -1606,10 +1618,11 @@ export function announceTrackUpdate(
     value: {
       mediaType,
       contentId: contentInfo.contentId,
+      subtitleTrack: mediaType === MediaType.Text ? trackId : undefined,
       audioTrack:
-        currentAudioTrack !== undefined
+        mediaType === MediaType.Audio && trackId !== undefined
           ? {
-              current: currentAudioTrack,
+              current: trackId,
             }
           : undefined,
     },
@@ -1867,6 +1880,45 @@ function decodeAudioTracks(
         sampleRates: sampleRates.length === 0 ? undefined : sampleRates,
       });
     }
+  }
+  return tracks;
+}
+
+/** Copies borrowed WASM rendition strings before returning to Rust. */
+function decodeSubtitleTracks(
+  data: Uint32Array,
+  memory: WebAssembly.Memory,
+): SubtitleTrackInfo[] {
+  let cursor = 1;
+  const readString = (): string => {
+    const length = data[cursor++];
+    const pointer = data[cursor++];
+    return new TextDecoder().decode(
+      new Uint8Array(memory.buffer, pointer, length),
+    );
+  };
+  const tracks: SubtitleTrackInfo[] = [];
+  for (let index = 0; index < data[0]; index++) {
+    const id = data[cursor++];
+    const hasName = data[cursor + 1] !== 0;
+    const rawName = readString();
+    const name = hasName ? rawName : undefined;
+    const language = readString() || undefined;
+    const assocLanguage = readString() || undefined;
+    const forced = data[cursor++] !== 0;
+    const count = data[cursor++];
+    const characteristics: string[] = [];
+    for (let i = 0; i < count; i++) {
+      characteristics.push(readString());
+    }
+    tracks.push({
+      id,
+      name,
+      language,
+      assocLanguage,
+      forced,
+      characteristics,
+    });
   }
   return tracks;
 }
