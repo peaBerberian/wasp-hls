@@ -588,7 +588,7 @@ impl MediaElementReference {
     pub(crate) fn on_source_buffer_update(
         &mut self,
         source_buffer_id: SourceBufferId,
-        buffered: JsTimeRanges,
+        buffered: &JsTimeRanges,
         success: bool,
     ) {
         if let Some(ref mut sb) = self.audio_buffer {
@@ -602,7 +602,7 @@ impl MediaElementReference {
                     if let Some(media_offset) = self.media_offset {
                         self.audio_inventory.reconcile_push_result(
                             id,
-                            &buffered,
+                            buffered,
                             media_offset,
                             success,
                         );
@@ -621,7 +621,7 @@ impl MediaElementReference {
                     if let Some(media_offset) = self.media_offset {
                         self.video_inventory.reconcile_push_result(
                             id,
-                            &buffered,
+                            buffered,
                             media_offset,
                             success,
                         );
@@ -629,7 +629,6 @@ impl MediaElementReference {
                 }
             }
         }
-        self.check_end_of_stream();
     }
 
     /// Method to call if a `SourceBuffer`'s creation asynchronously failed.
@@ -673,22 +672,37 @@ impl MediaElementReference {
         None
     }
 
-    /// Announce that the last chronological segment has been pushed to the buffer of a
-    /// given `media_type`.
-    ///
-    /// Calling this method for the media_type of each created SourceBuffer allows to properly end
-    /// the stream once those last segments are reached.
-    /// Pushing further segments for that `media_type` is still possible after calling `end_buffer`
-    /// in which case, `end_buffer` should be re-called once, the new last chronological segment
-    /// has been pushed.
-    pub(crate) fn end_buffer(&mut self, media_type: MediaType) {
-        match self.buffer_mut_for(media_type) {
-            None => log_warn!("Asked to end a non existent {} buffer", media_type),
-            Some(sb) => {
-                sb.announce_last_segment_pushed();
+    /// Set whether the playlist's final segment is buffered.
+    /// The dispatcher decides this after checking the playlist and buffered data.
+    pub(crate) fn set_buffer_end(&mut self, media_type: MediaType, complete: bool) {
+        if let Some(buffer) = self.buffer_mut_for(media_type) {
+            if complete {
+                buffer.announce_last_segment_pushed();
+            } else {
+                buffer.clear_last_segment_pushed();
             }
         }
-        self.check_end_of_stream();
+    }
+
+    /// Whether the last inventory chunk has finished appending and its end is buffered.
+    /// Use supplied ranges, or the latest playback observation when `None`.
+    pub(crate) fn has_buffered_tail(
+        &self,
+        media_type: MediaType,
+        buffered: Option<&JsTimeRanges>,
+    ) -> bool {
+        let buffered = buffered.or_else(|| {
+            let observation = self.last_observation.as_ref()?;
+            match media_type {
+                MediaType::Audio => observation.audio_buffered(),
+                MediaType::Video => observation.video_buffered(),
+            }
+        });
+        self.inventory(media_type).last().is_some_and(|chunk| {
+            self.media_offset
+                .zip(buffered)
+                .is_some_and(|(offset, ranges)| chunk.has_buffered_tail(ranges, offset))
+        })
     }
 
     /// Get reference to SourceBuffer attached to this `MediaElementReference` for this
@@ -741,13 +755,13 @@ impl MediaElementReference {
     /// and call `jsEndOfStream` if that's the case.
     ///
     /// To call when any of its condition might have changed.
-    fn check_end_of_stream(&self) {
+    pub(crate) fn check_end_of_stream(&self) {
         if self.video_buffer.is_none() && self.audio_buffer.is_none() {
             return;
         }
         if self.is_buffer_ended(MediaType::Audio)
             && self.is_buffer_ended(MediaType::Video)
-            && self.media_source_ready_state != Some(MediaSourceReadyState::Closed)
+            && self.media_source_ready_state == Some(MediaSourceReadyState::Open)
         {
             let _ = jsEndOfStream();
         }

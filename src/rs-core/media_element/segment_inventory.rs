@@ -182,8 +182,19 @@ impl BufferedChunk {
         {
             true
         } else {
-            self.end - self.last_buffered_end > 0.5
+            self.end - self.last_buffered_end > MAX_MISSING_BUFFER_END
         }
+    }
+
+    /// Returns true if the append has finished and at most 150 ms is missing from its end.
+    pub(super) fn has_buffered_tail(&self, buffered: &JsTimeRanges, media_offset: f64) -> bool {
+        let tail = self.end + media_offset;
+        self.validated
+            && self.last_buffered_end >= self.end - MAX_MISSING_BUFFER_END
+            && self.last_buffered_end > self.last_buffered_start
+            && buffered
+                .into_iter()
+                .any(|(start, end)| start < tail && end >= tail - MAX_MISSING_BUFFER_END)
     }
 
     pub(crate) fn is_worse_than(&self, context: &SegmentQualityContext) -> bool {
@@ -239,7 +250,8 @@ impl BufferedChunk {
     }
 }
 
-const FLOAT_TOLERANCE: f64 = 0.01;
+/// Allow up to 150 ms missing from a segment's end before requiring it again.
+const MAX_MISSING_BUFFER_END: f64 = 0.15;
 
 /// Keep track of every media segments downloaded and currently in the linked media
 /// buffer.
@@ -1284,6 +1296,7 @@ mod tests {
     use super::{BufferedSegmentMetadata, SegmentInventory, SegmentQualityContext};
     use crate::{
         bindings::{MediaType, TimescaledTimestamp},
+        dispatcher::JsTimeRanges,
         parser::MediaPlaylistPermanentId,
     };
 
@@ -1303,6 +1316,118 @@ mod tests {
             start,
             end,
             context: SegmentQualityContext::new(1.0, MediaPlaylistPermanentId::new_for_test(1)),
+        }
+    }
+
+    #[test]
+    fn buffered_tail_requires_append_reconciliation_and_observed_data() {
+        let mut inventory = SegmentInventory::new(MediaType::Video);
+        let id = inventory.insert_segment(metadata(10., 12.));
+        let ranges = JsTimeRanges::new(vec![10., 12.]);
+        assert!(!inventory
+            .inventory()
+            .last()
+            .unwrap()
+            .has_buffered_tail(&ranges, 0.));
+        inventory.reconcile_push_result(id, &ranges, 0., true);
+        assert!(inventory
+            .inventory()
+            .last()
+            .unwrap()
+            .has_buffered_tail(&ranges, 0.));
+        assert!(!inventory
+            .inventory()
+            .last()
+            .unwrap()
+            .has_buffered_tail(&JsTimeRanges::new(vec![]), 0.));
+
+        let mut empty_append = SegmentInventory::new(MediaType::Video);
+        let id = empty_append.insert_segment(metadata(10., 12.));
+        empty_append.reconcile_push_result(id, &JsTimeRanges::new(vec![]), 0., true);
+        assert!(empty_append
+            .inventory()
+            .iter()
+            .all(|chunk| { !chunk.has_buffered_tail(&JsTimeRanges::new(vec![]), 0.) }));
+    }
+
+    #[test]
+    fn earlier_appends_keep_the_final_tail_but_eviction_invalidates_it() {
+        let mut inventory = SegmentInventory::new(MediaType::Video);
+        let id = inventory.insert_segment(metadata(10., 12.));
+        inventory.reconcile_push_result(id, &JsTimeRanges::new(vec![10., 12.]), 0., true);
+        let earlier = inventory.insert_segment(metadata(8., 10.));
+        let ranges = JsTimeRanges::new(vec![8., 12.]);
+        inventory.reconcile_push_result(earlier, &ranges, 0., true);
+        let tail = inventory.inventory().last().unwrap();
+        assert_eq!(tail.playlist_start(), 10.);
+        assert!(tail.has_buffered_tail(&ranges, 0.));
+
+        let trimmed = JsTimeRanges::new(vec![8., 11.8]);
+        inventory.synchronize(&trimmed, 0.);
+        assert!(!inventory
+            .inventory()
+            .last()
+            .unwrap()
+            .has_buffered_tail(&trimmed, 0.));
+        inventory.synchronize(&JsTimeRanges::new(vec![8., 10.]), 0.);
+        assert!(inventory
+            .inventory()
+            .iter()
+            .all(|chunk| chunk.playlist_start() != 10.));
+    }
+
+    #[test]
+    fn buffered_tail_uses_media_offset_and_actual_end_after_timestamp_correction() {
+        let mut inventory = SegmentInventory::new(MediaType::Video);
+        let id = inventory.insert_segment(metadata(10., 12.));
+        let ranges = JsTimeRanges::new(vec![110., 111.96]);
+        inventory.reconcile_push_result(id, &ranges, 100., true);
+        let tail = inventory.inventory().last().unwrap();
+        assert!(tail.has_buffered_tail(&ranges, 100.));
+        assert!(!tail.has_buffered_tail(&ranges, 0.));
+        assert!(!tail.has_buffered_tail(&JsTimeRanges::new(vec![110., 111.8]), 100.));
+    }
+
+    #[test]
+    fn buffered_tail_and_gc_detection_allow_small_removals() {
+        let mut inventory = SegmentInventory::new(MediaType::Video);
+        let id = inventory.insert_segment(metadata(10., 12.));
+        inventory.reconcile_push_result(id, &JsTimeRanges::new(vec![10., 12.]), 0., true);
+
+        for (end, expected) in [
+            (11.995, true),
+            (11.98, true),
+            (11.86, true),
+            (11.84, false),
+            (11.8, false),
+        ] {
+            let ranges = JsTimeRanges::new(vec![10., end]);
+            // Check both the new ranges and the inventory after synchronization.
+            assert_eq!(
+                inventory
+                    .inventory()
+                    .last()
+                    .unwrap()
+                    .has_buffered_tail(&ranges, 0.),
+                expected
+            );
+            inventory.synchronize(&ranges, 0.);
+            assert_eq!(
+                inventory
+                    .inventory()
+                    .last()
+                    .unwrap()
+                    .has_buffered_tail(&ranges, 0.),
+                expected
+            );
+            assert_eq!(
+                inventory
+                    .inventory()
+                    .last()
+                    .unwrap()
+                    .appears_garbage_collected(10.),
+                !expected
+            );
         }
     }
 

@@ -362,6 +362,36 @@ describe("Generated VoD content - playback", function () {
   });
 
   it(
+    "ends after appending earlier segments following the final segment",
+    { timeout: 240_000 },
+    async () => {
+      let receivedEndedEvent = 0;
+      ctx.player.addEventListener("ended", () => receivedEndedEvent++);
+      ctx.player.load(getVodScenarioUrl("fmp4-player-api"), {
+        startingPosition: { startType: "FromEnd", position: 2 },
+      });
+      await waitForLoadedState(
+        ctx.player,
+        ctx.videoElement,
+        () => ctx.lastPlayerError,
+      );
+
+      // The final segment is buffered first. Seeking back requires earlier
+      // segments to be appended while that final segment remains buffered.
+      ctx.player.seek(4);
+      await ctx.player.resume();
+      await checkAfterSleepWithBackoff(
+        { minTimeMs: 100, maxTimeMs: 120_000, stepMs: 500 },
+        () => {
+          expect(ctx.videoElement.ended).toEqual(true);
+          expect(ctx.player.isEnded()).toEqual(true);
+          expect(receivedEndedEvent).toEqual(1);
+        },
+      );
+    },
+  );
+
+  it(
     "uses media time as playlist time when EXT-X-PROGRAM-DATE-TIME is absent",
     { timeout: VOD_TEST_TIMEOUT_MS },
     async () => {

@@ -412,7 +412,11 @@ impl Dispatcher {
         buffered: JsTimeRanges,
     ) {
         self.media_element_ref
-            .on_source_buffer_update(source_buffer_id, buffered, true);
+            .on_source_buffer_update(source_buffer_id, &buffered, true);
+        if let Some(media_type) = self.media_element_ref.media_type_for(source_buffer_id) {
+            self.check_buffer_end(media_type, Some(&buffered));
+        }
+        self.media_element_ref.check_end_of_stream();
         // More playable data does not necessarily cause a media-element event.
         // Request an observation now if it means we could go out of rebuffering faster
         if self.media_element_ref.is_rebuffering() {
@@ -428,7 +432,10 @@ impl Dispatcher {
         buffered: JsTimeRanges,
     ) {
         self.media_element_ref
-            .on_source_buffer_update(source_buffer_id, buffered, false);
+            .on_source_buffer_update(source_buffer_id, &buffered, false);
+        if let Some(media_type) = self.media_element_ref.media_type_for(source_buffer_id) {
+            self.check_buffer_end(media_type, Some(&buffered));
+        }
 
         match self.media_element_ref.media_type_for(source_buffer_id) {
             Some(mt) => {
@@ -492,7 +499,10 @@ impl Dispatcher {
         buffered: JsTimeRanges,
     ) {
         self.media_element_ref
-            .on_source_buffer_update(source_buffer_id, buffered, false);
+            .on_source_buffer_update(source_buffer_id, &buffered, false);
+        if let Some(media_type) = self.media_element_ref.media_type_for(source_buffer_id) {
+            self.check_buffer_end(media_type, Some(&buffered));
+        }
         match self.media_element_ref.media_type_for(source_buffer_id) {
             Some(mt) => {
                 let message =
@@ -512,7 +522,15 @@ impl Dispatcher {
     pub(super) fn on_observation(&mut self, observation: MediaObservation) {
         let reason = observation.reason();
         log_debug!("Tick received: {:?} {}", reason, observation.current_time());
+
+        // TODO: Rebuffering is evaluated before the finished flags are refreshed below.
+        // Near the end, this can pause playback unnecessarily until the next observation.
         self.media_element_ref.on_observation(observation);
+
+        for media_type in [MediaType::Audio, MediaType::Video] {
+            self.check_buffer_end(media_type, None);
+        }
+        self.media_element_ref.check_end_of_stream();
         match reason {
             PlaybackTickReason::Seeking => self.on_seek(),
             _ => self.on_regular_tick(),
@@ -883,15 +901,24 @@ impl Dispatcher {
         }
 
         for media_type in [MediaType::Audio, MediaType::Video] {
-            let Some(last_buffered_segment) = self.media_element_ref.inventory(media_type).last()
-            else {
-                continue;
-            };
-
-            if pl_store.is_last_media_segment(media_type, last_buffered_segment.playlist_start()) {
-                self.media_element_ref.end_buffer(media_type);
-            }
+            self.check_buffer_end(media_type, None);
         }
+        self.media_element_ref.check_end_of_stream();
+    }
+
+    /// Update the finished flag from the playlist and the currently buffered data.
+    fn check_buffer_end(&mut self, media_type: MediaType, buffered: Option<&JsTimeRanges>) {
+        let last_segment = self.media_element_ref.inventory(media_type).last();
+        let complete = last_segment.is_some_and(|segment| {
+            utils::was_last_segment(
+                self.playlist_store.as_ref(),
+                media_type,
+                segment.playlist_start(),
+            )
+        }) && self
+            .media_element_ref
+            .has_buffered_tail(media_type, buffered);
+        self.media_element_ref.set_buffer_end(media_type, complete);
     }
 
     /// This media player is based on a regular clock.
@@ -1463,33 +1490,21 @@ impl Dispatcher {
             return;
         }
 
-        match self
+        if let Err(x) = self
             .media_element_ref
             .push_media_segment(media_type, prepared_data)
         {
-            Err(x) => {
-                let media_type = x.media_type();
-                let message = x.to_string();
-                log_warn!(
-                    "Core: {} media segment push failed start:{} end:{} err:{}",
-                    media_type,
-                    segment_start,
-                    segment_end,
-                    message
-                );
-                jsSendSegmentParsingError(true, x.into(), Some(media_type), &message);
-                self.stop_current_content();
-            }
-            Ok(()) => {
-                if utils::was_last_segment(self.playlist_store.as_ref(), media_type, segment_start)
-                {
-                    log_info!(
-                        "Last {} segment request finished, declaring its buffer's end",
-                        media_type
-                    );
-                    self.media_element_ref.end_buffer(media_type);
-                }
-            }
+            let media_type = x.media_type();
+            let message = x.to_string();
+            log_warn!(
+                "Core: {} media segment push failed start:{} end:{} err:{}",
+                media_type,
+                segment_start,
+                segment_end,
+                message
+            );
+            jsSendSegmentParsingError(true, x.into(), Some(media_type), &message);
+            self.stop_current_content();
         }
     }
 

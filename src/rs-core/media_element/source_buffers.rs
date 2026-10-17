@@ -296,6 +296,11 @@ impl SourceBuffer {
         self.last_segment_pushed = true;
     }
 
+    /// Clear the finished flag when the final segment is no longer buffered.
+    pub(super) fn clear_last_segment_pushed(&mut self) {
+        self.last_segment_pushed = false;
+    }
+
     /// Returns `true` if the last chronological segment is known to have been pushed.
     pub(super) fn is_last_segment_pushed(&self) -> bool {
         self.last_segment_pushed
