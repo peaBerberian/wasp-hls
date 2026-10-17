@@ -51,6 +51,12 @@ for (const [format, scenario] of [
         await frame;
         testEnd(`${format} reload playing content to first frame`);
 
+        // Measure seeking during playback, after a few frames have passed.
+        const playbackStart = video.currentTime;
+        await waitForFrame(
+          video,
+          (metadata) => metadata.mediaTime >= playbackStart + 0.1,
+        );
         await waitUntil(
           () => isBuffered(video, video.currentTime + 0.5),
           "buffered seek target",
