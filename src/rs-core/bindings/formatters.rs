@@ -158,3 +158,29 @@ pub(crate) fn format_direct_media_audio_tracks_for_js(has_audio_track: bool) -> 
     }
     ret
 }
+
+/// Packed rendition metadata borrows strings from the playlist. The host must copy
+/// every field synchronously before this call returns.
+pub(crate) fn format_subtitle_tracks_for_js(tracks: &[crate::parser::SubtitleTrack]) -> Vec<u32> {
+    let mut out = vec![tracks.len() as u32];
+    for track in tracks {
+        out.push(track.id());
+        let name = track.name();
+        out.extend([
+            name.map_or(0, |value| value.len() as u32),
+            name.map_or(0, |value| value.as_ptr() as u32),
+        ]);
+        for value in [
+            track.language().unwrap_or(""),
+            track.assoc_language().unwrap_or(""),
+        ] {
+            out.extend([value.len() as u32, value.as_ptr() as u32]);
+        }
+        out.push(track.is_forced() as u32);
+        out.push(track.characteristics().len() as u32);
+        for value in track.characteristics() {
+            out.extend([value.len() as u32, value.as_ptr() as u32]);
+        }
+    }
+    out
+}

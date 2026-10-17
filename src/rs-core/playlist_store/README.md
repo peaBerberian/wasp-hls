@@ -13,8 +13,8 @@ Its job is to:
 - Own the top-level playlist and its loaded media playlists.
 
 - Keep track of the selected variant and audio/video playlists, explicit audio
-  track and variant choices. Applying a choice also figures out which media
-  playlists change as a consequence.
+  and subtitle track choices, and variant choices. Applying a choice also figures
+  out which media playlists change as a consequence.
 
 - Expose the available variants and tracks, taking audio track compatibility and
   known stream support into account when providing variant candidates.

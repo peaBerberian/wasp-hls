@@ -39,6 +39,7 @@ impl Dispatcher {
             playlist_refresh_manager: PlaylistRefreshManager::new(),
             ready_probe_segments: Default::default(),
             initial_audio_track_selection: Vec::new(),
+            last_subtitle_selection_generation: None,
         }
     }
 
@@ -129,6 +130,19 @@ impl Dispatcher {
     /// Remove an HLS variant previously put in place through `lock_variant`.
     pub fn unlock_variant(&mut self) {
         self.unlock_variant_core()
+    }
+
+    /// Selects a subtitle track; None restores automatic selection.
+    pub fn set_subtitle_track(&mut self, track_id: Option<u32>) {
+        self.set_subtitle_track_core(track_id);
+    }
+
+    pub fn disable_subtitle_track(&mut self) {
+        let Some(store) = self.playlist_store.as_mut() else {
+            return;
+        };
+        store.disable_subtitle_track();
+        self.sync_subtitle_selection();
     }
 
     /// Set an audio track whose `id` is given in argument.
@@ -381,6 +395,20 @@ pub extern "C" fn wasp_dispatcher_lock_variant(ptr: u32, variant_id: u32) {
 #[unsafe(no_mangle)]
 pub extern "C" fn wasp_dispatcher_unlock_variant(ptr: u32) {
     dispatcher_mut(ptr).unlock_variant();
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn wasp_dispatcher_disable_subtitle_track(ptr: u32) {
+    dispatcher_mut(ptr).disable_subtitle_track();
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn wasp_dispatcher_set_subtitle_track(ptr: u32, track_id: u32) {
+    dispatcher_mut(ptr).set_subtitle_track(if track_id == u32::MAX {
+        None
+    } else {
+        Some(track_id)
+    });
 }
 
 #[unsafe(no_mangle)]
