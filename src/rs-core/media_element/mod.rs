@@ -521,9 +521,9 @@ impl MediaElementReference {
         if !self.check_queued_seek() {
             let last_observation = self.last_observation.as_ref().unwrap();
             let buffer_gap = get_buffer_gap(last_observation);
-            // At EOF the browser may be able to play the remaining data even when the
-            // decoded buffer end falls slightly short of the reported duration.
-            let can_play_to_end = last_observation.ready_state() >= 3
+            // At EOF Chrome may only report HAVE_CURRENT_DATA while draining the
+            // final frames. Keep playing even if buffered ends short of duration.
+            let can_play_to_end = last_observation.ready_state() >= 2
                 && self.is_buffer_ended(MediaType::Audio)
                 && self.is_buffer_ended(MediaType::Video);
             if !self.is_rebuffering {

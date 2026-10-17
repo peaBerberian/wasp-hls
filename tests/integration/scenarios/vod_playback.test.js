@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { waitForLoadedState } from "../../utils/player_test_tools.js";
+import {
+  getPlayerStateSnapshot,
+  waitForLoadedState,
+} from "../../utils/player_test_tools.js";
 import sleep from "../../utils/sleep.js";
 import { getVodScenarioUrl } from "../../utils/vod_scenarios.js";
 import { checkAfterSleepWithBackoff } from "../../utils/checkAfterSleepWithBackoff.js";
@@ -331,7 +334,27 @@ describe("Generated VoD content - playback", function () {
     await checkAfterSleepWithBackoff(
       { minTimeMs: 100, maxTimeMs: 120_000, stepMs: 500 },
       () => {
-        expect(ctx.videoElement.ended).toEqual(true);
+        expect(
+          ctx.videoElement.ended,
+          JSON.stringify({
+            ...getPlayerStateSnapshot(
+              ctx.player,
+              ctx.videoElement,
+              ctx.lastPlayerError,
+            ),
+            duration: ctx.videoElement.duration,
+            playbackRate: ctx.videoElement.playbackRate,
+            seeking: ctx.videoElement.seeking,
+            buffered: Array.from(
+              { length: ctx.videoElement.buffered.length },
+              (_, i) => [
+                ctx.videoElement.buffered.start(i),
+                ctx.videoElement.buffered.end(i),
+              ],
+            ),
+            mediaError: ctx.videoElement.error?.message,
+          }),
+        ).toEqual(true);
         expect(ctx.player.isEnded()).toEqual(true);
         expect(receivedEndedEvent).toEqual(1);
       },
