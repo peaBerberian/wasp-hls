@@ -3,6 +3,7 @@ use super::{
     media_playlist::{MediaPlaylist, MediaPlaylistParsingError},
     media_tag::{MediaTag, MediaTagParsingError},
     playlist_lines::read_playlist_line,
+    subtitle_track_list::SubtitleTrackList,
     timeline_sync::TimelineReference,
     top_level_playlist::{
         is_media_playlist_tag_name, is_media_segment_tag_name,
@@ -45,6 +46,7 @@ pub struct MultivariantPlaylist {
 
     /// Parsed Media tags in the Multivariant Playlist which are not of `TYPE` `"audio"`
     other_media: Vec<MediaTag>,
+    subtitle_tracks: SubtitleTrackList,
 
     /// Supplementary information that will need to be communicated to other Media Playlists
     /// once they are loaded and parsed.
@@ -262,6 +264,7 @@ impl MultivariantPlaylist {
             primary_id_by_variant.insert(variant.id(), primary_id);
         }
 
+        let subtitle_tracks = SubtitleTrackList::new(&other_media, &variants);
         Ok(MultivariantPlaylist {
             last_id,
             url,
@@ -269,6 +272,7 @@ impl MultivariantPlaylist {
             primary_media,
             primary_id_by_variant,
             audio_tracks: AudioTrackList::new(audio_media),
+            subtitle_tracks,
             other_media,
             context: MediaPlaylistContext {
                 start,
@@ -672,10 +676,11 @@ impl MultivariantPlaylist {
         track_id: u32,
     ) -> Option<MediaPlaylistPermanentId> {
         let group = variant.subtitle_group()?;
+        let track = self.subtitle_tracks.track(track_id)?;
         self.other_media
             .iter()
             .find(|m| {
-                m.id() == track_id
+                track.contains_media(m.id())
                     && m.typ() == MediaTagType::Subtitles
                     && m.group_id() == group
                     && m.url().is_some()
@@ -683,24 +688,57 @@ impl MultivariantPlaylist {
             .map(|m| MediaPlaylistPermanentId::new(MediaPlaylistUrlLocation::OtherMedia, m.id()))
     }
 
-    /// Subtitle renditions referenced by at least one variant. IDs identify renditions;
-    /// a core selection policy must preserve preferences when switching groups.
-    pub(crate) fn subtitle_tracks(&self) -> Vec<&MediaTag> {
-        self.other_media
-            .iter()
-            .filter(|m| {
-                m.typ() == MediaTagType::Subtitles
-                    && m.url().is_some()
-                    && self
-                        .variants
-                        .iter()
-                        .any(|v| v.subtitle_group() == Some(m.group_id()))
-            })
-            .collect()
+    pub(crate) fn subtitle_tracks(&self) -> &[super::SubtitleTrack] {
+        self.subtitle_tracks.tracks()
     }
 
-    // TODO(subtitles): resolve selected subtitle rendition against the active variant,
-    // store/update its media playlist and report changes independently of A/V readiness.
+    pub(crate) fn subtitle_track_for_media_id(
+        &self,
+        id: &MediaPlaylistPermanentId,
+    ) -> Option<&super::SubtitleTrack> {
+        if id.location() != MediaPlaylistUrlLocation::OtherMedia {
+            return None;
+        }
+        self.subtitle_tracks.track_for_media(id.id())
+    }
+
+    pub(crate) fn automatic_subtitle_playlist_id_for(
+        &self,
+        variant: &VariantStream,
+        audio_language: Option<&str>,
+    ) -> Option<MediaPlaylistPermanentId> {
+        let group = variant.subtitle_group()?;
+        self.other_media
+            .iter()
+            .filter(|media| {
+                media.typ() == MediaTagType::Subtitles
+                    && media.url().is_some()
+                    && media.group_id() == group
+            })
+            .filter(|media| {
+                media.is_default()
+                    || (media.is_forced()
+                        && media.is_autoselect()
+                        && media.language().zip(audio_language).is_some_and(
+                            |(candidate, language)| candidate.eq_ignore_ascii_case(language),
+                        ))
+            })
+            .max_by_key(|media| {
+                (
+                    media.is_default(),
+                    media
+                        .language()
+                        .zip(audio_language)
+                        .is_some_and(|(candidate, language)| {
+                            candidate.eq_ignore_ascii_case(language)
+                        }),
+                )
+            })
+            .map(|media| {
+                MediaPlaylistPermanentId::new(MediaPlaylistUrlLocation::OtherMedia, media.id())
+            })
+    }
+
     pub(crate) fn audio_tracks(&self) -> &[AudioTrack] {
         self.audio_tracks.as_slice()
     }
@@ -966,7 +1004,12 @@ video2.m3u8
         assert_eq!(tracks.len(), 2);
         let english = tracks.iter().find(|t| t.language() == Some("en")).unwrap();
         assert_eq!(english.assoc_language(), Some("en-US"));
-        assert!(english.is_default() && english.is_autoselect() && english.is_forced());
+        let rendition = parsed
+            .other_media
+            .iter()
+            .find(|media| media.id() == english.id())
+            .unwrap();
+        assert!(rendition.is_default() && rendition.is_autoselect() && english.is_forced());
         assert_eq!(
             english.characteristics(),
             &["public.accessibility.transcribes-spoken-dialog"]

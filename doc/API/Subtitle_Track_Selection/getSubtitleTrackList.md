@@ -3,17 +3,14 @@
 ## Description
 
 Returns the available subtitle tracks for the loaded content, or an empty array
-when no tracks are known. Each track corresponds to an HLS subtitle rendition.
+when no tracks are known. Each track groups HLS subtitle renditions with the same characteristics.
 
 Each object contains:
 
 - `id` (`number`): Track identifier, scoped to the loaded content.
 - `name` (`string`): Human-readable description.
-- `groupId` (`string`): HLS rendition group identifier.
 - `language` (`string | undefined`): Primary language tag.
 - `assocLanguage` (`string | undefined`): Associated language tag.
-- `default` (`boolean`): Whether the content marks this rendition as default.
-- `autoselect` (`boolean`): Whether automatic selection is allowed.
 - `forced` (`boolean`): Whether this rendition contains forced subtitles.
 - `characteristics` (`Array.<string>`): Semantic characteristics, including
   accessibility roles.

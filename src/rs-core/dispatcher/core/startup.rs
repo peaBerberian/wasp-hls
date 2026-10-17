@@ -110,6 +110,7 @@ fn ensure_ready_playlists(dispatcher: &mut Dispatcher, wanted_position: f64) -> 
             if audio_track_changed {
                 dispatcher.announce_current_audio_track();
             }
+            dispatcher.sync_subtitle_selection();
             for media_type in changed_media_types {
                 dispatcher.ready_probe_segments.clear_media_type(media_type);
                 dispatcher.follow_selected_media_playlist(media_type);
@@ -220,15 +221,13 @@ fn advance_awaiting_playlist_info_state(dispatcher: &mut Dispatcher) {
             return;
         };
         let subtitle_tracks_info =
-            crate::bindings::formatters::format_subtitle_tracks_for_js(&store.subtitle_tracks());
+            crate::bindings::formatters::format_subtitle_tracks_for_js(store.subtitle_tracks());
         jsAnnounceFetchedContent(
             playlist_kind,
             variants_info,
             audio_tracks_info,
             subtitle_tracks_info,
         );
-        // TODO(subtitles): initialize automatic/explicit/off selection after track discovery.
-        // Subtitle playlist/segment readiness must never gate A/V startup or completion.
         dispatcher.announce_current_variant();
         jsAnnounceTrackUpdate(MediaType::Audio, curr_audio_track, is_fixed);
 
@@ -236,6 +235,7 @@ fn advance_awaiting_playlist_info_state(dispatcher: &mut Dispatcher) {
             starting_position,
             lifecycle_announced: true,
         };
+        dispatcher.sync_subtitle_selection();
     }
 
     if !ensure_ready_playlists(dispatcher, wanted_position) {

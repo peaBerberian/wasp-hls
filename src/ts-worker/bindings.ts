@@ -1873,9 +1873,6 @@ function decodeSubtitleTracks(
     const name = readString();
     const language = readString() || undefined;
     const assocLanguage = readString() || undefined;
-    const groupId = readString();
-    const isDefault = data[cursor++] !== 0;
-    const autoselect = data[cursor++] !== 0;
     const forced = data[cursor++] !== 0;
     const count = data[cursor++];
     const characteristics: string[] = [];
@@ -1887,9 +1884,6 @@ function decodeSubtitleTracks(
       name,
       language,
       assocLanguage,
-      groupId,
-      default: isDefault,
-      autoselect,
       forced,
       characteristics,
     });

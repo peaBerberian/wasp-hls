@@ -982,10 +982,17 @@
       },
     },
     {
+      "wasmSymbol": "wasp_dispatcher_disable_subtitle_track",
+      "doc": ["Disable subtitles for the current content."],
+      "wasm": {
+        "kind": "method",
+        "args": [{ "name": "ptr", "type": "number" }],
+        "returnType": "void",
+      },
+    },
+    {
       "wasmSymbol": "wasp_dispatcher_set_subtitle_track",
-      "doc": [
-        "Request a subtitle rendition, or disable subtitles.",
-      ],
+      "doc": ["Request a subtitle rendition, or disable subtitles."],
       "wasm": {
         "kind": "method",
         "args": [

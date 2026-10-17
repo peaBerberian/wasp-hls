@@ -739,6 +739,30 @@ impl Requester {
         }
     }
 
+    pub(crate) fn abort_playlists_with_type(&mut self, media_type: MediaType) {
+        let mut index = 0;
+        while index < self.pending_playlist_requests.len() {
+            let matches = matches!(self.pending_playlist_requests[index].playlist_type,
+                PlaylistFileType::MediaPlaylist { media_type: requested, .. } if requested == media_type);
+            if !matches {
+                index += 1;
+                continue;
+            }
+            let request = self.pending_playlist_requests.remove(index);
+            self.retry_timers.retain(|(timer_id, host_id)| {
+                if *host_id == request.host_id {
+                    jsClearTimer(*timer_id);
+                    false
+                } else {
+                    true
+                }
+            });
+            if !request.is_waiting_for_retry {
+                jsAbortRequest(request.host_id);
+            }
+        }
+    }
+
     pub(crate) fn abort_segments_with_type(&mut self, media_type: MediaType) -> Vec<u32> {
         let lane_tag = RequestLaneTag::from_media_type(media_type);
         let mut i = 0;
@@ -1100,6 +1124,7 @@ fn pending_segment_could_fill_before<T: RequesterSegmentInfo>(
 ) -> bool {
     requests.iter().any(
         |req| match (req.lane_tag().media_type(), req.start_time()) {
+            (Some(MediaType::Text), _) => false,
             (Some(_), None) => true,
             (Some(_), Some(start)) => start < range_start,
             (None, _) => false,
@@ -1117,6 +1142,16 @@ mod tests {
         bindings::RequestErrorReason, parser::SegmentTimeInfo, requester::RequestLaneTag,
         utils::url::Url,
     };
+
+    #[test]
+    fn subtitle_requests_do_not_block_av_gap_jumps() {
+        let mut text = waiting_init();
+        text.lane_tag = RequestLaneTag::Subtitles;
+        assert!(!pending_segment_could_fill_before(&[text], 12.));
+        let mut text = waiting_media(1.);
+        text.lane_tag = RequestLaneTag::Subtitles;
+        assert!(!pending_segment_could_fill_before(&[text], 12.));
+    }
 
     #[test]
     fn prohibited_retry_finishes_only_the_failed_request_and_preserves_its_reason() {

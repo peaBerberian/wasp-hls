@@ -915,7 +915,7 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
     return this.__contentMetadata__?.variants ?? [];
   }
 
-  /** Returns the active subtitle rendition, null when disabled, or undefined when unknown. */
+  /** Returns the active subtitle track, null when disabled, or undefined when unknown. */
   public getCurrentSubtitleTrack(): SubtitleTrackInfo | null | undefined {
     const metadata = this.__contentMetadata__;
     if (metadata?.currentSubtitleTrack === null) {
@@ -926,14 +926,12 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
     );
   }
 
-  /** Returns subtitle renditions announced by the multivariant playlist. */
+  /** Returns subtitle tracks announced by the multivariant playlist. */
   public getSubtitleTrackList(): SubtitleTrackInfo[] {
     return this.__contentMetadata__?.subtitleTracks ?? [];
   }
 
-  /** Requests a rendition, or explicitly disables subtitles with null.
-   * Changes take effect asynchronously.
-   */
+  /** Selects a subtitle track, or restores automatic selection with null. */
   public setSubtitleTrack(trackId: number | null): void {
     if (this.__worker__ === null) {
       throw new Error("The Player is not initialized or is disposed.");
@@ -951,6 +949,21 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
     postMessageToWorker(this.__worker__, {
       type: MainMessageType.SetSubtitleTrack,
       value: { contentId: metadata.contentId, trackId },
+    });
+  }
+
+  /** Disables subtitles for the current content. */
+  public disableSubtitleTrack(): void {
+    if (this.__worker__ === null) {
+      throw new Error("The Player is not initialized or is disposed.");
+    }
+    const metadata = this.__contentMetadata__;
+    if (metadata === null) {
+      throw new Error("No content loaded");
+    }
+    postMessageToWorker(this.__worker__, {
+      type: MainMessageType.DisableSubtitleTrack,
+      value: { contentId: metadata.contentId },
     });
   }
 

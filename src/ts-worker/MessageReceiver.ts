@@ -342,6 +342,17 @@ export default function MessageReceiver() {
         break;
       }
 
+      case MainMessageType.DisableSubtitleTrack: {
+        const dispatcher = playerInstance.getDispatcher();
+        if (
+          playerInstance.getContentInfo()?.contentId !== data.value.contentId
+        ) {
+          return;
+        }
+        dispatcher?.disable_subtitle_track();
+        break;
+      }
+
       case MainMessageType.SetSubtitleTrack: {
         const dispatcher = playerInstance.getDispatcher();
         const contentInfo = playerInstance.getContentInfo();

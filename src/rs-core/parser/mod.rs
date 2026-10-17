@@ -1,5 +1,7 @@
 mod attribute_list;
 mod audio_track_list;
+mod subtitle_track_list;
+pub(crate) use subtitle_track_list::SubtitleTrack;
 mod media_playlist;
 mod media_tag;
 mod multi_variant_playlist;

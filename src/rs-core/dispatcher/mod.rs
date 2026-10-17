@@ -74,6 +74,7 @@ pub struct Dispatcher {
     /// Preferred criteria to resolve the initial audio track selection for the
     /// next content being loaded.
     initial_audio_track_selection: Vec<InitialAudioTrackSelection>,
+    last_subtitle_selection_generation: Option<u64>,
 }
 
 #[derive(Clone, Debug, Default)]

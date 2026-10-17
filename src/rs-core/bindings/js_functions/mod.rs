@@ -565,11 +565,34 @@ pub fn jsAnnounceFetchedContent(
     }
 }
 
+#[cfg(test)]
+std::thread_local! {
+    static SELECTION_ANNOUNCEMENTS: std::cell::RefCell<Vec<(Option<MediaType>, Option<u32>)>> =
+        const { std::cell::RefCell::new(Vec::new()) };
+}
+
+#[cfg(test)]
+pub(crate) fn take_selection_announcements() -> Vec<(Option<MediaType>, Option<u32>)> {
+    SELECTION_ANNOUNCEMENTS.with(|events| std::mem::take(&mut *events.borrow_mut()))
+}
+
 pub fn jsAnnounceVariantUpdate(variant_id: Option<u32>) {
-    unsafe { __js_func__announce_variant_update(opt_u32_to_raw(variant_id)) }
+    #[cfg(test)]
+    SELECTION_ANNOUNCEMENTS.with(|events| events.borrow_mut().push((None, variant_id)));
+    #[cfg(not(test))]
+    unsafe {
+        __js_func__announce_variant_update(opt_u32_to_raw(variant_id))
+    }
 }
 
 pub fn jsAnnounceTrackUpdate(media_type: MediaType, track_id: Option<u32>, is_fixed: bool) {
+    #[cfg(test)]
+    {
+        let _ = is_fixed;
+        SELECTION_ANNOUNCEMENTS
+            .with(|events| events.borrow_mut().push((Some(media_type), track_id)));
+    }
+    #[cfg(not(test))]
     unsafe {
         __js_func__announce_track_update(
             media_type as u32,

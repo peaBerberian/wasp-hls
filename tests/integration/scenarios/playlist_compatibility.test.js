@@ -62,21 +62,89 @@ describe("Playlist compatibility", () => {
         expect(tracks[0]).toMatchObject({
           name: "Français",
           language: "fr",
-          groupId: "subs",
-          default: true,
-          autoselect: true,
           forced: true,
           characteristics: ["public.accessibility.transcribes-spoken-dialog"],
         });
         expect(announced.at(-1)).toEqual(tracks);
-        expect(ctx.player.getCurrentSubtitleTrack()).toBeUndefined();
+        expect(ctx.player.getCurrentSubtitleTrack()?.id).toBe(tracks[0].id);
         expect(() => ctx.player.setSubtitleTrack(-1)).toThrow(
           "Unknown subtitle track",
         );
         ctx.player.setSubtitleTrack(tracks[0].id);
+        const disabled = waitForPlayerEvent(
+          ctx.player,
+          "subtitleTrackUpdate",
+          (track) => track === null,
+        );
+        ctx.player.disableSubtitleTrack();
+        await disabled;
+        expect(ctx.player.getCurrentSubtitleTrack()).toBeNull();
+        const automatic = waitForPlayerEvent(
+          ctx.player,
+          "subtitleTrackUpdate",
+          (track) => track?.id === tracks[0].id,
+        );
         ctx.player.setSubtitleTrack(null);
+        await automatic;
+        expect(ctx.player.getCurrentSubtitleTrack()?.id).toBe(tracks[0].id);
         ctx.player.stop();
         expect(ctx.player.getSubtitleTrackList()).toEqual([]);
+      } finally {
+        ctx.dispose();
+      }
+    },
+  );
+
+  it(
+    "selects a subtitle track from another variant group",
+    { timeout: TEST_TIMEOUT_MS },
+    async () => {
+      const url = await ensureVodScenarioReady("fmp4-multivariant-no-codecs");
+      const master = await readPlaylist(url);
+      const variant = master.match(/#EXT-X-STREAM-INF:[^\n]+\n[^\n]+/);
+      if (variant === null) {
+        throw new Error("Missing test variant");
+      }
+      const tags = [
+        '#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID="a",NAME="English",LANGUAGE="en",DEFAULT=YES,URI="a.m3u8"',
+        '#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID="b",NAME="French",LANGUAGE="fr",DEFAULT=YES,URI="b.m3u8"',
+      ].join("\n");
+      const body = master
+        .replace("#EXTM3U\n", `#EXTM3U\n${tags}\n`)
+        .replace(
+          variant[0],
+          variant[0].replace(
+            "#EXT-X-STREAM-INF:",
+            '#EXT-X-STREAM-INF:SUBTITLES="a",',
+          ) +
+            "\n" +
+            variant[0].replace(
+              "#EXT-X-STREAM-INF:",
+              '#EXT-X-STREAM-INF:SUBTITLES="b",',
+            ),
+        );
+      const ctx = await createPlayerHarness({
+        fetchRules: [playlistRule(url, body)],
+      });
+      try {
+        await expectPlayback(ctx, url);
+        const current = ctx.player.getCurrentSubtitleTrack();
+        expect(current).toBeTruthy();
+        const other = ctx.player
+          .getSubtitleTrackList()
+          .find((track) => track.id !== current?.id);
+        if (other === undefined) {
+          throw new Error("Missing alternative subtitle track");
+        }
+        const selected = waitForPlayerEvent(
+          ctx.player,
+          "subtitleTrackUpdate",
+          (track) => track?.id === other.id,
+        );
+        ctx.player.setSubtitleTrack(other.id);
+        await selected;
+        expect(ctx.player.getCurrentSubtitleTrack()?.id).toBe(other.id);
+        expect(ctx.player.getError()).toBeNull();
       } finally {
         ctx.dispose();
       }

@@ -42,7 +42,8 @@ export type MainMessage =
   | LockVariantMainMessage
   | UpdateConfigMainMessage
   | SetAudioTrackMainMessage
-  | SetSubtitleTrackMainMessage;
+  | SetSubtitleTrackMainMessage
+  | DisableSubtitleTrackMainMessage;
 
 /**
  * Discriminants (value of the `type` property) for messages sent by the main
@@ -70,6 +71,7 @@ export const enum MainMessageType {
   LockVariant = "lock-var",
   SetAudioTrack = "set-audio",
   SetSubtitleTrack = "set-subtitle",
+  DisableSubtitleTrack = "disable-subtitle",
   CodecsSupportUpdate = "codecs-support-upd",
 }
 
@@ -492,20 +494,22 @@ export interface VariantInfo {
   videoRange?: string | undefined;
 }
 
-/** An HLS SUBTITLES rendition. IDs are scoped to the current content. */
+/** An HLS subtitle track grouping equivalent renditions. IDs are content-scoped. */
 export interface SubtitleTrackInfo {
   id: number;
   name: string;
   language?: string | undefined;
   assocLanguage?: string | undefined;
-  groupId: string;
-  default: boolean;
-  autoselect: boolean;
   forced: boolean;
   characteristics: string[];
 }
 
-/** null explicitly disables subtitles; it does not request automatic selection. */
+export interface DisableSubtitleTrackMainMessage {
+  type: MainMessageType.DisableSubtitleTrack;
+  value: { contentId: string };
+}
+
+/** null restores automatic selection, as with audio tracks. */
 export interface SetSubtitleTrackMainMessage {
   type: MainMessageType.SetSubtitleTrack;
   value: { contentId: string; trackId: number | null };

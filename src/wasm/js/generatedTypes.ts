@@ -368,6 +368,10 @@ export interface WaspWasmExports {
    */
   wasp_dispatcher_unlock_variant(ptr: number): void;
   /**
+   * Disable subtitles for the current content.
+   */
+  wasp_dispatcher_disable_subtitle_track(ptr: number): void;
+  /**
    * Request a subtitle rendition, or disable subtitles.
    */
   wasp_dispatcher_set_subtitle_track(ptr: number, trackId: number): void;
