@@ -17,6 +17,7 @@ const SCENARIO_ENTRY_FILES = {
   "fmp4-direct-media-byterange": "playlist.m3u8",
   "fmp4-player-api-ext-x-start": "playlist.m3u8",
   "fmp4-player-api-ext-x-start-imprecise": "playlist.m3u8",
+  "fmp4-audio-only": "master.m3u8",
   "fmp4-alt-audio": "master.m3u8",
   "fmp4-multivariant-alt-audio": "master.m3u8",
   "fmp4-shared-audio-muxed": "master.m3u8",

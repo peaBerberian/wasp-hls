@@ -1315,6 +1315,42 @@ mod tests {
     }
 
     #[test]
+    fn switching_audio_only_variants_updates_only_the_audio_playlist() {
+        let mut store = PlaylistStore::try_new(
+            br#"#EXTM3U
+#EXT-X-STREAM-INF:BANDWIDTH=65000,CODECS="mp4a.40.5"
+low.m3u8
+#EXT-X-STREAM-INF:BANDWIDTH=128000,CODECS="mp4a.40.2"
+high.m3u8
+"#,
+            parse_url("https://example.com/master.m3u8"),
+        )
+        .unwrap();
+        let low = store.available_variants()[0].id();
+        let high = store.available_variants()[1].id();
+
+        assert_eq!(store.set_variant(low), vec![MediaType::Audio]);
+        let low_playlist = *store.current_media_playlist_id(MediaType::Audio).unwrap();
+        assert!(store.current_media_playlist_id(MediaType::Video).is_none());
+        assert!(matches!(
+            store.startup_status(0.),
+            Ok(StartupStatus::AwaitingPlaylists)
+        ));
+
+        assert_eq!(store.set_variant(high), vec![MediaType::Audio]);
+        assert_ne!(
+            store.current_media_playlist_id(MediaType::Audio),
+            Some(&low_playlist)
+        );
+        assert!(store.current_media_playlist_id(MediaType::Video).is_none());
+        assert_eq!(store.set_variant(low), vec![MediaType::Audio]);
+        assert_eq!(
+            store.current_media_playlist_id(MediaType::Audio),
+            Some(&low_playlist)
+        );
+    }
+
+    #[test]
     fn constructor_preserves_playlist_parsing_errors() {
         use crate::parser::TopLevelPlaylistParsingError;
 

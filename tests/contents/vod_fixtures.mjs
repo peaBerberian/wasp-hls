@@ -392,6 +392,28 @@ const SCENARIOS = {
       );
     },
   },
+  "fmp4-audio-only": {
+    entryPath: "master.m3u8",
+    recipeId: "fmp4-audio-en",
+    async getFile(relativePath, context) {
+      if (relativePath === "master.m3u8") {
+        return {
+          body:
+            "#EXTM3U\n" +
+            '#EXT-X-STREAM-INF:BANDWIDTH=128000,CODECS="mp4a.40.2"\n' +
+            "audio.m3u8\n",
+          contentType: CONTENT_TYPE_M3U8,
+        };
+      }
+      if (relativePath === "audio.m3u8") {
+        return createMediaPlaylistResponse(
+          await readGeneratedMediaPlaylist("fmp4-audio-en"),
+          context,
+        );
+      }
+      return null;
+    },
+  },
   "fmp4-alt-audio": {
     entryPath: "master.m3u8",
     recipeId: "fmp4-video-only",

@@ -12,6 +12,7 @@
 
 ### Bug fixes
 
+- Fix playback of audio-only playlists
 - Actually send `audioTrackUpdate` if the audio track switched from one audio track to another (or none) on a `lockVariant` call
 - Don't needlessly send `audioTrackUpdate` if the audio track did not change on a `lockVariant` call
 - Don't crash if a variant selected through `lockVariant` is found to have unsupported codecs after probing. Remove the lock, send `variantLockUpdate` and fall back to a compatible variant

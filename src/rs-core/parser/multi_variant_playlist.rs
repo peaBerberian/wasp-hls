@@ -372,7 +372,6 @@ impl MultivariantPlaylist {
         curr_variant: &VariantStream,
         curr_audio_track: Option<u32>,
     ) -> Option<MediaPlaylistPermanentId> {
-        // TODO: Resolve the variant's own URL for audio-only variants without an AUDIO group.
         let primary_id: u32 = (*self.primary_id_by_variant.get(&curr_variant.id())?)
             .try_into()
             .ok()?;
@@ -420,6 +419,14 @@ impl MultivariantPlaylist {
                         }
                     })
             }
+        } else if curr_variant.has_type(MediaType::Audio)
+            && !curr_variant.has_type(MediaType::Video)
+        {
+            // Without an AUDIO group, an audio-only variant carries its own audio.
+            Some(MediaPlaylistPermanentId::new(
+                MediaPlaylistUrlLocation::Variant,
+                primary_id,
+            ))
         } else {
             None
         }
@@ -873,6 +880,30 @@ pub(crate) enum MediaPlaylistUrlLocation {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn audio_only_variant_without_audio_group_selects_its_primary_playlist() {
+        let playlist = r#"#EXTM3U
+#EXT-X-STREAM-INF:BANDWIDTH=65000,CODECS="mp4a.40.5"
+audio-only.m3u8
+"#;
+        let parsed = MultivariantPlaylist::parse(
+            playlist.as_bytes(),
+            Url::new("https://example.com/master.m3u8".to_owned()),
+        )
+        .unwrap();
+        let variant = parsed.variant_from_idx(0).unwrap();
+
+        assert!(parsed.video_media_playlist_id_for(variant).is_none());
+        let audio_id = parsed
+            .audio_media_playlist_id_for(variant, None)
+            .expect("An audio-only variant must select its own media playlist");
+        assert_eq!(audio_id.location(), MediaPlaylistUrlLocation::Variant);
+        assert_eq!(
+            parsed.media_playlist_url(&audio_id).unwrap().get_ref(),
+            "https://example.com/audio-only.m3u8"
+        );
+    }
 
     #[test]
     fn retains_variants_with_unknown_required_attributes_and_enum_values() {
