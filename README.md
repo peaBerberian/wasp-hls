@@ -20,15 +20,16 @@ to be built on top of it) for the web which:
    for media buffering when APIs are available), to reduce the influence an
    heavy UI can have on playback (and in some situations vice-versa).
 
-I'm [Paul Berberian](https://peaberberian.github.io/), lead developer of the
-[RxPlayer](https://github.com/canalplus/rx-player). Wasp-hls is a separate
-project that I maintain, developed in the open since 2022.
+I develop Wasp-hls as an independent personal project, drawing on my
+professional experience as lead developer of the [RxPlayer](https://github.com/canalplus/rx-player).
+Developed in the open since 2022, Wasp-hls is unaffiliated with RxPlayer or Canal+.
 
 Note that this is still heavily in development. Plans are:
 
 - **Short-term goal**: Answer most web needs expected from an HLS media engine.
 
   The library is almost there, with subtitle support the main missing feature.
+  Content decryption is not planned for now.
 
 - **Long-term goals**: Optimal low-latency HLS handling. In-Rust transmuxing.
 
@@ -358,9 +359,9 @@ most of them are not needed for playback):
   - [x] LANGUAGE: In audio track selection API
   - [x] ASSOC-LANGUAGE: In audio track selection API
   - [x] NAME: In audio track selection API
-  - [x] CHANNELS: Not so hard to implement, but I've been too lazy to parse that
-        specific format from the Multivariant Playlist for now
-  - [x] CHARACTERISTICS: Soon...
+  - [x] CHANNELS: Audio channel count exposed in the audio track selection API.
+  - [x] CHARACTERISTICS: Semantic characteristics exposed in the audio track
+        selection API.
   - [x] BIT-DEPTH
   - [x] SAMPLE-RATE
   - [ ] FORCED: As the SUBTITLES TYPE is not handled yet, we don't have to use
@@ -426,11 +427,12 @@ Then you need to install node dependencies by calling in your shell:
 npm install
 ```
 
-You also need to add the rust wasm32 target and some rust dependencies:
+The WebAssembly build requires nightly Rust with `rust-src` and the wasm32 target:
 
 ```sh
-# Add wasm32 target (needs rustup that you most likely took with rust)
-rustup target add wasm32-unknown-unknown
+# Install the build toolchain (needs rustup that you most likely took with rust)
+rustup toolchain install nightly --profile minimal --component rust-src
+rustup target add --toolchain nightly wasm32-unknown-unknown
 
 # Optionally, you may also need clippy, for checking Rust code mistakes
 rustup component add clippy
