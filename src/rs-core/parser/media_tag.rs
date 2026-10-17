@@ -104,6 +104,38 @@ pub struct MediaTag {
     // instream_id
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rendition_flags_respect_yes_no_and_absence() {
+        let url = Url::new("https://example.com/master.m3u8".to_owned());
+        for default in [None, Some("YES"), Some("NO")] {
+            for autoselect in [None, Some("YES"), Some("NO")] {
+                for forced in [None, Some("YES"), Some("NO")] {
+                    let mut line =
+                        "#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID=\"subs\",NAME=\"English\"".to_owned();
+                    for (name, value) in [
+                        ("DEFAULT", default),
+                        ("AUTOSELECT", autoselect),
+                        ("FORCED", forced),
+                    ] {
+                        if let Some(value) = value {
+                            line.push_str(&format!(",{name}={value}"));
+                        }
+                    }
+                    let parsed =
+                        MediaTag::create(&line, &url, 0, &VariableStore::default()).unwrap();
+                    assert_eq!(parsed.default, default == Some("YES"), "{line}");
+                    assert_eq!(parsed.autoselect, autoselect == Some("YES"), "{line}");
+                    assert_eq!(parsed.forced, forced == Some("YES"), "{line}");
+                }
+            }
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MediaTagType {
     Audio,
@@ -225,15 +257,16 @@ impl MediaTag {
                     );
                 }
                 "DEFAULT" => {
-                    // TODO: Parse YES/NO for DEFAULT, AUTOSELECT and FORCED instead of treating
-                    // attribute presence as YES.
-                    default = true;
+                    default =
+                        parse_enumerated_string(media_line, item.value_start_offset).0 == "YES";
                 }
                 "AUTOSELECT" => {
-                    autoselect = true;
+                    autoselect =
+                        parse_enumerated_string(media_line, item.value_start_offset).0 == "YES";
                 }
                 "FORCED" => {
-                    forced = true;
+                    forced =
+                        parse_enumerated_string(media_line, item.value_start_offset).0 == "YES";
                 }
                 "CHANNELS" => {
                     // TODO: Preserve recognition of CHANNELS parameters so selection can prefer an

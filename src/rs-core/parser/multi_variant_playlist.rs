@@ -5,7 +5,7 @@ use super::{
     playlist_lines::read_playlist_line,
     timeline_sync::TimelineReference,
     top_level_playlist::{
-        is_media_playlist_tag_name, is_media_segment_tag_name, is_multivariant_playlist_tag_name,
+        is_media_playlist_tag_name, is_media_segment_tag_name,
         multivariant_playlist_singleton_tag_name, tag_name,
     },
     value_parsers::{parse_start_attribute, StartAttribute},
@@ -111,20 +111,6 @@ impl MultivariantPlaylist {
                             return Err(MultivariantPlaylistParsingError::DuplicateTag);
                         }
                     }
-
-                    // TODO: Remove this whitelist assertion: HLS section 6.3.1 requires ignoring
-                    // unknown tags, including in debug builds.
-                    debug_assert!(
-                        is_multivariant_playlist_tag_name(tag_name)
-                            || matches!(
-                                tag_name,
-                                "M3U"
-                                    | "-X-VERSION"
-                                    | "-X-INDEPENDENT-SEGMENTS"
-                                    | "-X-START"
-                                    | "-X-DEFINE"
-                            )
-                    );
                 }
 
                 let colon_idx = match &stripped.find(':') {
@@ -879,6 +865,17 @@ pub(crate) enum MediaPlaylistUrlLocation {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn unknown_tags_are_ignored() {
+        let playlist = b"#EXTM3U\n#EXT-X-FUTURE\n#EXT-X-FUTURE-ATTR:VALUE=YES\n#EXT-X-STREAM-INF:BANDWIDTH=1000\nvideo.m3u8\n";
+        let parsed = MultivariantPlaylist::parse(
+            &playlist[..],
+            Url::new("https://example.com/master.m3u8".to_owned()),
+        )
+        .unwrap();
+        assert_eq!(parsed.variants.len(), 1);
+    }
 
     #[test]
     fn variants_with_the_same_primary_video_uri_share_playlist_identity_and_state() {
