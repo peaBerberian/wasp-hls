@@ -3,6 +3,7 @@
 import type {
   AddSourceBufferErrorCode,
   AttachMediaSourceErrorCode,
+  AvPlaybackMediaType,
   ContentCompatibilityErrorCode,
   EndOfStreamErrorCode,
   LogLevel,
@@ -40,7 +41,7 @@ export interface HostBindings {
    * Create a SourceBuffer for the given media type and MIME type.
    */
   addSourceBuffer(
-    mediaType: MediaType,
+    mediaType: AvPlaybackMediaType,
     typ: string,
   ): HostResult<number, AddSourceBufferErrorCode>;
   /**
@@ -50,9 +51,10 @@ export interface HostBindings {
     playlistType: PlaylistType,
     variantInfo: Uint32Array,
     audioTracksInfo: Uint32Array,
+    subtitleTracksInfo: Uint32Array,
   ): void;
   /**
-   * Report an audio or video track selection update to the host.
+   * Report a track selection update to the host.
    */
   announceTrackUpdate(mediaType: MediaType, trackId: number | undefined): void;
   /**
@@ -214,7 +216,7 @@ export interface HostBindings {
   sendPushedSegmentError(
     fatal: boolean,
     code: PushedSegmentErrorCode,
-    mediaType: MediaType,
+    mediaType: AvPlaybackMediaType,
     message: string,
   ): void;
   /**
@@ -222,7 +224,7 @@ export interface HostBindings {
    */
   sendRemoveBufferError(
     fatal: boolean,
-    mediaType: MediaType,
+    mediaType: AvPlaybackMediaType,
     message: string,
   ): void;
   /**
@@ -252,7 +254,7 @@ export interface HostBindings {
   sendSourceBufferCreationError(
     fatal: boolean,
     code: SourceBufferCreationErrorCode,
-    mediaType: MediaType,
+    mediaType: AvPlaybackMediaType,
     message: string,
   ): void;
   /**
@@ -371,6 +373,14 @@ export interface WaspWasmExports {
    * Clear any variant lock on a dispatcher.
    */
   wasp_dispatcher_unlock_variant(ptr: number): void;
+  /**
+   * Disable subtitles for the current content.
+   */
+  wasp_dispatcher_disable_subtitle_track(ptr: number): void;
+  /**
+   * Request a subtitle rendition, or disable subtitles.
+   */
+  wasp_dispatcher_set_subtitle_track(ptr: number, trackId: number): void;
   /**
    * Select the audio track used by a dispatcher.
    */

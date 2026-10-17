@@ -14,7 +14,11 @@ export type {
   InitialAudioTrackSelection,
   WaspHlsPlayerConfig,
 };
-export type { AudioTrackInfo, VariantInfo } from "./types.ts";
+export type {
+  AudioTrackInfo,
+  SubtitleTrackInfo,
+  VariantInfo,
+} from "./types.ts";
 export type { WaspError } from "./errors/index.ts";
 export {
   WaspErrorCode,

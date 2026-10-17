@@ -19,6 +19,9 @@ pub(crate) enum RequestLaneTag {
     Audio,
     Video,
     Probe,
+    // XXX TODO: Why out of urgency? Why out of ABR samples?
+    // TODO(subtitles): queue this lane independently; exclude it from A/V urgency and ABR samples.
+    Subtitles,
 }
 
 impl RequestLaneTag {
@@ -26,6 +29,7 @@ impl RequestLaneTag {
         match media_type {
             MediaType::Audio => Self::Audio,
             MediaType::Video => Self::Video,
+            MediaType::Text => Self::Subtitles,
         }
     }
 
@@ -33,6 +37,7 @@ impl RequestLaneTag {
         match self {
             Self::Audio => Some(MediaType::Audio),
             Self::Video => Some(MediaType::Video),
+            Self::Subtitles => Some(MediaType::Text),
             Self::Probe => None,
         }
     }
@@ -42,6 +47,7 @@ impl RequestLaneTag {
             Self::Audio => "audio",
             Self::Video => "video",
             Self::Probe => "probe",
+            Self::Subtitles => "subtitles",
         }
     }
 }
@@ -507,7 +513,7 @@ impl Requester {
         caller_id: u32,
     ) {
         log_info!(
-            "Req: Asking to request {} segment: t: {}, d: {}",
+            "Req: Asking to request {:?} segment: t: {}, d: {}",
             media_type,
             seg.start(),
             seg.duration()
@@ -731,6 +737,30 @@ impl Requester {
         }
         while let Some(last_req) = self.segment_waiting_queue.pop() {
             log_segment_abort(&last_req);
+        }
+    }
+
+    pub(crate) fn abort_playlists_with_type(&mut self, media_type: MediaType) {
+        let mut index = 0;
+        while index < self.pending_playlist_requests.len() {
+            let matches = matches!(self.pending_playlist_requests[index].playlist_type,
+                PlaylistFileType::MediaPlaylist { media_type: requested, .. } if requested == media_type);
+            if !matches {
+                index += 1;
+                continue;
+            }
+            let request = self.pending_playlist_requests.remove(index);
+            self.retry_timers.retain(|(timer_id, host_id)| {
+                if *host_id == request.host_id {
+                    jsClearTimer(*timer_id);
+                    false
+                } else {
+                    true
+                }
+            });
+            if !request.is_waiting_for_retry {
+                jsAbortRequest(request.host_id);
+            }
         }
     }
 
@@ -1095,6 +1125,7 @@ fn pending_segment_could_fill_before<T: RequesterSegmentInfo>(
 ) -> bool {
     requests.iter().any(
         |req| match (req.lane_tag().media_type(), req.start_time()) {
+            (Some(MediaType::Text), _) => false,
             (Some(_), None) => true,
             (Some(_), Some(start)) => start < range_start,
             (None, _) => false,
@@ -1112,6 +1143,16 @@ mod tests {
         bindings::RequestErrorReason, parser::SegmentTimeInfo, requester::RequestLaneTag,
         utils::url::Url,
     };
+
+    #[test]
+    fn subtitle_requests_do_not_block_av_gap_jumps() {
+        let mut text = waiting_init();
+        text.lane_tag = RequestLaneTag::Subtitles;
+        assert!(!pending_segment_could_fill_before(&[text], 12.));
+        let mut text = waiting_media(1.);
+        text.lane_tag = RequestLaneTag::Subtitles;
+        assert!(!pending_segment_could_fill_before(&[text], 12.));
+    }
 
     #[test]
     fn prohibited_retry_finishes_only_the_failed_request_and_preserves_its_reason() {

@@ -12,7 +12,7 @@ import {
 import initializeWasm, {
   JsTimeRanges,
   MediaObservation,
-  MediaType,
+  AvPlaybackMediaType,
   OtherErrorCode,
   PushedSegmentErrorCode,
   StartingPosition,
@@ -207,9 +207,11 @@ export default function MessageReceiver() {
             if (timeRange !== undefined) {
               const toFloat64 = timeRangesToFloat64Array(timeRange);
               const bufRange = new JsTimeRanges(toFloat64);
-              if (sourceBufferInfo.mediaType === MediaType.Audio) {
+              if (sourceBufferInfo.mediaType === AvPlaybackMediaType.Audio) {
                 audioSbBuffered = bufRange;
-              } else if (sourceBufferInfo.mediaType === MediaType.Video) {
+              } else if (
+                sourceBufferInfo.mediaType === AvPlaybackMediaType.Video
+              ) {
                 videoSbBuffered = bufRange;
               }
             }
@@ -221,9 +223,11 @@ export default function MessageReceiver() {
             const element = sbBuffered[sourceBufferInfo.id];
             if (element !== undefined) {
               const bufRange = new JsTimeRanges(element);
-              if (sourceBufferInfo.mediaType === MediaType.Audio) {
+              if (sourceBufferInfo.mediaType === AvPlaybackMediaType.Audio) {
                 audioSbBuffered = bufRange;
-              } else if (sourceBufferInfo.mediaType === MediaType.Video) {
+              } else if (
+                sourceBufferInfo.mediaType === AvPlaybackMediaType.Video
+              ) {
                 videoSbBuffered = bufRange;
               }
             }
@@ -335,6 +339,30 @@ export default function MessageReceiver() {
           return;
         }
         updateDispatcherConfig(dispatcher, data.value);
+        break;
+      }
+
+      case MainMessageType.DisableSubtitleTrack: {
+        const dispatcher = playerInstance.getDispatcher();
+        if (
+          playerInstance.getContentInfo()?.contentId !== data.value.contentId
+        ) {
+          return;
+        }
+        dispatcher?.disable_subtitle_track();
+        break;
+      }
+
+      case MainMessageType.SetSubtitleTrack: {
+        const dispatcher = playerInstance.getDispatcher();
+        const contentInfo = playerInstance.getContentInfo();
+        if (
+          dispatcher === null ||
+          contentInfo?.contentId !== data.value.contentId
+        ) {
+          return;
+        }
+        dispatcher.set_subtitle_track(data.value.trackId);
         break;
       }
 

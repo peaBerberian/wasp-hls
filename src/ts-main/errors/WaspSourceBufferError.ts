@@ -1,5 +1,5 @@
 import type { SourceBufferOperation } from "../../ts-common/QueuedSourceBuffer.ts";
-import type { MediaType } from "../../wasm/index.js";
+import type { AvPlaybackMediaType } from "../../wasm/index.js";
 import { PushedSegmentErrorCode } from "../../wasm/index.js";
 import type { WaspErrorCode } from "./common.ts";
 
@@ -36,7 +36,7 @@ export default class WaspSourceBufferError extends Error {
    *
    * `undefined` if unknown or if the concept cannot be applied here.
    */
-  public readonly mediaType: MediaType | undefined;
+  public readonly mediaType: AvPlaybackMediaType | undefined;
 
   /**
    * @param {number} operation
@@ -47,19 +47,19 @@ export default class WaspSourceBufferError extends Error {
   constructor(
     operation: SourceBufferOperation.Push,
     reason: PushedSegmentErrorCode,
-    mediaType: MediaType,
+    mediaType: AvPlaybackMediaType,
     message?: string | undefined,
   );
   constructor(
     operation: SourceBufferOperation.Remove,
     reason: null,
-    mediaType: MediaType,
+    mediaType: AvPlaybackMediaType,
     message?: string | undefined,
   );
   constructor(
     _operation: SourceBufferOperation,
     reason: PushedSegmentErrorCode | null,
-    mediaType: MediaType,
+    mediaType: AvPlaybackMediaType,
     message?: string | undefined,
   ) {
     super();
