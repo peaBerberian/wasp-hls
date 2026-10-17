@@ -3,6 +3,7 @@ import type {
   SegmentParsingErrorCode,
   MediaPlaylistParsingErrorCode,
   MultivariantPlaylistParsingErrorCode,
+  AvPlaybackMediaType,
   MediaType,
   OtherErrorCode,
   RequestErrorReason,
@@ -40,7 +41,8 @@ export type MainMessage =
   | UpdateLoggerLevelMainMessage
   | LockVariantMainMessage
   | UpdateConfigMainMessage
-  | SetAudioTrackMainMessage;
+  | SetAudioTrackMainMessage
+  | SetSubtitleTrackMainMessage;
 
 /**
  * Discriminants (value of the `type` property) for messages sent by the main
@@ -67,6 +69,7 @@ export const enum MainMessageType {
   UpdateConfig = "upd-conf",
   LockVariant = "lock-var",
   SetAudioTrack = "set-audio",
+  SetSubtitleTrack = "set-subtitle",
   CodecsSupportUpdate = "codecs-support-upd",
 }
 
@@ -363,7 +366,7 @@ export interface SourceBufferCreationErrorWorkerInfo {
   type: "sb-creation";
   value: {
     code: WasmSourceBufferCreationErrorCode;
-    mediaType: MediaType;
+    mediaType: AvPlaybackMediaType;
   };
 }
 
@@ -372,7 +375,7 @@ export interface PushedSegmentErrorWorkerInfo {
   type: "push-segment-error";
   value: {
     code: PushedSegmentErrorCode;
-    mediaType: MediaType;
+    mediaType: AvPlaybackMediaType;
   };
 }
 
@@ -380,7 +383,7 @@ export interface PushedSegmentErrorWorkerInfo {
 export interface RemoveBufferErrorWorkerInfo {
   type: "remove-buffer-error";
   value: {
-    mediaType: MediaType;
+    mediaType: AvPlaybackMediaType;
   };
 }
 
@@ -443,6 +446,7 @@ export interface TopLevelPlaylistParsedWorkerMessage {
     playlistType: PlaylistType;
     variants: VariantInfo[];
     audioTracks: AudioTrackInfo[];
+    subtitleTracks: SubtitleTrackInfo[];
   };
 }
 
@@ -456,6 +460,7 @@ export interface TrackUpdateWorkerMessage {
      */
     contentId: string;
     mediaType: MediaType;
+    subtitleTrack?: number | undefined;
     audioTrack?:
       | {
           current: number;
@@ -485,6 +490,25 @@ export interface VariantInfo {
   frameRate: number | undefined;
   bandwidth: number | undefined;
   videoRange?: string | undefined;
+}
+
+/** An HLS SUBTITLES rendition. IDs are scoped to the current content. */
+export interface SubtitleTrackInfo {
+  id: number;
+  name: string;
+  language?: string | undefined;
+  assocLanguage?: string | undefined;
+  groupId: string;
+  default: boolean;
+  autoselect: boolean;
+  forced: boolean;
+  characteristics: string[];
+}
+
+/** null explicitly disables subtitles; it does not request automatic selection. */
+export interface SetSubtitleTrackMainMessage {
+  type: MainMessageType.SetSubtitleTrack;
+  value: { contentId: string; trackId: number | null };
 }
 
 export interface AudioTrackInfo {
@@ -517,7 +541,8 @@ export interface InitialAudioTrackSelection {
  * single selector or as an ordered list of selectors.
  */
 export type InitialAudioTrackPreference =
-  InitialAudioTrackSelection | InitialAudioTrackSelection[];
+  | InitialAudioTrackSelection
+  | InitialAudioTrackSelection[];
 
 /**
  * Message sent when the Worker has succesfully stopped a content.

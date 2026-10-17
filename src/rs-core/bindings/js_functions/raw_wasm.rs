@@ -24,8 +24,10 @@ unsafe extern "C" {
         variant_info_len: u32,
         audio_tracks_info_ptr: *const u32,
         audio_tracks_info_len: u32,
+        subtitle_tracks_info_ptr: *const u32,
+        subtitle_tracks_info_len: u32,
     );
-    /// Report an audio or video track selection update to the host.
+    /// Report a track selection update to the host.
     pub(super) fn __js_func__announce_track_update(
         media_type: u32,
         track_id: u32,

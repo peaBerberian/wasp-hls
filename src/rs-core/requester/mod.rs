@@ -19,6 +19,8 @@ pub(crate) enum RequestLaneTag {
     Audio,
     Video,
     Probe,
+    // TODO(subtitles): queue this lane independently; exclude it from A/V urgency and ABR samples.
+    Subtitles,
 }
 
 impl RequestLaneTag {
@@ -26,6 +28,7 @@ impl RequestLaneTag {
         match media_type {
             MediaType::Audio => Self::Audio,
             MediaType::Video => Self::Video,
+            MediaType::Text => Self::Subtitles,
         }
     }
 
@@ -33,6 +36,7 @@ impl RequestLaneTag {
         match self {
             Self::Audio => Some(MediaType::Audio),
             Self::Video => Some(MediaType::Video),
+            Self::Subtitles => Some(MediaType::Text),
             Self::Probe => None,
         }
     }
@@ -42,6 +46,7 @@ impl RequestLaneTag {
             Self::Audio => "audio",
             Self::Video => "video",
             Self::Probe => "probe",
+            Self::Subtitles => "subtitles",
         }
     }
 }
@@ -507,7 +512,7 @@ impl Requester {
         caller_id: u32,
     ) {
         log_info!(
-            "Req: Asking to request {} segment: t: {}, d: {}",
+            "Req: Asking to request {:?} segment: t: {}, d: {}",
             media_type,
             seg.start(),
             seg.duration()

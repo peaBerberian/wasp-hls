@@ -479,7 +479,7 @@
         }
       }
     },
-    "MediaType": {
+    "AvPlaybackMediaType": {
       "default": "Audio",
       "members": {
         "Audio": 0,
@@ -636,6 +636,14 @@
             "The HTMLMediaElement's \"error\" event has just been triggered"
           ]
         }
+      }
+    },
+    "MediaType": {
+      "default": "Audio",
+      "members": {
+        "Audio": 0,
+        "Video": 1,
+        "Text": 2
       }
     }
   }

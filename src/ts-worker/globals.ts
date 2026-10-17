@@ -6,7 +6,11 @@ import type {
   WaspHlsPlayerConfig,
 } from "../ts-common/types.ts";
 import type Transmuxer from "../ts-transmux/index.ts";
-import { Dispatcher, type InitOutput, type MediaType } from "../wasm/index.js";
+import {
+  Dispatcher,
+  type InitOutput,
+  type AvPlaybackMediaType,
+} from "../wasm/index.js";
 
 export interface WorkerInitializationOptions {
   hasMseInWorker: boolean;
@@ -133,7 +137,7 @@ export interface SourceBufferInstanceInfo<HasMseInWorker extends boolean> {
         }
       >
     | undefined;
-  mediaType: MediaType;
+  mediaType: AvPlaybackMediaType;
   sourceBuffer: HasMseInWorker extends true ? QueuedSourceBuffer : null;
   transmuxer: null | Transmuxer;
 }
@@ -157,7 +161,9 @@ export interface MainMediaSourceInstanceInfo {
 export interface ContentInfo {
   contentId: string;
   mediaSourceObj:
-    WorkerMediaSourceInstanceInfo | MainMediaSourceInstanceInfo | null;
+    | WorkerMediaSourceInstanceInfo
+    | MainMediaSourceInstanceInfo
+    | null;
   observationsObj: {
     removeEventListeners: () => void;
     timeoutId: number | undefined;
@@ -231,7 +237,9 @@ export function updateDispatcherConfig(
 }
 
 export function getMediaSourceObj():
-  MainMediaSourceInstanceInfo | WorkerMediaSourceInstanceInfo | undefined {
+  | MainMediaSourceInstanceInfo
+  | WorkerMediaSourceInstanceInfo
+  | undefined {
   const contentInfo = playerInstance.getContentInfo();
   if (contentInfo === null) {
     return undefined;

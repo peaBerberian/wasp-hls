@@ -2,6 +2,7 @@ import type {
   ContentCompatibilityErrorCode,
   LogLevel,
   MediaPlaylistParsingErrorCode,
+  AvPlaybackMediaType,
   MediaType,
   MultivariantPlaylistParsingErrorCode,
   OtherErrorCode,
@@ -125,7 +126,7 @@ export function createWasmImports(bindings: HostBindings): WebAssembly.Imports {
         errDescLenOut: number,
       ): number {
         const result = bindings.addSourceBuffer(
-          mediaType as MediaType,
+          mediaType as AvPlaybackMediaType,
           readString(typPtr, typLen),
         );
         if (result.errorCode === undefined) {
@@ -292,12 +293,15 @@ export function createWasmImports(bindings: HostBindings): WebAssembly.Imports {
         variantInfoLen: number,
         audioTracksInfoPtr: number,
         audioTracksInfoLen: number,
+        subtitleTracksInfoPtr: number,
+        subtitleTracksInfoLen: number,
       ): void {
         const buffer = getWasmExports().memory.buffer;
         bindings.announceFetchedContent(
           playlistType as PlaylistType,
           new Uint32Array(buffer, variantInfoPtr, variantInfoLen),
           new Uint32Array(buffer, audioTracksInfoPtr, audioTracksInfoLen),
+          new Uint32Array(buffer, subtitleTracksInfoPtr, subtitleTracksInfoLen),
         );
       },
       __js_func__announce_variant_update(variantId: number): void {
@@ -394,7 +398,7 @@ export function createWasmImports(bindings: HostBindings): WebAssembly.Imports {
         bindings.sendSourceBufferCreationError(
           fatal !== 0,
           code as SourceBufferCreationErrorCode,
-          mediaType as MediaType,
+          mediaType as AvPlaybackMediaType,
           readString(messagePtr, messageLen),
         );
       },
@@ -448,7 +452,7 @@ export function createWasmImports(bindings: HostBindings): WebAssembly.Imports {
         bindings.sendPushedSegmentError(
           fatal !== 0,
           code as PushedSegmentErrorCode,
-          mediaType as MediaType,
+          mediaType as AvPlaybackMediaType,
           readString(messagePtr, messageLen),
         );
       },
@@ -460,7 +464,7 @@ export function createWasmImports(bindings: HostBindings): WebAssembly.Imports {
       ): void {
         bindings.sendRemoveBufferError(
           fatal !== 0,
-          mediaType as MediaType,
+          mediaType as AvPlaybackMediaType,
           readString(messagePtr, messageLen),
         );
       },

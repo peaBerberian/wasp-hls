@@ -383,8 +383,7 @@ impl MediaTag {
             timeline_reference,
             context,
         )?;
-        self.media_playlist = Some(new_mp);
-        Ok(self.media_playlist.as_ref().unwrap())
+        Ok(self.media_playlist.insert(new_mp))
     }
 
     pub(crate) fn id(&self) -> u32 {
@@ -409,6 +408,10 @@ impl MediaTag {
 
     pub(crate) fn is_autoselect(&self) -> bool {
         self.autoselect
+    }
+
+    pub(crate) fn is_forced(&self) -> bool {
+        self.forced
     }
 
     pub(crate) fn is_default(&self) -> bool {

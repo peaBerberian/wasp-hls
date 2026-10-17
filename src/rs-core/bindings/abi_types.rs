@@ -487,12 +487,12 @@ impl LogLevel {
 
 #[repr(u32)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum MediaType {
+pub enum AvPlaybackMediaType {
     Audio = 0,
     Video = 1,
 }
 
-impl MediaType {
+impl AvPlaybackMediaType {
     pub fn from_raw(value: u32) -> Self {
         match value {
             0 => Self::Audio,
@@ -627,6 +627,25 @@ impl PlaybackTickReason {
             16 => Self::Requested,
             15 => Self::Error,
             _ => Self::Init,
+        }
+    }
+}
+
+#[repr(u32)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MediaType {
+    Audio = 0,
+    Video = 1,
+    Text = 2,
+}
+
+impl MediaType {
+    pub fn from_raw(value: u32) -> Self {
+        match value {
+            0 => Self::Audio,
+            1 => Self::Video,
+            2 => Self::Text,
+            _ => Self::Audio,
         }
     }
 }

@@ -170,6 +170,7 @@ impl PlaylistStore {
         match media_type {
             MediaType::Audio => self.current_audio_id.is_some(),
             MediaType::Video => self.current_video_id.is_some(),
+            MediaType::Text => false,
         }
     }
 
@@ -199,7 +200,9 @@ impl PlaylistStore {
                 });
             let references = match media_type {
                 Some(MediaType::Audio) => [self.current_audio_id, self.current_video_id],
-                Some(MediaType::Video) | None => [self.current_video_id, self.current_audio_id],
+                Some(MediaType::Video | MediaType::Text) | None => {
+                    [self.current_video_id, self.current_audio_id]
+                }
             };
             references
                 .into_iter()
@@ -357,6 +360,7 @@ impl PlaylistStore {
                 let next_ids = match media_type {
                     MediaType::Audio => (Some(direct_media_id), None),
                     MediaType::Video => (None, Some(direct_media_id)),
+                    MediaType::Text => return,
                 };
                 self.current_audio_id = next_ids.0;
                 self.current_video_id = next_ids.1;
@@ -365,6 +369,7 @@ impl PlaylistStore {
                 let wanted_id = match media_type {
                     MediaType::Audio => self.current_audio_id.as_ref(),
                     MediaType::Video => self.current_video_id.as_ref(),
+                    MediaType::Text => None,
                 };
 
                 let Some(wanted_id) = wanted_id else {
@@ -606,6 +611,7 @@ impl PlaylistStore {
         match media_type {
             MediaType::Video => self.current_video_id.as_ref(),
             MediaType::Audio => self.current_audio_id.as_ref(),
+            MediaType::Text => None,
         }
     }
 
@@ -650,6 +656,7 @@ impl PlaylistStore {
         if let Some(wanted_id) = match media_type {
             MediaType::Video => &self.current_video_id,
             MediaType::Audio => &self.current_audio_id,
+            MediaType::Text => return None,
         } {
             self.current_media_playlist(media_type).map(|m| {
                 let score = self
@@ -697,6 +704,7 @@ impl PlaylistStore {
         match media_type {
             MediaType::Audio => audio_id,
             MediaType::Video => video_id,
+            MediaType::Text => None,
         }
     }
 
@@ -806,7 +814,15 @@ impl PlaylistStore {
         self.fixed_audio_track
     }
 
-    /// Returns the list of available audio tracks on the current content
+    /// Returns subtitle renditions referenced by the multivariant playlist.
+    pub(crate) fn subtitle_tracks(&self) -> Vec<&crate::parser::MediaTag> {
+        match &self.playlist {
+            TopLevelPlaylist::Multivariant(playlist) => playlist.subtitle_tracks(),
+            TopLevelPlaylist::DirectMedia(_) => vec![],
+        }
+    }
+
+    /// Returns the list of available audio tracks on the current content.
     pub(crate) fn audio_tracks(&self) -> &[AudioTrack] {
         match &self.playlist {
             TopLevelPlaylist::Multivariant(playlist) => playlist.audio_tracks(),
@@ -1071,6 +1087,7 @@ impl PlaylistStore {
                         match mt {
                             MediaType::Audio => inferred_audio_codec.clone(),
                             MediaType::Video => inferred_video_codec.clone(),
+                            MediaType::Text => None,
                         }
                     } else {
                         None
@@ -1082,6 +1099,7 @@ impl PlaylistStore {
                         && match mt {
                             MediaType::Audio => current_audio_required,
                             MediaType::Video => current_video_required,
+                            MediaType::Text => false,
                         };
                     if media_required {
                         current_variant_resolved = false;
@@ -1154,6 +1172,7 @@ impl PlaylistStore {
         if let Some(wanted_id) = match media_type {
             MediaType::Video => &self.current_video_id,
             MediaType::Audio => &self.current_audio_id,
+            MediaType::Text => return None,
         } {
             match &self.playlist {
                 TopLevelPlaylist::Multivariant(playlist) => playlist.media_playlist(wanted_id),
@@ -1511,6 +1530,7 @@ unknown.m3u8
                 match media_type {
                     MediaType::Video => store.current_video_id = Some(id),
                     MediaType::Audio => store.current_audio_id = Some(id),
+                    MediaType::Text => unreachable!("this test covers A/V timeline references"),
                 }
             }
             let data = format!("#EXTM3U\n#EXT-X-TARGETDURATION:4\n#EXT-X-MEDIA-SEQUENCE:{sequence}\n#EXTINF:4,\nnew.ts\n");

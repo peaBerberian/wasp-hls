@@ -131,6 +131,13 @@ impl Dispatcher {
         self.unlock_variant_core()
     }
 
+    /// Requests a subtitle rendition; None explicitly disables subtitles.
+    pub fn set_subtitle_track(&mut self, _track_id: Option<u32>) {
+        // TODO(subtitles): validate against PlaylistStore and record explicit/off preference;
+        // resolve the active variant group, invalidate old selection generations, cancel old
+        // requests and remove old cues. Do not announce a current track before installation.
+    }
+
     /// Set an audio track whose `id` is given in argument.
     pub fn set_audio_track(&mut self, track_id: Option<u32>) {
         self.set_audio_track_core(track_id)
@@ -381,6 +388,15 @@ pub extern "C" fn wasp_dispatcher_lock_variant(ptr: u32, variant_id: u32) {
 #[unsafe(no_mangle)]
 pub extern "C" fn wasp_dispatcher_unlock_variant(ptr: u32) {
     dispatcher_mut(ptr).unlock_variant();
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn wasp_dispatcher_set_subtitle_track(ptr: u32, track_id: u32) {
+    dispatcher_mut(ptr).set_subtitle_track(if track_id == u32::MAX {
+        None
+    } else {
+        Some(track_id)
+    });
 }
 
 #[unsafe(no_mangle)]

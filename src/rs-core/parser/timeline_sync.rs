@@ -74,6 +74,9 @@ impl TimelineReference {
         }
     }
 
+    // TODO(subtitles): distinguish same-playlist refresh from cross-rendition estimates.
+    // Independent media sequence numbers cannot establish subtitle synchronization; use
+    // PDT/discontinuity anchors and actual media timestamps/X-TIMESTAMP-MAP.
     pub(super) fn infer_offset_for(&self, media_segments: &[MediaSegmentInfo]) -> Option<f64> {
         self.align_by_discontinuity_sequence(media_segments)
             .or_else(|| self.align_by_program_date_time(media_segments))

@@ -184,6 +184,7 @@ struct ReadyProbeSegment {
 struct ReadyProbeSegments {
     audio: Option<ReadyProbeSegment>,
     video: Option<ReadyProbeSegment>,
+    text: Option<ReadyProbeSegment>,
 }
 
 impl ReadyProbeSegments {
@@ -191,6 +192,7 @@ impl ReadyProbeSegments {
         match media_type {
             MediaType::Audio => self.audio.as_ref(),
             MediaType::Video => self.video.as_ref(),
+            MediaType::Text => self.text.as_ref(),
         }
     }
 
@@ -198,6 +200,7 @@ impl ReadyProbeSegments {
         match probe.media_type {
             MediaType::Audio => self.audio = Some(probe),
             MediaType::Video => self.video = Some(probe),
+            MediaType::Text => self.text = Some(probe),
         }
     }
 
@@ -205,6 +208,7 @@ impl ReadyProbeSegments {
         match media_type {
             MediaType::Audio => self.audio.take(),
             MediaType::Video => self.video.take(),
+            MediaType::Text => self.text.take(),
         }
     }
 
@@ -212,12 +216,14 @@ impl ReadyProbeSegments {
         match media_type {
             MediaType::Audio => self.audio = None,
             MediaType::Video => self.video = None,
+            MediaType::Text => self.text = None,
         }
     }
 
     fn clear(&mut self) {
         self.audio = None;
         self.video = None;
+        self.text = None;
     }
 }
 

@@ -122,6 +122,14 @@ export class Dispatcher {
     getWasmExports().wasp_dispatcher_unlock_variant(this.__ptr);
   }
 
+  /** Requests a subtitle rendition, or explicitly disables subtitles. */
+  public set_subtitle_track(trackId: number | null): void {
+    getWasmExports().wasp_dispatcher_set_subtitle_track(
+      this.__ptr,
+      optionalIdToRaw(trackId ?? undefined),
+    );
+  }
+
   /** Selects the audio track to use, or clears the selection. */
   public set_audio_track(track_id?: number | null): void {
     getWasmExports().wasp_dispatcher_set_audio_track(

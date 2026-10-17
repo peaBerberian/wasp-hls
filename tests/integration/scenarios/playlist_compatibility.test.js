@@ -37,6 +37,52 @@ async function expectPlayback(ctx, url) {
 }
 
 describe("Playlist compatibility", () => {
+  it(
+    "exposes subtitle metadata without making subtitle requests gate playback",
+    { timeout: TEST_TIMEOUT_MS },
+    async () => {
+      const url = await ensureVodScenarioReady("fmp4-multivariant-no-codecs");
+      const master = await readPlaylist(url);
+      const tag =
+        '#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID="subs",NAME="Français",LANGUAGE="fr",DEFAULT=YES,AUTOSELECT=YES,FORCED=YES,CHARACTERISTICS="public.accessibility.transcribes-spoken-dialog",URI="missing-subs.m3u8"';
+      const body = master
+        .replace("#EXTM3U\n", `#EXTM3U\n${tag}\n`)
+        .replace("#EXT-X-STREAM-INF:", '#EXT-X-STREAM-INF:SUBTITLES="subs",');
+      const ctx = await createPlayerHarness({
+        fetchRules: [playlistRule(url, body)],
+      });
+      try {
+        const announced = [];
+        ctx.player.addEventListener("subtitleTrackListUpdate", (tracks) =>
+          announced.push(tracks),
+        );
+        await expectPlayback(ctx, url);
+        const tracks = ctx.player.getSubtitleTrackList();
+        expect(tracks).toHaveLength(1);
+        expect(tracks[0]).toMatchObject({
+          name: "Français",
+          language: "fr",
+          groupId: "subs",
+          default: true,
+          autoselect: true,
+          forced: true,
+          characteristics: ["public.accessibility.transcribes-spoken-dialog"],
+        });
+        expect(announced.at(-1)).toEqual(tracks);
+        expect(ctx.player.getCurrentSubtitleTrack()).toBeUndefined();
+        expect(() => ctx.player.setSubtitleTrack(-1)).toThrow(
+          "Unknown subtitle track",
+        );
+        ctx.player.setSubtitleTrack(tracks[0].id);
+        ctx.player.setSubtitleTrack(null);
+        ctx.player.stop();
+        expect(ctx.player.getSubtitleTrackList()).toEqual([]);
+      } finally {
+        ctx.dispose();
+      }
+    },
+  );
+
   it.each(["en", "fr"])(
     "selects the DEFAULT=YES audio rendition (%s) regardless of declaration order",
     { timeout: TEST_TIMEOUT_MS },

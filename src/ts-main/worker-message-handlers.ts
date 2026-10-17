@@ -979,6 +979,7 @@ export function onTopLevelPlaylistParsedMessage(
   contentMetadata.topLevelPlaylistType = msg.value.playlistType;
   contentMetadata.variants = msg.value.variants;
   contentMetadata.audioTracks = msg.value.audioTracks;
+  contentMetadata.subtitleTracks = msg.value.subtitleTracks;
   if (contentMetadata.lockedVariant !== null) {
     contentMetadata.lockedVariant = null;
   }
@@ -1000,6 +1001,10 @@ export function onTrackUpdateMessage(
   if (contentMetadata?.contentId !== msg.value.contentId) {
     logger.info("API: Ignoring warning due to wrong `contentId`");
     return false;
+  }
+  if (msg.value.mediaType === MediaType.Text) {
+    contentMetadata.currentSubtitleTrack = msg.value.subtitleTrack ?? null;
+    return true;
   }
   if (msg.value.mediaType !== MediaType.Audio) {
     logger.warn("API: track update for a type not handled for now");

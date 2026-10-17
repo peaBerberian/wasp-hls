@@ -612,7 +612,7 @@ impl MediaPlaylist {
 
     /// Return Mime-type associated to this MediaPlaylist.
     ///
-    /// TODO kind of weird to give the MediaType here
+    /// TODO: infer the media type from rendition metadata where possible.
     pub(crate) fn mime_type(&self, media_type: MediaType) -> Option<&str> {
         match media_type {
             MediaType::Audio => match self.extension() {
@@ -641,6 +641,11 @@ impl MediaPlaylist {
                 Some("m4f") => Some("video/mp4"),
                 Some("cmfv") => Some("video/mp4"),
                 Some("ts") => Some("video/mp2t"),
+                _ => None,
+            },
+            MediaType::Text => match self.extension() {
+                Some("vtt" | "webvtt") => Some("text/vtt"),
+                Some("mp4" | "m4s" | "m4i" | "m4f" | "cmft") => Some("application/mp4"),
                 _ => None,
             },
         }

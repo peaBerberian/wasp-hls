@@ -34,6 +34,8 @@ The code is split into:
 - `bindings/`: defines the JavaScript functions callable from Rust and converts
   values between the Rust and JavaScript representations.
 
+- `text/`: parses subtitle segments and maps cue timestamps to playback time.
+
 - `utils/`: shared helpers.
 
 Each directory has its own README describing its responsibilities and limits.

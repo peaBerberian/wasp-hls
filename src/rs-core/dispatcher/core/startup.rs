@@ -10,7 +10,8 @@ use crate::{
         },
         jsAnnounceFetchedContent, jsAnnounceTrackUpdate, jsAnnounceVariantLockStatusChange,
         jsSendOtherError, jsSendSegmentParsingError, jsSendSourceBufferCreationError,
-        jsStartObservingPlayback, MediaSourceReadyState, MediaType, OtherErrorCode, PlaylistType,
+        jsStartObservingPlayback, AvPlaybackMediaType, MediaSourceReadyState, MediaType,
+        OtherErrorCode, PlaylistType,
     },
     media_element::SourceBufferCreationError,
     playlist_store::{ProbeSegmentContext, StartupStatus},
@@ -215,7 +216,19 @@ fn advance_awaiting_playlist_info_state(dispatcher: &mut Dispatcher) {
             )
         };
 
-        jsAnnounceFetchedContent(playlist_kind, variants_info, audio_tracks_info);
+        let Some(store) = dispatcher.playlist_store.as_ref() else {
+            return;
+        };
+        let subtitle_tracks_info =
+            crate::bindings::formatters::format_subtitle_tracks_for_js(&store.subtitle_tracks());
+        jsAnnounceFetchedContent(
+            playlist_kind,
+            variants_info,
+            audio_tracks_info,
+            subtitle_tracks_info,
+        );
+        // TODO(subtitles): initialize automatic/explicit/off selection after track discovery.
+        // Subtitle playlist/segment readiness must never gate A/V startup or completion.
         dispatcher.announce_current_variant();
         jsAnnounceTrackUpdate(MediaType::Audio, curr_audio_track, is_fixed);
 
@@ -268,15 +281,15 @@ fn advance_awaiting_media_source_state(dispatcher: &mut Dispatcher) {
 
     sync_media_source_duration(playlist_store);
 
-    if let Some(Err(e)) = init_source_buffer(dispatcher, MediaType::Audio) {
+    if let Some(Err(e)) = init_source_buffer(dispatcher, AvPlaybackMediaType::Audio) {
         let (code, msg) = format_source_buffer_creation_err_for_js(e);
-        jsSendSourceBufferCreationError(true, code, MediaType::Audio, &msg);
+        jsSendSourceBufferCreationError(true, code, AvPlaybackMediaType::Audio, &msg);
         dispatcher.stop_current_content();
         return;
     }
-    if let Some(Err(e)) = init_source_buffer(dispatcher, MediaType::Video) {
+    if let Some(Err(e)) = init_source_buffer(dispatcher, AvPlaybackMediaType::Video) {
         let (code, msg) = format_source_buffer_creation_err_for_js(e);
-        jsSendSourceBufferCreationError(true, code, MediaType::Video, &msg);
+        jsSendSourceBufferCreationError(true, code, AvPlaybackMediaType::Video, &msg);
         dispatcher.stop_current_content();
         return;
     }
@@ -377,14 +390,14 @@ fn start_probe_segment_request(
 
 fn init_source_buffer(
     dispatcher: &mut Dispatcher,
-    media_type: MediaType,
+    media_type: AvPlaybackMediaType,
 ) -> Option<Result<(), SourceBufferCreationError>> {
     let content = dispatcher.playlist_store.as_mut()?;
-    if !content.has_loaded_media_playlist(media_type) {
+    if !content.has_loaded_media_playlist(media_type.into()) {
         return None;
     }
-    let mime_type = content.current_mime_type(media_type)?;
-    let codec = content.current_codec(media_type)?;
+    let mime_type = content.current_mime_type(media_type.into())?;
+    let codec = content.current_codec(media_type.into())?;
     Some(
         dispatcher
             .media_element_ref

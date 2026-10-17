@@ -1,5 +1,5 @@
 use crate::{
-    bindings::MediaType,
+    bindings::AvPlaybackMediaType,
     media_element::{BufferedChunk, SegmentQualityContext},
     parser::{
         InitSegmentInfo, MediaPlaylistPermanentId, MediaSegmentInfo, SegmentIdentity, SegmentList,
@@ -123,10 +123,10 @@ impl NextSegmentSelectors {
     ///
     /// Because most of the `NextSegmentSelector`'s method might update its internal state, you
     /// generally want to obtain a mutable reference of it.
-    pub(crate) fn get_mut(&mut self, media_type: MediaType) -> &mut NextSegmentSelector {
+    pub(crate) fn get_mut(&mut self, media_type: AvPlaybackMediaType) -> &mut NextSegmentSelector {
         match media_type {
-            MediaType::Audio => &mut self.audio,
-            MediaType::Video => &mut self.video,
+            AvPlaybackMediaType::Audio => &mut self.audio,
+            AvPlaybackMediaType::Video => &mut self.video,
         }
     }
 }
@@ -785,7 +785,7 @@ mod tests {
         NextSegmentSelector, NextSegmentSelectors, SegmentCursor, SegmentSelectionCandidate,
     };
     use crate::{
-        bindings::MediaType,
+        bindings::AvPlaybackMediaType,
         media_element::{BufferedChunk, SegmentQualityContext},
         parser::{MediaPlaylistPermanentId, MediaSegmentInfo, SegmentList, TopLevelPlaylist},
         utils::url::Url,
@@ -1487,7 +1487,7 @@ mod tests {
                 })
                 .collect();
             let mut selectors = NextSegmentSelectors::new(0., 40.);
-            let selector = selectors.get_mut(MediaType::Video);
+            let selector = selectors.get_mut(AvPlaybackMediaType::Video);
             let first = selector
                 .most_needed_segment(
                     candidate(list, &context),

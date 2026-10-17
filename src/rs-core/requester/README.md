@@ -10,7 +10,8 @@ Its job is to:
 
 - Keep track of pending requests and queued segments, with enough metadata for
   the caller to recover what a completed request was for. Segment requests carry
-  an opaque caller-provided identifier and an audio, video or probe lane tag.
+  an opaque caller-provided identifier and an audio, video, subtitle or probe
+  lane tag.
 
 - Prioritize media segment requests according to their distance from a
   caller-provided base position, normally the wanted playback position. Segments
