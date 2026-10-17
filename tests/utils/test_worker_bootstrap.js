@@ -25,6 +25,7 @@
  *     actions?: Array<{
  *       type: "passthrough" | "error" | "timeout" | "response";
  *       delayMs?: number;
+ *       finalUrl?: string;
  *       waitForRelease?: boolean;
  *       status?: number;
  *       body?: string;
@@ -406,7 +407,9 @@ export function runTestWorkerBootstrap(config) {
             status: action.status ?? 200,
             headers: action.headers,
           });
-          Object.defineProperty(response, "url", { value: url });
+          Object.defineProperty(response, "url", {
+            value: action.finalUrl ?? url,
+          });
           postTelemetry({
             type: "fetch-resolve",
             requestId,

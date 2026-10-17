@@ -43,6 +43,39 @@ impl Url {
         }
     }
 
+    /// Remove _HLS_skip without rewriting other query parameters.
+    /// Return None without allocating if it is not present.
+    pub(crate) fn without_hls_skip(&self) -> Option<Self> {
+        let (before_fragment, fragment) = self
+            .inner
+            .split_once('#')
+            .map_or((self.inner.as_str(), None), |(url, fragment)| {
+                (url, Some(fragment))
+            });
+        let (path, query) = before_fragment.split_once('?')?;
+        if !query
+            .split('&')
+            .any(|param| param.split('=').next() == Some("_HLS_skip"))
+        {
+            return None;
+        }
+        let query = query
+            .split('&')
+            .filter(|param| param.split('=').next() != Some("_HLS_skip"))
+            .collect::<Vec<_>>()
+            .join("&");
+        let mut url = path.to_owned();
+        if !query.is_empty() {
+            url.push('?');
+            url.push_str(&query);
+        }
+        if let Some(fragment) = fragment {
+            url.push('#');
+            url.push_str(fragment);
+        }
+        Some(Self::new(url))
+    }
+
     pub fn take(self) -> String {
         self.inner
     }
@@ -156,6 +189,42 @@ fn url_domain_name(url: &str) -> Option<&str> {
                 Some(last_slash_idx) => Some(&url[0..(last_slash_idx + first_slash_idx + 2)]),
                 None => Some(url),
             }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Url;
+
+    #[test]
+    fn removing_hls_skip_preserves_other_query_bytes_and_fragment() {
+        for url in [
+            "https://e/p",
+            "https://e/p?",
+            "https://e/p?token=a%2Fb#_HLS_skip=YES",
+        ] {
+            assert!(Url::new(url.to_owned()).without_hls_skip().is_none());
+        }
+        for (input, expected) in [
+            ("https://e/p?_HLS_skip=YES", "https://e/p"),
+            (
+                "https://e/p?_HLS_skip=v2&token=a%2Fb&x=1&_HLS_skip=YES&x=2#fragment",
+                "https://e/p?token=a%2Fb&x=1&x=2#fragment",
+            ),
+            (
+                "https://e/p?token=_HLS_skip%3DYES#_HLS_skip=YES",
+                "https://e/p?token=_HLS_skip%3DYES#_HLS_skip=YES",
+            ),
+            ("https://e/p#fragment", "https://e/p#fragment"),
+        ] {
+            assert_eq!(
+                Url::new(input.to_owned())
+                    .without_hls_skip()
+                    .unwrap_or_else(|| Url::new(input.to_owned()))
+                    .get_ref(),
+                expected
+            );
         }
     }
 }

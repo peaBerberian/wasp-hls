@@ -491,7 +491,13 @@ impl MultivariantPlaylist {
     pub(crate) fn media_playlist_url(&self, wanted_id: &MediaPlaylistPermanentId) -> Option<&Url> {
         match wanted_id.location() {
             MediaPlaylistUrlLocation::Variant => {
-                Some(&self.primary_media.get(wanted_id.id() as usize)?.url)
+                let media = self.primary_media.get(wanted_id.id() as usize)?;
+                Some(
+                    media
+                        .playlist
+                        .as_ref()
+                        .map_or(&media.url, |playlist| playlist.url()),
+                )
             }
             MediaPlaylistUrlLocation::AudioTrack => self.audio_url(wanted_id.id()),
             MediaPlaylistUrlLocation::OtherMedia => self.other_media_url(wanted_id.id()),

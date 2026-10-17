@@ -30,6 +30,7 @@
 ### Other
 
 - Make `bufferGoal` `30` by default (can be changed at any time)
+- Automatically fallback to full playlist if given initially a delta playlist URL
 - Improve ABR's "urgent switch" categorization to only abort previous requests if there's a fair risk of rebuffering
 - Optimal fast-quality-switching coordination: continue in additive mode until the playlist linked to segment replacements is fetched
 - Multiple primary media playlists sharing the same URL yet associated to multiple variants are now considered the same resource to optimize some playlist management logic (e.g. playlist refresh)
