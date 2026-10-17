@@ -1,11 +1,17 @@
-// TODO: HLS section 6.3.1 requires ignoring the whole tag for an unknown REQ-*
-// attribute or an unknown recognized enumerated-string value, unless its
-// definition says otherwise. Propagate a skipped-tag result to callers; for
-// EXT-X-STREAM-INF, also skip the following URI line.
-//
 // Some tags contain an attribute list, with a special K1=V1,K2=V2 syntax
 // This struct is an Iterator allowing to simplify their parsing, by generating
 // `AttributeListItem` elements for each of those key/value couples.
+//
+// NOTE: hls-rfc8216bis-22 Section 6.3.1 requires dropping tags with unknown REQ-* attributes or
+// unknown recognized enum values.
+// However most other playback engines (including the very popular hls.js and shaka-player) sadly do
+// not respect that rule. I would like to respect compliance, but the reality is that most people
+// will treat those players as effectively the spec: if they work on it, they should work on this
+// player.
+//
+// So instead, I here, without enthusiasm, retain unknown REQ-* attributes. I also keep unknown
+// flags false for the same reasons, and I retain unknown HDCP/video-range values rather than
+// rejecting the variant (Shaka is permissive here; hls.js filters video ranges in some paths).
 pub(crate) struct AttributeListIter<'a> {
     line: &'a str,
     offset: usize,

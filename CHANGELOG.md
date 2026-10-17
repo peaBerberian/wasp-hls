@@ -23,6 +23,9 @@
 - Known codecs but unknown mime-type now trigger segment probing instead of passing an empty MIME type to SourceBuffers
 - Don't be stuck rebuffering if the buffer goal is lower than what our internal `min_buffer_time`, one of the threshold controlling rebuffering
 - Don't load older segment if current playback position already moved past it
+- For `AUTOSELECT`, `FORCED` and `DEFAULT` `EXT-X-MEDIA` attributes, do not assume there are `true` just by their presence
+- Ignore unknown DEFINE attributes before parsing their values
+- Validate variable references even in GAP URIs
 
 ### Other
 

@@ -157,9 +157,9 @@ pub(crate) fn parse_define_tag(line: &str) -> Result<VariableDefinition, Variabl
     let mut import: Option<String> = None;
     let mut query_param: Option<String> = None;
     for item in AttributeListIter::new(line, "#EXT-X-DEFINE:".len()) {
-        // TODO: Ignore unknown attribute names before parsing their values;
-        // HLS section 6.3.1 requires ignoring ordinary unknown attributes even when their values
-        // are not quoted strings.
+        if !matches!(item.name, "NAME" | "VALUE" | "IMPORT" | "QUERYPARAM") {
+            continue;
+        }
         let (parsed_value, _) = parse_quoted_string(line, item.value_start_offset);
         let parsed_value = parsed_value.map_err(|_| VariableDefinitionError::InvalidDefinition)?;
         match item.name {

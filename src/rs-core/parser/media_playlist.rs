@@ -232,9 +232,10 @@ impl MediaPlaylist {
                         }
                         Err(err) => return Err(err.into()),
                     },
-                    // TODO: Validate EXT-X-VERSION against supported protocol versions and reject
-                    // unsupported values before using the playlist (HLS section 6.3.1 MUST, even
-                    // if hls.js and shaka-player do not respect it).
+                    // NOTE: Like hls.js and Shaka, do not reject playlists solely on
+                    // EXT-X-VERSION. This deliberately relaxes sections 6.3.1 and 8
+                    // to avoid rejecting otherwise playable content; a version
+                    // ceiling cannot describe our individual feature support.
                     "-X-VERSION" => match parse_decimal_integer(&str_line, colon_idx + 1).0 {
                         Ok(v) if v <= (u32::MAX as u64) => version = Some(v as u32),
                         _ => log_warn!("Unparsable VERSION value"),
@@ -356,9 +357,7 @@ impl MediaPlaylist {
             } else if str_line.starts_with('#') {
                 continue;
             } else if skip_next_segment {
-                // TODO: Substitute variables in GAP URIs before skipping them.
-                // HLS section 6.3.1 requires a parsing error for an undefined variable reference,
-                // including in a URI we will not request.
+                variable_store.substitute(&str_line)?;
                 skip_next_segment = false;
                 if let Some(duration) = next_segment_duration {
                     discontinuity_sequence =
@@ -764,6 +763,26 @@ mod tests {
             None,
             &MediaPlaylistContext::default(),
         )
+    }
+
+    #[test]
+    fn gap_uris_still_validate_variable_references() {
+        let playlist = "#EXTM3U\n#EXT-X-TARGETDURATION:4\n#EXT-X-DEFINE:NAME=\"segment\",VALUE=\"gap\",FUTURE=123\n#EXTINF:4,\n#EXT-X-GAP\n{$segment}.ts\n#EXTINF:4,\nnext.ts\n";
+        let parsed = parse_media_playlist(playlist).unwrap();
+        assert_eq!(parsed.segment_list.media().len(), 1);
+        assert!(matches!(
+            parse_media_playlist(&playlist.replace("{$segment}", "{$missing}")),
+            Err(MediaPlaylistParsingError::VariableDefinition(_))
+        ));
+    }
+
+    #[test]
+    fn retains_tags_with_unknown_required_attributes() {
+        let playlist = "#EXTM3U\n#EXT-X-TARGETDURATION:4\n#EXT-X-DEFINE:NAME=\"segment\",VALUE=\"seg\",REQ-FUTURE=YES,FUTURE=123\n#EXT-X-MAP:REQ-FUTURE=YES,URI=\"init.mp4\"\n#EXT-X-START:TIME-OFFSET=42,PRECISE=FUTURE,REQ-FUTURE=YES\n#EXTINF:4,\n{$segment}.ts\n";
+        let parsed = parse_media_playlist(playlist).unwrap();
+        let start = parsed.start.unwrap();
+        assert_eq!(start.time_offset, 42.);
+        assert!(!start.precise);
     }
 
     #[test]

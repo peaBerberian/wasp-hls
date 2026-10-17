@@ -95,4 +95,113 @@ describe("Playlist compatibility", () => {
       }
     },
   );
+  it.each(["REQ-FUTURE=YES", "HDCP-LEVEL=FUTURE", "VIDEO-RANGE=FUTURE"])(
+    "plays a variant carrying %s",
+    { timeout: TEST_TIMEOUT_MS },
+    async (attribute) => {
+      const url = await ensureVodScenarioReady("fmp4-multivariant-no-codecs");
+      const master = await readPlaylist(url);
+      const body = master.replace(
+        "#EXT-X-STREAM-INF:",
+        `#EXT-X-STREAM-INF:${attribute},`,
+      );
+      const ctx = await createPlayerHarness({
+        fetchRules: [playlistRule(url, body)],
+      });
+      try {
+        await expectPlayback(ctx, url);
+        expect(ctx.player.getVariantList()).toHaveLength(1);
+      } finally {
+        ctx.dispose();
+      }
+    },
+  );
+
+  it(
+    "retains renditions and initialization tags with unknown attributes and enum values",
+    { timeout: TEST_TIMEOUT_MS },
+    async () => {
+      const url = await ensureVodScenarioReady("fmp4-alt-audio");
+      const mediaUrl = new URL("video.m3u8", url).href;
+      const [master, media] = await Promise.all([
+        readPlaylist(url),
+        readPlaylist(mediaUrl),
+      ]);
+      const define = '#EXT-X-DEFINE:NAME="unused",VALUE="value",FUTURE=123\n';
+      const compatibilityTags = [
+        '#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="audio-main",NAME="Future",DEFAULT=FUTURE,AUTOSELECT=FUTURE,FORCED=FUTURE,URI="audio-fr.m3u8"',
+        '#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="audio-main",NAME="Required",REQ-FUTURE=YES,URI="audio-fr.m3u8"',
+        "#EXT-X-START:TIME-OFFSET=0,PRECISE=FUTURE,REQ-FUTURE=YES",
+      ].join("\n");
+      const ctx = await createPlayerHarness({
+        fetchRules: [
+          playlistRule(
+            url,
+            master.replace(
+              "#EXTM3U\n",
+              `#EXTM3U\n${define}${compatibilityTags}\n`,
+            ),
+          ),
+          playlistRule(
+            mediaUrl,
+            media
+              .replace("#EXTM3U\n", `#EXTM3U\n${define}`)
+              .replace("#EXT-X-MAP:", "#EXT-X-MAP:REQ-FUTURE=YES,"),
+          ),
+        ],
+      });
+      try {
+        await expectPlayback(ctx, url);
+        expect(ctx.player.getAudioTrackList()).toHaveLength(4);
+        expect(ctx.player.getCurrentAudioTrack()?.language).toBe("en");
+        expect(ctx.player.getPosition()).toBeLessThan(5);
+      } finally {
+        ctx.dispose();
+      }
+    },
+  );
+
+  it.each([true, false])(
+    "validates variables in GAP URIs (defined: %s)",
+    { timeout: TEST_TIMEOUT_MS },
+    async (defined) => {
+      const url = await ensureVodScenarioReady("fmp4-direct-media");
+      const original = await readPlaylist(url);
+      const definition = defined
+        ? '#EXT-X-DEFINE:NAME="gap",VALUE="missing"\n'
+        : "";
+      const body = original
+        .replace("#EXTM3U\n", `#EXTM3U\n${definition}`)
+        .replace(
+          "#EXT-X-ENDLIST",
+          "#EXTINF:4,\n#EXT-X-GAP\n{$gap}.m4s\n#EXT-X-ENDLIST",
+        );
+      expect(body).toContain("{$gap}.m4s");
+      const ctx = await createPlayerHarness({
+        fetchRules: [playlistRule(url, body)],
+      });
+      try {
+        if (defined) {
+          await expectPlayback(ctx, url);
+          expect(
+            ctx.workerHandle.telemetry
+              .getEvents()
+              .some(
+                (event) =>
+                  event.type === "fetch-start" &&
+                  event.url.endsWith("/missing.m4s"),
+              ),
+          ).toBe(false);
+        } else {
+          const errorPromise = waitForPlayerEvent(ctx.player, "error");
+          ctx.player.load(url);
+          const error = await errorPromise;
+          expect(error.code).toBe("MediaPlaylistVariableDefinitionError");
+          expect(ctx.player.getPlayerState()).toBe("Error");
+        }
+      } finally {
+        ctx.dispose();
+      }
+    },
+  );
 });

@@ -118,8 +118,10 @@ impl MultivariantPlaylist {
                     Some(idx) => idx + 4,
                 };
                 match &str_line[4..colon_idx] {
-                    // TODO: Validate EXT-X-VERSION against supported protocol versions and reject
-                    // unsupported values before using the playlist (HLS section 6.3.1 MUST).
+                    // NOTE: Like hls.js and Shaka, do not reject playlists solely on
+                    // EXT-X-VERSION. This deliberately relaxes sections 6.3.1 and 8
+                    // to avoid rejecting otherwise playable content; a version
+                    // ceiling cannot describe our individual feature support.
                     "-X-VERSION" => {}
                     "-X-DEFINE" => match parse_define_tag(&str_line) {
                         Ok(VariableDefinition::Name { name, value }) => {
@@ -865,6 +867,42 @@ pub(crate) enum MediaPlaylistUrlLocation {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn retains_variants_with_unknown_required_attributes_and_enum_values() {
+        for attribute in ["REQ-FUTURE=YES", "HDCP-LEVEL=FUTURE", "VIDEO-RANGE=FUTURE"] {
+            let playlist =
+                format!("#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1000,{attribute}\nvideo.m3u8\n");
+            let parsed = MultivariantPlaylist::parse(
+                playlist.as_bytes(),
+                Url::new("https://example.com/master.m3u8".to_owned()),
+            )
+            .unwrap();
+            assert_eq!(parsed.variants.len(), 1, "{attribute}");
+        }
+    }
+
+    #[test]
+    fn retained_variants_still_validate_attributes_and_uri_lines() {
+        for uri in ["", "#EXT-X-STREAM-INF:BANDWIDTH=1000"] {
+            let playlist =
+                format!("#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1000,REQ-FUTURE=YES\n{uri}\n");
+            assert!(matches!(
+                MultivariantPlaylist::parse(
+                    playlist.as_bytes(),
+                    Url::new("https://example.com/master.m3u8".to_owned())
+                ),
+                Err(MultivariantPlaylistParsingError::MissingUriLineAfterVariant)
+            ));
+        }
+        let playlist =
+            b"#EXTM3U\n#EXT-X-STREAM-INF:CODECS=\"{$missing}\",REQ-FUTURE=YES\nvideo.m3u8\n";
+        assert!(MultivariantPlaylist::parse(
+            &playlist[..],
+            Url::new("https://example.com/master.m3u8".to_owned())
+        )
+        .is_err());
+    }
 
     #[test]
     fn unknown_tags_are_ignored() {

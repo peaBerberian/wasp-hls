@@ -281,7 +281,6 @@ pub(crate) struct StartAttribute {
 pub(super) enum StartAttributeParsingError {
     NoTimeOffset,
     TimeOffsetParsingError(ParseFloatError),
-    InvalidPreciseValue,
 }
 
 pub(super) fn parse_start_attribute(
@@ -308,9 +307,9 @@ pub(super) fn parse_start_attribute(
                     match parsed {
                         "YES" => precise = true,
                         "NO" => precise = false,
-                        _ => {
-                            return Err(StartAttributeParsingError::InvalidPreciseValue);
-                        }
+                        // NOTE: Like hls.js and Shaka, keep TIME-OFFSET usable
+                        // even when PRECISE is unknown, rather than dropping START.
+                        _ => precise = false,
                     };
                 }
                 "TIME-OFFSET" => {
