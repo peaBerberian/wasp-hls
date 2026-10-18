@@ -4,6 +4,7 @@
 
 ### Changes
 
+- `AudioTrackInfo.name` is now optional: audio track lists, the current audio track and track events expose `undefined` when `NAME` is absent (an empty `NAME` remains `""`)
 - Slightly change the semantics of the `variantUpdate` event and `getCurrentVariant` method now that variant selection is internally much more flexible
 - Make `bufferGoal` `30` by default (can be changed at any time)
 

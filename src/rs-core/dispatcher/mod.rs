@@ -107,7 +107,7 @@ impl InitialAudioTrackSelection {
             && self
                 .name
                 .as_deref()
-                .map(|name| track.name() == name)
+                .map(|name| track.name() == Some(name))
                 .unwrap_or(true)
             && self
                 .channels
@@ -286,7 +286,7 @@ video.m3u8
             .iter()
             .find(|track| selection.matches(track))
             .unwrap();
-        assert_eq!(matched.name(), "French AD");
+        assert_eq!(matched.name(), Some("French AD"));
     }
 
     #[test]
@@ -329,6 +329,6 @@ video.m3u8
                     .find(|track| selection.matches(track))
             })
             .unwrap();
-        assert_eq!(matched.name(), "French surround");
+        assert_eq!(matched.name(), Some("French surround"));
     }
 }

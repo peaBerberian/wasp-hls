@@ -68,6 +68,9 @@ function AudioTrackSetting({
 export default React.memo(AudioTrackSetting);
 
 function formatAudioTrack(t: AudioTrackInfo): string {
+  if (t.name === undefined) {
+    return t.language ?? `Track ${t.id}`;
+  }
   // Some crazy work-around because the main test stream I add did not quite
   // respect the idea of having NAME in a human-readable format
   if (t.name.startsWith("stream_")) {

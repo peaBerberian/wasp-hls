@@ -491,7 +491,7 @@ export interface AudioTrackInfo {
   id: number;
   language?: string | undefined;
   assocLanguage?: string | undefined;
-  name: string;
+  name?: string | undefined;
   channels?: number | undefined;
   characteristics?: string[] | undefined;
   bitDepth?: number | undefined;

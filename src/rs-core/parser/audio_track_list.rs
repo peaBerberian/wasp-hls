@@ -126,8 +126,8 @@ impl AudioTrack {
     }
 
     /// Returns human-readable name associated with that audio track.
-    pub(crate) fn name(&self) -> &str {
-        self.media_tags.first().map_or("", MediaTag::name)
+    pub(crate) fn name(&self) -> Option<&str> {
+        self.media_tags.first().and_then(MediaTag::name)
     }
 
     /// Returns the number of channels that audio track outputs

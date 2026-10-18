@@ -1587,9 +1587,13 @@ export function announceFetchedContent(
 
       const nameLen = audioTracksInfo[i];
       i++;
-      const nameU8 = new Uint8Array(memory.buffer, audioTracksInfo[i], nameLen);
-      i++;
-      const name = cachedTextDecoder.decode(nameU8);
+      const namePointer = audioTracksInfo[i++];
+      const name =
+        namePointer === 0
+          ? undefined
+          : cachedTextDecoder.decode(
+              new Uint8Array(memory.buffer, namePointer, nameLen),
+            );
 
       const channels = audioTracksInfo[i];
       i++;

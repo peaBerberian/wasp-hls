@@ -459,7 +459,8 @@ When set to an object, it should contain the following keys:
 
   `undefined` if unknown or if there's no language involved.
 
-- `name` (`string`): Human-readable description of the audio track.
+- `name` (`string | undefined`): Human-readable description of the audio track,
+  or `undefined` when absent.
   If the `language` property is set, it should generally be in that language.
 
 - `channels` (`number | undefined`): If set, it is the count of audio channels,
@@ -520,7 +521,8 @@ Each object should contain the following keys (same than for the
 
   `undefined` if unknown or if there's no language involved.
 
-- `name` (`string`): Human-readable description of the audio track.
+- `name` (`string | undefined`): Human-readable description of the audio track,
+  or `undefined` when absent.
   If the `language` property is set, it should generally be in that language.
 
 - `channels` (`number | undefined`): If set, it is the count of audio channels,
