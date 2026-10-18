@@ -1124,8 +1124,7 @@ impl Dispatcher {
         recommendation: Option<AdaptiveVariantSelection>,
     ) {
         if self.requester.has_segment_request_pending(media_type) {
-            self.media_element_ref
-                .set_loading_complete(media_type, false);
+            self.media_element_ref.set_end_when_done(media_type, false);
             return;
         }
         let Some(pl_store) = self.playlist_store.as_ref() else {
@@ -1151,7 +1150,7 @@ impl Dispatcher {
             );
         let refresh_id = selected.playlist_to_refresh();
         self.media_element_ref
-            .set_loading_complete(media_type, selected.loading_complete());
+            .set_end_when_done(media_type, selected.loading_complete());
         // Own the proposed metadata before following, which may request another playlist.
         // Only one resource is loaded at a time: initialization first, otherwise media.
         let needed = selected.needed_segments().map(|needed| {
@@ -1266,8 +1265,7 @@ impl Dispatcher {
     /// changes.
     fn follow_selected_media_playlist(&mut self, media_type: MediaType) {
         // XXX TODO: Why is that one necessary?
-        self.media_element_ref
-            .set_loading_complete(media_type, false);
+        self.media_element_ref.set_end_when_done(media_type, false);
         let playlist_id = self
             .playlist_store
             .as_ref()
