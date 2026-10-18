@@ -81,20 +81,31 @@ describe("Playlist compatibility", () => {
   );
 
   it.each(["missing", "empty"])(
-    "preserves %s audio names through the public API",
+    "preserves %s audio and subtitle names through the public API",
     { timeout: TEST_TIMEOUT_MS },
     async (nameKind) => {
       const url = await ensureVodScenarioReady("fmp4-alt-audio");
       const master = await readPlaylist(url);
       const nameAttribute = nameKind === "missing" ? "" : ',NAME=""';
-      const body = master.replace(/,NAME="[^"]*"/g, nameAttribute);
+      const subtitleTag = `#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID="subs"${nameAttribute},LANGUAGE="fr",DEFAULT=YES,URI="subs.m3u8"`;
+      const body = master
+        .replace(/,NAME="[^"]*"/g, nameAttribute)
+        .replace("#EXTM3U\n", `#EXTM3U\n${subtitleTag}\n`)
+        .replaceAll(
+          "#EXT-X-STREAM-INF:",
+          '#EXT-X-STREAM-INF:SUBTITLES="subs",',
+        );
       const ctx = await createPlayerHarness({
         fetchRules: [playlistRule(url, body)],
       });
       try {
         const audioUpdates = [];
+        const subtitleUpdates = [];
         ctx.player.addEventListener("audioTrackListUpdate", (tracks) =>
           audioUpdates.push(tracks),
+        );
+        ctx.player.addEventListener("subtitleTrackListUpdate", (tracks) =>
+          subtitleUpdates.push(tracks),
         );
         await expectPlayback(ctx, url);
         const expectedName = nameKind === "missing" ? undefined : "";
@@ -104,8 +115,13 @@ describe("Playlist compatibility", () => {
           expect(track.name).toBe(expectedName);
           expect(track.characteristics).toEqual([]);
         }
+        const subtitleTracks = ctx.player.getSubtitleTrackList();
+        expect(subtitleTracks).toHaveLength(1);
+        expect(subtitleTracks[0].name).toBe(expectedName);
         expect(ctx.player.getCurrentAudioTrack()?.name).toBe(expectedName);
+        expect(ctx.player.getCurrentSubtitleTrack()?.name).toBe(expectedName);
         expect(audioUpdates.at(-1)).toEqual(audioTracks);
+        expect(subtitleUpdates.at(-1)).toEqual(subtitleTracks);
       } finally {
         ctx.dispose();
       }
