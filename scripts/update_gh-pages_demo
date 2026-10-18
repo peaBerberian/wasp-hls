@@ -5,15 +5,24 @@
 # Builds the demo and docs, updates a temporary `gh-pages` worktree with the
 # freshly built artifacts, and offers to commit/push them.
 
-if [ "$1" = "--help" ] || [ "$1" = "-h" ]; then
+demo_only=false
+for arg in "$@"; do
+  case "$arg" in
+    --demo-only) demo_only=true ;;
+    --help|-h)
   cat <<'EOF'
-Usage: ./scripts/update_gh-pages_demo
+Usage: ./scripts/update_gh-pages_demo [--demo-only]
 
 Run from a clean `main` checkout to rebuild the demo/docs and deploy them to
 the `gh-pages` branch.
+
+  --demo-only  Skip building docs and preserve the published doc/ directory.
 EOF
   exit 0
-fi
+      ;;
+    *) echo "ERROR: Unknown argument: $arg" >&2; exit 1 ;;
+  esac
+done
 
 set -e
 
@@ -45,7 +54,9 @@ fi
 # Generate demo
 npm install
 npm run demo -- --release
-npm run docs
+if [ "$demo_only" = false ]; then
+  npm run docs
+fi
 
 if [ -n "$(git status --porcelain)" ]; then
   echo "ERROR: Please commit your modifications to main"
@@ -56,6 +67,9 @@ tmpDemoDir=$(mktemp -d)
 tmpGhPagesDir=$(mktemp -d)
 
 cp -r build/. "$tmpDemoDir/" -v
+if [ "$demo_only" = true ]; then
+  rm -rf "$tmpDemoDir/doc"
+fi
 
 # update gh-pages in an isolated worktree so the current checkout stays intact
 git worktree add --force "$tmpGhPagesDir" gh-pages
@@ -63,7 +77,11 @@ git worktree add --force "$tmpGhPagesDir" gh-pages
 (
   cd "$tmpGhPagesDir"
   git pull origin gh-pages
-  find . -mindepth 1 -maxdepth 1 ! -name '.git' -exec rm -rf {} + || true
+  if [ "$demo_only" = true ]; then
+    find . -mindepth 1 -maxdepth 1 ! -name '.git' ! -name 'doc' -exec rm -rf {} +
+  else
+    find . -mindepth 1 -maxdepth 1 ! -name '.git' -exec rm -rf {} +
+  fi
   cp -r "$tmpDemoDir"/. .
 
   if [ -n "$(git status --porcelain)" ]; then
@@ -105,7 +123,7 @@ git worktree add --force "$tmpGhPagesDir" gh-pages
       elif [[ $REPLY =~ ^[Cc](heckout)?$ ]]; then
         git restore --source=HEAD --staged --worktree .
       elif [[ $REPLY =~ ^([Tt]|([Ss]tash))?$ ]]; then
-        git stash -u push
+        git stash push -u
         break
       fi
     done
