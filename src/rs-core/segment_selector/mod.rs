@@ -13,7 +13,7 @@ mod segment_loading_history;
 use segment_loading_history::SegmentLoadingHistory;
 
 /// Minimum distance from playback, in seconds, before replacing buffered media.
-const MIN_FAST_QUALITY_SWITCH_LEAD_SECONDS: f64 = 5.;
+const MIN_FAST_QUALITY_SWITCH_LEAD_SECONDS: f64 = 3.;
 
 /// Indicate the most prioritary segment to load according to the given situation.
 ///
@@ -1856,7 +1856,7 @@ mod tests {
         let list = playlist.playlist().segment_list();
         for (has_replacement, seek_position, expected_start, change_media) in [
             (false, 4., 24., false),
-            (true, 4., 12., false),
+            (true, 4., 8., false),
             (false, 30., 28., false),
             (false, 4., 24., true),
         ] {
@@ -1958,38 +1958,45 @@ mod tests {
 
     #[test]
     fn fast_quality_switch_requires_the_minimum_lead() {
-        let mut selector = NextSegmentSelector::new(0., 30.);
-        let buffered = vec![
-            BufferedChunk::new_for_test(
-                0.,
-                5.,
-                SegmentQualityContext::new(1., test_playlist_id(1)),
-            ),
-            BufferedChunk::new_for_test(
-                5.,
-                9.,
-                SegmentQualityContext::new(1., test_playlist_id(1)),
-            ),
-        ];
-        let higher_quality = SegmentQualityContext::new(2., test_playlist_id(2));
-
-        let result = selector.most_needed_segment(
-            SegmentSelectionCandidate {
-                variant_id: 3,
-                context: SegmentQualityContext::new(3., test_playlist_id(3)),
-                playlist: None,
-                is_ended: false,
-            },
-            SegmentSelectionCandidate {
-                variant_id: 2,
-                context: higher_quality,
-                playlist: None,
-                is_ended: false,
-            },
-            &buffered,
-        );
-        assert_eq!(result.playlist_to_refresh(), test_playlist_id(3));
-        assert_eq!(selector.find_next_unbuffered_position(&buffered), 9.);
+        for (lead, duration, replacement_allowed) in [
+            (3., 2., false),
+            (3.01, 2., true),
+            (4., 6., false),
+            (6., 6., false),
+            (6.01, 6., true),
+        ] {
+            let mut selector = NextSegmentSelector::new(0., 30.);
+            let low = SegmentQualityContext::new(1., test_playlist_id(1));
+            let buffered = vec![
+                BufferedChunk::new_for_test(0., lead, low),
+                BufferedChunk::new_for_test(lead, lead + duration, low),
+            ];
+            let result = selector.most_needed_segment(
+                SegmentSelectionCandidate {
+                    variant_id: 3,
+                    context: SegmentQualityContext::new(3., test_playlist_id(3)),
+                    playlist: None,
+                    is_ended: false,
+                },
+                SegmentSelectionCandidate {
+                    variant_id: 2,
+                    context: SegmentQualityContext::new(2., test_playlist_id(2)),
+                    playlist: None,
+                    is_ended: false,
+                },
+                &buffered,
+            );
+            // A permitted replacement needs its playlist; otherwise follow the addition playlist.
+            assert_eq!(
+                result.playlist_to_refresh(),
+                test_playlist_id(if replacement_allowed { 2 } else { 3 }),
+                "lead={lead}, duration={duration}",
+            );
+            assert_eq!(
+                selector.find_next_unbuffered_position(&buffered),
+                lead + duration
+            );
+        }
     }
 
     #[test]
