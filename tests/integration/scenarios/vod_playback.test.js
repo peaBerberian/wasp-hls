@@ -9,12 +9,32 @@ import { checkAfterSleepWithBackoff } from "../../utils/checkAfterSleepWithBacko
 import setupPlayer from "../utils/player_setup";
 
 const VOD_TEST_TIMEOUT_MS = 60_000;
-const PLAYBACK_SETTLE_MS = 2_000;
 const PROGRAM_DATE_TIME_START = Date.parse("2024-01-02T03:04:05.000Z") / 1000;
 
-function expectPositionToAdvance(player, startPosition) {
-  const newPosition = player.getPosition();
-  expect(newPosition).toBeGreaterThan(startPosition + 0.8);
+async function waitForPositionToAdvance(ctx, startPosition) {
+  // Loaded does not guarantee that playback will advance immediately on a slow machine.
+  await checkAfterSleepWithBackoff({ maxTimeMs: 15_000 }, () => {
+    const state = JSON.stringify({
+      ...getPlayerStateSnapshot(
+        ctx.player,
+        ctx.videoElement,
+        ctx.lastPlayerError,
+      ),
+      mediaError: ctx.videoElement.error?.message,
+      buffered: Array.from(
+        { length: ctx.videoElement.buffered.length },
+        (_, i) => [
+          ctx.videoElement.buffered.start(i),
+          ctx.videoElement.buffered.end(i),
+        ],
+      ),
+    });
+    expect(ctx.lastPlayerError, state).toBeNull();
+    expect(ctx.videoElement.error, state).toBeNull();
+    expect(ctx.player.getPosition(), state).toBeGreaterThan(
+      startPosition + 0.8,
+    );
+  });
 }
 
 describe("Generated VoD content - playback", function () {
@@ -42,8 +62,7 @@ describe("Generated VoD content - playback", function () {
       expect(ctx.player.getMaximumPosition()).toBeGreaterThan(10);
 
       const startPosition = ctx.player.getPosition();
-      await sleep(PLAYBACK_SETTLE_MS);
-      expectPositionToAdvance(ctx.player, startPosition);
+      await waitForPositionToAdvance(ctx, startPosition);
     },
   );
 
@@ -69,8 +88,7 @@ describe("Generated VoD content - playback", function () {
       expect(ctx.player.getMaximumPosition()).toBeGreaterThan(10);
 
       const startPosition = ctx.player.getPosition();
-      await sleep(PLAYBACK_SETTLE_MS);
-      expectPositionToAdvance(ctx.player, startPosition);
+      await waitForPositionToAdvance(ctx, startPosition);
     },
   );
 
@@ -96,8 +114,7 @@ describe("Generated VoD content - playback", function () {
       expect(ctx.player.getMaximumPosition()).toBeGreaterThan(10);
 
       const startPosition = ctx.player.getPosition();
-      await sleep(PLAYBACK_SETTLE_MS);
-      expectPositionToAdvance(ctx.player, startPosition);
+      await waitForPositionToAdvance(ctx, startPosition);
     },
   );
 
@@ -132,8 +149,7 @@ describe("Generated VoD content - playback", function () {
       expect(latestContentInfoUpdate?.isVod).toEqual(true);
 
       const startPosition = ctx.player.getPosition();
-      await sleep(PLAYBACK_SETTLE_MS);
-      expectPositionToAdvance(ctx.player, startPosition);
+      await waitForPositionToAdvance(ctx, startPosition);
     },
   );
 
@@ -158,8 +174,7 @@ describe("Generated VoD content - playback", function () {
       expect(ctx.player.getCurrentVariant()).not.toBeUndefined();
 
       const startPosition = ctx.player.getPosition();
-      await sleep(PLAYBACK_SETTLE_MS);
-      expectPositionToAdvance(ctx.player, startPosition);
+      await waitForPositionToAdvance(ctx, startPosition);
     },
   );
 
@@ -184,8 +199,7 @@ describe("Generated VoD content - playback", function () {
       expect(ctx.player.getCurrentVariant()).not.toBeUndefined();
 
       const startPosition = ctx.player.getPosition();
-      await sleep(PLAYBACK_SETTLE_MS);
-      expectPositionToAdvance(ctx.player, startPosition);
+      await waitForPositionToAdvance(ctx, startPosition);
     },
   );
 
