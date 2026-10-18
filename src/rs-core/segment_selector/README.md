@@ -22,6 +22,8 @@ Its job is to:
   playlist should be fetched or refreshed. That playlist can differ from the one
   containing the segment returned now.
 
+- Tell when there's no segment remaining to request.
+
 Returning a segment doesn't advance the cursor past it. The caller has to
 "validate" media and initialization segments through `validate_media` and
 `validate_init` when accepting them, otherwise they may be proposed again.
@@ -44,6 +46,4 @@ the caller; it doesn't own or update those.
 
 It doesn't estimate bandwidth or choose the candidate qualities, perform
 requests, decide playlist refresh timing or change media buffers. It returns
-segment recommendations and a playlist to follow. No segment returned only
-means nothing is needed or available with the current inputs, not necessarily
-that playback has reached the end.
+segment recommendations or a playlist to follow.

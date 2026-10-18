@@ -302,6 +302,12 @@ impl SegmentInventory {
         media_offset: f64,
         success: bool,
     ) {
+        // XXX TODO: Why that diff
+        if !success {
+            // The failed append also cancels the remaining operations in this buffer.
+            self.inventory
+                .retain(|segment| segment.validated || segment.id == seg_id);
+        }
         self.synchronize(buffered, media_offset);
         let seg_idx = self
             .inventory
@@ -1015,13 +1021,23 @@ impl SegmentInventory {
         );
 
         if segment_idx < self.inventory.len() {
-            log_info!(
-                "SI: Multiple {} segments have been completely removed at the end (pl:{}, nl:{})",
-                self.media_type,
-                self.inventory.len(),
-                segment_idx,
-            );
-            self.inventory.truncate(segment_idx);
+            // XXX TODO: Is that diff still needed
+            let previous_len = self.inventory.len();
+            let mut index = 0;
+            self.inventory.retain(|segment| {
+                // An unfinished append cannot yet be judged from buffered ranges.
+                let keep = index < segment_idx || !segment.validated;
+                index += 1;
+                keep
+            });
+            if self.inventory.len() < previous_len {
+                log_info!(
+                    "SI: {} segments removed at the end (pl:{}, nl:{})",
+                    self.media_type,
+                    previous_len,
+                    self.inventory.len(),
+                );
+            }
         }
         self.process_pending_updates(updates);
         self.clean_up();
@@ -1284,6 +1300,7 @@ mod tests {
     use super::{BufferedSegmentMetadata, SegmentInventory, SegmentQualityContext};
     use crate::{
         bindings::{MediaType, TimescaledTimestamp},
+        dispatcher::JsTimeRanges,
         parser::MediaPlaylistPermanentId,
     };
 
@@ -1304,6 +1321,39 @@ mod tests {
             end,
             context: SegmentQualityContext::new(1.0, MediaPlaylistPermanentId::new_for_test(1)),
         }
+    }
+
+    #[test]
+    fn pending_append_survives_empty_ranges_until_its_result_is_processed() {
+        let mut inventory = SegmentInventory::new(MediaType::Video);
+        let id = inventory.insert_segment(metadata(10., 12.));
+        inventory.reconcile_push_result(id, &JsTimeRanges::new(vec![]), 0., true);
+        assert_eq!(inventory.inventory().len(), 1);
+        assert!(inventory.inventory()[0].validated);
+        inventory.synchronize(&JsTimeRanges::new(vec![10., 12.]), 0.);
+        assert_eq!(inventory.inventory()[0].last_buffered_end(), 12.);
+
+        let mut failed = SegmentInventory::new(MediaType::Video);
+        let id = failed.insert_segment(metadata(10., 12.));
+        failed.insert_segment(metadata(12., 14.));
+        failed.reconcile_push_result(id, &JsTimeRanges::new(vec![]), 0., false);
+        assert!(failed.inventory().is_empty());
+    }
+
+    #[test]
+    fn pending_append_survives_a_report_containing_only_older_data() {
+        let mut inventory = SegmentInventory::new(MediaType::Video);
+        let earlier = inventory.insert_segment(metadata(8., 10.));
+        inventory.reconcile_push_result(earlier, &JsTimeRanges::new(vec![8., 10.]), 0., true);
+        let final_segment = inventory.insert_segment(metadata(10., 12.));
+        inventory.reconcile_push_result(final_segment, &JsTimeRanges::new(vec![8., 9.8]), 0., true);
+        assert_eq!(inventory.inventory().len(), 2);
+        assert!(inventory.inventory().last().unwrap().validated);
+        inventory.synchronize(&JsTimeRanges::new(vec![8., 12.]), 0.);
+        assert_eq!(
+            inventory.inventory().last().unwrap().last_buffered_end(),
+            12.
+        );
     }
 
     #[test]

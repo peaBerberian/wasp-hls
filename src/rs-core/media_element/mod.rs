@@ -488,7 +488,7 @@ impl MediaElementReference {
     /// partially garbage collected etc.
     ///
     /// New segment information is added to the inventory thanks to the
-    /// `announce_last_segment_pushed` method, which thus has to be called before this one if you
+    /// `announce_incoming_media_segment` method, which thus has to be called before this one if you
     /// want the corresponding segment to be included. Then synchronizations to the lower-level
     /// buffers are performed automatically on lifecycle methods such as `on_observation` and
     /// `on_source_buffer_update`.
@@ -521,8 +521,8 @@ impl MediaElementReference {
         if !self.check_queued_seek() {
             let last_observation = self.last_observation.as_ref().unwrap();
             let buffer_gap = get_buffer_gap(last_observation);
-            // At EOF Chrome may only report HAVE_CURRENT_DATA while draining the
-            // final frames. Keep playing even if buffered ends short of duration.
+            // readyState may stay at 2 while playing the last buffered frames.
+            // Keep playing even if buffered data ends slightly before the duration.
             let can_play_to_end = last_observation.ready_state() >= 2
                 && self.is_buffer_ended(MediaType::Audio)
                 && self.is_buffer_ended(MediaType::Video);
@@ -596,6 +596,8 @@ impl MediaElementReference {
                 let queue_elt = if success {
                     sb.on_operation_end()
                 } else {
+                    // XXX TODO: why?
+                    sb.set_loading_complete(false);
                     sb.cancel_current_operations()
                 };
                 if let Some(SourceBufferQueueElement::PushMedia { id, .. }) = queue_elt {
@@ -615,6 +617,7 @@ impl MediaElementReference {
                 let queue_elt = if success {
                     sb.on_operation_end()
                 } else {
+                    sb.set_loading_complete(false);
                     sb.cancel_current_operations()
                 };
                 if let Some(SourceBufferQueueElement::PushMedia { id, .. }) = queue_elt {
@@ -673,22 +676,14 @@ impl MediaElementReference {
         None
     }
 
-    /// Announce that the last chronological segment has been pushed to the buffer of a
-    /// given `media_type`.
-    ///
-    /// Calling this method for the media_type of each created SourceBuffer allows to properly end
-    /// the stream once those last segments are reached.
-    /// Pushing further segments for that `media_type` is still possible after calling `end_buffer`
-    /// in which case, `end_buffer` should be re-called once, the new last chronological segment
-    /// has been pushed.
-    pub(crate) fn end_buffer(&mut self, media_type: MediaType) {
-        match self.buffer_mut_for(media_type) {
-            None => log_warn!("Asked to end a non existent {} buffer", media_type),
-            Some(sb) => {
-                sb.announce_last_segment_pushed();
-            }
+    /// Record whether selection has supplied all segments needed through the end.
+    /// Pending buffer operations still have to finish before end-of-stream.
+    /// XXX TODO: I have trouble with the name here, seems out of place. `loading` means the request
+    /// to me.
+    pub(crate) fn set_loading_complete(&mut self, media_type: MediaType, complete: bool) {
+        if let Some(buffer) = self.buffer_mut_for(media_type) {
+            buffer.set_loading_complete(complete);
         }
-        self.check_end_of_stream();
     }
 
     /// Get reference to SourceBuffer attached to this `MediaElementReference` for this
@@ -741,25 +736,25 @@ impl MediaElementReference {
     /// and call `jsEndOfStream` if that's the case.
     ///
     /// To call when any of its condition might have changed.
-    fn check_end_of_stream(&self) {
+    pub(crate) fn check_end_of_stream(&self) {
         if self.video_buffer.is_none() && self.audio_buffer.is_none() {
             return;
         }
         if self.is_buffer_ended(MediaType::Audio)
             && self.is_buffer_ended(MediaType::Video)
-            && self.media_source_ready_state != Some(MediaSourceReadyState::Closed)
+            && self.media_source_ready_state == Some(MediaSourceReadyState::Open)
         {
             let _ = jsEndOfStream();
         }
     }
 
     /// Returns `true` if the `SourceBuffer` of the corresponding `media_type` has ended, that is:
-    ///   - its last chronological segment has been pushed.
+    ///   - selection has supplied everything needed through the end.
     ///   - it has no operation left to perform.
     fn is_buffer_ended(&self, media_type: MediaType) -> bool {
         match self.buffer_for(media_type) {
             None => true,
-            Some(sb) => sb.is_last_segment_pushed() && !sb.has_operations_pending(),
+            Some(sb) => sb.is_loading_complete() && !sb.has_operations_pending(),
         }
     }
 

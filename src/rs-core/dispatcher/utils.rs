@@ -12,14 +12,6 @@ use crate::{
     },
 };
 
-pub(super) fn was_last_segment(
-    playlist_store: Option<&PlaylistStore>,
-    media_type: MediaType,
-    seg_start: f64,
-) -> bool {
-    playlist_store.is_some_and(|c| c.is_last_media_segment(media_type, seg_start))
-}
-
 pub(super) fn has_playlist_store_media_type(
     playlist_store: Option<&PlaylistStore>,
 ) -> Option<MediaType> {

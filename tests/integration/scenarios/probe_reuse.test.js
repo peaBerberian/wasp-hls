@@ -13,7 +13,7 @@ import initializeWasm, {
 
 // Exercise the real WASM dispatcher with synchronous host stubs. No browser media
 // decoding is involved: these assertions cover requests, resource lifetime, and reuse.
-it.each([
+const scenarios = [
   { hasInit: true, manifestCodecs: false, opaqueUrls: false },
   { hasInit: false, manifestCodecs: false, opaqueUrls: false },
   { hasInit: true, manifestCodecs: true, opaqueUrls: false },
@@ -39,6 +39,15 @@ it.each([
     opaqueUrls: false,
     switchBeforeBuffer: true,
   },
+  {
+    name: "finishes loading after the final append even when its ranges appear later",
+    hasInit: true,
+    manifestCodecs: true,
+    opaqueUrls: false,
+    lateFirstObservation: true,
+    startCase: "fromEnd",
+    delayedBufferedRanges: true,
+  },
   ...[true, false].flatMap((hasInit) =>
     ["absolute", "fromEnd", "liveTimeline"].map((startCase) => ({
       hasInit,
@@ -47,8 +56,17 @@ it.each([
       startCase,
     })),
   ),
-])(
-  "waits for buffers and reuses probes: $hasInit init, $manifestCodecs codecs, $opaqueUrls opaque URLs, start $startCase",
+];
+
+it.each(
+  scenarios.map((scenario) => ({
+    ...scenario,
+    name:
+      scenario.name ??
+      `waits for buffers and reuses probes: ${scenario.hasInit} init, ${scenario.manifestCodecs} codecs, ${scenario.opaqueUrls} opaque URLs, start ${scenario.startCase}`,
+  })),
+)(
+  "$name",
   async ({
     hasInit,
     manifestCodecs,
@@ -56,6 +74,7 @@ it.each([
     switchBeforeBuffer,
     lateFirstObservation,
     startCase,
+    delayedBufferedRanges = false,
   }) => {
     const success = (value) => ({ value });
     const requests = [];
@@ -152,10 +171,13 @@ it.each([
     await initializeWasm(wasm, bindings);
     const dispatcher = new Dispatcher(1_000_000);
 
-    function finishBufferOperations() {
+    function finishBufferOperations(buffered = []) {
       while (bufferOperations.length > 0) {
         bufferOperations.shift();
-        dispatcher.on_source_buffer_update(1, new JsTimeRanges([]));
+        dispatcher.on_source_buffer_update(
+          1,
+          new JsTimeRanges(new Float64Array(buffered)),
+        );
       }
     }
 
@@ -267,32 +289,41 @@ it.each([
 
       if (lateFirstObservation) {
         finish(mediaUrl("low", startingIndex), "media bytes");
-        finishBufferOperations();
         const nearEnd = startCase === "fromEnd";
+        finishBufferOperations(
+          delayedBufferedRanges ? [] : nearEnd ? [0, 3.98] : [0, 4],
+        );
         if (nearEnd) {
           expect(streamEnded).toBe(true);
         }
         // A slow main thread may first report playback after data is already buffered.
         // Startup must still announce buffering completion so the API can become Loaded.
         // At EOF, decoded buffer ends can differ slightly from the media duration.
-        const buffered = new Float64Array(nearEnd ? [4, 7.98] : [0, 4]);
-        for (const readyState of nearEnd ? [2, 2, 4, 4] : [4]) {
+        // Playlist time 4 corresponds to media time 0 in the append stub.
+        const buffered = new Float64Array(nearEnd ? [0, 3.98] : [0, 4]);
+        const readyStates = nearEnd ? [2, 2, 4, 4] : [4];
+        for (const [index, readyState] of readyStates.entries()) {
           dispatcher.on_playback_tick(
             new MediaObservation(
               PlaybackTickReason.RegularInterval,
-              nearEnd ? 6 : 0,
+              nearEnd ? 2 : 0,
               readyState,
               new JsTimeRanges(buffered),
               true,
               false,
               false,
-              nearEnd ? 8.03 : 8,
+              nearEnd ? 4.03 : 8,
               new JsTimeRanges([]),
               new JsTimeRanges(buffered),
             ),
           );
+          if (nearEnd) {
+            expect(streamEnded).toBe(true);
+          }
+          // The first near-end observation applies the starting seek. The next
+          // observation can finish buffering even while readyState stays at 2.
           expect(rebufferingEvents).toEqual(
-            readyState < 3 ? ["start"] : ["start", "stop"],
+            nearEnd && index === 0 ? ["start"] : ["start", "stop"],
           );
         }
         return;
@@ -310,6 +341,21 @@ it.each([
         return;
       }
 
+      // Confirm the stub's empty buffer before switching variants.
+      dispatcher.on_playback_tick(
+        new MediaObservation(
+          PlaybackTickReason.RegularInterval,
+          0,
+          0,
+          new JsTimeRanges(new Float64Array([])),
+          true,
+          false,
+          false,
+          8,
+          new JsTimeRanges(new Float64Array([])),
+          new JsTimeRanges(new Float64Array([])),
+        ),
+      );
       dispatcher.lock_variant(variants[1]);
       finishBufferOperations();
       finish("high.m3u8", playlist("high"));

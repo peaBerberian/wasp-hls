@@ -512,11 +512,15 @@ impl Dispatcher {
     pub(super) fn on_observation(&mut self, observation: MediaObservation) {
         let reason = observation.reason();
         log_debug!("Tick received: {:?} {}", reason, observation.current_time());
+        // TODO: Group rebuffering and end-of-stream decisions with freezing
+        // detection and possibly gap jumping. Rebuffering currently uses the
+        // previous selection result until the next observation.
         self.media_element_ref.on_observation(observation);
         match reason {
             PlaybackTickReason::Seeking => self.on_seek(),
             _ => self.on_regular_tick(),
         }
+        self.media_element_ref.check_end_of_stream();
     }
 
     /// Method to call when a new codec support report has been received.
@@ -679,7 +683,6 @@ impl Dispatcher {
         // Probe segment may have provided information helping us to determine how much to
         // buffer (e.g. media type)
         self.update_min_buffer_time();
-        self.check_end_of_stream_after_playlist_update();
 
         self.ready_probe_segments.insert(ReadyProbeSegment {
             request: probe_segment,
@@ -867,31 +870,8 @@ impl Dispatcher {
             pl_store.uses_program_date_time(),
         );
         sync_media_source_duration(pl_store);
-        self.check_end_of_stream_after_playlist_update();
         self.recheck_player_state();
-    }
-
-    /// If a playlist only became finalized on a later refresh, its last segment
-    /// may already have been appended. Re-check buffered tails so the
-    /// corresponding SourceBuffer can still transition to end-of-stream.
-    fn check_end_of_stream_after_playlist_update(&mut self) {
-        let Some(pl_store) = self.playlist_store.as_ref() else {
-            return;
-        };
-        if !pl_store.is_finalized() {
-            return;
-        }
-
-        for media_type in [MediaType::Audio, MediaType::Video] {
-            let Some(last_buffered_segment) = self.media_element_ref.inventory(media_type).last()
-            else {
-                continue;
-            };
-
-            if pl_store.is_last_media_segment(media_type, last_buffered_segment.playlist_start()) {
-                self.media_element_ref.end_buffer(media_type);
-            }
-        }
+        self.media_element_ref.check_end_of_stream();
     }
 
     /// This media player is based on a regular clock.
@@ -1136,6 +1116,8 @@ impl Dispatcher {
         recommendation: Option<AdaptiveVariantSelection>,
     ) {
         if self.requester.has_segment_request_pending(media_type) {
+            self.media_element_ref
+                .set_loading_complete(media_type, false);
             return;
         }
         let Some(pl_store) = self.playlist_store.as_ref() else {
@@ -1160,6 +1142,8 @@ impl Dispatcher {
                 self.media_element_ref.inventory(media_type),
             );
         let refresh_id = selected.playlist_to_refresh();
+        self.media_element_ref
+            .set_loading_complete(media_type, selected.loading_complete());
         // Own the proposed metadata before following, which may request another playlist.
         // Only one resource is loaded at a time: initialization first, otherwise media.
         let needed = selected.needed_segments().map(|needed| {
@@ -1273,6 +1257,9 @@ impl Dispatcher {
     /// Follow the playback playlist (the one we're loading segments for) when its configuration
     /// changes.
     fn follow_selected_media_playlist(&mut self, media_type: MediaType) {
+        // XXX TODO: Why is that one necessary?
+        self.media_element_ref
+            .set_loading_complete(media_type, false);
         let playlist_id = self
             .playlist_store
             .as_ref()
@@ -1463,33 +1450,21 @@ impl Dispatcher {
             return;
         }
 
-        match self
+        if let Err(x) = self
             .media_element_ref
             .push_media_segment(media_type, prepared_data)
         {
-            Err(x) => {
-                let media_type = x.media_type();
-                let message = x.to_string();
-                log_warn!(
-                    "Core: {} media segment push failed start:{} end:{} err:{}",
-                    media_type,
-                    segment_start,
-                    segment_end,
-                    message
-                );
-                jsSendSegmentParsingError(true, x.into(), Some(media_type), &message);
-                self.stop_current_content();
-            }
-            Ok(()) => {
-                if utils::was_last_segment(self.playlist_store.as_ref(), media_type, segment_start)
-                {
-                    log_info!(
-                        "Last {} segment request finished, declaring its buffer's end",
-                        media_type
-                    );
-                    self.media_element_ref.end_buffer(media_type);
-                }
-            }
+            let media_type = x.media_type();
+            let message = x.to_string();
+            log_warn!(
+                "Core: {} media segment push failed start:{} end:{} err:{}",
+                media_type,
+                segment_start,
+                segment_end,
+                message
+            );
+            jsSendSegmentParsingError(true, x.into(), Some(media_type), &message);
+            self.stop_current_content();
         }
     }
 
@@ -1555,17 +1530,21 @@ fn segment_selection_candidate_for_variant(
         Some(SegmentSelectionCandidate {
             variant_id,
             context,
+            is_ended: pl_store
+                .media_playlist(&context.playlist_id())
+                .is_some_and(|playlist| playlist.is_ended()),
             playlist: pl_store
                 .media_playlist(&context.playlist_id())
                 .map(|playlist| playlist.segment_list()),
         })
     } else {
-        pl_store.direct_media_playlist()?;
+        let (_, playlist) = pl_store.direct_media_playlist()?;
         let (list, context) = pl_store.loaded_media_playlist_segment_info(media_type)?;
         Some(SegmentSelectionCandidate {
             variant_id: crate::bindings::formatters::DIRECT_MEDIA_VARIANT_ID,
             context,
             playlist: Some(list),
+            is_ended: playlist.is_ended(),
         })
     }
 }
