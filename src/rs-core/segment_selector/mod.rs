@@ -135,15 +135,12 @@ pub(crate) struct NextSegmentSelector {
     /// Interface allowing to keep track of which audio and video segments we need to load next.
     segment_cursor: SegmentCursor,
 
-    /// Accepted media that must not be selected again for replacement, even if the decoding
-    /// back-end did not retain it.
+    /// History of accepted media.
     ///
     /// This allows to prevent segment-loading-loop for complex cases where the decoding-side is
     /// not reliable.
     ///
-    /// TODO: Check if we should consult this history during ordinary forward selection, so
-    /// accepted media remains skipped after cursor recomputation, can be risky as we don't want
-    /// to prevent GC handling.
+    /// Also decides when observed buffer loss warrants another loading attempt.
     validated_segments: ValidatedSegmentHistory,
 
     /// Approximation of the current playback position, which will be used as a base position where
@@ -243,6 +240,13 @@ impl NextSegmentSelector {
         self.skipped_segments.clear();
     }
 
+    /// Check for buffer loss after the inventory was synchronized with a playback
+    /// observation. Append results alone may still contain estimated boundaries.
+    pub(crate) fn check_for_buffer_loss(&mut self, inventory: &[BufferedChunk]) {
+        self.validated_segments
+            .synchronize(inventory, self.base_pos);
+    }
+
     /// Calling this method allows to indicate that the initialization segment identified by `id`
     /// was requested and as such, doesn't need to be returned anymore by this
     /// `NextSegmentSelector`.
@@ -262,11 +266,13 @@ impl NextSegmentSelector {
         &mut self,
         playlist_id: MediaPlaylistPermanentId,
         identity: SegmentIdentity,
+        start: f64,
         end: f64,
     ) {
         self.segment_cursor.move_cursor(end);
         if end > self.base_pos {
-            self.validated_segments.insert(playlist_id, identity, end);
+            self.validated_segments
+                .insert(playlist_id, identity, start, end);
         }
     }
 
@@ -350,14 +356,11 @@ impl NextSegmentSelector {
         }
 
         // XXX TODO: explain
-        if replacement_segment.is_none()
-            && segment_list
-                .media()
-                .last()
-                .is_some_and(|last| self.segment_cursor.current_cursor >= last.end())
-        {
-            self.segment_cursor
-                .move_cursor(self.find_next_unbuffered_position(inventory));
+        if replacement_segment.is_none() {
+            if let Some(position) = self.validated_segments.next_retry_position() {
+                self.segment_cursor
+                    .move_cursor(self.segment_cursor.current_cursor.min(position));
+            }
         }
 
         let most_needed_segment = if let Some(segment) = replacement_segment {
@@ -373,23 +376,22 @@ impl NextSegmentSelector {
             ) else {
                 return MostNeededSegmentInfo {
                     needed_segments: None,
-                    // XXX TODO: Check required playlist segments instead of continuous
-                    // buffer coverage. A hole in the playlist can keep this false even
-                    // after all available segments were supplied, preventing end-of-stream
-                    // and potentially keeping rebuffering active at that hole.
                     loading_complete: selected_candidate.is_ended
-                        && segment_list
-                            .media()
-                            .iter()
-                            .rev()
+                        && !segment_list.media().is_empty()
+                        && segment_list.media().iter().all(|segment| {
                             // XXX TODO: needed check?
-                            .find(|segment| segment.duration() > 0.)
-                            .is_some_and(|last| {
-                                // XXX TODO: explain
-                                let playlist_start = segment_list.media()[0].start();
-                                self.buffered_end_from(inventory, self.base_pos.max(playlist_start))
-                                    >= last.end()
-                            }),
+                            segment.duration() <= 0.
+                                || segment.end() <= self.base_pos
+                                || !self
+                                    .validated_segments
+                                    .needs_loading(selected_playlist_id, segment.identity())
+                                || self.can_be_skipped(
+                                    segment.start(),
+                                    segment.end(),
+                                    context,
+                                    inventory,
+                                )
+                        }),
                     playlist_to_refresh,
                 };
             };
@@ -486,16 +488,10 @@ impl NextSegmentSelector {
             .contains(playlist_id, segment.identity())
     }
 
-    /// Starts from `self.base_pos`, look at what is already buffered, and determine a new optimal
-    /// starting point for segments of the given quality.
-    ///
-    /// Replacements have their own explicitly selected segment; this position is used for
-    /// ordinary buffer extension.
+    /// Find where additions should resume, based on continuous inventory coverage.
+    /// Replacements are selected separately.
     fn find_next_unbuffered_position(&self, inventory: &[BufferedChunk]) -> f64 {
-        self.buffered_end_from(inventory, self.base_pos)
-    }
-
-    fn buffered_end_from(&self, inventory: &[BufferedChunk], start: f64) -> f64 {
+        let start = self.base_pos;
         let Some(mut curr_idx) = inventory
             .iter()
             .position(|segment| segment.playlist_end() > start)
@@ -565,6 +561,19 @@ impl NextSegmentSelector {
             .segment_cursor
             .get_next(media_segments, maximum_position)?;
         let segment_end = si.end();
+
+        // XXX TODO:
+        if !self
+            .validated_segments
+            .needs_loading(context.playlist_id(), si.identity())
+        {
+            self.segment_cursor.move_cursor(segment_end);
+            return self.recursively_check_most_needed_media_segment(
+                media_segments,
+                context,
+                inventory,
+            );
+        }
 
         // Apply the project-specific "smart quality switching" optimization: skip the request
         // when equal- or higher-quality media is already buffered for its range.
@@ -851,7 +860,12 @@ mod tests {
         segment: &MediaSegmentInfo,
         context: &SegmentQualityContext,
     ) {
-        selector.validate_media(context.playlist_id(), segment.identity(), segment.end());
+        selector.validate_media(
+            context.playlist_id(),
+            segment.identity(),
+            segment.start(),
+            segment.end(),
+        );
     }
 
     fn playlist_starting_at(start_second: u32, segment_count: u32) -> TopLevelPlaylist {
@@ -901,6 +915,7 @@ mod tests {
         );
         validate(&mut selector, &list.media()[1], &context);
         inventory.push(BufferedChunk::new_for_test(4., 8., context));
+        selector.check_for_buffer_loss(&inventory);
         assert!(selector
             .most_needed_segment(ended(), ended(), &inventory)
             .loading_complete());
@@ -923,6 +938,7 @@ mod tests {
             .loading_complete());
 
         inventory.pop();
+        selector.check_for_buffer_loss(&inventory);
         let evicted = selector.most_needed_segment(ended(), ended(), &inventory);
         assert!(!evicted.loading_complete());
         assert_eq!(
@@ -1009,6 +1025,122 @@ mod tests {
         assert!(selector
             .most_needed_segment(ended(), ended(), &inventory)
             .loading_complete());
+    }
+
+    #[test]
+    fn gc_recovery_revisits_earlier_media_before_reaching_the_playlist_end() {
+        let TopLevelPlaylist::DirectMedia(playlist) = playlist_starting_at(0, 10) else {
+            panic!("expected direct media playlist");
+        };
+        let list = playlist.playlist().segment_list();
+        let context = SegmentQualityContext::new(1., test_playlist_id(1));
+        let mut selector = NextSegmentSelector::new(0., 20.);
+        let mut inventory = vec![];
+        for segment in &list.media()[..3] {
+            validate(&mut selector, segment, &context);
+            inventory.push(BufferedChunk::new_for_test(
+                segment.start(),
+                segment.end(),
+                context,
+            ));
+        }
+        selector.most_needed_segment(
+            candidate(list, &context),
+            candidate(list, &context),
+            &inventory,
+        );
+        selector.check_for_buffer_loss(&inventory);
+        inventory.remove(1);
+        selector.check_for_buffer_loss(&inventory);
+        let selected = selector.most_needed_segment(
+            candidate(list, &context),
+            candidate(list, &context),
+            &inventory,
+        );
+        assert_eq!(
+            selected
+                .needed_segments()
+                .unwrap()
+                .media_segment()
+                .unwrap()
+                .0
+                .start(),
+            4.
+        );
+        validate(&mut selector, &list.media()[1], &context);
+        let selected = selector.most_needed_segment(
+            candidate(list, &context),
+            candidate(list, &context),
+            &inventory,
+        );
+        assert_eq!(
+            selected
+                .needed_segments()
+                .unwrap()
+                .media_segment()
+                .unwrap()
+                .0
+                .start(),
+            12.
+        );
+    }
+
+    #[test]
+    fn a_gap_in_the_playlist_does_not_prevent_completion() {
+        let TopLevelPlaylist::DirectMedia(playlist) = TopLevelPlaylist::parse(
+            b"#EXTM3U\n#EXT-X-TARGETDURATION:4\n#EXT-X-PROGRAM-DATE-TIME:1970-01-01T00:00:00Z\n#EXTINF:4,\n0.m4s\n#EXT-X-DISCONTINUITY\n#EXT-X-PROGRAM-DATE-TIME:1970-01-01T00:00:08Z\n#EXTINF:4,\n1.m4s\n#EXT-X-ENDLIST\n",
+            Url::new("https://example.com/video.m3u8".into()),
+        ).unwrap() else { panic!("expected media playlist"); };
+        let list = playlist.playlist().segment_list();
+        assert_eq!(list.media()[1].start(), 8.);
+        let context = SegmentQualityContext::new(1., test_playlist_id(1));
+        let inventory = vec![
+            BufferedChunk::new_for_test(0., 4., context),
+            BufferedChunk::new_for_test(8., 12., context),
+        ];
+        let ended = || SegmentSelectionCandidate {
+            is_ended: true,
+            ..candidate(list, &context)
+        };
+        let mut selector = NextSegmentSelector::new(0., 30.);
+        let selected = selector.most_needed_segment(ended(), ended(), &inventory);
+        assert!(selected.needed_segments().is_none());
+        assert!(selected.loading_complete());
+    }
+
+    #[test]
+    fn accepted_media_without_inventory_can_complete_without_reloading() {
+        let TopLevelPlaylist::DirectMedia(playlist) = playlist_starting_at(10, 2) else {
+            panic!("expected direct media playlist");
+        };
+        let list = playlist.playlist().segment_list();
+        let context = SegmentQualityContext::new(1., test_playlist_id(1));
+        let mut selector = NextSegmentSelector::new(9.8, 30.);
+        let ended = || SegmentSelectionCandidate {
+            is_ended: true,
+            ..candidate(list, &context)
+        };
+        for segment in list.media() {
+            validate(&mut selector, segment, &context);
+        }
+        for _ in 0..3 {
+            let selected = selector.most_needed_segment(ended(), ended(), &[]);
+            assert!(selected.needed_segments().is_none());
+            assert!(selected.loading_complete());
+        }
+        selector.restart_from_position(10.);
+        let selected = selector.most_needed_segment(ended(), ended(), &[]);
+        assert_eq!(
+            selected
+                .needed_segments()
+                .unwrap()
+                .media_segment()
+                .unwrap()
+                .0
+                .start(),
+            10.
+        );
+        assert!(!selected.loading_complete());
     }
 
     #[test]

@@ -516,6 +516,12 @@ impl Dispatcher {
         // detection and possibly gap jumping. Rebuffering currently uses the
         // previous selection result until the next observation.
         self.media_element_ref.on_observation(observation);
+        for media_type in [MediaType::Audio, MediaType::Video] {
+            self.segment_selectors
+                .get_mut(media_type)
+                // XXX TODO: Mandatory? Why?
+                .check_for_buffer_loss(self.media_element_ref.inventory(media_type));
+        }
         match reason {
             PlaybackTickReason::Seeking => self.on_seek(),
             _ => self.on_regular_tick(),
@@ -1442,6 +1448,7 @@ impl Dispatcher {
         self.segment_selectors.get_mut(media_type).validate_media(
             playlist_id,
             identity,
+            segment_start,
             segment_end,
         );
         self.check_segments_to_request();
