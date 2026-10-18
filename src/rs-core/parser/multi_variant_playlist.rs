@@ -1002,6 +1002,39 @@ mod tests {
     }
 
     #[test]
+    fn missing_rendition_names_remain_distinct_from_empty_names() {
+        let manifest = b"#EXTM3U\n#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID=\"audio\",LANGUAGE=\"en\",URI=\"audio.m3u8\"\n#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID=\"audio\",NAME=\"\",LANGUAGE=\"en\",URI=\"empty-audio.m3u8\"\n#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID=\"subs\",LANGUAGE=\"en\",URI=\"subs.m3u8\"\n#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID=\"subs\",NAME=\"\",LANGUAGE=\"en\",URI=\"empty-subs.m3u8\"\n#EXT-X-STREAM-INF:BANDWIDTH=100000,AUDIO=\"audio\",SUBTITLES=\"subs\"\nvideo.m3u8\n";
+        let parsed = MultivariantPlaylist::parse(
+            &manifest[..],
+            Url::new("https://example.com/master.m3u8".into()),
+        )
+        .unwrap();
+        assert_eq!(
+            parsed
+                .audio_tracks()
+                .iter()
+                .map(|track| track.name())
+                .collect::<Vec<_>>(),
+            vec![None, Some("")]
+        );
+        assert_eq!(
+            parsed
+                .subtitle_tracks()
+                .iter()
+                .map(|track| track.name())
+                .collect::<Vec<_>>(),
+            vec![None, Some("")]
+        );
+        let variant = parsed.variant_from_idx(0).unwrap();
+        assert!(parsed
+            .audio_media_playlist_id_for(variant, Some(parsed.audio_tracks()[0].id()))
+            .is_some());
+        assert!(parsed
+            .subtitle_media_playlist_id_for(variant, parsed.subtitle_tracks()[0].id())
+            .is_some());
+    }
+
+    #[test]
     fn classifies_text_codecs_separately_from_muxed_audio_and_video() {
         let input = b"#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=100000,CODECS=\"avc1.42E01E,mp4a.40.2,stpp.ttml.im1t\"\nvideo.m3u8\n";
         let parsed = MultivariantPlaylist::parse(
