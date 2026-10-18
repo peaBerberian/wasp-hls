@@ -344,6 +344,8 @@ export interface WaspWasmExports {
     position: number,
     initialAudioPtr: number,
     initialAudioLen: number,
+    initialSubtitlePtr: number,
+    initialSubtitleLen: number,
   ): void;
   /**
    * Return the minimum known content position.

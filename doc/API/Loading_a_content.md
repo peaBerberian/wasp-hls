@@ -200,3 +200,16 @@ player.load(playlistUrl, {
   initialAudioTrack: [{ language: "de" }, { language: "fr" }],
 });
 ```
+
+### `initialSubtitleTrack`
+
+_type: `object | null | Array.<object | null> | undefined`_
+
+Uses the same matching and ordered preference rules as `initialAudioTrack`.
+The optional properties are `language`, `assocLanguage`, `name`,
+`characteristics`, and `forced` (`boolean`). Audio preferences are applied first;
+subtitle choices must be compatible with that audio track. If no choice matches,
+the player uses automatic subtitle selection.
+
+Omitting this option keeps automatic selection. `null` disables subtitles. In an
+ordered list, `null` selects no subtitles if earlier preferences did not match.

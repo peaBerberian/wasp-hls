@@ -1382,11 +1382,25 @@ other-video.m3u8
         assert_ne!(
             parsed.audio_media_playlist_id_for(
                 parsed.variant(first).unwrap(),
-                Some(parsed.audio_tracks()[0].id())
+                Some(
+                    parsed
+                        .audio_tracks()
+                        .iter()
+                        .find(|track| track.name() == Some("French"))
+                        .unwrap()
+                        .id()
+                )
             ),
             parsed.audio_media_playlist_id_for(
                 parsed.variant(second).unwrap(),
-                Some(parsed.audio_tracks()[1].id())
+                Some(
+                    parsed
+                        .audio_tracks()
+                        .iter()
+                        .find(|track| track.name() == Some("English"))
+                        .unwrap()
+                        .id()
+                )
             )
         );
 

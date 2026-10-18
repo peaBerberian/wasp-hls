@@ -4,6 +4,8 @@ import logger, {
 import type {
   InitialAudioTrackPreference,
   InitialAudioTrackSelection,
+  InitialSubtitleTrackPreference,
+  InitialSubtitleTrackSelection,
   WaspHlsPlayerConfig,
 } from "../ts-common/types.ts";
 import WaspHlsPlayer from "./api.ts";
@@ -12,6 +14,8 @@ import { PlayerState as innerPlayerState } from "./types.ts";
 export type {
   InitialAudioTrackPreference,
   InitialAudioTrackSelection,
+  InitialSubtitleTrackPreference,
+  InitialSubtitleTrackSelection,
   WaspHlsPlayerConfig,
 };
 export type {

@@ -165,17 +165,17 @@ pub(crate) fn format_subtitle_tracks_for_js(tracks: &[crate::parser::SubtitleTra
     let mut out = vec![tracks.len() as u32];
     for track in tracks {
         out.push(track.id());
-        let name = track.name();
-        out.extend([
-            name.map_or(0, |value| value.len() as u32),
-            name.map_or(0, |value| value.as_ptr() as u32),
-        ]);
         for value in [
             track.language().unwrap_or(""),
             track.assoc_language().unwrap_or(""),
         ] {
             out.extend([value.len() as u32, value.as_ptr() as u32]);
         }
+        let name = track.name();
+        out.extend([
+            name.map_or(0, |value| value.len() as u32),
+            name.map_or(0, |value| value.as_ptr() as u32),
+        ]);
         out.push(track.is_forced() as u32);
         out.push(track.characteristics().len() as u32);
         for value in track.characteristics() {

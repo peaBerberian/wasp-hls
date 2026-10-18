@@ -927,6 +927,8 @@
           { "name": "position", "type": "number" },
           { "name": "initialAudioPtr", "type": "number" },
           { "name": "initialAudioLen", "type": "number" },
+          { "name": "initialSubtitlePtr", "type": "number" },
+          { "name": "initialSubtitleLen", "type": "number" },
         ],
         "returnType": "void",
       },
