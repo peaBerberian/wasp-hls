@@ -28,6 +28,7 @@
 - For `AUTOSELECT`, `FORCED` and `DEFAULT` `EXT-X-MEDIA` attributes, do not assume they are set just by their presence
 - Ignore unknown DEFINE attributes before parsing their values
 - Validate variable references even in GAP URIs
+- Fix missing ended events when earlier segments are appended after the final segment.
 
 ### Other
 
@@ -38,6 +39,7 @@
 - "Probe segments" can now be "consumed" later than at startup if they coincide with the next segment needed
 - WebAssembly compilation now always targets the initial WebAssembly browser release (a.k.a. "MVP") to maximize support
 - WebAssembly is now embedded through a Base64 string instead of a number array for initialization performance reasons
+- Allow buffered quality improvements closer to playback by reducing the minimum replacement lead from 5 to 3 seconds (while keeping at least one segment’s duration)
 - tests: Begin automatically checking for performance regressions / improvements
 
 ## v0.5.0 (2025-06-01)
