@@ -1,8 +1,5 @@
 use super::MediaTag;
-use std::{
-    collections::BTreeSet,
-    ops::{Deref, DerefMut},
-};
+use std::{collections::BTreeSet, ops::Deref};
 
 /// Allows to translate various `EXT-X-MEDIA` tag found inside a Multivariant Playlist into well
 /// defined audio tracks that make more sense in a player API.
@@ -14,9 +11,9 @@ pub(crate) struct AudioTrackList {
 impl AudioTrackList {
     /// Creates a new `AudioTrackList` from the given `Vec<MediaTag>`, which should contain
     /// information on all media tags of type `"AUDIO"`.
-    pub(super) fn new(mut audio_media: Vec<MediaTag>) -> Self {
+    pub(super) fn new(audio_media: Vec<MediaTag>) -> Self {
         let mut available_audio_tracks: Vec<AudioTrack> = vec![];
-        while let Some(media) = audio_media.pop() {
+        for media in audio_media {
             let id = media.id();
             let name = media.name();
             let language = media.language();
@@ -25,7 +22,7 @@ impl AudioTrackList {
             let characteristics = media.characteristics();
 
             // Check if the track already exist in another encoding quality
-            let pos_compat = available_audio_tracks.iter().position(|t| {
+            let compatible_track = available_audio_tracks.iter_mut().find(|t| {
                 t.name() == name
                     && t.language() == language
                     && t.assoc_language() == assoc_language
@@ -33,11 +30,11 @@ impl AudioTrackList {
                     && t.characteristics() == characteristics
             });
 
-            if let Some(pos) = pos_compat {
-                available_audio_tracks[pos].media_tags.push(media);
+            if let Some(track) = compatible_track {
+                track.media_tags.push(media);
             } else {
                 available_audio_tracks.push(AudioTrack {
-                    id: id.to_owned(),
+                    id,
                     media_tags: vec![media],
                 });
             }
@@ -81,19 +78,16 @@ impl AudioTrackList {
     ///
     /// Returns `None` if none is found.
     pub(super) fn media_tag_mut(&mut self, id: u32) -> Option<&mut MediaTag> {
-        self.iter_mut()
+        self.tracks
+            .iter_mut()
             .find_map(|t| t.media_tags.iter_mut().find(|m| m.id() == id))
     }
 
     /// Returns an iterator implementation on tuples of `AudioTrack` and inner `MediaTag` objects
     /// found in this `AudioTrackList`.
     pub(super) fn iter_tracks_media(&self) -> impl Iterator<Item = (&AudioTrack, &MediaTag)> {
-        self.iter().flat_map(|t| {
-            t.media_tags
-                .iter()
-                .map(|m| (t, m))
-                .collect::<Vec<(&AudioTrack, &MediaTag)>>()
-        })
+        self.iter()
+            .flat_map(|track| track.media_tags.iter().map(move |media| (track, media)))
     }
 }
 
@@ -105,50 +99,44 @@ impl Deref for AudioTrackList {
     }
 }
 
-impl DerefMut for AudioTrackList {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.tracks
-    }
-}
-
 /// Describe a single audio track object with its own characteristics.
-pub struct AudioTrack {
+pub(crate) struct AudioTrack {
     /// Unique identifier for that audio track in the parent `AudioTrackList`.
     id: u32,
     /// `MediaTag` objects associated to this audio track.
     ///
     /// These are usually several qualities representing the same content.
-    pub(self) media_tags: Vec<MediaTag>,
+    media_tags: Vec<MediaTag>,
 }
 
 impl AudioTrack {
     /// Unique identifier for that audio track in the parent `AudioTrackList`.
-    pub fn id(&self) -> u32 {
+    pub(crate) fn id(&self) -> u32 {
         self.id
     }
 
     /// Returns reference to the audio language linked to that audio track.
-    pub fn language(&self) -> Option<&str> {
+    pub(crate) fn language(&self) -> Option<&str> {
         self.media_tags.first().and_then(|t| t.language())
     }
 
     /// Returns reference to the associated (secondary) audio language linked to that audio track.
-    pub fn assoc_language(&self) -> Option<&str> {
+    pub(crate) fn assoc_language(&self) -> Option<&str> {
         self.media_tags.first().and_then(|t| t.assoc_language())
     }
 
     /// Returns human-readable name associated with that audio track.
-    pub fn name(&self) -> &str {
-        self.media_tags.first().unwrap().name()
+    pub(crate) fn name(&self) -> &str {
+        self.media_tags.first().map_or("", MediaTag::name)
     }
 
     /// Returns the number of channels that audio track outputs
-    pub fn channels(&self) -> Option<u32> {
+    pub(crate) fn channels(&self) -> Option<u32> {
         self.media_tags.first().and_then(|t| t.channels())
     }
 
     /// Returns semantic characteristics linked to that audio track.
-    pub fn characteristics(&self) -> &[String] {
+    pub(crate) fn characteristics(&self) -> &[String] {
         self.media_tags
             .first()
             .map(|t| t.characteristics())
@@ -157,7 +145,7 @@ impl AudioTrack {
 
     /// Returns the uniform bit depth linked to that audio track when all
     /// backing renditions agree on it.
-    pub fn bit_depth(&self) -> Option<u32> {
+    pub(crate) fn bit_depth(&self) -> Option<u32> {
         let first = self.media_tags.first()?.bit_depth()?;
         if self.media_tags.iter().all(|t| t.bit_depth() == Some(first)) {
             Some(first)
@@ -168,7 +156,7 @@ impl AudioTrack {
 
     /// Returns the uniform sample rate linked to that audio track when all
     /// backing renditions agree on it.
-    pub fn sample_rate(&self) -> Option<u32> {
+    pub(crate) fn sample_rate(&self) -> Option<u32> {
         let first = self.media_tags.first()?.sample_rate()?;
         if self
             .media_tags
@@ -182,7 +170,7 @@ impl AudioTrack {
     }
 
     /// Returns all distinct bit depths seen on backing renditions.
-    pub fn bit_depths(&self) -> Vec<u32> {
+    pub(crate) fn bit_depths(&self) -> Vec<u32> {
         self.media_tags
             .iter()
             .filter_map(|t| t.bit_depth())
@@ -192,7 +180,7 @@ impl AudioTrack {
     }
 
     /// Returns all distinct sample rates seen on backing renditions.
-    pub fn sample_rates(&self) -> Vec<u32> {
+    pub(crate) fn sample_rates(&self) -> Vec<u32> {
         self.media_tags
             .iter()
             .filter_map(|t| t.sample_rate())
@@ -203,7 +191,7 @@ impl AudioTrack {
 
     /// Returns whether that audio track is selectable through a distinct audio
     /// playlist, not just shared through the variant media playlist.
-    pub fn is_selectable(&self) -> bool {
+    pub(crate) fn is_selectable(&self) -> bool {
         self.media_tags.iter().any(|t| t.url().is_some())
     }
 

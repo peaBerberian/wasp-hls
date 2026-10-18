@@ -36,6 +36,8 @@
 - Better fast-quality-switching coordination: continue in additive mode until the playlist linked to segment replacements is fetched
 - Multiple primary media playlists sharing the same URL yet associated with multiple variants are now considered the same resource to optimize some playlist management logic (e.g. playlist refresh)
 - Switch quality faster if the previously awaited segment for that type (audio/video) was in a backoff or waiting (due to low priority) phase
+- Return audio tracks in playlist declaration order
+- If no default audio track is declared, prefer tracks listed earlier in the playlist.
 - "Probe segments" can now be "consumed" later than at startup if they coincide with the next segment needed
 - WebAssembly compilation now always targets the initial WebAssembly browser release (a.k.a. "MVP") to maximize support
 - WebAssembly is now embedded through a Base64 string instead of a number array for initialization performance reasons
