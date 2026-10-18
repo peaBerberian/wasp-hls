@@ -613,8 +613,9 @@ impl MediaElementReference {
                 let queue_elt = if success {
                     sb.on_operation_end()
                 } else {
-                    // XXX TODO: why?
-                    sb.set_loading_complete(false);
+                    // Completion assumed the queued appends would succeed. A failure cancels
+                    // the remaining operations, so that decision can no longer be trusted.
+                    sb.set_end_when_done(false);
                     let cancelled = sb.cancel_current_operations();
                     self.audio_inventory
                         .discard_pending(&cancelled.cancelled_media_ids);
@@ -637,7 +638,7 @@ impl MediaElementReference {
                 let queue_elt = if success {
                     sb.on_operation_end()
                 } else {
-                    sb.set_loading_complete(false);
+                    sb.set_end_when_done(false);
                     let cancelled = sb.cancel_current_operations();
                     self.video_inventory
                         .discard_pending(&cancelled.cancelled_media_ids);
@@ -699,13 +700,10 @@ impl MediaElementReference {
         None
     }
 
-    /// Record whether selection has supplied all segments needed through the end.
-    /// Pending buffer operations still have to finish before end-of-stream.
-    /// XXX TODO: I have trouble with the name here, seems out of place. `loading` means the request
-    /// to me.
-    pub(crate) fn set_loading_complete(&mut self, media_type: MediaType, complete: bool) {
+    /// Set whether this buffer should signal the end once its pending operations finish.
+    pub(crate) fn set_end_when_done(&mut self, media_type: MediaType, complete: bool) {
         if let Some(buffer) = self.buffer_mut_for(media_type) {
-            buffer.set_loading_complete(complete);
+            buffer.set_end_when_done(complete);
         }
     }
 
@@ -777,7 +775,7 @@ impl MediaElementReference {
     fn is_buffer_ended(&self, media_type: MediaType) -> bool {
         match self.buffer_for(media_type) {
             None => true,
-            Some(sb) => sb.is_loading_complete() && !sb.has_operations_pending(),
+            Some(sb) => sb.should_end_when_done() && !sb.has_operations_pending(),
         }
     }
 
