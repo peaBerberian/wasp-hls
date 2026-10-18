@@ -9,6 +9,12 @@ use crate::dispatcher::JsMemoryBlob;
 use crate::parser::{MediaPlaylistPermanentId, SegmentTimeInfo};
 use crate::utils::logger::*;
 
+/// The failed operation and media appends cancelled before they could run.
+pub(super) struct CancelledOperations {
+    pub(super) current: Option<SourceBufferQueueElement>,
+    pub(super) cancelled_media_ids: Vec<u64>,
+}
+
 /// Abstraction over the Media Source Extension's `SourceBuffer` concept.
 ///
 /// This is the interface allowing to interact with lower-level media buffers.
@@ -285,10 +291,21 @@ impl SourceBuffer {
     ///
     /// Contrary to `on_operation_end`, this intentionally does not trigger any
     /// success-oriented side effects such as reflushes.
-    pub(super) fn cancel_current_operations(&mut self) -> Option<SourceBufferQueueElement> {
+    pub(super) fn cancel_current_operations(&mut self) -> CancelledOperations {
         let current = self.queue.pop_front();
+        let cancelled_media_ids = self
+            .queue
+            .iter()
+            .filter_map(|operation| match operation {
+                SourceBufferQueueElement::PushMedia { id, .. } => Some(*id),
+                _ => None,
+            })
+            .collect();
         self.clear_queue();
-        current
+        CancelledOperations {
+            current,
+            cancelled_media_ids,
+        }
     }
 
     /// Update the result of segment selection. Appends do not change this result.
