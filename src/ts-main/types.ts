@@ -150,7 +150,7 @@ export interface ContentMetadata {
    */
   audioTracks: AudioTrackInfo[];
   subtitleTracks: SubtitleTrackInfo[];
-  currentSubtitleTrack: number | null | undefined;
+  currentSubtitleTrack: { id: number } | null | undefined;
 
   /**
    * Information on the currently loaded audio track.

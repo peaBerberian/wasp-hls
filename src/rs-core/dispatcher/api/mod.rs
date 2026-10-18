@@ -3,7 +3,7 @@ use crate::{
     bindings::{jsSendOtherError, OtherErrorCode},
     dispatcher::{
         segment_request_contexts::SegmentRequestContexts, InitialAudioTrackSelection,
-        PlaylistRefreshManager,
+        InitialSubtitleTrackSelection, PlaylistRefreshManager,
     },
     media_element::MediaElementReference,
     requester::{PlaylistFileType, Requester},
@@ -39,7 +39,8 @@ impl Dispatcher {
             playlist_refresh_manager: PlaylistRefreshManager::new(),
             ready_probe_segments: Default::default(),
             initial_audio_track_selection: Vec::new(),
-            last_subtitle_selection_generation: None,
+            initial_subtitle_track_selection: Vec::new(),
+            last_announced_subtitle_selection: None,
         }
     }
 
@@ -49,12 +50,21 @@ impl Dispatcher {
         content_url: String,
         starting_pos: Option<StartingPosition>,
         initial_audio_track_selection: Vec<InitialAudioTrackSelection>,
+        initial_subtitle_track_selection: Vec<Option<InitialSubtitleTrackSelection>>,
     ) {
         log_info!("load_content called");
         self.stop();
         self.initial_audio_track_selection = initial_audio_track_selection
             .into_iter()
             .filter(|selection| !selection.is_empty())
+            .collect();
+        self.initial_subtitle_track_selection = initial_subtitle_track_selection
+            .into_iter()
+            .filter(|selection| {
+                selection
+                    .as_ref()
+                    .is_none_or(|selection| !selection.is_empty())
+            })
             .collect();
         self.ready_state = PlayerReadyState::AwaitingPlaylistInfo {
             starting_position: starting_pos,
@@ -310,6 +320,73 @@ fn deserialize_initial_audio_track_selection(
     selections
 }
 
+fn deserialize_initial_subtitle_track_selection(
+    initial_subtitle_ptr: *const u8,
+    initial_subtitle_len: u32,
+) -> Vec<Option<InitialSubtitleTrackSelection>> {
+    let Some(bytes) = opt_u8_slice_from_abi(initial_subtitle_ptr, initial_subtitle_len) else {
+        return Vec::new();
+    };
+    let mut offset = 0;
+    let Some(selection_count) = read_u32_le(bytes, &mut offset) else {
+        return Vec::new();
+    };
+
+    let mut selections = Vec::with_capacity(selection_count as usize);
+    for _ in 0..selection_count {
+        let Some(kind) = bytes.get(offset) else {
+            return Vec::new();
+        };
+        offset += 1;
+        match kind {
+            0 => {
+                selections.push(None);
+                continue;
+            }
+            1 => {}
+            _ => return Vec::new(),
+        }
+        let Some(language) = read_optional_string(bytes, &mut offset) else {
+            return Vec::new();
+        };
+        let Some(assoc_language) = read_optional_string(bytes, &mut offset) else {
+            return Vec::new();
+        };
+        let Some(name) = read_optional_string(bytes, &mut offset) else {
+            return Vec::new();
+        };
+        let Some(characteristics_count) = read_u32_le(bytes, &mut offset) else {
+            return Vec::new();
+        };
+        let mut characteristics = Vec::with_capacity(characteristics_count as usize);
+        for _ in 0..characteristics_count {
+            let Some(characteristic) = read_string(bytes, &mut offset) else {
+                return Vec::new();
+            };
+            characteristics.push(characteristic);
+        }
+        let Some(flag) = bytes.get(offset) else {
+            return Vec::new();
+        };
+        offset += 1;
+        let forced = match flag {
+            0 => None,
+            1 => Some(false),
+            2 => Some(true),
+            _ => return Vec::new(),
+        };
+
+        selections.push(Some(InitialSubtitleTrackSelection {
+            language,
+            assoc_language,
+            name,
+            characteristics,
+            forced,
+        }));
+    }
+    selections
+}
+
 fn dispatcher_mut<'a>(ptr: u32) -> &'a mut Dispatcher {
     unsafe { &mut *(ptr as *mut Dispatcher) }
 }
@@ -347,6 +424,8 @@ pub extern "C" fn wasp_dispatcher_load_content(
     start_position: f64,
     initial_audio_ptr: *const u8,
     initial_audio_len: u32,
+    initial_subtitle_ptr: *const u8,
+    initial_subtitle_len: u32,
 ) {
     let content_url = string_from_abi(content_url_ptr, content_url_len);
     let starting_pos = if has_starting_pos != 0 {
@@ -359,7 +438,14 @@ pub extern "C" fn wasp_dispatcher_load_content(
     };
     let initial_audio_track_selection =
         deserialize_initial_audio_track_selection(initial_audio_ptr, initial_audio_len);
-    dispatcher_mut(ptr).load_content(content_url, starting_pos, initial_audio_track_selection);
+    let initial_subtitle_track_selection =
+        deserialize_initial_subtitle_track_selection(initial_subtitle_ptr, initial_subtitle_len);
+    dispatcher_mut(ptr).load_content(
+        content_url,
+        starting_pos,
+        initial_audio_track_selection,
+        initial_subtitle_track_selection,
+    );
 }
 
 #[unsafe(no_mangle)]

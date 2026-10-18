@@ -17,6 +17,8 @@ import { optionalIdToRaw } from "./helpers.js";
 import type {
   InitialAudioTrackPreference,
   InitialAudioTrackSelection,
+  InitialSubtitleTrackPreference,
+  InitialSubtitleTrackSelection,
 } from "../../ts-common/types.ts";
 import type {
   AddSourceBufferErrorCode,
@@ -65,21 +67,45 @@ export class Dispatcher {
     content_url: string,
     starting_pos?: StartingPosition | null,
     initial_audio_track?: InitialAudioTrackPreference | null,
+    initial_subtitle_track?: InitialSubtitleTrackPreference | null,
   ): void {
     withString(content_url, (ptr, len) => {
-      const selectors =
-        normalizeInitialAudioTrackPreference(initial_audio_track);
-      const serialized = serializeInitialAudioTrackPreference(selectors);
+      const selectors = normalizeInitialTrackPreference(
+        initial_audio_track,
+        isEmptyInitialAudioTrackSelection,
+      );
+      const subtitleSelectors =
+        normalizeInitialTrackPreference<InitialSubtitleTrackSelection | null>(
+          initial_subtitle_track === null ? [null] : initial_subtitle_track,
+          (selection) =>
+            selection !== null &&
+            isEmptyInitialSubtitleTrackSelection(selection),
+        );
+      const serialized = serializeInitialTrackPreference(
+        selectors,
+        serializeInitialAudioTrackSelectionEntry,
+      );
+      const serializedSubtitles = serializeInitialTrackPreference(
+        subtitleSelectors,
+        serializeInitialSubtitleTrackSelectionEntry,
+      );
       withUint8Array(serialized, (initialAudioPtr, initialAudioLen) => {
-        getWasmExports().wasp_dispatcher_load_content(
-          this.__ptr,
-          ptr,
-          len,
-          starting_pos == null ? 0 : 1,
-          starting_pos?.start_type ?? 0,
-          starting_pos?.position ?? 0,
-          initialAudioPtr,
-          initialAudioLen,
+        withUint8Array(
+          serializedSubtitles,
+          (initialSubtitlePtr, initialSubtitleLen) => {
+            getWasmExports().wasp_dispatcher_load_content(
+              this.__ptr,
+              ptr,
+              len,
+              starting_pos == null ? 0 : 1,
+              starting_pos?.start_type ?? 0,
+              starting_pos?.position ?? 0,
+              initialAudioPtr,
+              initialAudioLen,
+              initialSubtitlePtr,
+              initialSubtitleLen,
+            );
+          },
         );
       });
     });
@@ -396,17 +422,16 @@ export class Dispatcher {
   }
 }
 
-function normalizeInitialAudioTrackPreference(
-  preference: InitialAudioTrackPreference | null | undefined,
-): InitialAudioTrackSelection[] {
+function normalizeInitialTrackPreference<T>(
+  preference: T | T[] | null | undefined,
+  isEmpty: (selection: T) => boolean,
+): T[] {
   const selections = Array.isArray(preference)
     ? preference
     : preference == null
       ? []
       : [preference];
-  return selections.filter(
-    (selection) => !isEmptyInitialAudioTrackSelection(selection),
-  );
+  return selections.filter((selection) => !isEmpty(selection));
 }
 
 function isEmptyInitialAudioTrackSelection(
@@ -422,10 +447,11 @@ function isEmptyInitialAudioTrackSelection(
   );
 }
 
-function serializeInitialAudioTrackPreference(
-  selections: InitialAudioTrackSelection[],
+function serializeInitialTrackPreference<T>(
+  selections: T[],
+  serializeEntry: (selection: T) => Uint8Array,
 ): Uint8Array {
-  const entries = selections.map(serializeInitialAudioTrackSelectionEntry);
+  const entries = selections.map(serializeEntry);
   const totalLength =
     4 + entries.reduce((sum, entry) => sum + entry.byteLength, 0);
   const bytes = new Uint8Array(totalLength);
@@ -440,8 +466,49 @@ function serializeInitialAudioTrackPreference(
   return bytes;
 }
 
+function isEmptyInitialSubtitleTrackSelection(
+  selection: InitialSubtitleTrackSelection,
+): boolean {
+  return (
+    selection.language === undefined &&
+    selection.assocLanguage === undefined &&
+    selection.name === undefined &&
+    selection.forced === undefined &&
+    (selection.characteristics === undefined ||
+      selection.characteristics.length === 0)
+  );
+}
+
 function serializeInitialAudioTrackSelectionEntry(
   selection: InitialAudioTrackSelection,
+): Uint8Array {
+  const channels = new Uint8Array(selection.channels === undefined ? 1 : 5);
+  if (selection.channels !== undefined) {
+    channels[0] = 1;
+    new DataView(channels.buffer).setUint32(1, selection.channels, true);
+  }
+  return serializeInitialTrackSelectionEntry(selection, channels);
+}
+
+function serializeInitialSubtitleTrackSelectionEntry(
+  selection: InitialSubtitleTrackSelection | null,
+): Uint8Array {
+  if (selection === null) {
+    return new Uint8Array([0]);
+  }
+  const forced = new Uint8Array([
+    selection.forced === undefined ? 0 : selection.forced ? 2 : 1,
+  ]);
+  const entry = serializeInitialTrackSelectionEntry(selection, forced);
+  const bytes = new Uint8Array(1 + entry.byteLength);
+  bytes[0] = 1;
+  bytes.set(entry, 1);
+  return bytes;
+}
+
+function serializeInitialTrackSelectionEntry(
+  selection: InitialAudioTrackSelection | InitialSubtitleTrackSelection,
+  extra: Uint8Array,
 ): Uint8Array {
   const language = encodeOptionalString(selection.language);
   const assocLanguage = encodeOptionalString(selection.assocLanguage);
@@ -453,7 +520,7 @@ function serializeInitialAudioTrackSelectionEntry(
     name.byteLength +
     4 +
     characteristics.reduce((sum, value) => sum + value.byteLength, 0) +
-    (selection.channels === undefined ? 1 : 5);
+    extra.byteLength;
   const bytes = new Uint8Array(totalLength);
   const view = new DataView(bytes.buffer);
   let offset = 0;
@@ -468,13 +535,7 @@ function serializeInitialAudioTrackSelectionEntry(
     offset = writeBytes(bytes, offset, characteristic);
   }
 
-  if (selection.channels === undefined) {
-    view.setUint8(offset, 0);
-  } else {
-    view.setUint8(offset, 1);
-    offset += 1;
-    view.setUint32(offset, selection.channels, true);
-  }
+  writeBytes(bytes, offset, extra);
 
   return bytes;
 }

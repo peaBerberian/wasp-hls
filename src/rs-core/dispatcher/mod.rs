@@ -3,7 +3,7 @@ use crate::{
     bindings::MediaType,
     dispatcher::playlist_refresh_manager::PlaylistRefreshManager,
     media_element::MediaElementReference,
-    parser::AudioTrack,
+    parser::{AudioTrack, SubtitleTrack},
     playlist_store::{PlaylistStore, ProbeSegmentMetadata},
     requester::Requester,
     segment_selector::NextSegmentSelectors,
@@ -74,8 +74,9 @@ pub struct Dispatcher {
     /// Preferred criteria to resolve the initial audio track selection for the
     /// next content being loaded.
     initial_audio_track_selection: Vec<InitialAudioTrackSelection>,
-    // XXX TODO what is this for:
-    last_subtitle_selection_generation: Option<u64>,
+    initial_subtitle_track_selection: Vec<Option<InitialSubtitleTrackSelection>>,
+    // Last subtitle playlist generation and explicit-selection flag sent to JavaScript.
+    last_announced_subtitle_selection: Option<u64>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -121,6 +122,44 @@ impl InitialAudioTrackSelection {
                     .iter()
                     .any(|track_characteristic| track_characteristic == characteristic)
             })
+    }
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct InitialSubtitleTrackSelection {
+    pub language: Option<String>,
+    pub assoc_language: Option<String>,
+    pub name: Option<String>,
+    pub characteristics: Vec<String>,
+    pub forced: Option<bool>,
+}
+
+impl InitialSubtitleTrackSelection {
+    fn is_empty(&self) -> bool {
+        self.language.is_none()
+            && self.assoc_language.is_none()
+            && self.name.is_none()
+            && self.characteristics.is_empty()
+            && self.forced.is_none()
+    }
+
+    fn matches(&self, track: &SubtitleTrack) -> bool {
+        self.language
+            .as_deref()
+            .is_none_or(|language| track.language() == Some(language))
+            && self
+                .assoc_language
+                .as_deref()
+                .is_none_or(|language| track.assoc_language() == Some(language))
+            && self
+                .name
+                .as_deref()
+                .is_none_or(|name| track.name() == Some(name))
+            && self.forced.is_none_or(|forced| track.is_forced() == forced)
+            && self
+                .characteristics
+                .iter()
+                .all(|characteristic| track.characteristics().contains(characteristic))
     }
 }
 
