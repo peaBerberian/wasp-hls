@@ -9,6 +9,7 @@ import type {
   AudioTrackInfo,
   SubtitleTrackInfo,
   InitialAudioTrackPreference,
+  InitialSubtitleTrackPreference,
   VariantInfo,
   WaspHlsPlayerConfig,
   WorkerMessage,
@@ -477,6 +478,7 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
         url,
         startingPosition,
         initialAudioTrack: opts?.initialAudioTrack,
+        initialSubtitleTrack: opts?.initialSubtitleTrack,
       },
     });
   }
@@ -922,7 +924,7 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
       return null;
     }
     return metadata?.subtitleTracks.find(
-      (t) => t.id === metadata.currentSubtitleTrack,
+      (t) => t.id === metadata.currentSubtitleTrack?.id,
     );
   }
 
@@ -939,12 +941,6 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
     const metadata = this.__contentMetadata__;
     if (metadata === null) {
       throw new Error("No content loaded");
-    }
-    if (
-      trackId !== null &&
-      !metadata.subtitleTracks.some((t) => t.id === trackId)
-    ) {
-      throw new Error("Unknown subtitle track");
     }
     postMessageToWorker(this.__worker__, {
       type: MainMessageType.SetSubtitleTrack,
@@ -1543,6 +1539,8 @@ export interface LoadOptions {
    * before the player starts requesting media playlists and segments.
    */
   initialAudioTrack?: InitialAudioTrackPreference | undefined;
+  /** Preferred characteristics for the initially selected subtitle track. */
+  initialSubtitleTrack?: InitialSubtitleTrackPreference | undefined;
 }
 
 /**

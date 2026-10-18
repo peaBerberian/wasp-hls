@@ -1011,7 +1011,11 @@ export function onTrackUpdateMessage(
     return false;
   }
   if (msg.value.mediaType === MediaType.Text) {
-    contentMetadata.currentSubtitleTrack = msg.value.subtitleTrack ?? null;
+    contentMetadata.currentSubtitleTrack = msg.value.subtitleTrack
+      ? {
+          id: msg.value.subtitleTrack.current,
+        }
+      : null;
     return true;
   }
   if (msg.value.mediaType !== MediaType.Audio) {

@@ -1618,7 +1618,10 @@ export function announceTrackUpdate(
     value: {
       mediaType,
       contentId: contentInfo.contentId,
-      subtitleTrack: mediaType === MediaType.Text ? trackId : undefined,
+      subtitleTrack:
+        mediaType === MediaType.Text && trackId !== undefined
+          ? { current: trackId }
+          : undefined,
       audioTrack:
         mediaType === MediaType.Audio && trackId !== undefined
           ? {
@@ -1893,18 +1896,18 @@ function decodeSubtitleTracks(
   const readString = (): string => {
     const length = data[cursor++];
     const pointer = data[cursor++];
-    return new TextDecoder().decode(
+    return cachedTextDecoder.decode(
       new Uint8Array(memory.buffer, pointer, length),
     );
   };
   const tracks: SubtitleTrackInfo[] = [];
   for (let index = 0; index < data[0]; index++) {
     const id = data[cursor++];
+    const language = readString() || undefined;
+    const assocLanguage = readString() || undefined;
     const hasName = data[cursor + 1] !== 0;
     const rawName = readString();
     const name = hasName ? rawName : undefined;
-    const language = readString() || undefined;
-    const assocLanguage = readString() || undefined;
     const forced = data[cursor++] !== 0;
     const count = data[cursor++];
     const characteristics: string[] = [];
