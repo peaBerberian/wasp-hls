@@ -257,6 +257,8 @@ export function buildGpacArgs(config, ports, outputDir) {
 
   const outputOptions = [
     `${out}/master.m3u8` +
+      // Publish complete files so HTTP requests cannot read an empty playlist during a rewrite.
+      `:atomic=true` +
       `:profile=live` +
       `:dmode=dynamic` +
       `:segdur=${config.segmentDuration}` +
