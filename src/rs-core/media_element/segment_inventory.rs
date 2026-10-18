@@ -100,6 +100,9 @@ pub(crate) struct BufferedChunk {
     /// We prefer performing a first check that `start` and `end` are coherent before integrating
     /// the segment in the whole core `SegmentInventory` logic to ensure we're not too impacted
     /// by curious browser behavior where a segment would be immediately made partial.
+    // TODO: Separate pending append metadata from confirmed buffer entries. This flag currently
+    // makes one entry represent both. The inventory still needs timing checks after an append,
+    // but whether supplied data may be loaded again belongs to SegmentLoadingHistory.
     validated: bool,
 
     /// Indicator of the desirability of the current quality a higher number
@@ -177,6 +180,8 @@ impl BufferedChunk {
 
     /// Returns true if the given segment appears to be garbage collected, at least since the
     /// position given by `min_wanted_pos`, in seconds
+    // TODO: Remove this method once selection checks current buffered bounds instead of full
+    // segment bounds. Keep removal tolerances and permission to reload in SegmentLoadingHistory.
     pub(crate) fn appears_garbage_collected(&self, min_wanted_pos: f64) -> bool {
         if self.last_buffered_start - self.start > 0.5 && self.last_buffered_start > min_wanted_pos
         {
@@ -247,11 +252,15 @@ const FLOAT_TOLERANCE: f64 = 0.01;
 /// The main point of this struct is to know which segments are already pushed to
 /// the corresponding media buffer, of which variant, and which have been
 /// garbage-collected since by the browser (and thus may need to be re-loaded).
+// TODO: Update this description after separating the roles: inventory estimates current buffered
+// data and its segment metadata; SegmentLoadingHistory decides when supplied segments may reload.
 pub(super) struct SegmentInventory {
     /// All the media segments which should be currently in the browser's
     /// memory, in chronological order
     /// This `Vec` contains objects, each being related to a single downloaded
     /// chunk or segment which is at least partially added in the media buffer.
+    // TODO: Keep pending appends separate so this list describes current buffer coverage rather
+    // than also including data that has only been scheduled for appending.
     inventory: Vec<BufferedChunk>,
 
     /// The concerned media type. This is just used for logs.
@@ -479,6 +488,9 @@ impl SegmentInventory {
         seg.last_buffered_start = seg.start;
         seg.last_buffered_end = seg.end;
         if !success {
+            // TODO: Keep this choice about the accuracy of the inventory, not the cost of a
+            // possible reload described below. Reload decisions belong to SegmentLoadingHistory.
+            //
             // Push operation failed, let's base ourselves on the current
             // announced buffered time ranges here.
             //
@@ -817,8 +829,6 @@ impl SegmentInventory {
         }
     }
 
-    // TODO: Naming make it look a little out of place, though determining where a future segment
-    // might be could be part of the role of the `SegmentInventory`. To ponder about...
     pub(super) fn infer_probable_base_dts(
         &self,
         playlist_start: f64,
@@ -886,6 +896,9 @@ impl SegmentInventory {
             .retain(|segment| segment.validated || !ids.contains(&segment.id));
     }
 
+    // TODO: Describe every remaining part of a chunk when reported ranges contain a hole, instead
+    // of choosing one range below. Keep synchronization about current coverage; deciding whether
+    // missing data warrants a reload belongs to SegmentLoadingHistory.
     pub(super) fn synchronize(&mut self, buffered: &JsTimeRanges, media_offset: f64) {
         let mut segment_idx = 0;
         if segment_idx >= self.inventory.len() {
