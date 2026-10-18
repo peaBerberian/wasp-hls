@@ -30,10 +30,9 @@ pub(super) struct SourceBuffer {
     /// `SourceBuffer` instances).
     was_used: bool,
 
-    /// If `true` the chronologically last possible media chunk has been
-    /// scheduled to be pushed.
-    /// This allows for example to properly "end" the `SourceBuffer`.
-    last_segment_pushed: bool,
+    /// XXX TODO: variable name and comment out-of-place
+    /// Whether segment selection has supplied everything needed through the playlist's end.
+    loading_complete: bool,
 
     /// The MediaType associated to this `SourceBuffer`.
     media_type: MediaType,
@@ -93,7 +92,7 @@ impl SourceBuffer {
                 queue: VecDeque::new(),
                 was_used: false,
                 needs_reflush: false,
-                last_segment_pushed: false,
+                loading_complete: false,
                 media_type,
                 reset_transmuxer_on_next_segment: false,
                 last_pushed_segment_info: None,
@@ -171,7 +170,6 @@ impl SourceBuffer {
         &mut self,
         data: PreparedPushData,
     ) -> Result<AppendBufferResponse, PushSegmentError> {
-        self.last_segment_pushed = false;
         self.was_used = true;
         let sequence_number = data.sequence_number;
         let segment_data = data.segment_data.id();
@@ -241,6 +239,7 @@ impl SourceBuffer {
     /// * `end` - End time, in seconds, of the range of time which should be removed from the
     ///   `SourceBuffer`.
     pub(super) fn remove_buffer(&mut self, start: f64, end: f64) {
+        self.loading_complete = false;
         self.was_used = true;
         self.queue
             .push_back(SourceBufferQueueElement::Remove { start, end });
@@ -259,6 +258,7 @@ impl SourceBuffer {
     /// There's special considerations too take care of here as we'll remove data corresponding to
     /// the current position. As such a seek will have to be performed once the remove is done
     pub(super) fn flush_buffer(&mut self) {
+        self.loading_complete = false;
         self.was_used = true;
         self.last_pushed_segment_info = None;
         self.reset_transmuxer_on_next_segment = true;
@@ -291,14 +291,13 @@ impl SourceBuffer {
         current
     }
 
-    /// Indicate to this `SourceBuffer` that the last chronological segment has been pushed.
-    pub(super) fn announce_last_segment_pushed(&mut self) {
-        self.last_segment_pushed = true;
+    /// Update the result of segment selection. Appends do not change this result.
+    pub(super) fn set_loading_complete(&mut self, complete: bool) {
+        self.loading_complete = complete;
     }
 
-    /// Returns `true` if the last chronological segment is known to have been pushed.
-    pub(super) fn is_last_segment_pushed(&self) -> bool {
-        self.last_segment_pushed
+    pub(super) fn is_loading_complete(&self) -> bool {
+        self.loading_complete
     }
 
     /// To call once a `SourceBuffer` operation, either created through `append_buffer`,

@@ -626,21 +626,6 @@ impl PlaylistStore {
             .is_some_and(|playlist| playlist.contains_sequence(sequence_number))
     }
 
-    /// Returns `true` if `seg_start` corresponds to the last segment of the currently loaded
-    /// playlist for the given `MediaType`.
-    pub(crate) fn is_last_media_segment(&self, media_type: MediaType, seg_start: f64) -> bool {
-        self.current_media_playlist(media_type)
-            .is_some_and(|playlist| {
-                playlist.is_ended()
-                    && playlist
-                        .segment_list()
-                        .media()
-                        .last()
-                        .map(|segment| segment.start() == seg_start)
-                        .unwrap_or(false)
-            })
-    }
-
     /// Get segment Metadata linked to the currently loaded media playlist of the given type.
     /// To use e.g. when you want to start loading its segments.
     pub(crate) fn loaded_media_playlist_segment_info(
