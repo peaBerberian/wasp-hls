@@ -140,7 +140,7 @@ impl BufferedChunk {
 
     #[cfg(test)]
     pub(crate) fn new_for_test(start: f64, end: f64, context: SegmentQualityContext) -> Self {
-        let mut chunk = Self::new(
+        Self::new(
             BufferedSegmentMetadata {
                 playlist_start: start,
                 playlist_end: end,
@@ -150,13 +150,7 @@ impl BufferedChunk {
                 context,
             },
             0,
-        );
-        chunk.validated = true;
-        chunk
-    }
-
-    pub(crate) fn is_validated(&self) -> bool {
-        !self.validated
+        )
     }
 
     /// Returns media start of the segment, in seconds, according to its `MediaPlaylist`.
@@ -888,8 +882,8 @@ impl SegmentInventory {
 
     /// Remove entries for media appends cancelled before they could run.
     pub(super) fn discard_pending(&mut self, ids: &[u64]) {
-        // XXX TODO: Shouldn't we remove only the non-validated ones?
-        self.inventory.retain(|segment| !ids.contains(&segment.id));
+        self.inventory
+            .retain(|segment| segment.validated || !ids.contains(&segment.id));
     }
 
     pub(super) fn synchronize(&mut self, buffered: &JsTimeRanges, media_offset: f64) {
@@ -1027,23 +1021,13 @@ impl SegmentInventory {
         );
 
         if segment_idx < self.inventory.len() {
-            // XXX TODO: Is that diff still needed
-            let previous_len = self.inventory.len();
-            let mut index = 0;
-            self.inventory.retain(|segment| {
-                // An unfinished append cannot yet be judged from buffered ranges.
-                let keep = index < segment_idx || !segment.validated;
-                index += 1;
-                keep
-            });
-            if self.inventory.len() < previous_len {
-                log_info!(
-                    "SI: {} segments removed at the end (pl:{}, nl:{})",
-                    self.media_type,
-                    previous_len,
-                    self.inventory.len(),
-                );
-            }
+            log_info!(
+                "SI: Multiple {} segments have been completely removed at the end (pl:{}, nl:{})",
+                self.media_type,
+                self.inventory.len(),
+                segment_idx,
+            );
+            self.inventory.truncate(segment_idx);
         }
         self.process_pending_updates(updates);
         self.clean_up();
@@ -1330,21 +1314,14 @@ mod tests {
     }
 
     #[test]
-    fn pending_append_survives_empty_ranges_until_its_result_is_processed() {
+    fn an_empty_report_can_remove_pending_entries_before_their_results() {
         let mut inventory = SegmentInventory::new(MediaType::Video);
         let id = inventory.insert_segment(metadata(10., 12.));
-        inventory.reconcile_push_result(id, &JsTimeRanges::new(vec![]), 0., true);
-        assert_eq!(inventory.inventory().len(), 1);
-        assert!(inventory.inventory()[0].validated);
-        inventory.synchronize(&JsTimeRanges::new(vec![10., 12.]), 0.);
-        assert_eq!(inventory.inventory()[0].last_buffered_end(), 12.);
-
-        let mut failed = SegmentInventory::new(MediaType::Video);
-        let id = failed.insert_segment(metadata(10., 12.));
-        let cancelled = failed.insert_segment(metadata(12., 14.));
-        failed.discard_pending(&[cancelled]);
-        failed.reconcile_push_result(id, &JsTimeRanges::new(vec![]), 0., false);
-        assert!(failed.inventory().is_empty());
+        inventory.insert_segment(metadata(12., 14.));
+        inventory.synchronize(&JsTimeRanges::new(vec![]), 0.);
+        assert!(inventory.inventory().is_empty());
+        inventory.reconcile_push_result(id, &JsTimeRanges::new(vec![10., 12.]), 0., true);
+        assert!(inventory.inventory().is_empty());
     }
 
     #[test]
@@ -1356,7 +1333,7 @@ mod tests {
         let cancelled = inventory.insert_segment(metadata(8., 12.));
         let other = inventory.insert_segment(metadata(12., 16.));
 
-        inventory.discard_pending(&[cancelled]);
+        inventory.discard_pending(&[cancelled, earlier]);
         assert_eq!(
             inventory
                 .inventory()
@@ -1373,26 +1350,12 @@ mod tests {
             .unwrap();
         assert!(failed_entry.validated);
         assert_eq!(failed_entry.last_buffered_end(), 6.);
-        assert!(inventory
+        // The unlisted entry survived cancellation above, but normal buffer
+        // synchronization can still remove it when its data is absent.
+        assert!(!inventory
             .inventory()
             .iter()
-            .any(|segment| segment.id == other && !segment.validated));
-    }
-
-    #[test]
-    fn pending_append_survives_a_report_containing_only_older_data() {
-        let mut inventory = SegmentInventory::new(MediaType::Video);
-        let earlier = inventory.insert_segment(metadata(8., 10.));
-        inventory.reconcile_push_result(earlier, &JsTimeRanges::new(vec![8., 10.]), 0., true);
-        let final_segment = inventory.insert_segment(metadata(10., 12.));
-        inventory.reconcile_push_result(final_segment, &JsTimeRanges::new(vec![8., 9.8]), 0., true);
-        assert_eq!(inventory.inventory().len(), 2);
-        assert!(inventory.inventory().last().unwrap().validated);
-        inventory.synchronize(&JsTimeRanges::new(vec![8., 12.]), 0.);
-        assert_eq!(
-            inventory.inventory().last().unwrap().last_buffered_end(),
-            12.
-        );
+            .any(|segment| segment.id == other));
     }
 
     #[test]

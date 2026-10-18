@@ -192,6 +192,23 @@ impl MediaElementReference {
             .find(|range| range.0 > wanted_pos)
     }
 
+    /// Reported ranges for this buffer, converted to playlist time.
+    /// None while the ranges or timestamp offset are unknown.
+    pub(crate) fn buffered_ranges_for(&self, media_type: MediaType) -> Option<Vec<(f64, f64)>> {
+        let offset = self.media_offset?;
+        let observation = self.last_observation.as_ref()?;
+        let buffered = match media_type {
+            MediaType::Audio => observation.audio_buffered(),
+            MediaType::Video => observation.video_buffered(),
+        }?;
+        Some(
+            buffered
+                .into_iter()
+                .map(|(start, end)| (start - offset, end - offset))
+                .collect(),
+        )
+    }
+
     /// Contiguous duration buffered ahead of the wanted position for this SourceBuffer.
     /// Returns media seconds, or zero when the corresponding ranges are unavailable.
     ///
@@ -968,6 +985,39 @@ mod tests {
                 assert_eq!(media_element.buffer_ahead_for(media_type), expected);
             }
         }
+    }
+
+    #[test]
+    fn reported_ranges_preserve_gaps_and_convert_media_to_playlist_time() {
+        let mut media_element = MediaElementReference::new();
+        media_element.media_offset = Some(-1_704_164_645.);
+        media_element.last_observation = Some(buffer_observation(
+            0.,
+            vec![0., 4., 8., 12.],
+            None,
+            Some(vec![0., 4., 8., 12.]),
+        ));
+        assert_eq!(
+            media_element.buffered_ranges_for(MediaType::Video),
+            Some(vec![
+                (1_704_164_645., 1_704_164_649.),
+                (1_704_164_653., 1_704_164_657.),
+            ])
+        );
+        assert_eq!(media_element.buffered_ranges_for(MediaType::Audio), None);
+    }
+
+    #[test]
+    fn reported_ranges_distinguish_empty_from_unknown() {
+        let mut media_element = MediaElementReference::new();
+        media_element.last_observation = Some(buffer_observation(0., vec![], None, Some(vec![])));
+        assert_eq!(media_element.buffered_ranges_for(MediaType::Video), None);
+        media_element.media_offset = Some(0.);
+        assert_eq!(
+            media_element.buffered_ranges_for(MediaType::Video),
+            Some(vec![])
+        );
+        assert_eq!(media_element.buffered_ranges_for(MediaType::Audio), None);
     }
 
     #[test]

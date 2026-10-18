@@ -8,9 +8,9 @@ use crate::{
     utils::logger::*,
 };
 
-mod validated_segment_history;
+mod segment_loading_history;
 
-use validated_segment_history::ValidatedSegmentHistory;
+use segment_loading_history::SegmentLoadingHistory;
 
 /// Minimum distance from playback, in seconds, before replacing buffered media.
 const MIN_FAST_QUALITY_SWITCH_LEAD_SECONDS: f64 = 5.;
@@ -141,7 +141,7 @@ pub(crate) struct NextSegmentSelector {
     /// not reliable.
     ///
     /// Also decides when observed buffer loss warrants another loading attempt.
-    validated_segments: ValidatedSegmentHistory,
+    validated_segments: SegmentLoadingHistory,
 
     /// Approximation of the current playback position, which will be used as a base position where
     /// segments should start to be loaded.
@@ -205,7 +205,7 @@ impl NextSegmentSelector {
             buffer_goal,
             last_playlist_id: None,
             needs_starting_position_recompute: true,
-            validated_segments: ValidatedSegmentHistory::default(),
+            validated_segments: SegmentLoadingHistory::default(),
             init_status: InitializationSegmentSelectorStatus::Unchecked,
             skipped_segments: vec![],
         }
@@ -218,7 +218,7 @@ impl NextSegmentSelector {
         self.init_status = InitializationSegmentSelectorStatus::Unchecked;
         self.last_playlist_id = None;
         self.needs_starting_position_recompute = true;
-        self.validated_segments = ValidatedSegmentHistory::default();
+        self.validated_segments = SegmentLoadingHistory::default();
         self.segment_cursor = SegmentCursor::new(base_pos);
         self.skipped_segments.clear();
     }
@@ -240,11 +240,9 @@ impl NextSegmentSelector {
         self.skipped_segments.clear();
     }
 
-    /// Check for buffer loss after the inventory was synchronized with a playback
-    /// observation. Append results alone may still contain estimated boundaries.
-    pub(crate) fn check_for_buffer_loss(&mut self, inventory: &[BufferedChunk]) {
-        self.validated_segments
-            .synchronize(inventory, self.base_pos);
+    /// Check reported buffer ranges for removed data. Times are in playlist seconds.
+    pub(crate) fn check_for_buffer_loss(&mut self, buffered: &[(f64, f64)]) {
+        self.validated_segments.synchronize(buffered, self.base_pos);
     }
 
     /// Calling this method allows to indicate that the initialization segment identified by `id`
@@ -357,7 +355,7 @@ impl NextSegmentSelector {
 
         // XXX TODO: explain
         if replacement_segment.is_none() {
-            if let Some(position) = self.validated_segments.next_retry_position() {
+            if let Some(position) = self.validated_segments.first_position_to_reload() {
                 self.segment_cursor
                     .move_cursor(self.segment_cursor.current_cursor.min(position));
             }
@@ -915,7 +913,7 @@ mod tests {
         );
         validate(&mut selector, &list.media()[1], &context);
         inventory.push(BufferedChunk::new_for_test(4., 8., context));
-        selector.check_for_buffer_loss(&inventory);
+        selector.check_for_buffer_loss(&[(0., 8.)]);
         assert!(selector
             .most_needed_segment(ended(), ended(), &inventory)
             .loading_complete());
@@ -938,7 +936,7 @@ mod tests {
             .loading_complete());
 
         inventory.pop();
-        selector.check_for_buffer_loss(&inventory);
+        selector.check_for_buffer_loss(&[(0., 4.)]);
         let evicted = selector.most_needed_segment(ended(), ended(), &inventory);
         assert!(!evicted.loading_complete());
         assert_eq!(
@@ -1049,9 +1047,9 @@ mod tests {
             candidate(list, &context),
             &inventory,
         );
-        selector.check_for_buffer_loss(&inventory);
+        selector.check_for_buffer_loss(&[(0., 12.)]);
         inventory.remove(1);
-        selector.check_for_buffer_loss(&inventory);
+        selector.check_for_buffer_loss(&[(0., 4.), (8., 12.)]);
         let selected = selector.most_needed_segment(
             candidate(list, &context),
             candidate(list, &context),
@@ -1106,6 +1104,66 @@ mod tests {
         let selected = selector.most_needed_segment(ended(), ended(), &inventory);
         assert!(selected.needed_segments().is_none());
         assert!(selected.loading_complete());
+    }
+
+    #[test]
+    fn buffer_loss_and_retry_do_not_require_inventory_entries() {
+        let TopLevelPlaylist::DirectMedia(playlist) = playlist_starting_at(0, 3) else {
+            panic!("expected direct media playlist");
+        };
+        let list = playlist.playlist().segment_list();
+        let context = SegmentQualityContext::new(1., test_playlist_id(1));
+        let ended = || SegmentSelectionCandidate {
+            is_ended: true,
+            ..candidate(list, &context)
+        };
+        let mut selector = NextSegmentSelector::new(0., 30.);
+        for segment in list.media() {
+            validate(&mut selector, segment, &context);
+        }
+        // The inventory lost its entries before append completion. History must
+        // still stop duplicate loads, then notice data appearing and disappearing.
+        selector.check_for_buffer_loss(&[]);
+        let selected = selector.most_needed_segment(ended(), ended(), &[]);
+        assert!(selected.loading_complete());
+        assert!(selected.needed_segments().is_none());
+        selector.check_for_buffer_loss(&[(0., 12.)]);
+        selector.check_for_buffer_loss(&[(0., 4.), (8., 12.)]);
+        let selected = selector.most_needed_segment(ended(), ended(), &[]);
+        assert!(!selected.loading_complete());
+        assert_eq!(
+            selected
+                .needed_segments()
+                .unwrap()
+                .media_segment()
+                .unwrap()
+                .0
+                .start(),
+            4.
+        );
+        validate(&mut selector, &list.media()[1], &context);
+        // The retry does not restore the missing data: do not request it in a loop.
+        for _ in 0..3 {
+            selector.check_for_buffer_loss(&[(0., 4.), (8., 12.)]);
+            let selected = selector.most_needed_segment(ended(), ended(), &[]);
+            assert!(selected.loading_complete());
+            assert!(selected.needed_segments().is_none());
+        }
+        // If data really returns, a separate later removal can be recovered again.
+        selector.check_for_buffer_loss(&[(0., 12.)]);
+        selector.check_for_buffer_loss(&[(0., 4.), (8., 12.)]);
+        let selected = selector.most_needed_segment(ended(), ended(), &[]);
+        assert!(!selected.loading_complete());
+        assert_eq!(
+            selected
+                .needed_segments()
+                .unwrap()
+                .media_segment()
+                .unwrap()
+                .0
+                .start(),
+            4.
+        );
     }
 
     #[test]

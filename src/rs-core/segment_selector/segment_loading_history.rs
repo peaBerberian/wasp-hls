@@ -1,6 +1,6 @@
 use crate::{
-    media_element::BufferedChunk,
     parser::{MediaPlaylistPermanentId, SegmentIdentity},
+    utils::time_ranges::TimeRanges,
 };
 
 /// When choosing which segment to load next, there's a need to understand which segments we already
@@ -13,12 +13,11 @@ use crate::{
 /// loaded+pushed. It is intended as more of a history of operations than an actual representation
 /// of what's in the buffer.
 #[derive(Default)]
-pub(super) struct ValidatedSegmentHistory {
-    entries: Vec<ValidatedSegment>,
+pub(super) struct SegmentLoadingHistory {
+    entries: Vec<SegmentHistoryEntry>,
 }
 
-// XXX TODO: To rename?
-struct ValidatedSegment {
+struct SegmentHistoryEntry {
     /// Identifier for the associated `media_playlist`.
     playlist_id: MediaPlaylistPermanentId,
     /// Identifies unambiguously the segment.
@@ -26,47 +25,63 @@ struct ValidatedSegment {
     /// Playlist positions used for buffer checks and eviction.
     start: f64,
     end: f64,
-    /// Ranges seen since the last attempt, keeping any gaps between them.
-    buffered: Vec<(f64, f64)>,
+    /// Parts of this segment previously reported as buffered. Used to detect removed data. Cleared
+    /// when the segment is supplied again.
+    ///
+    /// Only remember data inside this segment's time bounds. For example, if this segment covers 8
+    /// to 12 seconds:
+    ///
+    /// ```text
+    /// Time:              8       10      12      14
+    /// This segment:      [---------------]
+    /// Reported buffer:           [---------------]
+    /// Part we remember:          [-------]
+    /// ```
+    ///
+    /// Each observation adds its ranges to this memory. Missing data does not shrink it. Gaps
+    /// remain unless a later observation reports data there:
+    ///
+    /// ```text
+    /// Reported now       Remembered after this report
+    /// [8--9]             [8--9]
+    ///         [10--12]   [8--9]  [10--12]
+    /// [8----------12]    [8----------12]
+    /// [8------10]        [8----------12]
+    /// ```
+    ///
+    /// In the last row, we remember data up to 12, but only see data up to 10. Comparing the two
+    /// lets us detect removal, including several small removals over time. The check ignores data
+    /// before the wanted position and tolerates up to 0.5 seconds missing in each gap or at a
+    /// boundary. If all remembered data disappears, that tolerance does not apply.
+    ///
+    /// When the segment is supplied again, clear this memory and start over. Otherwise the same
+    /// missing data could trigger reloads forever. These ranges tell us where data was seen, not
+    /// which segment supplied it: another quality covering the same times also counts as buffered
+    /// data.
+    buffered: TimeRanges,
     /// If `true`, this entry has been detected as garbage collected since it
     /// was first pushed, it can be retried.
     needs_reload: bool,
 }
 
-impl ValidatedSegmentHistory {
-    /// XXX TODO: Rewrite comment. Use simple english
-    /// Only data lost after an observation can permit another attempt. The
-    /// initial coverage of each attempt is its baseline, even if partial.
-    /// XXX TODO: What is "position"?
-    pub(super) fn synchronize(&mut self, inventory: &[BufferedChunk], position: f64) {
+impl SegmentLoadingHistory {
+    /// Check whether previously reported data is now missing after the wanted position.
+    /// Both the ranges and the position are in playlist time.
+    pub(super) fn synchronize(&mut self, buffered: &[(f64, f64)], wanted_position: f64) {
         for entry in &mut self.entries {
-            // A queued replacement may already have replaced the old inventory
-            // entry. Wait for its append result before treating that as removal.
-            if inventory.iter().any(|chunk| {
-                chunk.is_validated()
-                    && chunk.playlist_start() < entry.end
-                    && chunk.playlist_end() > entry.start
-            }) {
-                continue;
+            let mut current = TimeRanges::new();
+            for &(start, end) in buffered {
+                // Only keep the part of this range inside the segment.
+                let start = start.max(entry.start);
+                let end = end.min(entry.end);
+                if end > start {
+                    current.add(start, end);
+                }
             }
-            let buffered: Vec<_> = inventory
-                .iter()
-                .filter(|chunk| {
-                    !chunk.is_validated()
-                        && chunk.playlist_start() < entry.end
-                        && chunk.playlist_end() > entry.start
-                })
-                .filter_map(|chunk| {
-                    // XXX TODO: Why are we doing the max with last buffered here?
-                    let start = chunk.last_buffered_start().max(entry.start);
-                    let end = chunk.last_buffered_end().min(entry.end);
-                    (end > start).then_some((start, end))
-                })
-                .collect();
-            let buffered = merge_overlapping_ranges(buffered);
-            entry.needs_reload = has_lost_buffer(&entry.buffered, &buffered, position);
-            entry.buffered.extend(buffered);
-            entry.buffered = merge_overlapping_ranges(std::mem::take(&mut entry.buffered));
+            entry.needs_reload = has_lost_buffer(&entry.buffered, &current, wanted_position);
+            for range in &current {
+                entry.buffered.add(range.start(), range.end());
+            }
         }
     }
 
@@ -82,8 +97,8 @@ impl ValidatedSegmentHistory {
             .is_none_or(|entry| entry.needs_reload)
     }
 
-    // XXX TODO: rename? And comment
-    pub(super) fn next_retry_position(&self) -> Option<f64> {
+    /// Earliest start of a segment that needs loading again.
+    pub(super) fn first_position_to_reload(&self) -> Option<f64> {
         self.entries
             .iter()
             .filter(|entry| entry.needs_reload)
@@ -107,7 +122,7 @@ impl ValidatedSegmentHistory {
             .any(|entry| entry.playlist_id == playlist_id && entry.identity == identity)
     }
 
-    /// Adds the segment to the `ValidatedSegmentHistory`.
+    /// Adds the segment to the `SegmentLoadingHistory`.
     ///
     /// # Arguments
     ///
@@ -130,16 +145,15 @@ impl ValidatedSegmentHistory {
             // Judge a new attempt from its own observations, not the coverage
             // of an earlier attempt. Repeated missing or partial results then
             // do not look like fresh removal on every observation.
-            // XXX TODO: why clearing all buffered? Isn't it risky?
             entry.buffered.clear();
             entry.needs_reload = false;
         } else {
-            self.entries.push(ValidatedSegment {
+            self.entries.push(SegmentHistoryEntry {
                 playlist_id,
                 identity,
                 start,
                 end,
-                buffered: vec![],
+                buffered: TimeRanges::new(),
                 needs_reload: false,
             });
         }
@@ -160,47 +174,47 @@ impl ValidatedSegmentHistory {
     }
 }
 
-/// Merge overlapping or touching ranges, but keep gaps between them.
-/// XXX TODO: shouldn't it me in range utils? As TimeRange?
-fn merge_overlapping_ranges(mut ranges: Vec<(f64, f64)>) -> Vec<(f64, f64)> {
-    ranges.sort_unstable_by(|a, b| a.0.total_cmp(&b.0));
-    let mut merged: Vec<(f64, f64)> = Vec::with_capacity(ranges.len());
-    for (start, end) in ranges {
-        if let Some(previous) = merged.last_mut() {
-            if start <= previous.1 {
-                previous.1 = previous.1.max(end);
-                continue;
-            }
-        }
-        merged.push((start, end));
-    }
-    merged
-}
-
-/// Look for newly missing data ahead of playback, including inside a range.
-fn has_lost_buffer(previous: &[(f64, f64)], current: &[(f64, f64)], position: f64) -> bool {
+/// Compare the data seen since the latest loading attempt with the data reported now.
+/// The caller limits both sets of ranges to one segment, which may contain holes.
+/// TimeRanges keeps each set sorted and keeps its gaps.
+/// `position` is the first playlist position we still need; earlier data can be ignored.
+fn has_lost_buffer(previous: &TimeRanges, current: &TimeRanges, position: f64) -> bool {
     if current.is_empty() {
-        // XXX TODO: Why only end here? The only call site check for a single entry
-        return previous.iter().any(|&(_, end)| end > position);
+        // All previously seen data disappeared. We need another load if any of
+        // it was after `position`. Its start does not matter: a range can start
+        // before that position and still contain data we need after it.
+        // Complete disappearance triggers a reload even for a range under 0.5s.
+        return previous.into_iter().any(|range| range.end() > position);
     }
-    for &(start, end) in previous {
-        let mut covered_until = start.max(position);
-        for &(current_start, current_end) in current {
+    for range in previous {
+        let end = range.end();
+        // Start at the wanted position if the earlier part is already behind us.
+        let mut covered_until = range.start().max(position);
+        for current_range in current {
+            let current_start = current_range.start();
+            let current_end = current_range.end();
             if current_end <= covered_until {
+                // This current range is entirely before the part being checked.
                 continue;
             }
             if current_start >= end {
+                // No later current range can cover this old range. The remaining
+                // missing part is checked after the loop.
                 break;
             }
-            // Ignore small changes, as for partial removal in the inventory.
+            // A later start leaves a hole, including in the middle of a segment.
+            // Tolerate at most 0.5s of missing data in each hole or at a boundary.
+            // This allows small timing changes and small amounts of removal.
             if current_start - covered_until > 0.5 {
                 return true;
             }
             covered_until = covered_until.max(current_end);
             if covered_until >= end {
+                // All of this old range has been checked. Continue with the next.
                 break;
             }
         }
+        // The current ranges may have ended before this old range ended.
         if end - covered_until > 0.5 {
             return true;
         }
@@ -210,101 +224,99 @@ fn has_lost_buffer(previous: &[(f64, f64)], current: &[(f64, f64)], position: f6
 
 #[cfg(test)]
 mod tests {
-    use super::ValidatedSegmentHistory;
-    use crate::{
-        media_element::{BufferedChunk, SegmentQualityContext},
-        parser::{MediaPlaylistPermanentId, SegmentIdentity},
-    };
+    use super::SegmentLoadingHistory;
+    use crate::parser::{MediaPlaylistPermanentId, SegmentIdentity};
 
     #[test]
     fn losing_data_in_the_middle_requests_a_retry_until_the_hole_is_filled() {
-        let mut history = ValidatedSegmentHistory::default();
+        let mut history = SegmentLoadingHistory::default();
         let playlist_id = MediaPlaylistPermanentId::new_for_test(1);
         let identity = SegmentIdentity::new(1, 0);
-        let chunk = |start, end| {
-            BufferedChunk::new_for_test(start, end, SegmentQualityContext::new(1., playlist_id))
-        };
         history.insert(playlist_id, identity, 0., 12.);
-        history.synchronize(&[chunk(0., 12.)], 0.);
-        history.synchronize(&[chunk(0., 4.), chunk(8., 12.)], 0.);
+        history.synchronize(&[(0., 12.)], 0.);
+        history.synchronize(&[(0., 4.), (8., 12.)], 0.);
         assert!(history.needs_loading(playlist_id, identity));
-        assert_eq!(history.next_retry_position(), Some(0.));
-        history.synchronize(&[chunk(0., 4.), chunk(8., 12.)], 0.);
+        assert_eq!(history.first_position_to_reload(), Some(0.));
+        history.synchronize(&[(0., 4.), (8., 12.)], 0.);
         assert!(history.needs_loading(playlist_id, identity));
-        history.synchronize(&[chunk(0., 12.)], 0.);
+        history.synchronize(&[(0., 12.)], 0.);
         assert!(!history.needs_loading(playlist_id, identity));
     }
 
     #[test]
     fn existing_holes_are_preserved_between_observations_and_after_a_retry() {
-        let mut history = ValidatedSegmentHistory::default();
+        let mut history = SegmentLoadingHistory::default();
         let playlist_id = MediaPlaylistPermanentId::new_for_test(1);
         let identity = SegmentIdentity::new(1, 0);
-        let chunk = |start, end| {
-            BufferedChunk::new_for_test(start, end, SegmentQualityContext::new(1., playlist_id))
-        };
         history.insert(playlist_id, identity, 0., 12.);
-        // Unordered and overlapping entries must merge without filling the hole.
-        let inventory = [chunk(8., 12.), chunk(0., 3.), chunk(2., 4.)];
+        // Unordered and overlapping ranges must merge without filling the hole.
+        let ranges = [(8., 12.), (0., 3.), (2., 4.)];
         for _ in 0..2 {
-            history.synchronize(&inventory, 0.);
-            assert_eq!(history.entries[0].buffered, vec![(0., 4.), (8., 12.)]);
+            history.synchronize(&ranges, 0.);
+            assert_eq!(
+                (&history.entries[0].buffered)
+                    .into_iter()
+                    .map(|range| (range.start(), range.end()))
+                    .collect::<Vec<_>>(),
+                vec![(0., 4.), (8., 12.)]
+            );
             assert!(!history.needs_loading(playlist_id, identity));
         }
         // Newly seen data may fill part of the hole, but not all of it.
-        history.synchronize(&[chunk(0., 5.), chunk(7., 12.)], 0.);
-        assert_eq!(history.entries[0].buffered, vec![(0., 5.), (7., 12.)]);
+        history.synchronize(&[(0., 5.), (7., 12.)], 0.);
+        assert_eq!(
+            (&history.entries[0].buffered)
+                .into_iter()
+                .map(|range| (range.start(), range.end()))
+                .collect::<Vec<_>>(),
+            vec![(0., 5.), (7., 12.)]
+        );
         assert!(!history.needs_loading(playlist_id, identity));
-        history.synchronize(&[chunk(0., 3.), chunk(7., 12.)], 0.);
+        history.synchronize(&[(0., 3.), (7., 12.)], 0.);
         assert!(history.needs_loading(playlist_id, identity));
         history.insert(playlist_id, identity, 0., 12.);
-        history.synchronize(&[chunk(0., 3.), chunk(7., 12.)], 0.);
+        history.synchronize(&[(0., 3.), (7., 12.)], 0.);
         assert!(!history.needs_loading(playlist_id, identity));
     }
 
     #[test]
     fn middle_loss_behind_playback_is_ignored_and_small_holes_are_tolerated() {
-        let mut history = ValidatedSegmentHistory::default();
+        let mut history = SegmentLoadingHistory::default();
         let playlist_id = MediaPlaylistPermanentId::new_for_test(1);
         let identity = SegmentIdentity::new(1, 0);
-        let chunk = |start, end| {
-            BufferedChunk::new_for_test(start, end, SegmentQualityContext::new(1., playlist_id))
-        };
         history.insert(playlist_id, identity, 0., 12.);
-        history.synchronize(&[chunk(0., 12.)], 0.);
-        history.synchronize(&[chunk(0., 4.), chunk(4.2, 12.)], 0.);
+        history.synchronize(&[(0., 12.)], 0.);
+        history.synchronize(&[(0., 4.), (4.2, 12.)], 0.);
         assert!(!history.needs_loading(playlist_id, identity));
-        history.synchronize(&[chunk(0., 4.), chunk(8., 12.)], 9.);
+        history.synchronize(&[(0., 4.), (8., 12.)], 9.);
         assert!(!history.needs_loading(playlist_id, identity));
-        history.synchronize(&[chunk(0., 4.), chunk(8., 12.)], 6.);
+        history.synchronize(&[(0., 4.), (8., 12.)], 6.);
         assert!(history.needs_loading(playlist_id, identity));
     }
 
     #[test]
     fn missing_data_without_previous_coverage_does_not_trigger_reloads() {
-        let mut history = ValidatedSegmentHistory::default();
+        let mut history = SegmentLoadingHistory::default();
         let playlist_id = MediaPlaylistPermanentId::new_for_test(1);
         let identity = SegmentIdentity::new(1, 0);
         history.insert(playlist_id, identity, 8., 12.);
         for _ in 0..3 {
             history.synchronize(&[], 4.);
             assert!(!history.needs_loading(playlist_id, identity));
-            assert_eq!(history.next_retry_position(), None);
+            assert_eq!(history.first_position_to_reload(), None);
         }
     }
 
     #[test]
     fn removed_data_can_be_retried_but_repeated_missing_data_cannot_loop() {
-        let mut history = ValidatedSegmentHistory::default();
+        let mut history = SegmentLoadingHistory::default();
         let playlist_id = MediaPlaylistPermanentId::new_for_test(1);
         let identity = SegmentIdentity::new(1, 0);
-        let chunk =
-            || BufferedChunk::new_for_test(8., 12., SegmentQualityContext::new(1., playlist_id));
         history.insert(playlist_id, identity, 8., 12.);
-        history.synchronize(&[chunk()], 4.);
+        history.synchronize(&[(8., 12.)], 4.);
         history.synchronize(&[], 4.);
         assert!(history.needs_loading(playlist_id, identity));
-        assert_eq!(history.next_retry_position(), Some(8.));
+        assert_eq!(history.first_position_to_reload(), Some(8.));
         // Merely proposing a retry must not consume it: an existing request may
         // still be in progress, or selection may choose a different segment.
         history.synchronize(&[], 4.);
@@ -313,7 +325,7 @@ mod tests {
         for _ in 0..3 {
             history.synchronize(&[], 4.);
             assert!(!history.needs_loading(playlist_id, identity));
-            assert_eq!(history.next_retry_position(), None);
+            assert_eq!(history.first_position_to_reload(), None);
         }
         history.clear();
         assert!(history.needs_loading(playlist_id, identity));
@@ -321,57 +333,48 @@ mod tests {
 
     #[test]
     fn repeated_partial_loss_is_suppressed_but_further_loss_can_be_retried() {
-        let mut history = ValidatedSegmentHistory::default();
+        let mut history = SegmentLoadingHistory::default();
         let playlist_id = MediaPlaylistPermanentId::new_for_test(1);
         let identity = SegmentIdentity::new(1, 0);
-        let chunk =
-            |end| BufferedChunk::new_for_test(8., end, SegmentQualityContext::new(1., playlist_id));
         history.insert(playlist_id, identity, 8., 12.);
-        history.synchronize(&[chunk(12.)], 4.);
-        history.synchronize(&[chunk(10.)], 4.);
+        history.synchronize(&[(8., 12.)], 4.);
+        history.synchronize(&[(8., 10.)], 4.);
         assert!(history.needs_loading(playlist_id, identity));
         history.insert(playlist_id, identity, 8., 12.);
-        history.synchronize(&[chunk(10.)], 4.);
-        history.synchronize(&[chunk(10.)], 4.);
+        history.synchronize(&[(8., 10.)], 4.);
+        history.synchronize(&[(8., 10.)], 4.);
         assert!(!history.needs_loading(playlist_id, identity));
-        history.synchronize(&[chunk(9.)], 4.);
+        history.synchronize(&[(8., 9.)], 4.);
         assert!(history.needs_loading(playlist_id, identity));
     }
 
     #[test]
-    fn a_quality_replacement_is_not_mistaken_for_removed_data() {
-        let mut history = ValidatedSegmentHistory::default();
+    fn reported_ranges_are_limited_to_the_segment_being_checked() {
+        let mut history = SegmentLoadingHistory::default();
         let playlist_id = MediaPlaylistPermanentId::new_for_test(1);
         let identity = SegmentIdentity::new(1, 0);
         history.insert(playlist_id, identity, 8., 12.);
-        for quality in [1, 2] {
-            history.synchronize(
-                &[BufferedChunk::new_for_test(
-                    8.,
-                    12.,
-                    SegmentQualityContext::new(
-                        quality as f64,
-                        MediaPlaylistPermanentId::new_for_test(quality),
-                    ),
-                )],
-                4.,
-            );
-            assert!(!history.needs_loading(playlist_id, identity));
-        }
-        history.synchronize(&[], 4.);
-        assert!(history.needs_loading(playlist_id, identity));
+        history.synchronize(&[(0., 20.)], 4.);
+        assert_eq!(
+            (&history.entries[0].buffered)
+                .into_iter()
+                .map(|range| (range.start(), range.end()))
+                .collect::<Vec<_>>(),
+            vec![(8., 12.)]
+        );
+        // Removing data outside this segment does not require reloading it.
+        history.synchronize(&[(8., 12.)], 4.);
+        assert!(!history.needs_loading(playlist_id, identity));
     }
 
     #[test]
     fn restored_data_can_be_reloaded_after_a_separate_removal() {
-        let mut history = ValidatedSegmentHistory::default();
+        let mut history = SegmentLoadingHistory::default();
         let playlist_id = MediaPlaylistPermanentId::new_for_test(1);
         let identity = SegmentIdentity::new(1, 0);
-        let chunk =
-            || BufferedChunk::new_for_test(8., 12., SegmentQualityContext::new(1., playlist_id));
         history.insert(playlist_id, identity, 8., 12.);
         for _ in 0..3 {
-            history.synchronize(&[chunk()], 4.);
+            history.synchronize(&[(8., 12.)], 4.);
             history.synchronize(&[], 4.);
             assert!(history.needs_loading(playlist_id, identity));
             history.insert(playlist_id, identity, 8., 12.);
@@ -380,25 +383,22 @@ mod tests {
 
     #[test]
     fn partial_loss_is_ignored_behind_playback_and_small_boundary_changes_are_tolerated() {
-        let mut history = ValidatedSegmentHistory::default();
+        let mut history = SegmentLoadingHistory::default();
         let playlist_id = MediaPlaylistPermanentId::new_for_test(1);
         let identity = SegmentIdentity::new(1, 0);
-        let chunk = |start, end| {
-            BufferedChunk::new_for_test(start, end, SegmentQualityContext::new(1., playlist_id))
-        };
         history.insert(playlist_id, identity, 8., 12.);
-        history.synchronize(&[chunk(8., 12.)], 4.);
-        history.synchronize(&[chunk(8., 11.8)], 4.);
+        history.synchronize(&[(8., 12.)], 4.);
+        history.synchronize(&[(8., 11.8)], 4.);
         assert!(!history.needs_loading(playlist_id, identity));
-        history.synchronize(&[chunk(9., 12.)], 10.);
+        history.synchronize(&[(9., 12.)], 10.);
         assert!(!history.needs_loading(playlist_id, identity));
-        history.synchronize(&[chunk(9., 12.)], 4.);
+        history.synchronize(&[(9., 12.)], 4.);
         assert!(history.needs_loading(playlist_id, identity));
     }
 
     #[test]
     fn identity_ignores_end_time_and_distinguishes_media_and_discontinuities() {
-        let mut history = ValidatedSegmentHistory::default();
+        let mut history = SegmentLoadingHistory::default();
         let identity = SegmentIdentity::new(10, 2);
         history.insert(MediaPlaylistPermanentId::new_for_test(1), identity, 0., 12.);
         history.insert(
@@ -427,7 +427,7 @@ mod tests {
 
     #[test]
     fn eviction_keeps_future_entries_regardless_of_insertion_order() {
-        let mut history = ValidatedSegmentHistory::default();
+        let mut history = SegmentLoadingHistory::default();
         let earlier = SegmentIdentity::new(1, 0);
         let later = SegmentIdentity::new(2, 0);
         history.insert(MediaPlaylistPermanentId::new_for_test(1), later, 0., 20.);

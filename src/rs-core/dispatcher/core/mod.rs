@@ -513,14 +513,16 @@ impl Dispatcher {
         let reason = observation.reason();
         log_debug!("Tick received: {:?} {}", reason, observation.current_time());
         // TODO: Group rebuffering and end-of-stream decisions with freezing
-        // detection and possibly gap jumping. Rebuffering currently uses the
+        // detection and possibly gap jumping? Rebuffering currently uses the
         // previous selection result until the next observation.
         self.media_element_ref.on_observation(observation);
         for media_type in [MediaType::Audio, MediaType::Video] {
-            self.segment_selectors
-                .get_mut(media_type)
-                // XXX TODO: Mandatory? Why?
-                .check_for_buffer_loss(self.media_element_ref.inventory(media_type));
+            if let Some(buffered) = self.media_element_ref.buffered_ranges_for(media_type) {
+                self.segment_selectors
+                    .get_mut(media_type)
+                    // XXX TODO: Maybe not talk about "buffer" when in segment_selectors
+                    .check_for_buffer_loss(&buffered);
+            }
         }
         match reason {
             PlaybackTickReason::Seeking => self.on_seek(),
