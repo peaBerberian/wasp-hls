@@ -55,7 +55,8 @@ impl Dispatcher {
         self.update_min_buffer_time();
         self.ready_probe_segments.clear();
         self.initial_audio_track_selection.clear();
-        self.last_subtitle_selection_generation = None;
+        self.initial_subtitle_track_selection.clear();
+        self.last_announced_subtitle_selection = None;
         self.last_position = 0.;
         self.playlist_refresh_manager.clear();
         self.ready_state = PlayerReadyState::Stopped;
@@ -628,7 +629,7 @@ impl Dispatcher {
             return;
         };
         let generation = store.subtitle_selection_generation();
-        if self.last_subtitle_selection_generation == Some(generation) {
+        if self.last_announced_subtitle_selection == Some(generation) {
             return;
         }
         let track_id = store.current_subtitle_track_id();
@@ -648,7 +649,7 @@ impl Dispatcher {
         ) {
             return;
         }
-        self.last_subtitle_selection_generation = Some(generation);
+        self.last_announced_subtitle_selection = Some(generation);
         jsAnnounceTrackUpdate(MediaType::Text, track_id);
     }
 
@@ -886,6 +887,7 @@ impl Dispatcher {
             Ok(mut pl_store) => {
                 log_info!("Core: top-level playlist parsed successfully");
                 self.apply_initial_audio_track_selection(&mut pl_store);
+                self.apply_initial_subtitle_track_selection(&mut pl_store);
                 // Inspect the safe variant at startup. Later recommendations go straight
                 // to segment selection.
                 if let Some(selection) = self.adaptive_selector.select_variant(
@@ -933,6 +935,27 @@ impl Dispatcher {
                     SetAudioTrackResponse::NoPlaylistChange
                     | SetAudioTrackResponse::AudioMediaUpdate
                     | SetAudioTrackResponse::VariantSelectionNeeded { .. } => return,
+                }
+            }
+        }
+    }
+
+    fn apply_initial_subtitle_track_selection(&mut self, pl_store: &mut PlaylistStore) {
+        let selections = std::mem::take(&mut self.initial_subtitle_track_selection);
+        for selection in selections {
+            let Some(selection) = selection else {
+                pl_store.disable_subtitle_track();
+                return;
+            };
+            let matching_ids: Vec<_> = pl_store
+                .subtitle_tracks()
+                .iter()
+                .filter(|track| selection.matches(track))
+                .map(|track| track.id())
+                .collect();
+            for id in matching_ids {
+                if pl_store.set_subtitle_track(Some(id)).is_ok() {
+                    return;
                 }
             }
         }
@@ -1802,6 +1825,41 @@ video.m3u8
     }
 
     #[test]
+    fn initial_subtitle_preferences_skip_tracks_incompatible_with_selected_audio() {
+        let mut store = selected_playlist(b"#EXTM3U\n#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID=\"en\",NAME=\"English\",LANGUAGE=\"en\",URI=\"en.m3u8\"\n#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID=\"fr\",NAME=\"French\",LANGUAGE=\"fr\",URI=\"fr.m3u8\"\n#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID=\"a\",NAME=\"English\",LANGUAGE=\"en\",URI=\"en-subs.m3u8\"\n#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID=\"b\",NAME=\"French\",LANGUAGE=\"fr\",URI=\"fr-subs.m3u8\"\n#EXT-X-STREAM-INF:BANDWIDTH=100000,AUDIO=\"en\",SUBTITLES=\"a\"\na.m3u8\n#EXT-X-STREAM-INF:BANDWIDTH=200000,AUDIO=\"fr\",SUBTITLES=\"b\"\nb.m3u8\n");
+        let audio_id = store
+            .audio_tracks()
+            .iter()
+            .find(|track| track.language() == Some("en"))
+            .unwrap()
+            .id();
+        store.set_audio_track(Some(audio_id));
+        let mut dispatcher = Dispatcher::new(100000.);
+        dispatcher.initial_subtitle_track_selection = vec![
+            Some(crate::dispatcher::InitialSubtitleTrackSelection {
+                language: Some("fr".into()),
+                forced: Some(false),
+                ..Default::default()
+            }),
+            Some(crate::dispatcher::InitialSubtitleTrackSelection {
+                language: Some("en".into()),
+                forced: Some(false),
+                ..Default::default()
+            }),
+        ];
+        dispatcher.apply_initial_subtitle_track_selection(&mut store);
+        let english_subtitle = store
+            .subtitle_tracks()
+            .iter()
+            .find(|track| track.language() == Some("en"))
+            .unwrap()
+            .id();
+        assert_eq!(store.fixed_audio_track_id(), Some(audio_id));
+        assert_eq!(store.fixed_subtitle_track_id(), Some(english_subtitle));
+        assert!(dispatcher.initial_subtitle_track_selection.is_empty());
+    }
+
+    #[test]
     fn changing_subtitle_selection_cancels_only_text_requests_and_contexts() {
         let mut store = selected_playlist(b"#EXTM3U\n#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID=\"subs\",NAME=\"English\",DEFAULT=YES,URI=\"subs.m3u8\"\n#EXT-X-STREAM-INF:BANDWIDTH=100000,CODECS=\"avc1.42E01E\",SUBTITLES=\"subs\"\nvideo.m3u8\n");
         let text_id = *store.current_media_playlist_id(MediaType::Text).unwrap();
@@ -1975,7 +2033,7 @@ video.m3u8
             ]
         );
         assert_eq!(
-            dispatcher.last_subtitle_selection_generation,
+            dispatcher.last_announced_subtitle_selection,
             Some(store.subtitle_selection_generation())
         );
         assert_eq!(

@@ -14,9 +14,9 @@ pub(crate) struct AudioTrackList {
 impl AudioTrackList {
     /// Creates a new `AudioTrackList` from the given `Vec<MediaTag>`, which should contain
     /// information on all media tags of type `"AUDIO"`.
-    pub(super) fn new(mut audio_media: Vec<MediaTag>) -> Self {
+    pub(super) fn new(audio_media: Vec<MediaTag>) -> Self {
         let mut available_audio_tracks: Vec<AudioTrack> = vec![];
-        while let Some(media) = audio_media.pop() {
+        for media in audio_media {
             let id = media.id();
             let name = media.name();
             let language = media.language();
@@ -25,7 +25,7 @@ impl AudioTrackList {
             let characteristics = media.characteristics();
 
             // Check if the track already exist in another encoding quality
-            let pos_compat = available_audio_tracks.iter().position(|t| {
+            let compatible_track = available_audio_tracks.iter_mut().find(|t| {
                 t.name() == name
                     && t.language() == language
                     && t.assoc_language() == assoc_language
@@ -33,11 +33,11 @@ impl AudioTrackList {
                     && t.characteristics() == characteristics
             });
 
-            if let Some(pos) = pos_compat {
-                available_audio_tracks[pos].media_tags.push(media);
+            if let Some(track) = compatible_track {
+                track.media_tags.push(media);
             } else {
                 available_audio_tracks.push(AudioTrack {
-                    id: id.to_owned(),
+                    id,
                     media_tags: vec![media],
                 });
             }

@@ -80,6 +80,101 @@ describe("Playlist compatibility", () => {
     },
   );
 
+  it.each([
+    "single",
+    "ordered",
+    "unmatched",
+    "forced",
+    "off",
+    "fallback-off",
+    "off-first",
+    "match-before-off",
+    "empty",
+  ])(
+    "applies %s initial subtitle preferences before the first track update",
+    { timeout: TEST_TIMEOUT_MS },
+    async (preferenceKind) => {
+      const url = await ensureVodScenarioReady("fmp4-alt-audio");
+      const master = await readPlaylist(url);
+      const tags = [
+        '#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID="subs",NAME="English",LANGUAGE="en",DEFAULT=YES,URI="en-subs.m3u8"',
+        '#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID="subs",NAME="Forced French",LANGUAGE="fr",FORCED=YES,AUTOSELECT=YES,URI="forced-fr.m3u8"',
+        '#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID="subs",NAME="French",LANGUAGE="fr",CHARACTERISTICS="public.accessibility.transcribes-spoken-dialog",URI="fr-subs.m3u8"',
+      ].join("\n");
+      const body = master
+        .replace("#EXTM3U\n", `#EXTM3U\n${tags}\n`)
+        .replaceAll(
+          "#EXT-X-STREAM-INF:",
+          '#EXT-X-STREAM-INF:SUBTITLES="subs",',
+        );
+      const selection = {
+        language: "fr",
+        forced: false,
+        characteristics: ["public.accessibility.transcribes-spoken-dialog"],
+      };
+      const initialSubtitleTrack =
+        preferenceKind === "off"
+          ? null
+          : preferenceKind === "fallback-off"
+            ? [{ language: "de" }, null, selection]
+            : preferenceKind === "off-first"
+              ? [null, selection]
+              : preferenceKind === "match-before-off"
+                ? [selection, null]
+                : preferenceKind === "empty"
+                  ? []
+                  : preferenceKind === "ordered"
+                    ? [{ language: "de" }, selection]
+                    : preferenceKind === "unmatched"
+                      ? { language: "de" }
+                      : preferenceKind === "forced"
+                        ? { forced: true }
+                        : selection;
+      const ctx = await createPlayerHarness({
+        fetchRules: [playlistRule(url, body)],
+      });
+      try {
+        const updates = [];
+        ctx.player.addEventListener("subtitleTrackUpdate", (track) =>
+          updates.push(track),
+        );
+        ctx.player.load(url, {
+          initialAudioTrack: { language: "fr" },
+          initialSubtitleTrack,
+        });
+        await waitForLoadedState(ctx.player, ctx.videoElement, () =>
+          ctx.getLastPlayerError(),
+        );
+        const expectedName = ["off", "fallback-off", "off-first"].includes(
+          preferenceKind,
+        )
+          ? undefined
+          : ["unmatched", "empty"].includes(preferenceKind)
+            ? "English"
+            : preferenceKind === "forced"
+              ? "Forced French"
+              : "French";
+        expect(ctx.player.getCurrentAudioTrack()?.language).toBe("fr");
+        expect(ctx.player.getCurrentSubtitleTrack()?.name).toBe(expectedName);
+        expect(updates[0]?.name).toBe(expectedName);
+        if (expectedName === undefined) {
+          expect(ctx.player.getCurrentSubtitleTrack()).toBeNull();
+          expect(updates[0]).toBeNull();
+        }
+        expect(ctx.player.getError()).toBeNull();
+
+        // A new load without preferences uses automatic selection again.
+        ctx.player.load(url);
+        await waitForLoadedState(ctx.player, ctx.videoElement, () =>
+          ctx.getLastPlayerError(),
+        );
+        expect(ctx.player.getCurrentSubtitleTrack()?.name).toBe("English");
+      } finally {
+        ctx.dispose();
+      }
+    },
+  );
+
   it.each(["missing", "empty"])(
     "preserves %s audio and subtitle names through the public API",
     { timeout: TEST_TIMEOUT_MS },
@@ -158,9 +253,14 @@ describe("Playlist compatibility", () => {
         });
         expect(announced.at(-1)).toEqual(tracks);
         expect(ctx.player.getCurrentSubtitleTrack()?.id).toBe(tracks[0].id);
-        expect(() => ctx.player.setSubtitleTrack(-1)).toThrow(
-          "Unknown subtitle track",
+        const invalidSelection = waitForPlayerEvent(
+          ctx.player,
+          "warning",
+          () => true,
         );
+        expect(() => ctx.player.setSubtitleTrack(0x7ffffffe)).not.toThrow();
+        await invalidSelection;
+        expect(ctx.player.getCurrentSubtitleTrack()?.id).toBe(tracks[0].id);
         ctx.player.setSubtitleTrack(tracks[0].id);
         const disabled = waitForPlayerEvent(
           ctx.player,

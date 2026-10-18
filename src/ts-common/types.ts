@@ -474,7 +474,7 @@ export interface TrackUpdateWorkerMessage {
      */
     contentId: string;
     mediaType: MediaType;
-    subtitleTrack?: number | undefined;
+    subtitleTrack?: { current: number } | undefined;
     audioTrack?:
       | {
           current: number;
@@ -557,6 +557,20 @@ export interface InitialAudioTrackSelection {
  */
 export type InitialAudioTrackPreference =
   InitialAudioTrackSelection | InitialAudioTrackSelection[];
+
+/** Preferred characteristics for the initially selected subtitle track. */
+export interface InitialSubtitleTrackSelection {
+  language?: string | undefined;
+  assocLanguage?: string | undefined;
+  name?: string | undefined;
+  characteristics?: string[] | undefined;
+  forced?: boolean | undefined;
+}
+
+export type InitialSubtitleTrackPreference =
+  | InitialSubtitleTrackSelection
+  | null
+  | Array<InitialSubtitleTrackSelection | null>;
 
 /**
  * Message sent when the Worker has succesfully stopped a content.
@@ -1026,6 +1040,7 @@ export interface LoadContentMainMessage {
       | undefined;
     /** Preferred characteristics for the initially selected audio track. */
     initialAudioTrack?: InitialAudioTrackPreference | undefined;
+    initialSubtitleTrack?: InitialSubtitleTrackPreference | undefined;
   };
 }
 
