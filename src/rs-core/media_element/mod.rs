@@ -598,7 +598,10 @@ impl MediaElementReference {
                 } else {
                     // XXX TODO: why?
                     sb.set_loading_complete(false);
-                    sb.cancel_current_operations()
+                    let cancelled = sb.cancel_current_operations();
+                    self.audio_inventory
+                        .discard_pending(&cancelled.cancelled_media_ids);
+                    cancelled.current
                 };
                 if let Some(SourceBufferQueueElement::PushMedia { id, .. }) = queue_elt {
                     if let Some(media_offset) = self.media_offset {
@@ -618,7 +621,10 @@ impl MediaElementReference {
                     sb.on_operation_end()
                 } else {
                     sb.set_loading_complete(false);
-                    sb.cancel_current_operations()
+                    let cancelled = sb.cancel_current_operations();
+                    self.video_inventory
+                        .discard_pending(&cancelled.cancelled_media_ids);
+                    cancelled.current
                 };
                 if let Some(SourceBufferQueueElement::PushMedia { id, .. }) = queue_elt {
                     if let Some(media_offset) = self.media_offset {

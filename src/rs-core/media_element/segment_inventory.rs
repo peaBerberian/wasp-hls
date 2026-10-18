@@ -302,12 +302,6 @@ impl SegmentInventory {
         media_offset: f64,
         success: bool,
     ) {
-        // XXX TODO: Why that diff
-        if !success {
-            // The failed append also cancels the remaining operations in this buffer.
-            self.inventory
-                .retain(|segment| segment.validated || segment.id == seg_id);
-        }
         self.synchronize(buffered, media_offset);
         let seg_idx = self
             .inventory
@@ -886,6 +880,12 @@ impl SegmentInventory {
             .map(|(_, precise_end)| precise_end)
     }
 
+    /// Remove entries for media appends cancelled before they could run.
+    pub(super) fn discard_pending(&mut self, ids: &[u64]) {
+        // XXX TODO: Shouldn't we remove only the non-validated ones?
+        self.inventory.retain(|segment| !ids.contains(&segment.id));
+    }
+
     pub(super) fn synchronize(&mut self, buffered: &JsTimeRanges, media_offset: f64) {
         let mut segment_idx = 0;
         if segment_idx >= self.inventory.len() {
@@ -1335,9 +1335,42 @@ mod tests {
 
         let mut failed = SegmentInventory::new(MediaType::Video);
         let id = failed.insert_segment(metadata(10., 12.));
-        failed.insert_segment(metadata(12., 14.));
+        let cancelled = failed.insert_segment(metadata(12., 14.));
+        failed.discard_pending(&[cancelled]);
         failed.reconcile_push_result(id, &JsTimeRanges::new(vec![]), 0., false);
         assert!(failed.inventory().is_empty());
+    }
+
+    #[test]
+    fn cancellation_keeps_other_entries_and_reconciles_the_failed_append() {
+        let mut inventory = SegmentInventory::new(MediaType::Video);
+        let earlier = inventory.insert_segment(metadata(0., 4.));
+        inventory.reconcile_push_result(earlier, &JsTimeRanges::new(vec![0., 4.]), 0., true);
+        let failed = inventory.insert_segment(metadata(4., 8.));
+        let cancelled = inventory.insert_segment(metadata(8., 12.));
+        let other = inventory.insert_segment(metadata(12., 16.));
+
+        inventory.discard_pending(&[cancelled]);
+        assert_eq!(
+            inventory
+                .inventory()
+                .iter()
+                .map(|segment| segment.id)
+                .collect::<Vec<_>>(),
+            vec![earlier, failed, other]
+        );
+        inventory.reconcile_push_result(failed, &JsTimeRanges::new(vec![0., 6.]), 0., false);
+        let failed_entry = inventory
+            .inventory()
+            .iter()
+            .find(|segment| segment.id == failed)
+            .unwrap();
+        assert!(failed_entry.validated);
+        assert_eq!(failed_entry.last_buffered_end(), 6.);
+        assert!(inventory
+            .inventory()
+            .iter()
+            .any(|segment| segment.id == other && !segment.validated));
     }
 
     #[test]
