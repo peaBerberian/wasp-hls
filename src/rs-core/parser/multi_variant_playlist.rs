@@ -673,7 +673,6 @@ pub(crate) enum MultivariantPlaylistParsingError {
     InvalidDecimalInteger,
 
     MediaTagMissingType,
-    MediaTagMissingName,
     MediaTagMissingGroupId,
 
     UnableToReadLine,
@@ -711,9 +710,6 @@ impl fmt::Display for MultivariantPlaylistParsingError {
             }
             MultivariantPlaylistParsingError::MediaTagMissingType => {
                 write!(f, "A media tag is missing a TYPE attribute")
-            }
-            MultivariantPlaylistParsingError::MediaTagMissingName => {
-                write!(f, "A media tag is missing a NAME attribute")
             }
             MultivariantPlaylistParsingError::MediaTagMissingGroupId => {
                 write!(f, "A media tag is missing a GROUP-ID attribute")
@@ -756,9 +752,6 @@ impl From<MediaTagParsingError> for MultivariantPlaylistParsingError {
             }
             MediaTagParsingError::MissingGroupId => {
                 MultivariantPlaylistParsingError::MediaTagMissingGroupId
-            }
-            MediaTagParsingError::MissingName => {
-                MultivariantPlaylistParsingError::MediaTagMissingName
             }
             _ => MultivariantPlaylistParsingError::Unknown,
         }
@@ -859,7 +852,7 @@ mod tests {
                 .iter()
                 .map(|track| track.name())
                 .collect::<Vec<_>>(),
-            vec!["English", "French"]
+            vec![Some("English"), Some("French")]
         );
         assert_eq!(parsed.audio_tracks()[0].id(), 0);
         assert_eq!(
@@ -870,6 +863,30 @@ mod tests {
                 .collect::<Vec<_>>(),
             vec![0, 2]
         );
+    }
+
+    #[test]
+    fn missing_audio_names_remain_distinct_from_explicitly_empty_names() {
+        let manifest = b"#EXTM3U\n#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID=\"audio\",LANGUAGE=\"en\",URI=\"audio.m3u8\"\n#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID=\"audio\",NAME=\"\",LANGUAGE=\"en\",URI=\"empty-audio.m3u8\"\n#EXT-X-STREAM-INF:BANDWIDTH=100000,AUDIO=\"audio\"\nvideo.m3u8\n";
+        let parsed = MultivariantPlaylist::parse(
+            &manifest[..],
+            Url::new("https://example.com/master.m3u8".into()),
+        )
+        .unwrap();
+        assert_eq!(
+            parsed
+                .audio_tracks()
+                .iter()
+                .map(|track| track.name())
+                .collect::<Vec<_>>(),
+            vec![None, Some("")]
+        );
+        let variant = parsed.variant_from_idx(0).unwrap();
+        for track in parsed.audio_tracks() {
+            assert!(parsed
+                .audio_media_playlist_id_for(variant, Some(track.id()))
+                .is_some());
+        }
     }
 
     #[test]
@@ -1086,7 +1103,7 @@ other-video.m3u8
             parsed.variant_from_idx(0).unwrap().url().get_ref(),
             "https://cdn.example.com/video.m3u8"
         );
-        assert_eq!(parsed.audio_tracks()[0].name(), "Track aud-main");
+        assert_eq!(parsed.audio_tracks()[0].name(), Some("Track aud-main"));
         assert_eq!(
             parsed.audio_tracks()[0].medias()[0]
                 .url()

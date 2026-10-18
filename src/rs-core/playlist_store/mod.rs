@@ -1333,7 +1333,7 @@ mod tests {
             let expected = store
                 .audio_tracks()
                 .iter()
-                .find(|track| track.name() == default.unwrap_or("English"))
+                .find(|track| track.name() == Some(default.unwrap_or("English")))
                 .unwrap()
                 .id();
             assert_eq!(store.current_audio_track_id(), Some(expected));
@@ -1824,7 +1824,7 @@ high.m3u8
         let french_id = store
             .audio_tracks()
             .iter()
-            .find(|track| track.name() == "French")
+            .find(|track| track.name() == Some("French"))
             .unwrap()
             .id();
         store.set_variant(low_id);
@@ -1899,13 +1899,13 @@ high.m3u8
         let english_id = store
             .audio_tracks()
             .iter()
-            .find(|track| track.name() == "English")
+            .find(|track| track.name() == Some("English"))
             .unwrap()
             .id();
         let french_id = store
             .audio_tracks()
             .iter()
-            .find(|track| track.name() == "French")
+            .find(|track| track.name() == Some("French"))
             .unwrap()
             .id();
         store.set_audio_track(Some(english_id));
@@ -1965,7 +1965,7 @@ fr-high.m3u8
         let french_id = store
             .audio_tracks()
             .iter()
-            .find(|track| track.name() == "French")
+            .find(|track| track.name() == Some("French"))
             .unwrap()
             .id();
 
@@ -2231,13 +2231,13 @@ seg.ts
         let english_track_id = store
             .audio_tracks()
             .iter()
-            .find(|track| track.name() == "English")
+            .find(|track| track.name() == Some("English"))
             .unwrap()
             .id();
         let french_track_id = store
             .audio_tracks()
             .iter()
-            .find(|track| track.name() == "French")
+            .find(|track| track.name() == Some("French"))
             .unwrap()
             .id();
         let english_playlist_id = *store.current_media_playlist_id(MediaType::Audio).unwrap();
@@ -2312,13 +2312,13 @@ seg.ts
         let english_track_id = store
             .audio_tracks()
             .iter()
-            .find(|track| track.name() == "English")
+            .find(|track| track.name() == Some("English"))
             .unwrap()
             .id();
         let french_track_id = store
             .audio_tracks()
             .iter()
-            .find(|track| track.name() == "French")
+            .find(|track| track.name() == Some("French"))
             .unwrap()
             .id();
         let english_playlist_id = *store.current_media_playlist_id(MediaType::Audio).unwrap();

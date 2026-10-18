@@ -794,7 +794,6 @@ impl From<MultivariantPlaylistParsingError> for MultivariantPlaylistParsingError
                 MultivariantPlaylistParsingErrorCode::InvalidValue
             }
             MultivariantPlaylistParsingError::MediaTagMissingType
-            | MultivariantPlaylistParsingError::MediaTagMissingName
             | MultivariantPlaylistParsingError::MediaTagMissingGroupId => {
                 MultivariantPlaylistParsingErrorCode::MissingRequiredAttribute
             }

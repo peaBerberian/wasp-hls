@@ -37,6 +37,37 @@ async function expectPlayback(ctx, url) {
 }
 
 describe("Playlist compatibility", () => {
+  it.each(["missing", "empty"])(
+    "preserves %s audio names through the public API",
+    { timeout: TEST_TIMEOUT_MS },
+    async (nameKind) => {
+      const url = await ensureVodScenarioReady("fmp4-alt-audio");
+      const master = await readPlaylist(url);
+      const nameAttribute = nameKind === "missing" ? "" : ',NAME=""';
+      const body = master.replace(/,NAME="[^"]*"/g, nameAttribute);
+      const ctx = await createPlayerHarness({
+        fetchRules: [playlistRule(url, body)],
+      });
+      try {
+        const audioUpdates = [];
+        ctx.player.addEventListener("audioTrackListUpdate", (tracks) =>
+          audioUpdates.push(tracks),
+        );
+        await expectPlayback(ctx, url);
+        const expectedName = nameKind === "missing" ? undefined : "";
+        const audioTracks = ctx.player.getAudioTrackList();
+        expect(audioTracks).toHaveLength(2);
+        for (const track of audioTracks) {
+          expect(track.name).toBe(expectedName);
+        }
+        expect(ctx.player.getCurrentAudioTrack()?.name).toBe(expectedName);
+        expect(audioUpdates.at(-1)).toEqual(audioTracks);
+      } finally {
+        ctx.dispose();
+      }
+    },
+  );
+
   it.each(["en", "fr"])(
     "selects the DEFAULT=YES audio rendition (%s) regardless of declaration order",
     { timeout: TEST_TIMEOUT_MS },

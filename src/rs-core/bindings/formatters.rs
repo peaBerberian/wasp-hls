@@ -107,8 +107,9 @@ pub(crate) unsafe fn format_audio_tracks_for_js(tracks: &[AudioTrack]) -> Vec<u3
         ret.push(assoc_language.as_ptr() as u32);
 
         let name = t.name();
-        ret.push(name.len() as u32);
-        ret.push(name.as_ptr() as u32);
+        // A null pointer marks a missing NAME, preserving explicitly empty names.
+        ret.push(name.map_or(0, |value| value.len() as u32));
+        ret.push(name.map_or(0, |value| value.as_ptr() as u32));
         ret.push(t.channels().unwrap_or(0));
 
         let characteristics = t.characteristics();

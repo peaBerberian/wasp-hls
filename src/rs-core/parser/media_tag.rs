@@ -54,10 +54,10 @@ pub struct MediaTag {
     /// spoken, or a fallback dialect).
     assoc_language: Option<String>,
 
-    /// Contains a human-readable description of the Rendition.
+    /// Contains a human-readable description of the Rendition, or `None` when NAME is absent.
     /// If the `language` attribute is present, then this description SHOULD be
     /// in that language.
-    name: String,
+    name: Option<String>,
 
     /// If `true`, then the client SHOULD play this Rendition of the content in
     /// the absence of information from the user indicating a different choice.
@@ -149,7 +149,6 @@ pub enum MediaTagType {
 pub enum MediaTagParsingError {
     MissingType,
     MissingGroupId,
-    MissingName,
     Unknown,
 }
 
@@ -324,12 +323,6 @@ impl MediaTag {
         } else {
             return Err(MediaTagParsingError::MissingGroupId);
         };
-        let name = if let Some(x) = name {
-            x
-        } else {
-            return Err(MediaTagParsingError::MissingName);
-        };
-
         url = url.map(|u| {
             if u.is_absolute() {
                 u
@@ -383,8 +376,7 @@ impl MediaTag {
             timeline_reference,
             context,
         )?;
-        self.media_playlist = Some(new_mp);
-        Ok(self.media_playlist.as_ref().unwrap())
+        Ok(self.media_playlist.insert(new_mp))
     }
 
     pub(crate) fn id(&self) -> u32 {
@@ -425,8 +417,8 @@ impl MediaTag {
         Some(l.as_str())
     }
 
-    pub(crate) fn name(&self) -> &str {
-        self.name.as_str()
+    pub(crate) fn name(&self) -> Option<&str> {
+        self.name.as_deref()
     }
 
     pub(crate) fn channels(&self) -> Option<u32> {
