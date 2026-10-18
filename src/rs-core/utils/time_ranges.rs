@@ -30,78 +30,33 @@ impl TimeRanges {
 
     /// Add a range of time to that `TimeRanges` object, merging it with the ranges that are
     /// already there.
-    pub(crate) fn add(&mut self, start: f64, end: f64) {
-        let first_overlapping_idx = self.ranges.iter().position(|r| r.end > start);
-
-        if let Some(first_overlapping_idx) = first_overlapping_idx {
-            let mut has_updated_start = false;
-            let mut has_updated_end = false;
-
-            let initial_range = self.ranges.get_mut(first_overlapping_idx).unwrap();
-            if end < initial_range.start {
-                self.ranges
-                    .insert(first_overlapping_idx, TimeRange { start, end });
-                return;
-            } else {
-                if end > initial_range.end {
-                    initial_range.end = end;
-                    has_updated_end = true;
-                }
-
-                if start < initial_range.start {
-                    initial_range.start = start;
-                    has_updated_start = true;
-                }
+    pub(crate) fn add(&mut self, mut start: f64, mut end: f64) {
+        let first = self
+            .ranges
+            .iter()
+            .position(|range| range.end >= start)
+            .unwrap_or(self.ranges.len());
+        let mut after_last = first;
+        while let Some(range) = self.ranges.get(after_last) {
+            if range.start > end {
+                break;
             }
-
-            // TODO simplify this mess pls
-
-            if has_updated_end {
-                let mut to_remove_after = 0;
-                let mut prev_end = self.ranges.get_mut(first_overlapping_idx).unwrap().end;
-                for next_range in self.ranges.iter().skip(first_overlapping_idx) {
-                    if next_range.start <= prev_end {
-                        to_remove_after += 1;
-                        prev_end = next_range.end;
-                    } else {
-                        break;
-                    }
-                }
-
-                if to_remove_after > 0 {
-                    let removal_range_start = first_overlapping_idx + 1;
-                    let removal_range_end = first_overlapping_idx + 1 + to_remove_after;
-                    self.ranges.drain(removal_range_start..removal_range_end);
-                }
-            }
-
-            if has_updated_start {
-                let mut to_remove_before = 0;
-                let mut next_start = self.ranges.get_mut(first_overlapping_idx).unwrap().start;
-                let iteration_start = self.ranges.len() - first_overlapping_idx;
-                for prev_range in self.ranges.iter().rev().skip(iteration_start) {
-                    if prev_range.end >= next_start {
-                        to_remove_before += 1;
-                        next_start = prev_range.start;
-                    } else {
-                        break;
-                    }
-                }
-
-                if to_remove_before > 0 {
-                    let removal_range_start = first_overlapping_idx - to_remove_before;
-                    let removal_range_end = to_remove_before;
-                    self.ranges.drain(removal_range_start..removal_range_end);
-                }
-            }
-        } else {
-            self.ranges.push(TimeRange { start, end });
+            start = start.min(range.start);
+            end = end.max(range.end);
+            after_last += 1;
         }
+        // Replace only the ranges that overlap or touch the new range.
+        self.ranges
+            .splice(first..after_last, [TimeRange { start, end }]);
     }
 
     /// Remove time range at a particular index
     pub(crate) fn remove(&mut self, idx: usize) -> TimeRange {
         self.ranges.remove(idx)
+    }
+
+    pub(crate) fn is_empty(&self) -> bool {
+        self.ranges.is_empty()
     }
 
     /// Returns the number of non-contiguous ranges in this `TimeRanges` object
@@ -176,5 +131,81 @@ impl<'a> IntoIterator for &'a TimeRanges {
 
     fn into_iter(self) -> Self::IntoIter {
         self.ranges.iter()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::TimeRanges;
+
+    #[test]
+    fn merging_matches_covered_intervals_in_every_insertion_order() {
+        let inputs: Vec<_> = (0..5)
+            .flat_map(|start| (start + 1..=5).map(move |end| (start, end)))
+            .collect();
+        for a in &inputs {
+            for b in &inputs {
+                for c in &inputs {
+                    let mut ranges = TimeRanges::new();
+                    let mut covered = [false; 5];
+                    for &(start, end) in [a, b, c] {
+                        ranges.add(start as f64, end as f64);
+                        covered[start..end].fill(true);
+                    }
+                    // Build the expected ranges from individual covered intervals,
+                    // independently of the range-merging algorithm.
+                    let mut expected = Vec::new();
+                    let mut index = 0;
+                    while index < covered.len() {
+                        if !covered[index] {
+                            index += 1;
+                            continue;
+                        }
+                        let start = index;
+                        while index < covered.len() && covered[index] {
+                            index += 1;
+                        }
+                        expected.push((start as f64, index as f64));
+                    }
+                    let actual: Vec<_> = (&ranges)
+                        .into_iter()
+                        .map(|range| (range.start(), range.end()))
+                        .collect();
+                    assert_eq!(actual, expected, "inputs: {a:?}, {b:?}, {c:?}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn adding_ranges_merges_overlap_and_touching_boundaries_but_keeps_gaps() {
+        for (input, expected) in [
+            (vec![(2., 4.), (3., 6.)], vec![(2., 6.)]),
+            (vec![(2., 4.), (0., 2.), (4., 6.)], vec![(0., 6.)]),
+            (
+                vec![(0., 2.), (4., 6.), (8., 10.), (1., 9.)],
+                vec![(0., 10.)],
+            ),
+            (
+                vec![(0., 2.), (4., 10.), (11., 12.), (1., 5.)],
+                vec![(0., 10.), (11., 12.)],
+            ),
+            (vec![(0., 10.), (2., 3.)], vec![(0., 10.)]),
+            (
+                vec![(8., 10.), (0., 2.), (4., 6.)],
+                vec![(0., 2.), (4., 6.), (8., 10.)],
+            ),
+            (vec![(0., 2.), (2.01, 4.)], vec![(0., 2.), (2.01, 4.)]),
+        ] {
+            let mut ranges = TimeRanges::new();
+            for &(start, end) in &input {
+                ranges.add(start, end);
+            }
+            let actual: Vec<_> = (&ranges)
+                .into_iter()
+                .map(|range| (range.start(), range.end()))
+                .collect();
+            assert_eq!(actual, expected, "input: {input:?}");
+        }
     }
 }

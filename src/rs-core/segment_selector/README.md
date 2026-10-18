@@ -28,7 +28,7 @@ Returning a segment doesn't advance the cursor past it. The caller has to
 "validate" media and initialization segments through `validate_media` and
 `validate_init` when accepting them, otherwise they may be proposed again.
 
-`validated_segment_history.rs` remembers which segments were already supplied.
+`segment_loading_history.rs` remembers which segments were already supplied.
 It prevents repeated downloads and decides when removed data should be loaded again.
 
 For regular playback, `advance_position` updates the base position while keeping
