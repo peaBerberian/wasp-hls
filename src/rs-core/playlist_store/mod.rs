@@ -1351,6 +1351,19 @@ mod tests {
         }
     }
 
+    #[test]
+    fn missing_audio_group_does_not_prevent_selecting_the_variant() {
+        let manifest = b"#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=100000,CODECS=\"avc1.42E01E,mp4a.40.2\",AUDIO=\"missing\"\nvideo.m3u8\n";
+        let mut store =
+            PlaylistStore::try_new(&manifest[..], parse_url("https://example.com/master.m3u8"))
+                .unwrap();
+        let variant_id = store.available_variants()[0].id();
+        store.set_variant(variant_id);
+        assert_eq!(store.current_variant_id(), Some(variant_id));
+        assert!(store.current_media_playlist_id(MediaType::Video).is_some());
+        assert_eq!(store.compatible_variants().len(), 1);
+    }
+
     fn parse_url(url: &str) -> Url {
         Url::new(url.to_string())
     }

@@ -21,7 +21,6 @@
 - Return `undefined` instead of `-1` for unknown `mediaType` properties on `WaspMediaPlaylistRequestError`, `WaspMediaPlaylistParsingError` and `WaspSegmentParsingError`
 - Correctly report failed segment downloads as `WaspSegmentRequestError` through `error` or `warning` events even when the player does not yet know whether the segment contains audio or video
 - Be resilient to non-UTF-8 HLS playlists
-- Throw error with code `MultivariantPlaylistInvalidValue` when a Multivariant playlist refers to an AUDIO group which does not exist, as per the HLS specification
 - Known codecs but unknown mime-type now trigger segment probing instead of passing an empty MIME type to SourceBuffers
 - Don't get stuck rebuffering if the buffer goal is lower than our internal `min_buffer_time`, one of the thresholds controlling rebuffering
 - Don't load older segments if current playback position already moved past them
