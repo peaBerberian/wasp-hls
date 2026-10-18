@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { waitForLoadedState } from "../../utils/player_test_tools.js";
+import {
+  getPlayerStateSnapshot,
+  waitForLoadedState,
+} from "../../utils/player_test_tools.js";
 import { checkAfterSleepWithBackoff } from "../../utils/checkAfterSleepWithBackoff.js";
 import { getVodScenarioUrl } from "../../utils/vod_scenarios.js";
 import setupPlayer from "../utils/player_setup";
@@ -11,11 +14,6 @@ describe("Generated VoD content - audio only", function () {
     "plays an audio-only variant without an AUDIO group",
     { timeout: 180_000 },
     async () => {
-      ctx.player.addEventListener("playerStateChange", (state) => {
-        if (state === "Loaded") {
-          ctx.player.resume();
-        }
-      });
       ctx.player.load(getVodScenarioUrl("fmp4-audio-only"));
       await waitForLoadedState(
         ctx.player,
@@ -26,8 +24,10 @@ describe("Generated VoD content - audio only", function () {
       expect(ctx.player.isVod()).toEqual(true);
       expect(ctx.player.getMaximumPosition()).toBeGreaterThan(10);
       const startPosition = ctx.player.getPosition();
+      await ctx.player.resume();
       // Allow slow machines time to start playback after reaching Loaded.
       await checkAfterSleepWithBackoff({ maxTimeMs: 60_000 }, () => {
+        expect(ctx.lastPlayerError).toBeNull();
         expect(ctx.player.getPosition()).toBeGreaterThan(startPosition + 1);
       });
       expect(ctx.lastPlayerError).toBeNull();
