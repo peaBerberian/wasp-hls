@@ -359,6 +359,17 @@ impl MultivariantPlaylist {
         }
     }
 
+    /// Return audio renditions in the variant's declared group.
+    pub(crate) fn audio_renditions_for<'a>(
+        &'a self,
+        variant: &'a VariantStream,
+    ) -> impl Iterator<Item = (&'a AudioTrack, &'a MediaTag)> {
+        let group = variant.audio_group();
+        self.audio_tracks
+            .iter_tracks_media()
+            .filter(move |(_, media)| Some(media.group_id()) == group)
+    }
+
     /// Returns the `id` of the audio media that should be chosen when loading the variant given
     /// in argument.
     ///
@@ -369,60 +380,28 @@ impl MultivariantPlaylist {
     /// are compatible with the given characteristics.
     pub(crate) fn audio_media_playlist_id_for(
         &self,
-        curr_variant: &VariantStream,
-        curr_audio_track: Option<u32>,
+        variant: &VariantStream,
+        track_id: Option<u32>,
     ) -> Option<MediaPlaylistPermanentId> {
-        let primary_id: u32 = (*self.primary_id_by_variant.get(&curr_variant.id())?)
+        let primary_id = (*self.primary_id_by_variant.get(&variant.id())?)
             .try_into()
             .ok()?;
-        if let Some(group_id) = curr_variant.audio_group() {
-            if let Some(track_id) = curr_audio_track {
-                self.audio_tracks
-                    .iter()
-                    .find(|t| t.id() == track_id)
-                    .and_then(|t| t.medias().iter().find(|m| m.group_id() == group_id))
-                    .map(|m| {
-                        if m.url().is_some() {
-                            MediaPlaylistPermanentId::new(
-                                MediaPlaylistUrlLocation::AudioTrack,
-                                m.id().to_owned(),
-                            )
-                        } else {
-                            // AudioTrack without URL have in fact their MediaPlaylist's URL in the
-                            // variant
-                            MediaPlaylistPermanentId::new(
-                                MediaPlaylistUrlLocation::Variant,
-                                primary_id,
-                            )
-                        }
-                    })
+        if let Some(track_id) = track_id {
+            let (_, media) = self
+                .audio_renditions_for(variant)
+                .find(|(track, _)| track.id() == track_id)?;
+            if media.url().is_some() {
+                Some(MediaPlaylistPermanentId::new(
+                    MediaPlaylistUrlLocation::AudioTrack,
+                    media.id(),
+                ))
             } else {
-                self.audio_tracks
-                    .iter_tracks_media()
-                    .fold(None, |acc, (_, m)| {
-                        if m.group_id() == group_id && (acc.is_none() || m.is_default()) {
-                            if m.url().is_some() {
-                                Some(MediaPlaylistPermanentId::new(
-                                    MediaPlaylistUrlLocation::AudioTrack,
-                                    m.id().to_owned(),
-                                ))
-                            } else {
-                                // AudioTrack without URL have in fact their MediaPlaylist's URL in the
-                                // variant
-                                Some(MediaPlaylistPermanentId::new(
-                                    MediaPlaylistUrlLocation::Variant,
-                                    primary_id,
-                                ))
-                            }
-                        } else {
-                            acc
-                        }
-                    })
+                Some(MediaPlaylistPermanentId::new(
+                    MediaPlaylistUrlLocation::Variant,
+                    primary_id,
+                ))
             }
-        } else if curr_variant.has_type(MediaType::Audio)
-            && !curr_variant.has_type(MediaType::Video)
-        {
-            // Without an AUDIO group, an audio-only variant carries its own audio.
+        } else if variant.has_type(MediaType::Audio) {
             Some(MediaPlaylistPermanentId::new(
                 MediaPlaylistUrlLocation::Variant,
                 primary_id,
@@ -882,6 +861,33 @@ mod tests {
     use super::*;
 
     #[test]
+    fn audio_tracks_preserve_declaration_order_and_first_rendition_ids() {
+        let manifest = b"#EXTM3U\n#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID=\"a\",NAME=\"English\",URI=\"a-en.m3u8\"\n#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID=\"a\",NAME=\"French\",URI=\"a-fr.m3u8\"\n#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID=\"b\",NAME=\"English\",URI=\"b-en.m3u8\"\n#EXT-X-STREAM-INF:BANDWIDTH=100000,AUDIO=\"a\"\na.m3u8\n#EXT-X-STREAM-INF:BANDWIDTH=200000,AUDIO=\"b\"\nb.m3u8\n";
+        let parsed = MultivariantPlaylist::parse(
+            &manifest[..],
+            Url::new("https://example.com/master.m3u8".into()),
+        )
+        .unwrap();
+        assert_eq!(
+            parsed
+                .audio_tracks()
+                .iter()
+                .map(|track| track.name())
+                .collect::<Vec<_>>(),
+            vec!["English", "French"]
+        );
+        assert_eq!(parsed.audio_tracks()[0].id(), 0);
+        assert_eq!(
+            parsed.audio_tracks()[0]
+                .medias()
+                .iter()
+                .map(|media| media.id())
+                .collect::<Vec<_>>(),
+            vec![0, 2]
+        );
+    }
+
+    #[test]
     fn audio_only_variant_without_audio_group_selects_its_primary_playlist() {
         let playlist = r#"#EXTM3U
 #EXT-X-STREAM-INF:BANDWIDTH=65000,CODECS="mp4a.40.5"
@@ -989,8 +995,14 @@ other-video.m3u8
             1
         );
         assert_ne!(
-            parsed.audio_media_playlist_id_for(parsed.variant(first).unwrap(), None),
-            parsed.audio_media_playlist_id_for(parsed.variant(second).unwrap(), None)
+            parsed.audio_media_playlist_id_for(
+                parsed.variant(first).unwrap(),
+                Some(parsed.audio_tracks()[0].id())
+            ),
+            parsed.audio_media_playlist_id_for(
+                parsed.variant(second).unwrap(),
+                Some(parsed.audio_tracks()[1].id())
+            )
         );
 
         parsed

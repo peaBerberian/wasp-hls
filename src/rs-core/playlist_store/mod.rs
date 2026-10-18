@@ -676,7 +676,7 @@ impl PlaylistStore {
         };
         let variant = playlist.variant(variant_id)?;
         let (audio_id, video_id) = Self::normalize_current_media_ids(
-            playlist.audio_media_playlist_id_for(variant, self.fixed_audio_track),
+            playlist.audio_media_playlist_id_for(variant, self.audio_track_id_for_variant(variant)),
             playlist.video_media_playlist_id_for(variant),
         );
         match media_type {
@@ -783,6 +783,26 @@ impl PlaylistStore {
         }
     }
 
+    /// Choose an explicit audio track, or the first default rendition in declaration order.
+    fn audio_track_id_for_variant(&self, variant: &VariantStream) -> Option<u32> {
+        if let Some(track_id) = self.fixed_audio_track {
+            return Some(track_id);
+        }
+        let TopLevelPlaylist::Multivariant(playlist) = &self.playlist else {
+            return None;
+        };
+        let mut renditions = playlist.audio_renditions_for(variant);
+        let (first_track, first_media) = renditions.next()?;
+        if first_media.is_default() {
+            return Some(first_track.id());
+        }
+        Some(
+            renditions
+                .find(|(_, media)| media.is_default())
+                .map_or(first_track.id(), |(track, _)| track.id()),
+        )
+    }
+
     /// Returns the `id` of the `AudioTrack` object explicitely selected through the
     /// `set_audio_track` API.
     ///
@@ -824,9 +844,8 @@ impl PlaylistStore {
 
         if let Some(variant) = self.current_variant() {
             let raw_new_audio_id = match &self.playlist {
-                TopLevelPlaylist::Multivariant(playlist) => {
-                    playlist.audio_media_playlist_id_for(variant, self.fixed_audio_track)
-                }
+                TopLevelPlaylist::Multivariant(playlist) => playlist
+                    .audio_media_playlist_id_for(variant, self.audio_track_id_for_variant(variant)),
                 TopLevelPlaylist::DirectMedia(_) => None,
             };
             let (new_audio_id, _) =
@@ -954,7 +973,7 @@ impl PlaylistStore {
         let variant = playlist.variant(variant_id).unwrap();
         self.current_variant_id = Some(variant_id);
         let (current_audio_id, current_video_id) = Self::normalize_current_media_ids(
-            playlist.audio_media_playlist_id_for(variant, self.fixed_audio_track),
+            playlist.audio_media_playlist_id_for(variant, self.audio_track_id_for_variant(variant)),
             playlist.video_media_playlist_id_for(variant),
         );
         self.current_audio_id = current_audio_id;
@@ -1294,6 +1313,43 @@ mod tests {
         parser::{ExternalMediaInfo, TopLevelPlaylist},
         utils::url::Url,
     };
+
+    #[test]
+    fn automatic_audio_uses_defaults_and_restores_them_after_explicit_selection() {
+        for default in [None, Some("English"), Some("French")] {
+            let mut manifest = "#EXTM3U\n".to_string();
+            for name in ["English", "French"] {
+                let is_default = if default == Some(name) { "YES" } else { "NO" };
+                manifest.push_str(&format!("#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID=\"audio\",NAME=\"{name}\",DEFAULT={is_default},URI=\"{name}.m3u8\"\n"));
+            }
+            manifest.push_str("#EXT-X-STREAM-INF:BANDWIDTH=100000,AUDIO=\"audio\"\nvideo.m3u8\n");
+            let mut store = PlaylistStore::try_new(
+                manifest.as_bytes(),
+                parse_url("https://example.com/master.m3u8"),
+            )
+            .unwrap();
+            let variant_id = store.available_variants()[0].id();
+            store.set_variant(variant_id);
+            let expected = store
+                .audio_tracks()
+                .iter()
+                .find(|track| track.name() == default.unwrap_or("English"))
+                .unwrap()
+                .id();
+            assert_eq!(store.current_audio_track_id(), Some(expected));
+            let other = store
+                .audio_tracks()
+                .iter()
+                .find(|track| track.id() != expected)
+                .unwrap()
+                .id();
+            store.set_audio_track(Some(other));
+            assert_eq!(store.current_audio_track_id(), Some(other));
+            store.set_audio_track(None);
+            assert_eq!(store.fixed_audio_track_id(), None);
+            assert_eq!(store.current_audio_track_id(), Some(expected));
+        }
+    }
 
     fn parse_url(url: &str) -> Url {
         Url::new(url.to_string())
