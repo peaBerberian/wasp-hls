@@ -241,7 +241,7 @@ impl NextSegmentSelector {
     }
 
     /// Check reported buffer ranges for removed data. Times are in playlist seconds.
-    pub(crate) fn check_for_buffer_loss(&mut self, buffered: &[(f64, f64)]) {
+    pub(crate) fn check_for_removed_data(&mut self, buffered: &[(f64, f64)]) {
         self.validated_segments.synchronize(buffered, self.base_pos);
     }
 
@@ -353,7 +353,7 @@ impl NextSegmentSelector {
             self.segment_cursor.move_cursor(start_pos);
         }
 
-        // XXX TODO: explain
+        // Detect for GCed data
         if replacement_segment.is_none() {
             if let Some(position) = self.validated_segments.first_position_to_reload() {
                 self.segment_cursor
@@ -377,7 +377,6 @@ impl NextSegmentSelector {
                     loading_complete: selected_candidate.is_ended
                         && !segment_list.media().is_empty()
                         && segment_list.media().iter().all(|segment| {
-                            // XXX TODO: needed check?
                             segment.duration() <= 0.
                                 || segment.end() <= self.base_pos
                                 || !self
@@ -560,7 +559,10 @@ impl NextSegmentSelector {
             .get_next(media_segments, maximum_position)?;
         let segment_end = si.end();
 
-        // XXX TODO:
+        // As an extra safeguard against repeated downloads, also check SegmentLoadingHistory.
+        // Smart quality switching below relies on the inventory; history remembers supplied
+        // segments even when the inventory no longer contains them. Reload only if history
+        // detected removed data and allowed another attempt.
         if !self
             .validated_segments
             .needs_loading(context.playlist_id(), si.identity())
@@ -913,7 +915,7 @@ mod tests {
         );
         validate(&mut selector, &list.media()[1], &context);
         inventory.push(BufferedChunk::new_for_test(4., 8., context));
-        selector.check_for_buffer_loss(&[(0., 8.)]);
+        selector.check_for_removed_data(&[(0., 8.)]);
         assert!(selector
             .most_needed_segment(ended(), ended(), &inventory)
             .loading_complete());
@@ -936,7 +938,7 @@ mod tests {
             .loading_complete());
 
         inventory.pop();
-        selector.check_for_buffer_loss(&[(0., 4.)]);
+        selector.check_for_removed_data(&[(0., 4.)]);
         let evicted = selector.most_needed_segment(ended(), ended(), &inventory);
         assert!(!evicted.loading_complete());
         assert_eq!(
@@ -1047,9 +1049,9 @@ mod tests {
             candidate(list, &context),
             &inventory,
         );
-        selector.check_for_buffer_loss(&[(0., 12.)]);
+        selector.check_for_removed_data(&[(0., 12.)]);
         inventory.remove(1);
-        selector.check_for_buffer_loss(&[(0., 4.), (8., 12.)]);
+        selector.check_for_removed_data(&[(0., 4.), (8., 12.)]);
         let selected = selector.most_needed_segment(
             candidate(list, &context),
             candidate(list, &context),
@@ -1123,12 +1125,12 @@ mod tests {
         }
         // The inventory lost its entries before append completion. History must
         // still stop duplicate loads, then notice data appearing and disappearing.
-        selector.check_for_buffer_loss(&[]);
+        selector.check_for_removed_data(&[]);
         let selected = selector.most_needed_segment(ended(), ended(), &[]);
         assert!(selected.loading_complete());
         assert!(selected.needed_segments().is_none());
-        selector.check_for_buffer_loss(&[(0., 12.)]);
-        selector.check_for_buffer_loss(&[(0., 4.), (8., 12.)]);
+        selector.check_for_removed_data(&[(0., 12.)]);
+        selector.check_for_removed_data(&[(0., 4.), (8., 12.)]);
         let selected = selector.most_needed_segment(ended(), ended(), &[]);
         assert!(!selected.loading_complete());
         assert_eq!(
@@ -1144,14 +1146,14 @@ mod tests {
         validate(&mut selector, &list.media()[1], &context);
         // The retry does not restore the missing data: do not request it in a loop.
         for _ in 0..3 {
-            selector.check_for_buffer_loss(&[(0., 4.), (8., 12.)]);
+            selector.check_for_removed_data(&[(0., 4.), (8., 12.)]);
             let selected = selector.most_needed_segment(ended(), ended(), &[]);
             assert!(selected.loading_complete());
             assert!(selected.needed_segments().is_none());
         }
         // If data really returns, a separate later removal can be recovered again.
-        selector.check_for_buffer_loss(&[(0., 12.)]);
-        selector.check_for_buffer_loss(&[(0., 4.), (8., 12.)]);
+        selector.check_for_removed_data(&[(0., 12.)]);
+        selector.check_for_removed_data(&[(0., 4.), (8., 12.)]);
         let selected = selector.most_needed_segment(ended(), ended(), &[]);
         assert!(!selected.loading_complete());
         assert_eq!(

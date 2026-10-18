@@ -520,8 +520,7 @@ impl Dispatcher {
             if let Some(buffered) = self.media_element_ref.buffered_ranges_for(media_type) {
                 self.segment_selectors
                     .get_mut(media_type)
-                    // XXX TODO: Maybe not talk about "buffer" when in segment_selectors
-                    .check_for_buffer_loss(&buffered);
+                    .check_for_removed_data(&buffered);
             }
         }
         match reason {
@@ -1016,6 +1015,9 @@ impl Dispatcher {
         let Some(recommendation) = self.compute_optimal_variant() else {
             return true;
         };
+        // TODO: A slow replacement of the final segment can delay end-of-stream even when
+        // lower-quality data already covers the end. We could cancel that optional
+        // download near the end, without preventing reloads of data that is actually missing.
         if self.requester.has_segment_in_flight(media_type)
             && !self.should_interrupt_download(media_type, recommendation)
         {
@@ -1264,8 +1266,6 @@ impl Dispatcher {
     /// Follow the playback playlist (the one we're loading segments for) when its configuration
     /// changes.
     fn follow_selected_media_playlist(&mut self, media_type: MediaType) {
-        // XXX TODO: Why is that one necessary?
-        self.media_element_ref.set_end_when_done(media_type, false);
         let playlist_id = self
             .playlist_store
             .as_ref()
