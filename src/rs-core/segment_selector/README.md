@@ -28,10 +28,8 @@ Returning a segment doesn't advance the cursor past it. The caller has to
 "validate" media and initialization segments through `validate_media` and
 `validate_init` when accepting them, otherwise they may be proposed again.
 
-`validated_segment_history.rs` remembers accepted media by playlist and segment
-identity to avoid repeatedly proposing the same replacement, even when the
-browser doesn't retain all of it. This is a history of accepted operations,
-separate from the supplied buffer inventory.
+`validated_segment_history.rs` remembers which segments were already supplied.
+It prevents repeated downloads and decides when removed data should be loaded again.
 
 For regular playback, `advance_position` updates the base position while keeping
 the cursor. After a seek or buffer flush, `restart_from_position` makes selection

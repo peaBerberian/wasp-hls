@@ -140,7 +140,7 @@ impl BufferedChunk {
 
     #[cfg(test)]
     pub(crate) fn new_for_test(start: f64, end: f64, context: SegmentQualityContext) -> Self {
-        Self::new(
+        let mut chunk = Self::new(
             BufferedSegmentMetadata {
                 playlist_start: start,
                 playlist_end: end,
@@ -150,7 +150,13 @@ impl BufferedChunk {
                 context,
             },
             0,
-        )
+        );
+        chunk.validated = true;
+        chunk
+    }
+
+    pub(crate) fn is_validated(&self) -> bool {
+        !self.validated
     }
 
     /// Returns media start of the segment, in seconds, according to its `MediaPlaylist`.
