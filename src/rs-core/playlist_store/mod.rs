@@ -852,8 +852,11 @@ impl PlaylistStore {
             }
         }
         if self.current_variant_id.is_none() {
+            // Before the first variant is selected, save the track ID. set_variant() will use it
+            // to choose the audio playlist.
+            // As for a direct media playlist, it has no other playlist to switch to.
             self.fixed_audio_track = track_id;
-            return SetAudioTrackResponse::NoUpdate;
+            return SetAudioTrackResponse::NoPlaylistChange;
         }
         self.fixed_audio_track = track_id;
         self.clear_variant_supports();
@@ -879,10 +882,10 @@ impl PlaylistStore {
                 self.current_audio_id = new_audio_id;
                 SetAudioTrackResponse::AudioMediaUpdate
             } else {
-                SetAudioTrackResponse::NoUpdate
+                SetAudioTrackResponse::NoPlaylistChange
             }
         } else {
-            SetAudioTrackResponse::NoUpdate
+            SetAudioTrackResponse::NoPlaylistChange
         }
     }
 
@@ -1272,11 +1275,9 @@ pub(crate) enum SetAudioTrackResponse {
     /// `variant_lock_removed` is true when this track change removed an existing variant lock.
     VariantSelectionNeeded { variant_lock_removed: bool },
 
-    /// No Media Playlist nor the current variant were changed due to this track change.
-    ///
-    /// Because variants may be or not be linked to a given audio track it is however possible that
-    /// the list of currently adaptively switchable variants has changed.
-    NoUpdate,
+    /// No media playlist or variant changed.
+    /// The list of available variants may still have changed.
+    NoPlaylistChange,
 }
 
 /// Potential audio track change caused by locking a variant.
@@ -1919,7 +1920,7 @@ video.m3u8
         assert!(store.current_variant_id().is_none());
         assert!(matches!(
             store.set_audio_track(Some(english)),
-            SetAudioTrackResponse::NoUpdate
+            SetAudioTrackResponse::NoPlaylistChange
         ));
         assert!(matches!(
             store.set_audio_track(Some(u32::MAX - 1)),
@@ -1929,7 +1930,7 @@ video.m3u8
         assert!(store.current_variant_id().is_none());
         assert!(matches!(
             store.set_audio_track(None),
-            SetAudioTrackResponse::NoUpdate
+            SetAudioTrackResponse::NoPlaylistChange
         ));
         assert_eq!(store.fixed_audio_track_id(), None);
     }

@@ -213,7 +213,7 @@ impl Dispatcher {
                 self.reset_on_selected_media_playlists(&changed_media_types);
             }
 
-            SetAudioTrackResponse::NoUpdate => {
+            SetAudioTrackResponse::NoPlaylistChange => {
                 self.check_requested_segments_still_needed();
                 self.check_segments_to_request();
             }
@@ -849,12 +849,13 @@ impl Dispatcher {
 
             // In all matching, keep the first actually possible one
             for id in matching_ids {
-                if !matches!(
-                    pl_store.set_audio_track(Some(id)),
+                match pl_store.set_audio_track(Some(id)) {
                     SetAudioTrackResponse::UnknownTrack
-                        | SetAudioTrackResponse::NoCompatibleVariant
-                ) {
-                    return;
+                    | SetAudioTrackResponse::NoCompatibleVariant => continue,
+
+                    SetAudioTrackResponse::NoPlaylistChange
+                    | SetAudioTrackResponse::AudioMediaUpdate
+                    | SetAudioTrackResponse::VariantSelectionNeeded { .. } => return,
                 }
             }
         }
