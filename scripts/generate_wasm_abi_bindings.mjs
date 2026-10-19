@@ -204,7 +204,7 @@ function renderRustSignature(fn, mode) {
       ? `${renderRustReturnType(fn.rust.returnType)} {`
       : `${renderRustReturnType(fn.rust.returnType)};`;
   const inline = `${prefix}(${args.join(", ")})${suffix}`;
-  if (args.length <= 3 && inline.length <= 88) {
+  if (args.length <= 3 && inline.length <= 100) {
     return [inline];
   }
   const lines = [`${prefix}(`];

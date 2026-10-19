@@ -11,6 +11,10 @@
     {
       "path": "./setAudioTrack.md",
       "displayName": "setAudioTrack"
+    },
+    {
+      "path": "./resetAudioTrack.md",
+      "displayName": "resetAudioTrack"
     }
   ]
 }

@@ -14,6 +14,50 @@ import {
 } from "../utils/request_integration_test_tools.js";
 
 describe("Variant and audio-track event ordering", function () {
+  it(
+    "restores automatic audio selection with resetAudioTrack",
+    { timeout: TEST_TIMEOUT_MS },
+    async () => {
+      const ctx = await createPlayerHarness({ fetchRules: [] });
+      try {
+        ctx.player.load(getVodScenarioUrl("fmp4-alt-audio"));
+        await waitForLoadedState(
+          ctx.player,
+          ctx.videoElement,
+          ctx.getLastPlayerError,
+        );
+        const automaticTrack = ctx.player.getCurrentAudioTrack();
+        const french = ctx.player
+          .getAudioTrackList()
+          .find((track) => track.language === "fr");
+        const selected = waitForPlayerEvent(
+          ctx.player,
+          "audioTrackUpdate",
+          (track) => track?.id === french.id,
+        );
+        ctx.player.setAudioTrack(french.id);
+        await selected;
+        for (const args of [[null], [undefined], []]) {
+          expect(() =>
+            Reflect.apply(ctx.player.setAudioTrack, ctx.player, args),
+          ).toThrow(TypeError);
+        }
+        expect(ctx.player.getCurrentAudioTrack()?.id).toBe(french.id);
+        const reset = waitForPlayerEvent(
+          ctx.player,
+          "audioTrackUpdate",
+          (track) => track?.id === automaticTrack.id,
+        );
+        expect(ctx.player.resetAudioTrack()).toBeUndefined();
+        await reset;
+        expect(ctx.player.getCurrentAudioTrack()).toEqual(automaticTrack);
+        expect(ctx.player.getError()).toBeNull();
+      } finally {
+        ctx.dispose();
+      }
+    },
+  );
+
   it.each(["fmp4-direct-media", "fmp4-alt-audio"])(
     "warns asynchronously for nonexistent audio IDs (%s)",
     { timeout: TEST_TIMEOUT_MS },
@@ -27,15 +71,13 @@ describe("Variant and audio-track event ordering", function () {
           ctx.getLastPlayerError,
         );
         const initialAudio = ctx.player.getCurrentAudioTrack();
-        for (const [select, media] of [
-          [() => ctx.player.setAudioTrack(0x7ffffffe), "audio"],
-        ]) {
+        for (const trackId of [0x7ffffffe, 0xfffffffe]) {
           let returned = false;
           const warning = waitForPlayerEvent(ctx.player, "warning", () => {
             expect(returned).toBe(true);
             return true;
           });
-          expect(select()).toBeUndefined();
+          expect(ctx.player.setAudioTrack(trackId)).toBeUndefined();
           returned = true;
           const error = await warning;
           expect(error).toBeInstanceOf(WaspTrackSelectionError);
@@ -43,9 +85,9 @@ describe("Variant and audio-track event ordering", function () {
           expect(error.code).toBe("UnknownTrack");
           expect(error.globalCode).toBe("UnknownTrack");
           expect(error.mediaType).toBe(MediaType.Audio);
-          expect(error.trackId).toBe(0x7ffffffe);
+          expect(error.trackId).toBe(trackId);
           expect(error.message).toContain(
-            `Unable to select the ${media} track: unknown track ID`,
+            "Unable to select the audio track: unknown track ID",
           );
           expect(ctx.player.getError()).toBeNull();
           expect(ctx.player.getCurrentAudioTrack()).toEqual(initialAudio);
