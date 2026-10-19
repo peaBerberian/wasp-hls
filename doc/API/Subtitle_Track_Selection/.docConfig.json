@@ -1,0 +1,24 @@
+{
+  "pages": [
+    {
+      "path": "./getCurrentSubtitleTrack.md",
+      "displayName": "getCurrentSubtitleTrack"
+    },
+    {
+      "path": "./getSubtitleTrackList.md",
+      "displayName": "getSubtitleTrackList"
+    },
+    {
+      "path": "./setSubtitleTrack.md",
+      "displayName": "setSubtitleTrack"
+    },
+    {
+      "path": "./resetSubtitleTrack.md",
+      "displayName": "resetSubtitleTrack"
+    },
+    {
+      "path": "./disableSubtitleTrack.md",
+      "displayName": "disableSubtitleTrack"
+    }
+  ]
+}
