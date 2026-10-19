@@ -88,7 +88,7 @@ pub(crate) fn format_source_buffer_creation_err_for_js(
     }
 }
 
-pub(crate) unsafe fn format_audio_tracks_for_js(tracks: &[AudioTrack]) -> Vec<u32> {
+pub(crate) fn format_audio_tracks_for_js(tracks: &[AudioTrack]) -> Vec<u32> {
     let selectable_tracks = tracks
         .iter()
         .filter(|track| track.is_selectable())
@@ -135,7 +135,7 @@ pub(crate) unsafe fn format_audio_tracks_for_js(tracks: &[AudioTrack]) -> Vec<u3
     ret
 }
 
-pub(crate) unsafe fn format_direct_media_audio_tracks_for_js(has_audio_track: bool) -> Vec<u32> {
+pub(crate) fn format_direct_media_audio_tracks_for_js(has_audio_track: bool) -> Vec<u32> {
     let mut ret: Vec<u32> = vec![];
     ret.push(if has_audio_track { 1 } else { 0 });
     if has_audio_track {

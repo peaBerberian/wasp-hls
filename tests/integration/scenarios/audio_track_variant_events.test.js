@@ -12,6 +12,56 @@ import {
 } from "../utils/request_integration_test_tools.js";
 
 describe("Variant and audio-track event ordering", function () {
+  it.each(["fmp4-direct-media", "fmp4-alt-audio"])(
+    "warns asynchronously for nonexistent audio IDs (%s)",
+    { timeout: TEST_TIMEOUT_MS },
+    async (scenario) => {
+      const ctx = await createPlayerHarness({ fetchRules: [] });
+      try {
+        ctx.player.load(getVodScenarioUrl(scenario));
+        await waitForLoadedState(
+          ctx.player,
+          ctx.videoElement,
+          ctx.getLastPlayerError,
+        );
+        const initialAudio = ctx.player.getCurrentAudioTrack();
+        for (const [select, media] of [
+          [() => ctx.player.setAudioTrack(0x7ffffffe), "audio"],
+        ]) {
+          let returned = false;
+          const warning = waitForPlayerEvent(ctx.player, "warning", () => {
+            expect(returned).toBe(true);
+            return true;
+          });
+          expect(select()).toBeUndefined();
+          returned = true;
+          const error = await warning;
+          expect(error.name).toBe("WaspOtherError");
+          expect(error.message).toContain(
+            `Unable to select the ${media} track: unknown track ID`,
+          );
+          expect(ctx.player.getError()).toBeNull();
+          expect(ctx.player.getCurrentAudioTrack()).toEqual(initialAudio);
+        }
+        // The synthetic audio track exposed for direct media remains selectable.
+        if (initialAudio !== undefined) {
+          const receivedWarnings = [];
+          ctx.player.addEventListener("warning", (value) =>
+            receivedWarnings.push(value),
+          );
+          ctx.player.setAudioTrack(initialAudio.id);
+          const warning = waitForPlayerEvent(ctx.player, "warning", () => true);
+          ctx.player.setAudioTrack(0x7ffffffe);
+          await warning;
+          expect(receivedWarnings).toHaveLength(1);
+          expect(ctx.player.getCurrentAudioTrack()).toEqual(initialAudio);
+        }
+      } finally {
+        ctx.dispose();
+      }
+    },
+  );
+
   it.each(["fmp4-player-api", "fmp4-multivariant-no-codecs", "fmp4-alt-audio"])(
     "announces lists, variant, then audio track at startup (%s)",
     { timeout: TEST_TIMEOUT_MS },

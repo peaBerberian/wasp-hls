@@ -37,6 +37,49 @@ async function expectPlayback(ctx, url) {
 }
 
 describe("Playlist compatibility", () => {
+  it.each(["same-selector", "ordered", "fallback"])(
+    "skips unused audio groups in initial preferences (%s)",
+    { timeout: TEST_TIMEOUT_MS },
+    async (mode) => {
+      const url = await ensureVodScenarioReady("fmp4-alt-audio");
+      const master = await readPlaylist(url);
+      const body = master.replace(
+        "#EXTM3U\n",
+        `#EXTM3U\n#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="unused",NAME="Unused",LANGUAGE="en",URI="unused.m3u8"\n`,
+      );
+      const initialAudioTrack =
+        mode === "ordered"
+          ? [{ name: "Unused" }, { language: "fr" }]
+          : mode === "fallback"
+            ? { name: "Unused" }
+            : { language: "en" };
+      const ctx = await createPlayerHarness({
+        fetchRules: [playlistRule(url, body)],
+      });
+      try {
+        const updates = [];
+        ctx.player.addEventListener("audioTrackUpdate", (track) =>
+          updates.push(track),
+        );
+        ctx.player.load(url, { initialAudioTrack });
+        await waitForLoadedState(
+          ctx.player,
+          ctx.videoElement,
+          ctx.getLastPlayerError,
+        );
+        const expectedLanguage = mode === "ordered" ? "fr" : "en";
+        expect(ctx.player.getCurrentAudioTrack()?.language).toBe(
+          expectedLanguage,
+        );
+        expect(updates[0]?.language).toBe(expectedLanguage);
+        expect(ctx.player.getCurrentAudioTrack()?.name).not.toBe("Unused");
+        expect(ctx.player.getError()).toBeNull();
+      } finally {
+        ctx.dispose();
+      }
+    },
+  );
+
   it.each(["missing", "empty"])(
     "preserves %s audio names through the public API",
     { timeout: TEST_TIMEOUT_MS },
@@ -59,6 +102,7 @@ describe("Playlist compatibility", () => {
         expect(audioTracks).toHaveLength(2);
         for (const track of audioTracks) {
           expect(track.name).toBe(expectedName);
+          expect(track.characteristics).toEqual([]);
         }
         expect(ctx.player.getCurrentAudioTrack()?.name).toBe(expectedName);
         expect(audioUpdates.at(-1)).toEqual(audioTracks);

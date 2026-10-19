@@ -176,13 +176,12 @@ When set as an object, it can contain the following optional properties:
 - `characteristics` (`Array.<string> | undefined`)
 - `channels` (`number | undefined`)
 
-Every set property must match for a track to be selected. If multiple tracks
-match, the first one in playlist order is chosen.
+Every set property must match for a track to be selected. If several tracks
+match, the first available track in playlist order is chosen.
 
-You can also provide an ordered array of such objects. In that case, the player
-tries each selector in order and uses the first one that matches at least one
-track. If no selector matches, the player falls back to its default startup
-selection.
+You can also provide an ordered array of such objects. The player tries each
+preference in order. If none matches an available track, it uses the default
+audio selection.
 
 For example, to start with the French audio track:
 

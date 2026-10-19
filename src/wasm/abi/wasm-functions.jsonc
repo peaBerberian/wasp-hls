@@ -72,7 +72,6 @@
         "args": [
           { "name": "mediaType", "type": "MediaType" },
           { "name": "trackId", "type": "number | undefined" },
-          { "name": "isSelected", "type": "boolean" },
         ],
         "returnType": "void",
       },
@@ -80,7 +79,6 @@
         "args": [
           { "name": "media_type", "type": "u32" },
           { "name": "track_id", "type": "u32" },
-          { "name": "is_selected", "type": "u32" },
         ],
         "returnType": "void",
       },

@@ -1557,106 +1557,13 @@ export function announceFetchedContent(
       });
     }
   }
-  const audioTracksObj: AudioTrackInfo[] = [];
-  {
-    let i = 0;
-    i++; // Skip number of audio tracks
-    while (i < audioTracksInfo.length) {
-      const id = audioTracksInfo[i];
-      i++;
-
-      const languageLen = audioTracksInfo[i];
-      i++;
-      const languageU8 = new Uint8Array(
-        memory.buffer,
-        audioTracksInfo[i],
-        languageLen,
-      );
-      i++;
-      const language = cachedTextDecoder.decode(languageU8);
-
-      const assocLanguageLen = audioTracksInfo[i];
-      i++;
-      const assocLanguageU8 = new Uint8Array(
-        memory.buffer,
-        audioTracksInfo[i],
-        assocLanguageLen,
-      );
-      i++;
-      const assocLanguage = cachedTextDecoder.decode(assocLanguageU8);
-
-      const nameLen = audioTracksInfo[i];
-      i++;
-      const namePointer = audioTracksInfo[i++];
-      const name =
-        namePointer === 0
-          ? undefined
-          : cachedTextDecoder.decode(
-              new Uint8Array(memory.buffer, namePointer, nameLen),
-            );
-
-      const channels = audioTracksInfo[i];
-      i++;
-
-      const characteristicsCount = audioTracksInfo[i];
-      i++;
-      const characteristics: string[] = [];
-      for (let j = 0; j < characteristicsCount; j++) {
-        const characteristicLen = audioTracksInfo[i];
-        i++;
-        const characteristicU8 = new Uint8Array(
-          memory.buffer,
-          audioTracksInfo[i],
-          characteristicLen,
-        );
-        i++;
-        characteristics.push(cachedTextDecoder.decode(characteristicU8));
-      }
-
-      const bitDepth = audioTracksInfo[i];
-      i++;
-
-      const sampleRate = audioTracksInfo[i];
-      i++;
-
-      const bitDepthCount = audioTracksInfo[i];
-      i++;
-      const bitDepths: number[] = [];
-      for (let j = 0; j < bitDepthCount; j++) {
-        bitDepths.push(audioTracksInfo[i]);
-        i++;
-      }
-
-      const sampleRateCount = audioTracksInfo[i];
-      i++;
-      const sampleRates: number[] = [];
-      for (let j = 0; j < sampleRateCount; j++) {
-        sampleRates.push(audioTracksInfo[i]);
-        i++;
-      }
-
-      audioTracksObj.push({
-        id,
-        language: language === "" ? undefined : language,
-        assocLanguage: assocLanguage === "" ? undefined : assocLanguage,
-        name,
-        channels: channels === 0 ? undefined : channels,
-        characteristics:
-          characteristics.length === 0 ? undefined : characteristics,
-        bitDepth: bitDepth === 0 ? undefined : bitDepth,
-        sampleRate: sampleRate === 0 ? undefined : sampleRate,
-        bitDepths: bitDepths.length === 0 ? undefined : bitDepths,
-        sampleRates: sampleRates.length === 0 ? undefined : sampleRates,
-      });
-    }
-  }
   postMessageToMain({
     type: WorkerMessageType.TopLevelPlaylistParsed,
     value: {
       contentId: contentInfo.contentId,
       playlistType,
       variants: variantInfoObj,
-      audioTracks: audioTracksObj,
+      audioTracks: decodeAudioTracks(audioTracksInfo, memory),
     },
   });
 }
@@ -1664,7 +1571,6 @@ export function announceFetchedContent(
 export function announceTrackUpdate(
   mediaType: MediaType,
   currentAudioTrack: number | undefined,
-  isAudioTrackSelected: boolean,
 ): void {
   const contentInfo = playerInstance.getContentInfo();
   const memory = playerInstance.getCurrentWasmMemory();
@@ -1680,7 +1586,6 @@ export function announceTrackUpdate(
         currentAudioTrack !== undefined
           ? {
               current: currentAudioTrack,
-              isSelected: isAudioTrackSelected,
             }
           : undefined,
     },
@@ -1843,4 +1748,100 @@ export function getWaspHostCapabilities(): HostBindings {
     sendOtherError,
     sendContentCompatibilityError,
   };
+}
+
+/** Copies borrowed WASM audio metadata before returning to Rust. */
+function decodeAudioTracks(
+  data: Uint32Array,
+  memory: WebAssembly.Memory,
+): AudioTrackInfo[] {
+  const tracks: AudioTrackInfo[] = [];
+  {
+    let i = 0;
+    i++; // Skip number of audio tracks
+    while (i < data.length) {
+      const id = data[i];
+      i++;
+
+      const languageLen = data[i];
+      i++;
+      const languageU8 = new Uint8Array(memory.buffer, data[i], languageLen);
+      i++;
+      const language = cachedTextDecoder.decode(languageU8);
+
+      const assocLanguageLen = data[i];
+      i++;
+      const assocLanguageU8 = new Uint8Array(
+        memory.buffer,
+        data[i],
+        assocLanguageLen,
+      );
+      i++;
+      const assocLanguage = cachedTextDecoder.decode(assocLanguageU8);
+
+      const nameLen = data[i];
+      i++;
+      const namePointer = data[i++];
+      const name =
+        namePointer === 0
+          ? undefined
+          : cachedTextDecoder.decode(
+              new Uint8Array(memory.buffer, namePointer, nameLen),
+            );
+
+      const channels = data[i];
+      i++;
+
+      const characteristicsCount = data[i];
+      i++;
+      const characteristics: string[] = [];
+      for (let j = 0; j < characteristicsCount; j++) {
+        const characteristicLen = data[i];
+        i++;
+        const characteristicU8 = new Uint8Array(
+          memory.buffer,
+          data[i],
+          characteristicLen,
+        );
+        i++;
+        characteristics.push(cachedTextDecoder.decode(characteristicU8));
+      }
+
+      const bitDepth = data[i];
+      i++;
+
+      const sampleRate = data[i];
+      i++;
+
+      const bitDepthCount = data[i];
+      i++;
+      const bitDepths: number[] = [];
+      for (let j = 0; j < bitDepthCount; j++) {
+        bitDepths.push(data[i]);
+        i++;
+      }
+
+      const sampleRateCount = data[i];
+      i++;
+      const sampleRates: number[] = [];
+      for (let j = 0; j < sampleRateCount; j++) {
+        sampleRates.push(data[i]);
+        i++;
+      }
+
+      tracks.push({
+        id,
+        language: language === "" ? undefined : language,
+        assocLanguage: assocLanguage === "" ? undefined : assocLanguage,
+        name,
+        channels: channels === 0 ? undefined : channels,
+        characteristics,
+        bitDepth: bitDepth === 0 ? undefined : bitDepth,
+        sampleRate: sampleRate === 0 ? undefined : sampleRate,
+        bitDepths: bitDepths.length === 0 ? undefined : bitDepths,
+        sampleRates: sampleRates.length === 0 ? undefined : sampleRates,
+      });
+    }
+  }
+  return tracks;
 }

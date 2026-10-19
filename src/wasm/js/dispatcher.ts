@@ -123,7 +123,7 @@ export class Dispatcher {
   }
 
   /** Selects the audio track to use, or clears the selection. */
-  public set_audio_track(track_id?: number | null): void {
+  public set_audio_track(track_id: number | null): void {
     getWasmExports().wasp_dispatcher_set_audio_track(
       this.__ptr,
       optionalIdToRaw(track_id ?? undefined),
