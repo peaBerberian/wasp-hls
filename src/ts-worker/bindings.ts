@@ -41,6 +41,7 @@ import type {
   MediaPlaylistParsingErrorCode,
   MultivariantPlaylistParsingErrorCode,
   OtherErrorCode,
+  TrackSelectionErrorCode,
   PlaylistNature,
   PlaylistType,
   RequestErrorReason,
@@ -221,6 +222,29 @@ export function sendRemoveBufferError(
         value: {
           mediaType,
         },
+      },
+    },
+  });
+}
+
+export function sendTrackSelectionError(
+  code: TrackSelectionErrorCode,
+  mediaType: MediaType,
+  trackId: number,
+  message: string,
+): void {
+  const contentId = playerInstance.getContentInfo()?.contentId;
+  if (contentId === undefined) {
+    return;
+  }
+  postMessageToMain({
+    type: WorkerMessageType.Warning,
+    value: {
+      contentId,
+      message,
+      errorInfo: {
+        type: "track-selection",
+        value: { code, mediaType, trackId },
       },
     },
   });
@@ -1746,6 +1770,7 @@ export function getWaspHostCapabilities(): HostBindings {
     sendPushedSegmentError,
     sendRemoveBufferError,
     sendOtherError,
+    sendTrackSelectionError,
     sendContentCompatibilityError,
   };
 }

@@ -523,6 +523,30 @@
       },
     },
     {
+      "wasmSymbol": "__js_func__send_track_selection_error",
+      "doc": ["Report a rejected track selection as a warning."],
+      "typescript": {
+        "methodName": "sendTrackSelectionError",
+        "args": [
+          { "name": "code", "type": "TrackSelectionErrorCode" },
+          { "name": "mediaType", "type": "MediaType" },
+          { "name": "trackId", "type": "number" },
+          { "name": "message", "type": "string" },
+        ],
+        "returnType": "void",
+      },
+      "rust": {
+        "args": [
+          { "name": "code", "type": "u32" },
+          { "name": "media_type", "type": "u32" },
+          { "name": "track_id", "type": "u32" },
+          { "name": "message_ptr", "type": "*const u8" },
+          { "name": "message_len", "type": "u32" },
+        ],
+        "returnType": "void",
+      },
+    },
+    {
       "wasmSymbol": "__js_func__send_other_error",
       "doc": ["Emit a generic error to the host."],
       "typescript": {

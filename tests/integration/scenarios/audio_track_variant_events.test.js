@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { WaspTrackSelectionError } from "../../../build/es6/ts-main/index.js";
+import { MediaType } from "../../../build/es6/wasm/js/enums.js";
 import {
   eventListener,
   waitForLoadedState,
@@ -36,7 +38,12 @@ describe("Variant and audio-track event ordering", function () {
           expect(select()).toBeUndefined();
           returned = true;
           const error = await warning;
-          expect(error.name).toBe("WaspOtherError");
+          expect(error).toBeInstanceOf(WaspTrackSelectionError);
+          expect(error.name).toBe("WaspTrackSelectionError");
+          expect(error.code).toBe("UnknownTrack");
+          expect(error.globalCode).toBe("UnknownTrack");
+          expect(error.mediaType).toBe(MediaType.Audio);
+          expect(error.trackId).toBe(0x7ffffffe);
           expect(error.message).toContain(
             `Unable to select the ${media} track: unknown track ID`,
           );
@@ -401,8 +408,14 @@ ${baseUrl}video.m3u8
           expect(ctx.player.setAudioTrack(trackId)).toBeUndefined();
           expect(warnings.getCurrentCount()).toBe(previousWarningCount);
           const warning = await warningPromise;
-          expect(warning.name).toBe("WaspOtherError");
-          expect(warning.code).toBe("Unknown");
+          expect(warning).toBeInstanceOf(WaspTrackSelectionError);
+          expect(warning.name).toBe("WaspTrackSelectionError");
+          const expectedCode =
+            trackId === frenchTrack.id ? "NoCompatibleVariant" : "UnknownTrack";
+          expect(warning.code).toBe(expectedCode);
+          expect(warning.globalCode).toBe(expectedCode);
+          expect(warning.mediaType).toBe(MediaType.Audio);
+          expect(warning.trackId).toBe(trackId);
           expect(ctx.player.getCurrentAudioTrack()).toEqual(initialTrack);
           expect(ctx.player.getCurrentVariant()).toEqual(initialVariant);
           expect(ctx.player.getLockedVariant()).toEqual(initialVariant);

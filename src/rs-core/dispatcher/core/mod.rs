@@ -10,9 +10,10 @@ use crate::{
         jsRequestPlaybackObservation, jsSendMediaPlaylistParsingError,
         jsSendMediaPlaylistRequestError, jsSendMultivariantPlaylistRequestError, jsSendOtherError,
         jsSendPushedSegmentError, jsSendRemoveBufferError, jsSendSegmentParsingError,
-        jsSendSegmentRequestError, jsSendSourceBufferCreationError, jsSetMediaSourceDuration,
-        jsStopObservingPlayback, jsUpdateContentInfo, AddSourceBufferErrorCode, MediaType,
-        OtherErrorCode, PushedSegmentErrorCode, RequestId, SourceBufferId, TimerId,
+        jsSendSegmentRequestError, jsSendSourceBufferCreationError, jsSendTrackSelectionError,
+        jsSetMediaSourceDuration, jsStopObservingPlayback, jsUpdateContentInfo,
+        AddSourceBufferErrorCode, MediaType, OtherErrorCode, PushedSegmentErrorCode, RequestId,
+        SourceBufferId, TimerId, TrackSelectionErrorCode,
     },
     dispatcher::segment_request_contexts::PendingSegmentRequest,
     media_element::SegmentPushMetadata,
@@ -160,16 +161,26 @@ impl Dispatcher {
             return;
         };
         match pl_store.set_audio_track(track_id) {
-            SetAudioTrackResponse::UnknownTrack => jsSendOtherError(
-                false,
-                OtherErrorCode::Unknown,
-                "Unable to select the audio track: unknown track ID",
-            ),
-            SetAudioTrackResponse::NoCompatibleVariant => jsSendOtherError(
-                false,
-                OtherErrorCode::Unknown,
-                "Unable to select the audio track: no compatible variant",
-            ),
+            SetAudioTrackResponse::UnknownTrack => {
+                if let Some(track_id) = track_id {
+                    jsSendTrackSelectionError(
+                        TrackSelectionErrorCode::UnknownTrack,
+                        MediaType::Audio,
+                        track_id,
+                        "Unable to select the audio track: unknown track ID",
+                    );
+                }
+            }
+            SetAudioTrackResponse::NoCompatibleVariant => {
+                if let Some(track_id) = track_id {
+                    jsSendTrackSelectionError(
+                        TrackSelectionErrorCode::NoCompatibleVariant,
+                        MediaType::Audio,
+                        track_id,
+                        "Unable to select the audio track: no compatible variant",
+                    );
+                }
+            }
 
             update @ (SetAudioTrackResponse::VariantSelectionNeeded { .. }
             | SetAudioTrackResponse::AudioMediaUpdate) => {
@@ -835,6 +846,8 @@ impl Dispatcher {
                 .filter(|track| selection.matches(track))
                 .map(|track| track.id())
                 .collect();
+
+            // In all matching, keep the first actually possible one
             for id in matching_ids {
                 if !matches!(
                     pl_store.set_audio_track(Some(id)),

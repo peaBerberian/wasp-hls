@@ -5,6 +5,7 @@ import type {
   MediaType,
   MultivariantPlaylistParsingErrorCode,
   OtherErrorCode,
+  TrackSelectionErrorCode,
   PlaylistNature,
   PlaylistType,
   PushedSegmentErrorCode,
@@ -459,6 +460,20 @@ export function createWasmImports(bindings: HostBindings): WebAssembly.Imports {
         bindings.sendRemoveBufferError(
           fatal !== 0,
           mediaType as MediaType,
+          readString(messagePtr, messageLen),
+        );
+      },
+      __js_func__send_track_selection_error(
+        code: number,
+        mediaType: number,
+        trackId: number,
+        messagePtr: number,
+        messageLen: number,
+      ): void {
+        bindings.sendTrackSelectionError(
+          code as TrackSelectionErrorCode,
+          mediaType as MediaType,
+          trackId >>> 0,
           readString(messagePtr, messageLen),
         );
       },

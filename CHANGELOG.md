@@ -12,6 +12,7 @@
 ### Features
 
 - Adaptive: Add a buffer-based adaptive algorithm (BOLA)
+- Add `WaspTrackSelectionError` error type for errors specific linked to track selection (sent through `warning` events)
 
 ### Bug fixes
 
@@ -38,7 +39,7 @@
 - adaptive: Better fast-quality-switching coordination: continue in additive mode until the playlist linked to segment replacements is fetched
 - optimization: Multiple primary media playlists sharing the same URL yet associated with multiple variants are now considered the same resource to optimize some playlist management logic (e.g. playlist refresh)
 - optimization: Switch quality faster if the previously awaited segment for that type (audio/video) was in a backoff or waiting (due to low priority) phase
-- `setAudioTrack()`: send a warning for unknown IDs.
+- `setAudioTrack()`: use `WaspTrackSelectionError` for selection warnings.
 - Return audio tracks in playlist declaration order in audio-related APIs
 - If no default audio track is declared, prefer tracks listed earlier in the playlist.
 - "Probe segments" can now be "consumed" later than at startup if they coincide with the next segment needed

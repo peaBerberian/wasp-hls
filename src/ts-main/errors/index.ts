@@ -9,6 +9,7 @@ import WaspSegmentParsingError from "./WaspSegmentParsingError.ts";
 import WaspSegmentRequestError from "./WaspSegmentRequestError.ts";
 import WaspSourceBufferCreationError from "./WaspSourceBufferCreationError.ts";
 import WaspSourceBufferError from "./WaspSourceBufferError.ts";
+import WaspTrackSelectionError from "./WaspTrackSelectionError.ts";
 
 /**
  * General type for all potential errors returned by the `WaspHlsPlayer`.
@@ -19,6 +20,7 @@ export type WaspError =
   | WaspMediaPlaylistRequestError
   | WaspMultivariantPlaylistParsingError
   | WaspMultivariantPlaylistRequestError
+  | WaspTrackSelectionError
   | WaspOtherError
   | WaspSegmentParsingError
   | WaspSegmentRequestError
@@ -35,6 +37,7 @@ export {
   WaspMultivariantPlaylistParsingError,
   WaspMultivariantPlaylistRequestError,
   WaspOtherError,
+  WaspTrackSelectionError,
   WaspSegmentParsingError,
   WaspSegmentRequestError,
   WaspSourceBufferCreationError,

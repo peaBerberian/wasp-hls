@@ -522,3 +522,10 @@ export const PlaybackTickReason = Object.freeze({
 } as const);
 export type PlaybackTickReason =
   (typeof PlaybackTickReason)[keyof typeof PlaybackTickReason];
+
+export const TrackSelectionErrorCode = Object.freeze({
+  UnknownTrack: 0,
+  NoCompatibleVariant: 1,
+} as const);
+export type TrackSelectionErrorCode =
+  (typeof TrackSelectionErrorCode)[keyof typeof TrackSelectionErrorCode];

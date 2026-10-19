@@ -499,6 +499,19 @@ following values:
   No supported variant was found for the current content.
   This is generally due to insufficient codec support on the current platform.
 
+## Error type: `WaspTrackSelectionError`
+
+Sent through `warning` when a requested track cannot be selected. The previous
+selection stays unchanged.
+
+- `name`: `"WaspTrackSelectionError"`.
+- `code`: `"UnknownTrack"` if the ID does not exist, or `"NoCompatibleVariant"`
+  if no variant can provide the track.
+- `globalCode`: Same value as `code`.
+- `mediaType`: Media type of the requested track.
+- `trackId`: Requested track ID.
+- `message`: Description of the failed selection.
+
 ## Error type: `WaspOtherError`
 
 `WaspOtherError` are errors that are other, uncategorized errors that didn't fit

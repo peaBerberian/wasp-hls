@@ -3,6 +3,10 @@
  * returned by the `WaspHlsPlayer`.
  */
 export const WaspErrorCode = {
+  /** The requested track ID does not exist. */
+  UnknownTrack: "UnknownTrack",
+  /** No variant can provide the requested track. */
+  NoCompatibleVariant: "NoCompatibleVariant",
   /** The `WaspHlsPlayer` was already initialized. */
   AlreadyInitializedError: "AlreadyInitializedError",
   /**
