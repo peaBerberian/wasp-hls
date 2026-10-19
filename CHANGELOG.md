@@ -4,16 +4,16 @@
 
 ### Changes
 
-- `setAudioTrack()` accepts IDs only. Use `resetAudioTrack()` instead of passing `null` to let the player select the default one again.
+- `setAudioTrack()` now only accepts IDs. Use `resetAudioTrack()` instead of passing `null` to let the player select the default one again.
 - `AudioTrackInfo.name` is now optional: audio track lists, the current audio track and track events expose `undefined` when `NAME` is absent (an empty `NAME` remains `""`)
 - Slightly change the semantics of the `variantUpdate` event and `getCurrentVariant` method now that variant selection is internally much more flexible
-- `bufferGoal`: make it `30` by default (can be changed at any time)
+- `bufferGoal`: now defaults to `30` (can be changed at any time)
 - `AudioTrackInfo.characteristics`: if none, returns `[]` instead of `undefined`.
 
 ### Features
 
 - Adaptive: Add a buffer-based adaptive algorithm (BOLA)
-- Add `WaspTrackSelectionError` error type for errors specific linked to track selection (sent through `warning` events)
+- Add `WaspTrackSelectionError` error type for errors related to track selection (sent through `warning` events)
 - Add `resetAudioTrack` method (equivalent to previous `setAudioTrack(null)` usage)
 
 ### Bug fixes
