@@ -1016,7 +1016,9 @@
     },
     {
       "wasmSymbol": "wasp_dispatcher_set_subtitle_track",
-      "doc": ["Request a subtitle rendition, or disable subtitles."],
+      "doc": [
+        "Select a subtitle track, or restore automatic selection with the sentinel value.",
+      ],
       "wasm": {
         "kind": "method",
         "args": [

@@ -380,7 +380,7 @@ export interface WaspWasmExports {
    */
   wasp_dispatcher_disable_subtitle_track(ptr: number): void;
   /**
-   * Request a subtitle rendition, or disable subtitles.
+   * Select a subtitle track, or restore automatic selection with the sentinel value.
    */
   wasp_dispatcher_set_subtitle_track(ptr: number, trackId: number): void;
   /**
