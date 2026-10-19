@@ -20,7 +20,7 @@
 - `lockVariant`: Actually send `audioTrackUpdate` if the audio track switched from one audio track to another (or none) on a `lockVariant` call
 - `lockVariant`: Don't needlessly send `audioTrackUpdate` if the audio track did not change on a `lockVariant` call
 - `lockVariant`: Don't crash if a variant selected through `lockVariant` is found to have unsupported codecs after probing. Remove the lock, send `variantLockUpdate` and fall back to a compatible variant
-- `initialAudioTrack`: skip tracks with no matching variant
+- `initialAudioTrack`: skip tracks with no matching variant instead of failing playback.
 - errors: Return `undefined` instead of `-1` for unknown `status` properties on `WaspMultivariantPlaylistRequestError` and `WaspMediaPlaylistRequestError`
 - errors: Return `undefined` instead of `-1` for unknown `mediaType` properties on `WaspMediaPlaylistRequestError`, `WaspMediaPlaylistParsingError` and `WaspSegmentParsingError`
 - errors: Correctly report failed segment downloads as `WaspSegmentRequestError` through `error` or `warning` events even when the player does not yet know whether the segment contains audio or video
