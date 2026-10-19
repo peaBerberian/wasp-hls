@@ -933,8 +933,28 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
     return this.__contentMetadata__?.subtitleTracks ?? [];
   }
 
-  /** Selects a subtitle track, or restores automatic selection with null. */
-  public setSubtitleTrack(trackId: number | null): void {
+  /** Selects a subtitle track by ID. */
+  public setSubtitleTrack(trackId: number): void {
+    if (this.__worker__ === null) {
+      throw new Error("The Player is not initialized or is disposed.");
+    }
+    const metadata = this.__contentMetadata__;
+    if (metadata === null) {
+      throw new Error("No content loaded");
+    }
+    if (typeof trackId !== "number") {
+      throw new TypeError(
+        "Expected a subtitle track ID. Use resetSubtitleTrack() for automatic selection.",
+      );
+    }
+    postMessageToWorker(this.__worker__, {
+      type: MainMessageType.SetSubtitleTrack,
+      value: { contentId: metadata.contentId, trackId },
+    });
+  }
+
+  /** Restores automatic subtitle track selection for the current content. */
+  public resetSubtitleTrack(): void {
     if (this.__worker__ === null) {
       throw new Error("The Player is not initialized or is disposed.");
     }
@@ -944,7 +964,7 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
     }
     postMessageToWorker(this.__worker__, {
       type: MainMessageType.SetSubtitleTrack,
-      value: { contentId: metadata.contentId, trackId },
+      value: { contentId: metadata.contentId, trackId: null },
     });
   }
 

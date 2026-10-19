@@ -259,7 +259,15 @@ describe("Playlist compatibility", () => {
           () => true,
         );
         expect(() => ctx.player.setSubtitleTrack(0x7ffffffe)).not.toThrow();
-        await invalidSelection;
+        const warning = await invalidSelection;
+        expect(warning.name).toBe("WaspTrackSelectionError");
+        expect(warning.code).toBe("UnknownTrack");
+        expect(warning.trackId).toBe(0x7ffffffe);
+        for (const args of [[null], [undefined], []]) {
+          expect(() =>
+            Reflect.apply(ctx.player.setSubtitleTrack, ctx.player, args),
+          ).toThrow(TypeError);
+        }
         expect(ctx.player.getCurrentSubtitleTrack()?.id).toBe(tracks[0].id);
         ctx.player.setSubtitleTrack(tracks[0].id);
         const disabled = waitForPlayerEvent(
@@ -275,11 +283,45 @@ describe("Playlist compatibility", () => {
           "subtitleTrackUpdate",
           (track) => track?.id === tracks[0].id,
         );
-        ctx.player.setSubtitleTrack(null);
+        ctx.player.resetSubtitleTrack();
         await automatic;
         expect(ctx.player.getCurrentSubtitleTrack()?.id).toBe(tracks[0].id);
         ctx.player.stop();
         expect(ctx.player.getSubtitleTrackList()).toEqual([]);
+      } finally {
+        ctx.dispose();
+      }
+    },
+  );
+
+  it(
+    "warns when a subtitle track has no matching variant",
+    { timeout: TEST_TIMEOUT_MS },
+    async () => {
+      const url = await ensureVodScenarioReady("fmp4-multivariant-no-codecs");
+      const master = await readPlaylist(url);
+      const body = master.replace(
+        "#EXTM3U\n",
+        '#EXTM3U\n#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID="unused",NAME="French",LANGUAGE="fr",URI="unused.m3u8"\n',
+      );
+      const ctx = await createPlayerHarness({
+        fetchRules: [playlistRule(url, body)],
+      });
+      try {
+        await expectPlayback(ctx, url);
+        const previousTrack = ctx.player.getCurrentSubtitleTrack();
+        const previousVariant = ctx.player.getCurrentVariant();
+        const track = ctx.player.getSubtitleTrackList()[0];
+        expect(track).toBeDefined();
+        const warningPromise = waitForPlayerEvent(ctx.player, "warning");
+        ctx.player.setSubtitleTrack(track.id);
+        const warning = await warningPromise;
+        expect(warning.name).toBe("WaspTrackSelectionError");
+        expect(warning.code).toBe("NoCompatibleVariant");
+        expect(warning.trackId).toBe(track.id);
+        expect(ctx.player.getCurrentSubtitleTrack()).toEqual(previousTrack);
+        expect(ctx.player.getCurrentVariant()).toEqual(previousVariant);
+        expect(ctx.player.getError()).toBeNull();
       } finally {
         ctx.dispose();
       }
