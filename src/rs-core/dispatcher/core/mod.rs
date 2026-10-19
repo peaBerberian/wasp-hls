@@ -596,15 +596,19 @@ impl Dispatcher {
         let needs_variant = match store.set_subtitle_track(track_id) {
             Ok(needs_variant) => needs_variant,
             Err(reason) => {
-                let message = match reason {
-                    SubtitleTrackSelectionError::UnknownTrack => {
-                        "Unable to select the subtitle track: unknown track ID"
-                    }
-                    SubtitleTrackSelectionError::NoCompatibleVariant => {
-                        "Unable to select the subtitle track: no compatible variant"
-                    }
+                let (code, message) = match reason {
+                    SubtitleTrackSelectionError::UnknownTrack => (
+                        TrackSelectionErrorCode::UnknownTrack,
+                        "Unable to select the subtitle track: unknown track ID",
+                    ),
+                    SubtitleTrackSelectionError::NoCompatibleVariant => (
+                        TrackSelectionErrorCode::NoCompatibleVariant,
+                        "Unable to select the subtitle track: no compatible variant",
+                    ),
                 };
-                jsSendOtherError(false, OtherErrorCode::Unknown, message);
+                if let Some(track_id) = track_id {
+                    jsSendTrackSelectionError(code, MediaType::Text, track_id, message);
+                }
                 return;
             }
         };
