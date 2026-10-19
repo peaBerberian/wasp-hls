@@ -11,8 +11,7 @@ track object's `id` property. The main location where you may find those objects
 are through the [`getAudioTrackList` method](./getAudioTrackList.md) and the
 `audioTrackListUpdate` [event](../Player_Events.md).
 
-You can also set the argument to `null` to let the `WaspHlsPlayer` set a
-default audio track.
+Use [`resetAudioTrack()`](./resetAudioTrack.md) to restore automatic selection.
 
 `setAudioTrack` can only be called when the `WaspHlsPlayer` instance is [in the
 `"Loaded"` state](../Basic_Methods/getPlayerState.md) and thus when a content is
@@ -55,8 +54,6 @@ player.setAudioTrack(trackId);
 ```
 
 - **arguments**:
-  1. _trackId_ `number|null`: The wanted track's `id` property (see
+  1. _trackId_ `number`: The wanted track's `id` property (see
      [`getAudioTrackList` method](./getAudioTrackList.md) and `audioTrackListUpdate`
      [event](../Player_Events.md).
-
-     Can be set to `null` to let the `WaspHlsPlayer` set a default one instead.

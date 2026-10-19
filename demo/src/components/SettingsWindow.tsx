@@ -105,7 +105,11 @@ function SettingsWindow({
 
   const updateAudioTrack = React.useCallback(
     (t: AudioTrackInfo | undefined) => {
-      player.setAudioTrack(t?.id ?? null);
+      if (t === undefined) {
+        player.resetAudioTrack();
+      } else {
+        player.setAudioTrack(t.id);
+      }
       setAudioTrack(t);
     },
     [player],

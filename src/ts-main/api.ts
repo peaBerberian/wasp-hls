@@ -936,20 +936,39 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
   }
 
   /**
-   * Set the wanted audio track through its `id` property or indicate that you
-   * don't want to force an audio track (you want to rely on the content
-   * default's ones) by communicating `null` instead.
+   * Select an audio track through its `id` property.
+   * Use `resetAudioTrack()` to restore automatic selection.
    *
    * Note that if relying on `lockVariant`, updating the audio track might lead
    * to the automatic unlocking of the variant if and only if the wanted track
    * has no equivalent in the locked variant. In that case, you will receive a
    * `variantLockUpdate` event indicating that the lock is no more in place.
    *
-   * @param {number|null} trackId - The value of the `id` property of the
-   * track you want to set or `null` if you want to rely on the
-   * content's default instead.
+   * @param {number} trackId - The `id` of the track to select.
    */
-  public setAudioTrack(trackId: number | null): void {
+  public setAudioTrack(trackId: number): void {
+    if (this.__worker__ === null) {
+      throw new Error("The Player is not initialized or is disposed.");
+    }
+    if (this.__contentMetadata__ === null) {
+      throw new Error("No content loaded");
+    }
+    if (typeof trackId !== "number") {
+      throw new TypeError(
+        "Expected an audio track ID. Use resetAudioTrack() for automatic selection.",
+      );
+    }
+    postMessageToWorker(this.__worker__, {
+      type: MainMessageType.SetAudioTrack,
+      value: {
+        contentId: this.__contentMetadata__.contentId,
+        trackId,
+      },
+    });
+  }
+
+  /** Restores automatic audio track selection for the current content. */
+  public resetAudioTrack(): void {
     if (this.__worker__ === null) {
       throw new Error("The Player is not initialized or is disposed.");
     }
@@ -958,10 +977,7 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
     }
     postMessageToWorker(this.__worker__, {
       type: MainMessageType.SetAudioTrack,
-      value: {
-        contentId: this.__contentMetadata__.contentId,
-        trackId,
-      },
+      value: { contentId: this.__contentMetadata__.contentId, trackId: null },
     });
   }
 
