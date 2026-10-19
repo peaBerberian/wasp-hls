@@ -20,7 +20,7 @@ use crate::{
     parser::{PlaylistRefreshInfo, SegmentIdentity},
     playlist_store::{
         AudioTrackChange, LockVariantResponse, MediaPlaylistPermanentId, PlaylistStore,
-        ProbeSegmentMetadata, SetAudioTrackResponse,
+        ProbeSegmentMetadata, SetAudioTrackResponse, SubtitleTrackSelectionError,
     },
     requester::{
         FinishedRequestType, PlaylistFileType, PlaylistRequestInfo, RetryResult, SegmentRequestInfo,
@@ -595,27 +595,31 @@ impl Dispatcher {
         let was_locked = store.is_variant_locked();
         let needs_variant = match store.set_subtitle_track(track_id) {
             Ok(needs_variant) => needs_variant,
-            Err(()) => {
-                jsSendOtherError(
-                    false,
-                    OtherErrorCode::Unknown,
-                    "No compatible variant for the subtitle track",
-                );
+            Err(reason) => {
+                let message = match reason {
+                    SubtitleTrackSelectionError::UnknownTrack => {
+                        "Unable to select the subtitle track: unknown track ID"
+                    }
+                    SubtitleTrackSelectionError::NoCompatibleVariant => {
+                        "Unable to select the subtitle track: no compatible variant"
+                    }
+                };
+                jsSendOtherError(false, OtherErrorCode::Unknown, message);
                 return;
             }
         };
         if needs_variant {
-            if was_locked {
-                jsAnnounceVariantLockStatusChange(None);
-            }
             if let Some(selection) = self.compute_optimal_variant() {
                 let Some(store) = self.playlist_store.as_mut() else {
                     return;
                 };
                 let changed = store.set_variant(selection.safe_variant_id);
                 self.announce_current_audio_track();
-                self.announce_current_variant();
                 self.sync_subtitle_selection();
+                self.announce_current_variant();
+                if was_locked {
+                    jsAnnounceVariantLockStatusChange(None);
+                }
                 self.reset_on_selected_media_playlists(&changed);
             }
         }
@@ -1847,6 +1851,16 @@ video.m3u8
                 ..Default::default()
             }),
         ];
+        let french = store
+            .subtitle_tracks()
+            .iter()
+            .find(|track| track.language() == Some("fr"))
+            .unwrap()
+            .id();
+        assert_eq!(
+            store.set_subtitle_track(Some(french)),
+            Err(crate::playlist_store::SubtitleTrackSelectionError::NoCompatibleVariant)
+        );
         dispatcher.apply_initial_subtitle_track_selection(&mut store);
         let english_subtitle = store
             .subtitle_tracks()

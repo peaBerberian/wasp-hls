@@ -851,9 +851,12 @@ impl PlaylistStore {
     }
 
     /// Returns whether a compatible variant must be selected.
-    pub(crate) fn set_subtitle_track(&mut self, track_id: Option<u32>) -> Result<bool, ()> {
+    pub(crate) fn set_subtitle_track(
+        &mut self,
+        track_id: Option<u32>,
+    ) -> Result<bool, SubtitleTrackSelectionError> {
         if track_id.is_some_and(|id| !self.subtitle_tracks().iter().any(|track| track.id() == id)) {
-            return Err(());
+            return Err(SubtitleTrackSelectionError::UnknownTrack);
         }
         if let (Some(track_id), TopLevelPlaylist::Multivariant(playlist)) =
             (track_id, &self.playlist)
@@ -874,7 +877,7 @@ impl PlaylistStore {
                         })
                 })
             {
-                return Err(());
+                return Err(SubtitleTrackSelectionError::NoCompatibleVariant);
             }
         }
         self.fixed_subtitle_track = track_id;
@@ -1406,6 +1409,13 @@ enum MultivariantStartupStatus {
     Ready,
 }
 
+/// Reason a subtitle selection was rejected without changing the store.
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum SubtitleTrackSelectionError {
+    UnknownTrack,
+    NoCompatibleVariant,
+}
+
 /// Result of calling the `set_audio_track` `PlaylistStore`'s method
 #[allow(clippy::enum_variant_names)]
 pub(crate) enum SetAudioTrackResponse {
@@ -1750,7 +1760,10 @@ c.m3u8
         let french = subtitle_id(&store, "French");
         store.set_subtitle_track(Some(french)).unwrap();
         let generation = store.subtitle_selection_generation();
-        assert!(store.set_subtitle_track(Some(u32::MAX)).is_err());
+        assert_eq!(
+            store.set_subtitle_track(Some(u32::MAX)),
+            Err(super::SubtitleTrackSelectionError::UnknownTrack)
+        );
         assert_eq!(store.fixed_subtitle_track_id(), Some(french));
         assert_eq!(store.current_subtitle_track_id(), Some(french));
         assert_eq!(store.subtitle_selection_generation(), generation);

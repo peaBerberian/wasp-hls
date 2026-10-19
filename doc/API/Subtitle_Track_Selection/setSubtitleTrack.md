@@ -4,7 +4,10 @@
 
 Selects a subtitle track by its `id` from
 [`getSubtitleTrackList`](./getSubtitleTrackList.md). Pass `null` to restore automatic
-selection. An unknown ID or a call without loaded content throws an error.
+selection. A call without loaded content throws an error.
+
+An unknown ID triggers an asynchronous `warning` event and leaves the selection
+unchanged.
 
 Selection takes effect asynchronously. The `subtitleTrackUpdate`
 [event](../Player_Events.md) reports when the active track changes.
