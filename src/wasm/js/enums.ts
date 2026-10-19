@@ -10,6 +10,7 @@ export {
   MediaType,
   MultivariantPlaylistParsingErrorCode,
   OtherErrorCode,
+  TrackSelectionErrorCode,
   PlaybackTickReason,
   PlaylistNature,
   PlaylistType,

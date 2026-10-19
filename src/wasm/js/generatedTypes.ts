@@ -23,6 +23,7 @@ import type {
   SourceBufferCreationErrorCode,
   StartingPositionType,
   TimerReason,
+  TrackSelectionErrorCode,
 } from "./enums.js";
 import type {
   AppendBufferValue,
@@ -185,6 +186,15 @@ export interface HostBindings {
     url: string,
     reason: RequestErrorReason,
     status: number | undefined,
+  ): void;
+  /**
+   * Report a rejected track selection as a warning.
+   */
+  sendTrackSelectionError(
+    code: TrackSelectionErrorCode,
+    mediaType: MediaType,
+    trackId: number,
+    message: string,
   ): void;
   /**
    * Emit a generic error to the host.

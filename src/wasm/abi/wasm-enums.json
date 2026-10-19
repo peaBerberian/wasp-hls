@@ -637,6 +637,13 @@
           ]
         }
       }
+    },
+    "TrackSelectionErrorCode": {
+      "default": "UnknownTrack",
+      "members": {
+        "UnknownTrack": 0,
+        "NoCompatibleVariant": 1
+      }
     }
   }
 }

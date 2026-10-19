@@ -48,6 +48,7 @@ import {
   WaspMultivariantPlaylistParsingError,
   WaspMultivariantPlaylistRequestError,
   WaspOtherError,
+  WaspTrackSelectionError,
   WaspSegmentParsingError,
   WaspSegmentRequestError,
   WaspSourceBufferCreationError,
@@ -840,6 +841,13 @@ function formatError(
         msg.value.errorInfo.value.reason,
         msg.value.errorInfo.value.status,
         msg.value.errorInfo.value.mediaType,
+        msg.value.message,
+      );
+    case "track-selection":
+      return new WaspTrackSelectionError(
+        msg.value.errorInfo.value.code,
+        msg.value.errorInfo.value.mediaType,
+        msg.value.errorInfo.value.trackId,
         msg.value.message,
       );
     case "other-error":

@@ -171,6 +171,14 @@ unsafe extern "C" {
         reason: u32,
         status: u32,
     );
+    /// Report a rejected track selection as a warning.
+    pub(super) fn __js_func__send_track_selection_error(
+        code: u32,
+        media_type: u32,
+        track_id: u32,
+        message_ptr: *const u8,
+        message_len: u32,
+    );
     /// Emit a generic error to the host.
     pub(super) fn __js_func__send_other_error(
         fatal: u32,

@@ -25,6 +25,7 @@ export {
   WaspMultivariantPlaylistParsingError,
   WaspMultivariantPlaylistRequestError,
   WaspOtherError,
+  WaspTrackSelectionError,
   WaspSegmentParsingError,
   WaspSegmentRequestError,
   WaspSourceBufferCreationError,

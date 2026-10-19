@@ -5,6 +5,7 @@ import type {
   MultivariantPlaylistParsingErrorCode,
   MediaType,
   OtherErrorCode,
+  TrackSelectionErrorCode,
   RequestErrorReason,
   SourceBufferCreationErrorCode as WasmSourceBufferCreationErrorCode,
   PushedSegmentErrorCode,
@@ -224,7 +225,8 @@ export interface ErrorWorkerMessage {
       | SourceBufferCreationErrorWorkerInfo
       | PushedSegmentErrorWorkerInfo
       | RemoveBufferErrorWorkerInfo
-      | OtherErrorWorkerInfo;
+      | OtherErrorWorkerInfo
+      | TrackSelectionErrorWorkerInfo;
 
     /**
      * If set, human-readable string describing the error, for debugging
@@ -263,7 +265,8 @@ export interface WarningWorkerMessage {
       | SourceBufferCreationErrorWorkerInfo
       | PushedSegmentErrorWorkerInfo
       | RemoveBufferErrorWorkerInfo
-      | OtherErrorWorkerInfo;
+      | OtherErrorWorkerInfo
+      | TrackSelectionErrorWorkerInfo;
 
     /**
      * If set, human-readable string describing the error, for debugging
@@ -385,6 +388,15 @@ export interface RemoveBufferErrorWorkerInfo {
 }
 
 /** Errors that do not corresponds to other Error categorizations. */
+export interface TrackSelectionErrorWorkerInfo {
+  type: "track-selection";
+  value: {
+    code: TrackSelectionErrorCode;
+    mediaType: MediaType;
+    trackId: number;
+  };
+}
+
 export interface OtherErrorWorkerInfo {
   type: "other-error";
   value: {

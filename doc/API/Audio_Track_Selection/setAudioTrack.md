@@ -19,8 +19,10 @@ default audio track.
 currently loaded. Calling it in any other scenario leads to an error being
 thrown.
 
-An unknown ID triggers an asynchronous `warning` event and leaves the selection
-unchanged.
+A failed selection sends an asynchronous `warning` event with
+`name: "WaspTrackSelectionError"`. Its `code` is `"UnknownTrack"` for an unknown ID
+or `"NoCompatibleVariant"` when no variant can provide the track. The warning
+includes `mediaType` and `trackId`; the selection stays unchanged.
 
 ## Influence on variants
 

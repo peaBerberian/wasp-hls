@@ -256,6 +256,17 @@ pub(super) unsafe fn __js_func__send_multivariant_playlist_request_error(
     non_wasm_binding_panic("__js_func__send_multivariant_playlist_request_error")
 }
 
+/// Report a rejected track selection as a warning.
+pub(super) unsafe fn __js_func__send_track_selection_error(
+    _code: u32,
+    _media_type: u32,
+    _track_id: u32,
+    _message_ptr: *const u8,
+    _message_len: u32,
+) {
+    non_wasm_binding_panic("__js_func__send_track_selection_error")
+}
+
 /// Emit a generic error to the host.
 pub(super) unsafe fn __js_func__send_other_error(
     _fatal: u32,

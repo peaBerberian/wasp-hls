@@ -6,7 +6,7 @@ use super::{
     MediaSourceDurationUpdateErrorCode, MediaType, MultivariantPlaylistParsingErrorCode,
     OtherErrorCode, PlaylistNature, PlaylistType, PushedSegmentErrorCode, RemoveBufferErrorCode,
     RemoveMediaSourceErrorCode, RequestErrorReason, SegmentParsingErrorCode,
-    SourceBufferCreationErrorCode, TimerReason,
+    SourceBufferCreationErrorCode, TimerReason, TrackSelectionErrorCode,
 };
 use crate::{
     media_element::{PushSegmentError, SegmentHints},
@@ -748,6 +748,24 @@ pub fn jsSendRemoveBufferError(fatal: bool, media_type: MediaType, message: &str
         __js_func__send_remove_buffer_error(
             bool_to_raw(fatal),
             media_type as u32,
+            message.as_ptr(),
+            message.len() as u32,
+        )
+    }
+}
+
+/// Report a rejected track selection without stopping playback.
+pub fn jsSendTrackSelectionError(
+    code: TrackSelectionErrorCode,
+    media_type: MediaType,
+    track_id: u32,
+    message: &str,
+) {
+    unsafe {
+        __js_func__send_track_selection_error(
+            code as u32,
+            media_type as u32,
+            track_id,
             message.as_ptr(),
             message.len() as u32,
         )

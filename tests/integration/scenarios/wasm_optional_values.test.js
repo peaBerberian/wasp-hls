@@ -25,6 +25,18 @@ describe("WASM optional unsigned values", () => {
     expect(rawOptionalId(raw)).toBe(expected);
   });
 
+  it.each([0, 1, 0x7fffffff, 0x80000000, 0xfffffffe])(
+    "preserves unsigned track selection IDs (%s)",
+    (trackId) => {
+      const calls = [];
+      const imports = createWasmImports({
+        sendTrackSelectionError: (...args) => calls.push(args),
+      }).wasp;
+      imports.__js_func__send_track_selection_error(0, 1, trackId | 0, 0, 0);
+      expect(calls.at(-1)[2]).toBe(trackId);
+    },
+  );
+
   // Each optional argument is paired with its position in the host callback.
   it.each([
     ["announce_variant_update", "announceVariantUpdate", 1, [[0, 0]]],

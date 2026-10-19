@@ -630,3 +630,20 @@ impl PlaybackTickReason {
         }
     }
 }
+
+#[repr(u32)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TrackSelectionErrorCode {
+    UnknownTrack = 0,
+    NoCompatibleVariant = 1,
+}
+
+impl TrackSelectionErrorCode {
+    pub fn from_raw(value: u32) -> Self {
+        match value {
+            0 => Self::UnknownTrack,
+            1 => Self::NoCompatibleVariant,
+            _ => Self::UnknownTrack,
+        }
+    }
+}
