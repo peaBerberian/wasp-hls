@@ -36,10 +36,7 @@ pub(super) unsafe fn __js_func__announce_fetched_content(
 }
 
 /// Report an audio or video track selection update to the host.
-pub(super) unsafe fn __js_func__announce_track_update(
-    _media_type: u32,
-    _track_id: u32,
-) {
+pub(super) unsafe fn __js_func__announce_track_update(_media_type: u32, _track_id: u32) {
     non_wasm_binding_panic("__js_func__announce_track_update")
 }
 
