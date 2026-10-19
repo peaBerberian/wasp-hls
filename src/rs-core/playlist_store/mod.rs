@@ -1,5 +1,7 @@
 use crate::{
-    bindings::{jsIsTypeSupported, MediaType, PlaylistNature},
+    bindings::{
+        formatters::DIRECT_MEDIA_AUDIO_TRACK_ID, jsIsTypeSupported, MediaType, PlaylistNature,
+    },
     media_element::SegmentQualityContext,
     parser::{
         AudioTrack, ExternalMediaInfo, MediaPlaylist, MediaPlaylistUpdateError, SegmentList,
@@ -826,9 +828,19 @@ impl PlaylistStore {
     /// TODO: The name of this method is poor, as it doesn't communicate well the place that it
     /// "locks-in" an audio track, e.g. unlike `set_variant`
     pub(crate) fn set_audio_track(&mut self, track_id: Option<u32>) -> SetAudioTrackResponse {
-        if self.current_variant_id.is_none() {
-            self.fixed_audio_track = track_id;
-            return SetAudioTrackResponse::NoUpdate;
+        if let Some(id) = track_id {
+            let exists = match &self.playlist {
+                TopLevelPlaylist::Multivariant(playlist) => {
+                    playlist.audio_tracks().iter().any(|track| track.id() == id)
+                }
+                TopLevelPlaylist::DirectMedia(_) => {
+                    id == DIRECT_MEDIA_AUDIO_TRACK_ID
+                        && self.has_distinct_media_type(MediaType::Audio)
+                }
+            };
+            if !exists {
+                return SetAudioTrackResponse::UnknownTrack;
+            }
         }
         if let (TopLevelPlaylist::Multivariant(playlist), Some(track_id)) =
             (&self.playlist, track_id)
@@ -838,6 +850,10 @@ impl PlaylistStore {
             if playlist.variants_for_audio(track_id).is_empty() {
                 return SetAudioTrackResponse::NoCompatibleVariant;
             }
+        }
+        if self.current_variant_id.is_none() {
+            self.fixed_audio_track = track_id;
+            return SetAudioTrackResponse::NoUpdate;
         }
         self.fixed_audio_track = track_id;
         self.clear_variant_supports();
@@ -1240,6 +1256,9 @@ enum MultivariantStartupStatus {
 /// Result of calling the `set_audio_track` `PlaylistStore`'s method
 #[allow(clippy::enum_variant_names)]
 pub(crate) enum SetAudioTrackResponse {
+    /// The requested track does not exist. The store was left unchanged.
+    UnknownTrack,
+
     /// No variant can provide the requested track. The store was left unchanged.
     NoCompatibleVariant,
 
@@ -1624,7 +1643,7 @@ unknown.m3u8
     }
 
     #[test]
-    fn startup_rejects_an_initial_audio_track_without_compatible_variants() {
+    fn startup_preserves_candidates_when_initial_audio_track_has_no_variant() {
         let mut store = PlaylistStore::try_new(
             br#"#EXTM3U
 #EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="unused",NAME="French",LANGUAGE="fr",URI="unused.m3u8"
@@ -1636,13 +1655,17 @@ video.m3u8
         )
         .unwrap();
         let track_id = store.audio_tracks().first().unwrap().id();
-        store.set_audio_track(Some(track_id));
+        assert!(matches!(
+            store.set_audio_track(Some(track_id)),
+            SetAudioTrackResponse::NoCompatibleVariant
+        ));
+        assert_eq!(store.fixed_audio_track_id(), None);
 
         assert!(store.current_variant_id().is_none());
-        assert!(store.compatible_variants().is_empty());
+        assert_eq!(store.compatible_variants().len(), 1);
         assert!(matches!(
             store.startup_status(0.),
-            Err(PlaylistStoreError::NoSupportedVariant)
+            Ok(StartupStatus::VariantSelectionNeeded)
         ));
     }
 
@@ -1881,6 +1904,37 @@ muxed.m3u8
     }
 
     #[test]
+    fn invalid_audio_id_before_variant_selection_preserves_preferences() {
+        let mut store = PlaylistStore::try_new(
+            br#"#EXTM3U
+#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="audio",NAME="English",URI="en.m3u8"
+#EXT-X-STREAM-INF:BANDWIDTH=1000,AUDIO="audio"
+video.m3u8
+"#
+            .as_slice(),
+            parse_url("https://example.com/master.m3u8"),
+        )
+        .unwrap();
+        let english = store.audio_tracks()[0].id();
+        assert!(store.current_variant_id().is_none());
+        assert!(matches!(
+            store.set_audio_track(Some(english)),
+            SetAudioTrackResponse::NoUpdate
+        ));
+        assert!(matches!(
+            store.set_audio_track(Some(u32::MAX - 1)),
+            SetAudioTrackResponse::UnknownTrack
+        ));
+        assert_eq!(store.fixed_audio_track_id(), Some(english));
+        assert!(store.current_variant_id().is_none());
+        assert!(matches!(
+            store.set_audio_track(None),
+            SetAudioTrackResponse::NoUpdate
+        ));
+        assert_eq!(store.fixed_audio_track_id(), None);
+    }
+
+    #[test]
     fn unavailable_audio_track_changes_preserve_selection_lock_and_support() {
         let playlist = PlaylistStore::try_new(
             br#"#EXTM3U
@@ -1926,7 +1980,7 @@ high.m3u8
         for rejected_id in [french_id, u32::MAX - 1] {
             assert!(matches!(
                 store.set_audio_track(Some(rejected_id)),
-                SetAudioTrackResponse::NoCompatibleVariant
+                SetAudioTrackResponse::NoCompatibleVariant | SetAudioTrackResponse::UnknownTrack
             ));
             assert_eq!(store.fixed_audio_track_id(), Some(english_id));
             assert_eq!(store.current_audio_track_id(), Some(english_id));

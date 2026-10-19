@@ -296,7 +296,7 @@ MSE API and buffer handling:
 
 Tracks:
 
-- [x] Provide API to set an audio track
+- [x] Provide API to set an audio track (and track preferences)
 - [ ] Provide API to set a video track
       _Priority: low_
 - [ ] Allow text track selection and support at least one text track format
@@ -360,8 +360,7 @@ most of them are not needed for playback):
   - [x] ASSOC-LANGUAGE: In audio track selection API
   - [x] NAME: In audio track selection API
   - [x] CHANNELS: Audio channel count exposed in the audio track selection API.
-  - [x] CHARACTERISTICS: Semantic characteristics exposed in the audio track
-        selection API.
+  - [x] CHARACTERISTICS: Exposed in track selection APIs
   - [x] BIT-DEPTH
   - [x] SAMPLE-RATE
   - [ ] FORCED: As the SUBTITLES TYPE is not handled yet, we don't have to use

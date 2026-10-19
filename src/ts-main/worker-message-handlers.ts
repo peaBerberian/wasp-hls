@@ -1008,7 +1008,6 @@ export function onTrackUpdateMessage(
   contentMetadata.currentAudioTrack = msg.value.audioTrack
     ? {
         id: msg.value.audioTrack.current,
-        isSelected: msg.value.audioTrack.isSelected,
       }
     : undefined;
   return true;

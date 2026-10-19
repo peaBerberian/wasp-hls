@@ -26,11 +26,7 @@ unsafe extern "C" {
         audio_tracks_info_len: u32,
     );
     /// Report an audio or video track selection update to the host.
-    pub(super) fn __js_func__announce_track_update(
-        media_type: u32,
-        track_id: u32,
-        is_selected: u32,
-    );
+    pub(super) fn __js_func__announce_track_update(media_type: u32, track_id: u32);
     /// Report that variant lock state changed.
     pub(super) fn __js_func__announce_variant_lock_status_change(variant_id: u32);
     /// Report the currently selected variant update.

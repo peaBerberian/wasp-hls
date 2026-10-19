@@ -566,14 +566,8 @@ pub fn jsAnnounceVariantUpdate(variant_id: Option<u32>) {
     unsafe { __js_func__announce_variant_update(opt_u32_to_raw(variant_id)) }
 }
 
-pub fn jsAnnounceTrackUpdate(media_type: MediaType, track_id: Option<u32>, is_fixed: bool) {
-    unsafe {
-        __js_func__announce_track_update(
-            media_type as u32,
-            opt_u32_to_raw(track_id),
-            bool_to_raw(is_fixed),
-        )
-    }
+pub fn jsAnnounceTrackUpdate(media_type: MediaType, track_id: Option<u32>) {
+    unsafe { __js_func__announce_track_update(media_type as u32, opt_u32_to_raw(track_id)) }
 }
 
 pub fn jsAnnounceVariantLockStatusChange(variant_id: Option<u32>) {

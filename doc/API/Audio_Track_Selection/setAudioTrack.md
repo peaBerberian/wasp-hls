@@ -19,6 +19,9 @@ default audio track.
 currently loaded. Calling it in any other scenario leads to an error being
 thrown.
 
+An unknown ID triggers an asynchronous `warning` event and leaves the selection
+unchanged.
+
 ## Influence on variants
 
 Changing the audio track may also trigger an automatic "unlocking" of a variant

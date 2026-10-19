@@ -459,7 +459,6 @@ export interface TrackUpdateWorkerMessage {
     audioTrack?:
       | {
           current: number;
-          isSelected: boolean;
         }
       | undefined;
   };
@@ -493,7 +492,7 @@ export interface AudioTrackInfo {
   assocLanguage?: string | undefined;
   name?: string | undefined;
   channels?: number | undefined;
-  characteristics?: string[] | undefined;
+  characteristics: string[];
   bitDepth?: number | undefined;
   sampleRate?: number | undefined;
   bitDepths?: number[] | undefined;

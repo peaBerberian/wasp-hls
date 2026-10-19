@@ -53,11 +53,7 @@ export interface HostBindings {
   /**
    * Report an audio or video track selection update to the host.
    */
-  announceTrackUpdate(
-    mediaType: MediaType,
-    trackId: number | undefined,
-    isSelected: boolean,
-  ): void;
+  announceTrackUpdate(mediaType: MediaType, trackId: number | undefined): void;
   /**
    * Report that variant lock state changed.
    */

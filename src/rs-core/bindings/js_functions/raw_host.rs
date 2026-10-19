@@ -39,7 +39,6 @@ pub(super) unsafe fn __js_func__announce_fetched_content(
 pub(super) unsafe fn __js_func__announce_track_update(
     _media_type: u32,
     _track_id: u32,
-    _is_selected: u32,
 ) {
     non_wasm_binding_panic("__js_func__announce_track_update")
 }

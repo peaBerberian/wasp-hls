@@ -164,7 +164,7 @@ fn advance_awaiting_playlist_info_state(dispatcher: &mut Dispatcher) {
     }
 
     if !lifecycle_announced {
-        let (playlist_kind, variants_info, audio_tracks_info, curr_audio_track, is_fixed) = {
+        let (playlist_kind, variants_info, audio_tracks_info, curr_audio_track) = {
             let Some(playlist_store) = dispatcher.playlist_store.as_mut() else {
                 return;
             };
@@ -184,18 +184,17 @@ fn advance_awaiting_playlist_info_state(dispatcher: &mut Dispatcher) {
                 let has_audio_track = playlist_store.has_distinct_media_type(MediaType::Audio);
                 (
                     unsafe { format_direct_media_variants_info_for_js() },
-                    unsafe { format_direct_media_audio_tracks_for_js(has_audio_track) },
+                    format_direct_media_audio_tracks_for_js(has_audio_track),
                 )
             } else {
                 (
                     unsafe {
                         format_variants_info_for_js(playlist_store.available_variants().as_slice())
                     },
-                    unsafe { format_audio_tracks_for_js(playlist_store.audio_tracks()) },
+                    format_audio_tracks_for_js(playlist_store.audio_tracks()),
                 )
             };
             let fixed_audio_track = playlist_store.fixed_audio_track_id();
-            let is_fixed = fixed_audio_track.is_some();
             let curr_audio_track = if let Some(fixed) = fixed_audio_track {
                 Some(fixed)
             } else if playlist_store.playlist_kind() == PlaylistType::MediaPlaylist
@@ -211,13 +210,12 @@ fn advance_awaiting_playlist_info_state(dispatcher: &mut Dispatcher) {
                 variants_info,
                 audio_tracks_info,
                 curr_audio_track,
-                is_fixed,
             )
         };
 
         jsAnnounceFetchedContent(playlist_kind, variants_info, audio_tracks_info);
         dispatcher.announce_current_variant();
-        jsAnnounceTrackUpdate(MediaType::Audio, curr_audio_track, is_fixed);
+        jsAnnounceTrackUpdate(MediaType::Audio, curr_audio_track);
 
         dispatcher.ready_state = PlayerReadyState::AwaitingPlaylistInfo {
             starting_position,

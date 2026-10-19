@@ -350,7 +350,7 @@ export default function MessageReceiver() {
         ) {
           return;
         }
-        dispatcher.set_audio_track(data.value.trackId ?? undefined);
+        dispatcher.set_audio_track(data.value.trackId);
         break;
       }
 

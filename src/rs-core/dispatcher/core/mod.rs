@@ -75,8 +75,7 @@ impl Dispatcher {
                     audio_track_change,
                 } => {
                     if let AudioTrackChange::Changed(track_id) = audio_track_change {
-                        let is_audio_track_selected = pl_store.fixed_audio_track_id().is_some();
-                        jsAnnounceTrackUpdate(MediaType::Audio, track_id, is_audio_track_selected);
+                        jsAnnounceTrackUpdate(MediaType::Audio, track_id);
                     }
 
                     self.announce_current_variant();
@@ -161,6 +160,11 @@ impl Dispatcher {
             return;
         };
         match pl_store.set_audio_track(track_id) {
+            SetAudioTrackResponse::UnknownTrack => jsSendOtherError(
+                false,
+                OtherErrorCode::Unknown,
+                "Unable to select the audio track: unknown track ID",
+            ),
             SetAudioTrackResponse::NoCompatibleVariant => jsSendOtherError(
                 false,
                 OtherErrorCode::Unknown,
@@ -569,7 +573,6 @@ impl Dispatcher {
         jsAnnounceTrackUpdate(
             MediaType::Audio,
             fixed_audio_track.or_else(|| pl_store.current_audio_track_id()),
-            fixed_audio_track.is_some(),
         );
     }
 
@@ -825,16 +828,23 @@ impl Dispatcher {
 
     fn apply_initial_audio_track_selection(&mut self, pl_store: &mut PlaylistStore) {
         let initial_audio_track_selection = std::mem::take(&mut self.initial_audio_track_selection);
-        let Some(track_id) = initial_audio_track_selection.iter().find_map(|selection| {
-            pl_store
+        for selection in initial_audio_track_selection {
+            let matching_ids: Vec<_> = pl_store
                 .audio_tracks()
                 .iter()
-                .find(|track| selection.matches(track))
+                .filter(|track| selection.matches(track))
                 .map(|track| track.id())
-        }) else {
-            return;
-        };
-        pl_store.set_audio_track(Some(track_id));
+                .collect();
+            for id in matching_ids {
+                if !matches!(
+                    pl_store.set_audio_track(Some(id)),
+                    SetAudioTrackResponse::UnknownTrack
+                        | SetAudioTrackResponse::NoCompatibleVariant
+                ) {
+                    return;
+                }
+            }
+        }
     }
 
     /// Keep playback's resume threshold reachable by the segment scheduler.
@@ -1617,6 +1627,52 @@ mod tests {
         playlist_store::PlaylistStore,
         utils::url::Url,
     };
+
+    #[test]
+    fn initial_audio_preferences_skip_unused_groups() {
+        for mode in 0..3 {
+            let mut store = PlaylistStore::try_new(
+                br#"#EXTM3U
+#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="unused",NAME="Unused",LANGUAGE="fr",ASSOC-LANGUAGE="en",URI="unused.m3u8"
+#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="audio",NAME="Usable",LANGUAGE="en",ASSOC-LANGUAGE="en",URI="audio.m3u8"
+#EXT-X-STREAM-INF:BANDWIDTH=100000,AUDIO="audio"
+video.m3u8
+"#
+                .as_slice(),
+                Url::new("https://example.com/master.m3u8".into()),
+            )
+            .unwrap();
+            let mut dispatcher = Dispatcher::new(100000.);
+            dispatcher.initial_audio_track_selection = if mode == 1 {
+                vec![
+                    crate::dispatcher::InitialAudioTrackSelection {
+                        language: Some("fr".into()),
+                        ..Default::default()
+                    },
+                    crate::dispatcher::InitialAudioTrackSelection {
+                        language: Some("en".into()),
+                        ..Default::default()
+                    },
+                ]
+            } else {
+                vec![crate::dispatcher::InitialAudioTrackSelection {
+                    language: (mode == 2).then(|| "fr".into()),
+                    assoc_language: Some("en".into()),
+                    ..Default::default()
+                }]
+            };
+            dispatcher.apply_initial_audio_track_selection(&mut store);
+            let usable = store
+                .audio_tracks()
+                .iter()
+                .find(|track| track.name() == Some("Usable"))
+                .unwrap()
+                .id();
+            assert_eq!(store.fixed_audio_track_id(), (mode != 2).then_some(usable));
+            assert_eq!(store.compatible_variants().len(), 1);
+            assert!(dispatcher.initial_audio_track_selection.is_empty());
+        }
+    }
 
     fn selected_playlist(manifest: &[u8]) -> PlaylistStore {
         let mut pl_store = PlaylistStore::try_new(

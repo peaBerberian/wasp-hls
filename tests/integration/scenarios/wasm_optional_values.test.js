@@ -28,7 +28,7 @@ describe("WASM optional unsigned values", () => {
   // Each optional argument is paired with its position in the host callback.
   it.each([
     ["announce_variant_update", "announceVariantUpdate", 1, [[0, 0]]],
-    ["announce_track_update", "announceTrackUpdate", 3, [[1, 1]]],
+    ["announce_track_update", "announceTrackUpdate", 2, [[1, 1]]],
     [
       "announce_variant_lock_status_change",
       "announceVariantLockStatusChange",

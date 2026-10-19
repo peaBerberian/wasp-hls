@@ -306,12 +306,10 @@ export function createWasmImports(bindings: HostBindings): WebAssembly.Imports {
       __js_func__announce_track_update(
         mediaType: number,
         trackId: number,
-        isSelected: number,
       ): void {
         bindings.announceTrackUpdate(
           mediaType as MediaType,
           rawOptionalId(trackId),
-          isSelected !== 0,
         );
       },
       __js_func__announce_variant_lock_status_change(variantId: number): void {

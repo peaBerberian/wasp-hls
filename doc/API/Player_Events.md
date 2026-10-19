@@ -469,9 +469,8 @@ When set to an object, it should contain the following keys:
 
   For example, an AC-3 5.1 Rendition would have a `channels` attribute set to `6`.
 
-- `characteristics` (`Array.<string> | undefined`): Semantic characteristics
-  linked to that audio track, generally expressed as Uniform Type Identifiers
-  such as accessibility-related metadata or commentary flags.
+- `characteristics` (`Array.<string>`): Characteristics of the audio track,
+  such as `public.accessibility.describes-video` for audio description.
 
 - `bitDepth` (`number | undefined`): If set, the bit depth in bits of the audio
   samples for every rendition grouped into that audio track.
@@ -531,9 +530,8 @@ Each object should contain the following keys (same than for the
 
   For example, an AC-3 5.1 Rendition would have a `channels` attribute set to `6`.
 
-- `characteristics` (`Array.<string> | undefined`): Semantic characteristics
-  linked to that audio track, generally expressed as Uniform Type Identifiers
-  such as accessibility-related metadata or commentary flags.
+- `characteristics` (`Array.<string>`): Characteristics of the audio track,
+  such as `public.accessibility.describes-video` for audio description.
 
 - `bitDepth` (`number | undefined`): If set, the bit depth in bits of the audio
   samples for every rendition grouped into that audio track.
