@@ -23,7 +23,7 @@
       "typescript": {
         "methodName": "addSourceBuffer",
         "args": [
-          { "name": "mediaType", "type": "AvPlaybackMediaType" },
+          { "name": "mediaType", "type": "MediaType" },
           { "name": "typ", "type": "string" },
         ],
         "returnType": "HostResult<number, AddSourceBufferErrorCode>",
@@ -601,7 +601,7 @@
         "args": [
           { "name": "fatal", "type": "boolean" },
           { "name": "code", "type": "PushedSegmentErrorCode" },
-          { "name": "mediaType", "type": "AvPlaybackMediaType" },
+          { "name": "mediaType", "type": "MediaType" },
           { "name": "message", "type": "string" },
         ],
         "returnType": "void",
@@ -624,7 +624,7 @@
         "methodName": "sendRemoveBufferError",
         "args": [
           { "name": "fatal", "type": "boolean" },
-          { "name": "mediaType", "type": "AvPlaybackMediaType" },
+          { "name": "mediaType", "type": "MediaType" },
           { "name": "message", "type": "string" },
         ],
         "returnType": "void",
@@ -702,7 +702,7 @@
         "args": [
           { "name": "fatal", "type": "boolean" },
           { "name": "code", "type": "SourceBufferCreationErrorCode" },
-          { "name": "mediaType", "type": "AvPlaybackMediaType" },
+          { "name": "mediaType", "type": "MediaType" },
           { "name": "message", "type": "string" },
         ],
         "returnType": "void",

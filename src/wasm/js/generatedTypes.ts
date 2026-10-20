@@ -3,7 +3,6 @@
 import type {
   AddSourceBufferErrorCode,
   AttachMediaSourceErrorCode,
-  AvPlaybackMediaType,
   ContentCompatibilityErrorCode,
   EndOfStreamErrorCode,
   LogLevel,
@@ -41,7 +40,7 @@ export interface HostBindings {
    * Create a SourceBuffer for the given media type and MIME type.
    */
   addSourceBuffer(
-    mediaType: AvPlaybackMediaType,
+    mediaType: MediaType,
     typ: string,
   ): HostResult<number, AddSourceBufferErrorCode>;
   /**
@@ -216,7 +215,7 @@ export interface HostBindings {
   sendPushedSegmentError(
     fatal: boolean,
     code: PushedSegmentErrorCode,
-    mediaType: AvPlaybackMediaType,
+    mediaType: MediaType,
     message: string,
   ): void;
   /**
@@ -224,7 +223,7 @@ export interface HostBindings {
    */
   sendRemoveBufferError(
     fatal: boolean,
-    mediaType: AvPlaybackMediaType,
+    mediaType: MediaType,
     message: string,
   ): void;
   /**
@@ -254,7 +253,7 @@ export interface HostBindings {
   sendSourceBufferCreationError(
     fatal: boolean,
     code: SourceBufferCreationErrorCode,
-    mediaType: AvPlaybackMediaType,
+    mediaType: MediaType,
     message: string,
   ): void;
   /**

@@ -12,8 +12,8 @@ use crate::{
         jsSendPushedSegmentError, jsSendRemoveBufferError, jsSendSegmentParsingError,
         jsSendSegmentRequestError, jsSendSourceBufferCreationError, jsSendTrackSelectionError,
         jsSetMediaSourceDuration, jsStopObservingPlayback, jsUpdateContentInfo,
-        AddSourceBufferErrorCode, AvPlaybackMediaType, MediaType, OtherErrorCode,
-        PushedSegmentErrorCode, RequestId, SourceBufferId, TimerId, TrackSelectionErrorCode,
+        AddSourceBufferErrorCode, MediaType, OtherErrorCode, PushedSegmentErrorCode, RequestId,
+        SourceBufferId, TimerId, TrackSelectionErrorCode,
     },
     dispatcher::segment_request_contexts::PendingSegmentRequest,
     media_element::SegmentPushMetadata,
@@ -36,7 +36,7 @@ mod startup;
 const SEGMENT_SELECTION_MARGIN: f64 = 0.2;
 
 impl Dispatcher {
-    // TODO(subtitles): schedule the selected playlist and segments using independent coverage.
+    // XXX TODO: Schedule text segments using the shared buffer coverage interface.
     // Count successfully installed empty segments as covered; refresh live playlists, restart
     // on seeks, and invalidate requests/cue batches on selection generation changes.
     // Fetch ahead of playback, never wait for cues to become active before sending them.
@@ -96,8 +96,9 @@ impl Dispatcher {
                         log_info!("Core: {} MediaPlaylist changed on variant lock", media_type);
                         self.ready_probe_segments.clear_media_type(media_type);
                         self.abort_segment_requests_with_type(media_type);
-                        if let Some(buffer_type) = media_type.av_playback() {
-                            self.flush_media_buffer(buffer_type);
+                        // XXX TODO: Flush text through the shared buffer interface too.
+                        if media_type != MediaType::Text {
+                            self.flush_media_buffer(media_type);
                         }
                     }
 
@@ -108,18 +109,17 @@ impl Dispatcher {
                     // contains data from the newly-locked variant. An unchanged playlist
                     // may still have older-quality buffered data, but when it does not this causes
                     // an unnecessary rebuffer and refetch.
+                    // XXX TODO: Include text when its buffer and playlist scheduling are connected.
                     for media_type in [MediaType::Audio, MediaType::Video] {
-                        if media_type.av_playback().is_some_and(|buffer_type| {
-                            self.media_element_ref.has_buffer(buffer_type)
-                        }) && !changed_media_types.contains(&media_type)
+                        if self.media_element_ref.has_buffer(media_type)
+                            && !changed_media_types.contains(&media_type)
                         {
                             self.abort_segment_requests_with_type(media_type);
-                            if let Some(buffer_type) = media_type.av_playback() {
-                                self.flush_media_buffer(buffer_type);
-                            }
+                            self.flush_media_buffer(media_type);
                         }
                     }
 
+                    // XXX TODO: Include text when its buffer and playlist scheduling are connected.
                     for media_type in [MediaType::Audio, MediaType::Video] {
                         self.follow_selected_media_playlist(media_type);
                     }
@@ -547,7 +547,8 @@ impl Dispatcher {
         // detection and possibly gap jumping? Rebuffering currently uses the
         // previous selection result until the next observation.
         self.media_element_ref.on_observation(observation);
-        for media_type in [AvPlaybackMediaType::Audio, AvPlaybackMediaType::Video] {
+        // XXX TODO: Check removed text data using observed text buffered ranges too.
+        for media_type in [MediaType::Audio, MediaType::Video] {
             if let Some(buffered) = self.media_element_ref.buffered_ranges_for(media_type) {
                 self.segment_selectors
                     .get_mut(media_type)
@@ -646,7 +647,7 @@ impl Dispatcher {
         self.playlist_refresh_manager
             .forget_media_type(MediaType::Text);
         self.ready_probe_segments.clear_media_type(MediaType::Text);
-        // TODO(subtitles): reset parsed cues and pass this generation to the renderer.
+        // XXX TODO: Reset text buffer coverage, selector state and cues for this generation.
         if matches!(
             self.ready_state,
             PlayerReadyState::Stopped
@@ -704,9 +705,9 @@ impl Dispatcher {
         // The last playback observation may also still report it after a flush is queued.
         // TODO: If we introduce per-type BOLA, coordinate choices as a playable variant pair
         // and account for their combined bandwidth. For now both selectors share one ABR result.
-        let buffer_level = [AvPlaybackMediaType::Audio, AvPlaybackMediaType::Video]
+        let buffer_level = [MediaType::Audio, MediaType::Video]
             .into_iter()
-            .filter_map(|buffer_type| self.media_element_ref.buffer_ahead_for(buffer_type))
+            .filter_map(|media_type| self.media_element_ref.buffer_ahead_for(media_type))
             .reduce(f64::min);
         PlaybackConditions {
             buffer_level,
@@ -766,6 +767,7 @@ impl Dispatcher {
             media_type: inspection.media_type,
             codec: inspection.codec,
         };
+        // XXX TODO: Track text playlist changes here too when text scheduling is connected.
         let previous_playlists = [MediaType::Audio, MediaType::Video]
             .map(|media_type| pl_store.current_media_playlist_id(media_type).copied());
         pl_store.set_external_media_info(media_info, considered_media_type);
@@ -1103,10 +1105,11 @@ impl Dispatcher {
     /// Return whether the pending request survives selection. Reconsider queued requests and
     /// requests waiting for retry even when a switch is nonurgent.
     fn check_requested_segment_still_needed(&mut self, media_type: MediaType) -> bool {
-        let Some(buffer_type) = media_type.av_playback() else {
-            // TODO(subtitles): handle independent text coverage and requests.
+        if media_type == MediaType::Text {
+            // XXX TODO: Connect text coverage and requests to the shared buffer interface.
             return true;
-        };
+        }
+
         if !self.requester.has_segment_request_pending(media_type) {
             return false;
         }
@@ -1168,11 +1171,11 @@ impl Dispatcher {
         // Now just check that the current requests are still the ones we want
         let selected = self
             .segment_selectors
-            .get_mut(buffer_type)
+            .get_mut(media_type)
             .most_needed_segment(
                 addition_candidate,
                 replacement_candidate,
-                self.media_element_ref.inventory(buffer_type),
+                self.media_element_ref.inventory(media_type),
             );
         let Some(needed) = selected.needed_segments() else {
             let refresh_id = selected.playlist_to_refresh();
@@ -1261,12 +1264,13 @@ impl Dispatcher {
         media_type: MediaType,
         recommendation: Option<AdaptiveVariantSelection>,
     ) {
-        let Some(buffer_type) = media_type.av_playback() else {
-            // TODO(subtitles): handle independent text coverage and requests.
+        if media_type == MediaType::Text {
+            // XXX TODO: Connect text coverage and requests to the shared buffer interface.
             return;
-        };
+        }
+
         if self.requester.has_segment_request_pending(media_type) {
-            self.media_element_ref.set_end_when_done(buffer_type, false);
+            self.media_element_ref.set_end_when_done(media_type, false);
             return;
         }
         let Some(pl_store) = self.playlist_store.as_ref() else {
@@ -1284,15 +1288,15 @@ impl Dispatcher {
         let replacement_context = replacement_candidate.context;
         let selected = self
             .segment_selectors
-            .get_mut(buffer_type)
+            .get_mut(media_type)
             .most_needed_segment(
                 addition_candidate,
                 replacement_candidate,
-                self.media_element_ref.inventory(buffer_type),
+                self.media_element_ref.inventory(media_type),
             );
         let refresh_id = selected.playlist_to_refresh();
         self.media_element_ref
-            .set_end_when_done(buffer_type, selected.loading_complete());
+            .set_end_when_done(media_type, selected.loading_complete());
         // Own the proposed metadata before following, which may request another playlist.
         // Only one resource is loaded at a time: initialization first, otherwise media.
         let needed = selected.needed_segments().map(|needed| {
@@ -1381,7 +1385,7 @@ impl Dispatcher {
             {
                 self.on_media_segment_loaded(SegmentPushMetadata {
                     data,
-                    media_type: buffer_type,
+                    media_type,
                     init_segment_id,
                     time_info: media.time_info().clone(),
                     context: quality_context,
@@ -1409,7 +1413,7 @@ impl Dispatcher {
     /// changes.
     fn follow_selected_media_playlist(&mut self, media_type: MediaType) {
         if media_type == MediaType::Text {
-            // TODO(subtitles): subscribe the selected playlist when text scheduling is connected.
+            // XXX TODO: Subscribe the selected text playlist when text scheduling is connected.
             return;
         }
         let playlist_id = self
@@ -1467,15 +1471,16 @@ impl Dispatcher {
 
             self.follow_selected_media_playlist(media_type);
             self.abort_segment_requests_with_type(media_type);
-            if let Some(buffer_type) = media_type.av_playback() {
-                self.flush_media_buffer(buffer_type);
+            // XXX TODO: Flush text through the shared buffer interface too.
+            if media_type != MediaType::Text {
+                self.flush_media_buffer(media_type);
             }
         }
 
         self.check_segments_to_request();
     }
 
-    fn flush_media_buffer(&mut self, media_type: AvPlaybackMediaType) {
+    fn flush_media_buffer(&mut self, media_type: MediaType) {
         if let Err(e) = self.media_element_ref.flush(media_type) {
             log_warn!(
                 "Could not remove data from the previous {media_type} buffer: {}",
@@ -1535,13 +1540,14 @@ impl Dispatcher {
                 if Some(req_media_type) != media_type {
                     log_warn!("Loaded media segment with mismatched media type context.");
                 }
-                let Some(buffer_type) = req_media_type.av_playback() else {
-                    // TODO(subtitles): parse this segment and send timestamped cue batches.
+                if req_media_type == MediaType::Text {
+                    // XXX TODO: Parse text in Rust, retain its coverage and send timestamped cue batches.
                     return;
-                };
+                }
+                let media_type = req_media_type;
                 self.on_media_segment_loaded(SegmentPushMetadata {
                     data: result,
-                    media_type: buffer_type,
+                    media_type,
                     init_segment_id,
                     time_info,
                     context: quality_context,
@@ -1622,17 +1628,18 @@ impl Dispatcher {
                 segment_end,
                 message
             );
-            jsSendSegmentParsingError(true, x.into(), Some(media_type.into()), &message);
+            jsSendSegmentParsingError(true, x.into(), Some(media_type), &message);
             self.stop_current_content();
         }
     }
 
     fn on_init_segment_loaded(&mut self, data: JsMemoryBlob, media_type: MediaType, init_id: f64) {
-        let Some(buffer_type) = media_type.av_playback() else {
-            // TODO(subtitles): parse initialization data in the Rust text pipeline.
+        if media_type == MediaType::Text {
+            // XXX TODO: Parse initialization data in the Rust text pipeline.
             return;
-        };
-        match self.media_element_ref.push_init_segment(buffer_type, data) {
+        }
+
+        match self.media_element_ref.push_init_segment(media_type, data) {
             Err(x) => {
                 let media_type = x.media_type();
                 let message = x.to_string();
@@ -1642,12 +1649,12 @@ impl Dispatcher {
                     init_id,
                     message
                 );
-                jsSendSegmentParsingError(true, x.into(), Some(media_type.into()), &message);
+                jsSendSegmentParsingError(true, x.into(), Some(media_type), &message);
                 self.stop_current_content();
             }
             Ok(()) => self
                 .segment_selectors
-                .get_mut(buffer_type)
+                .get_mut(media_type)
                 .validate_init(init_id),
         }
 
@@ -2645,7 +2652,7 @@ video.m3u8
             .collect();
         let selected = dispatcher
             .segment_selectors
-            .get_mut(crate::bindings::AvPlaybackMediaType::Video)
+            .get_mut(crate::bindings::MediaType::Video)
             .most_needed_segment(best, safe, &inventory);
         let needed = selected.needed_segments().unwrap();
         assert_eq!(needed.variant_id(), safe_variant);

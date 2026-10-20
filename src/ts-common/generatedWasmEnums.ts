@@ -403,13 +403,6 @@ export const LogLevel = Object.freeze({
 } as const);
 export type LogLevel = (typeof LogLevel)[keyof typeof LogLevel];
 
-export const AvPlaybackMediaType = Object.freeze({
-  Audio: 0,
-  Video: 1,
-} as const);
-export type AvPlaybackMediaType =
-  (typeof AvPlaybackMediaType)[keyof typeof AvPlaybackMediaType];
-
 export const PlaylistNature = Object.freeze({
   Event: 0,
   VoD: 1,

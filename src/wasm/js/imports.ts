@@ -2,7 +2,6 @@ import type {
   ContentCompatibilityErrorCode,
   LogLevel,
   MediaPlaylistParsingErrorCode,
-  AvPlaybackMediaType,
   MediaType,
   MultivariantPlaylistParsingErrorCode,
   OtherErrorCode,
@@ -127,7 +126,7 @@ export function createWasmImports(bindings: HostBindings): WebAssembly.Imports {
         errDescLenOut: number,
       ): number {
         const result = bindings.addSourceBuffer(
-          mediaType as AvPlaybackMediaType,
+          mediaType as MediaType,
           readString(typPtr, typLen),
         );
         if (result.errorCode === undefined) {
@@ -397,7 +396,7 @@ export function createWasmImports(bindings: HostBindings): WebAssembly.Imports {
         bindings.sendSourceBufferCreationError(
           fatal !== 0,
           code as SourceBufferCreationErrorCode,
-          mediaType as AvPlaybackMediaType,
+          mediaType as MediaType,
           readString(messagePtr, messageLen),
         );
       },
@@ -451,7 +450,7 @@ export function createWasmImports(bindings: HostBindings): WebAssembly.Imports {
         bindings.sendPushedSegmentError(
           fatal !== 0,
           code as PushedSegmentErrorCode,
-          mediaType as AvPlaybackMediaType,
+          mediaType as MediaType,
           readString(messagePtr, messageLen),
         );
       },
@@ -463,7 +462,7 @@ export function createWasmImports(bindings: HostBindings): WebAssembly.Imports {
       ): void {
         bindings.sendRemoveBufferError(
           fatal !== 0,
-          mediaType as AvPlaybackMediaType,
+          mediaType as MediaType,
           readString(messagePtr, messageLen),
         );
       },

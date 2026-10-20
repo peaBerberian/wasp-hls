@@ -3,7 +3,6 @@ import type {
   SegmentParsingErrorCode,
   MediaPlaylistParsingErrorCode,
   MultivariantPlaylistParsingErrorCode,
-  AvPlaybackMediaType,
   MediaType,
   OtherErrorCode,
   TrackSelectionErrorCode,
@@ -371,7 +370,7 @@ export interface SourceBufferCreationErrorWorkerInfo {
   type: "sb-creation";
   value: {
     code: WasmSourceBufferCreationErrorCode;
-    mediaType: AvPlaybackMediaType;
+    mediaType: MediaType;
   };
 }
 
@@ -380,7 +379,7 @@ export interface PushedSegmentErrorWorkerInfo {
   type: "push-segment-error";
   value: {
     code: PushedSegmentErrorCode;
-    mediaType: AvPlaybackMediaType;
+    mediaType: MediaType;
   };
 }
 
@@ -388,7 +387,7 @@ export interface PushedSegmentErrorWorkerInfo {
 export interface RemoveBufferErrorWorkerInfo {
   type: "remove-buffer-error";
   value: {
-    mediaType: AvPlaybackMediaType;
+    mediaType: MediaType;
   };
 }
 

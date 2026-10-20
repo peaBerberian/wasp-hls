@@ -12,7 +12,7 @@ import {
 import initializeWasm, {
   JsTimeRanges,
   MediaObservation,
-  AvPlaybackMediaType,
+  MediaType,
   OtherErrorCode,
   PushedSegmentErrorCode,
   StartingPosition,
@@ -208,11 +208,9 @@ export default function MessageReceiver() {
             if (timeRange !== undefined) {
               const toFloat64 = timeRangesToFloat64Array(timeRange);
               const bufRange = new JsTimeRanges(toFloat64);
-              if (sourceBufferInfo.mediaType === AvPlaybackMediaType.Audio) {
+              if (sourceBufferInfo.mediaType === MediaType.Audio) {
                 audioSbBuffered = bufRange;
-              } else if (
-                sourceBufferInfo.mediaType === AvPlaybackMediaType.Video
-              ) {
+              } else if (sourceBufferInfo.mediaType === MediaType.Video) {
                 videoSbBuffered = bufRange;
               }
             }
@@ -224,11 +222,9 @@ export default function MessageReceiver() {
             const element = sbBuffered[sourceBufferInfo.id];
             if (element !== undefined) {
               const bufRange = new JsTimeRanges(element);
-              if (sourceBufferInfo.mediaType === AvPlaybackMediaType.Audio) {
+              if (sourceBufferInfo.mediaType === MediaType.Audio) {
                 audioSbBuffered = bufRange;
-              } else if (
-                sourceBufferInfo.mediaType === AvPlaybackMediaType.Video
-              ) {
+              } else if (sourceBufferInfo.mediaType === MediaType.Video) {
                 videoSbBuffered = bufRange;
               }
             }

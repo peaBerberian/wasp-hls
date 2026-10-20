@@ -479,13 +479,6 @@
         }
       }
     },
-    "AvPlaybackMediaType": {
-      "default": "Audio",
-      "members": {
-        "Audio": 0,
-        "Video": 1
-      }
-    },
     "PlaylistNature": {
       "default": "Unknown",
       "members": {

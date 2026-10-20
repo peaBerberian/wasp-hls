@@ -10,8 +10,7 @@ use crate::{
         },
         jsAnnounceFetchedContent, jsAnnounceTrackUpdate, jsAnnounceVariantLockStatusChange,
         jsSendOtherError, jsSendSegmentParsingError, jsSendSourceBufferCreationError,
-        jsStartObservingPlayback, AvPlaybackMediaType, MediaSourceReadyState, MediaType,
-        OtherErrorCode, PlaylistType,
+        jsStartObservingPlayback, MediaSourceReadyState, MediaType, OtherErrorCode, PlaylistType,
     },
     media_element::SourceBufferCreationError,
     playlist_store::{ProbeSegmentContext, StartupStatus},
@@ -161,6 +160,7 @@ fn advance_awaiting_playlist_info_state(dispatcher: &mut Dispatcher) {
         utils::get_initial_position(playlist_store, starting_position)
     };
 
+    // XXX TODO: Follow the selected text playlist when text scheduling is connected.
     for media_type in [MediaType::Video, MediaType::Audio] {
         dispatcher.follow_selected_media_playlist(media_type);
     }
@@ -279,15 +279,16 @@ fn advance_awaiting_media_source_state(dispatcher: &mut Dispatcher) {
 
     sync_media_source_duration(playlist_store);
 
-    if let Some(Err(e)) = init_source_buffer(dispatcher, AvPlaybackMediaType::Audio) {
+    // XXX TODO: Initialize text storage through the shared buffer interface too.
+    if let Some(Err(e)) = init_source_buffer(dispatcher, MediaType::Audio) {
         let (code, msg) = format_source_buffer_creation_err_for_js(e);
-        jsSendSourceBufferCreationError(true, code, AvPlaybackMediaType::Audio, &msg);
+        jsSendSourceBufferCreationError(true, code, MediaType::Audio, &msg);
         dispatcher.stop_current_content();
         return;
     }
-    if let Some(Err(e)) = init_source_buffer(dispatcher, AvPlaybackMediaType::Video) {
+    if let Some(Err(e)) = init_source_buffer(dispatcher, MediaType::Video) {
         let (code, msg) = format_source_buffer_creation_err_for_js(e);
-        jsSendSourceBufferCreationError(true, code, AvPlaybackMediaType::Video, &msg);
+        jsSendSourceBufferCreationError(true, code, MediaType::Video, &msg);
         dispatcher.stop_current_content();
         return;
     }
@@ -388,14 +389,14 @@ fn start_probe_segment_request(
 
 fn init_source_buffer(
     dispatcher: &mut Dispatcher,
-    media_type: AvPlaybackMediaType,
+    media_type: MediaType,
 ) -> Option<Result<(), SourceBufferCreationError>> {
     let content = dispatcher.playlist_store.as_mut()?;
-    if !content.has_loaded_media_playlist(media_type.into()) {
+    if !content.has_loaded_media_playlist(media_type) {
         return None;
     }
-    let mime_type = content.current_mime_type(media_type.into())?;
-    let codec = content.current_codec(media_type.into())?;
+    let mime_type = content.current_mime_type(media_type)?;
+    let codec = content.current_codec(media_type)?;
     Some(
         dispatcher
             .media_element_ref
