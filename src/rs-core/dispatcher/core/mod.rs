@@ -56,7 +56,6 @@ impl Dispatcher {
         self.ready_probe_segments.clear();
         self.initial_audio_track_selection.clear();
         self.initial_subtitle_track_selection.clear();
-        self.last_announced_subtitle_selection = None;
         self.last_position = 0.;
         self.playlist_refresh_manager.clear();
         self.ready_state = PlayerReadyState::Stopped;
@@ -87,9 +86,14 @@ impl Dispatcher {
                         jsAnnounceTrackUpdate(MediaType::Audio, track_id);
                     }
 
+                    if changed_media_types.contains(&MediaType::Text) {
+                        self.announce_current_subtitle_track();
+                    }
                     self.announce_current_variant();
                     jsAnnounceVariantLockStatusChange(Some(variant_id));
-                    self.sync_subtitle_selection();
+                    if changed_media_types.contains(&MediaType::Text) {
+                        self.reset_subtitle_playlist();
+                    }
 
                     // Stop and clean all resources linked to media types whose playlist changed.
                     for media_type in changed_media_types.iter().copied() {
@@ -174,6 +178,7 @@ impl Dispatcher {
         let Some(pl_store) = self.playlist_store.as_mut() else {
             return;
         };
+        let previous_text_id = pl_store.current_media_playlist_id(MediaType::Text).copied();
         match pl_store.set_audio_track(track_id) {
             SetAudioTrackResponse::UnknownTrack => {
                 if let Some(track_id) = track_id {
@@ -219,17 +224,34 @@ impl Dispatcher {
                     changed_media_types.push(MediaType::Audio);
                 }
 
+                let subtitle_changed =
+                    self.playlist_store.as_ref().and_then(|store| {
+                        store.current_media_playlist_id(MediaType::Text).copied()
+                    }) != previous_text_id;
                 self.announce_current_audio_track();
+                if subtitle_changed {
+                    self.announce_current_subtitle_track();
+                }
                 self.announce_current_variant();
                 if variant_lock_removed {
                     jsAnnounceVariantLockStatusChange(None);
                 }
-                self.sync_subtitle_selection();
+                if subtitle_changed {
+                    self.reset_subtitle_playlist();
+                }
                 self.reset_on_selected_media_playlists(&changed_media_types);
             }
 
             SetAudioTrackResponse::NoPlaylistChange => {
-                self.sync_subtitle_selection();
+                if self
+                    .playlist_store
+                    .as_ref()
+                    .and_then(|store| store.current_media_playlist_id(MediaType::Text).copied())
+                    != previous_text_id
+                {
+                    self.announce_current_subtitle_track();
+                    self.reset_subtitle_playlist();
+                }
                 self.check_requested_segments_still_needed();
                 self.check_segments_to_request();
             }
@@ -579,11 +601,26 @@ impl Dispatcher {
             return;
         }
 
+        let previous_subtitle_track = self
+            .playlist_store
+            .as_ref()
+            .and_then(|store| store.current_subtitle_track_id());
         let recommendation = self.compute_optimal_variant();
         let was_already_locked = self.requester.lock_segment_requests();
         for media_type in [MediaType::Video, MediaType::Audio, MediaType::Text] {
             self.schedule_next_segment_for_type(media_type, recommendation);
         }
+        if self
+            .playlist_store
+            .as_ref()
+            .and_then(|store| store.current_subtitle_track_id())
+            != previous_subtitle_track
+        {
+            self.announce_current_subtitle_track();
+        }
+        // Selection can change while waiting for codecs, without scheduling a segment.
+        // The API already filters unchanged variant announcements.
+        self.announce_current_variant();
         if !was_already_locked {
             self.requester.unlock_segment_requests();
         }
@@ -593,6 +630,7 @@ impl Dispatcher {
         let Some(store) = self.playlist_store.as_mut() else {
             return;
         };
+        let previous_text_id = store.current_media_playlist_id(MediaType::Text).copied();
         let was_locked = store.is_variant_locked();
         let needs_variant = match store.set_subtitle_track(track_id) {
             Ok(needs_variant) => needs_variant,
@@ -613,53 +651,71 @@ impl Dispatcher {
                 return;
             }
         };
+        let mut changed = Vec::new();
         if needs_variant {
             if let Some(selection) = self.compute_optimal_variant() {
                 let Some(store) = self.playlist_store.as_mut() else {
                     return;
                 };
-                let changed = store.set_variant(selection.safe_variant_id);
+                changed = store.set_variant(selection.safe_variant_id);
                 self.announce_current_audio_track();
-                self.sync_subtitle_selection();
-                self.announce_current_variant();
-                if was_locked {
-                    jsAnnounceVariantLockStatusChange(None);
-                }
-                self.reset_on_selected_media_playlists(&changed);
             }
         }
-        self.sync_subtitle_selection();
+        self.announce_current_subtitle_track();
+        if needs_variant {
+            self.announce_current_variant();
+            if was_locked {
+                jsAnnounceVariantLockStatusChange(None);
+            }
+        }
+        if self
+            .playlist_store
+            .as_ref()
+            .and_then(|store| store.current_media_playlist_id(MediaType::Text).copied())
+            != previous_text_id
+        {
+            self.reset_subtitle_playlist();
+        }
+        self.reset_on_selected_media_playlists(&changed);
         self.check_requested_segments_still_needed();
         self.check_segments_to_request();
     }
 
-    pub(super) fn sync_subtitle_selection(&mut self) {
-        let Some(store) = self.playlist_store.as_ref() else {
+    pub(super) fn disable_subtitle_track_core(&mut self) {
+        let Some(store) = self.playlist_store.as_mut() else {
             return;
         };
-        let generation = store.subtitle_selection_generation();
-        if self.last_announced_subtitle_selection == Some(generation) {
-            return;
+        let previous_text_id = store.current_media_playlist_id(MediaType::Text).copied();
+        store.disable_subtitle_track();
+        let changed = previous_text_id != store.current_media_playlist_id(MediaType::Text).copied();
+        self.announce_current_subtitle_track();
+        if changed {
+            self.reset_subtitle_playlist();
         }
-        let track_id = store.current_subtitle_track_id();
+        self.check_segments_to_request();
+    }
+
+    /// Discard work belonging to the previous subtitle playlist.
+    fn reset_subtitle_playlist(&mut self) {
         self.abort_segment_requests_with_type(MediaType::Text);
         self.requester.abort_playlists_with_type(MediaType::Text);
         self.playlist_refresh_manager
             .forget_media_type(MediaType::Text);
         self.ready_probe_segments.clear_media_type(MediaType::Text);
-        // XXX TODO: Reset text buffer coverage, selector state and cues for this generation.
-        if matches!(
-            self.ready_state,
-            PlayerReadyState::Stopped
-                | PlayerReadyState::AwaitingPlaylistInfo {
-                    lifecycle_announced: false,
-                    ..
-                }
-        ) {
+        self.segment_selectors
+            .get_mut(MediaType::Text)
+            .restart_from_position(
+                self.media_element_ref.wanted_position() - SEGMENT_SELECTION_MARGIN,
+            );
+        // XXX TODO: Reset retained text and renderer cues for the new selection generation.
+    }
+
+    /// Send `trackUpdate` for the selected subtitle track, as for audio.
+    fn announce_current_subtitle_track(&self) {
+        let Some(store) = self.playlist_store.as_ref() else {
             return;
-        }
-        self.last_announced_subtitle_selection = Some(generation);
-        jsAnnounceTrackUpdate(MediaType::Text, track_id);
+        };
+        jsAnnounceTrackUpdate(MediaType::Text, store.current_subtitle_track_id());
     }
 
     /// Send `trackUpdate` event for the audio track currently-set on the `PlaylistStore`.
@@ -1342,8 +1398,9 @@ impl Dispatcher {
         {
             // TODO: Verify transitions between separate and muxed audio in both directions.
             let changed_media_types = pl_store.set_variant(variant_id);
-            self.announce_current_variant();
-            self.sync_subtitle_selection();
+            if changed_media_types.contains(&MediaType::Text) {
+                self.reset_subtitle_playlist();
+            }
             for changed_type in changed_media_types {
                 self.ready_probe_segments.clear_media_type(changed_type);
                 if recommendation.is_some_and(|selection| {
@@ -1740,6 +1797,7 @@ fn normalize_abr_selection(
     let other_type = match media_type {
         MediaType::Video => MediaType::Audio,
         MediaType::Audio => MediaType::Video,
+        // XXX TODO WHY?
         MediaType::Text => return None,
     };
     if pl_store.media_playlist_id_for_variant(selection.best_variant_id, other_type)
@@ -1916,12 +1974,7 @@ video.m3u8
                 .requester
                 .request_media_segment(media_type, &media, context);
         }
-        dispatcher
-            .playlist_store
-            .as_mut()
-            .unwrap()
-            .disable_subtitle_track();
-        dispatcher.sync_subtitle_selection();
+        dispatcher.disable_subtitle_track_core();
         assert!(!dispatcher
             .requester
             .has_segment_request_pending(MediaType::Text));
@@ -1993,87 +2046,97 @@ video.m3u8
 
     #[test]
     fn shared_video_does_not_select_safe_variant_before_best_audio() {
-        let mut store = selected_playlist(
-            b"#EXTM3U\n#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID=\"low-subs\",NAME=\"English\",DEFAULT=YES,URI=\"low-subs.m3u8\"\n#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID=\"high-subs\",NAME=\"English\",DEFAULT=YES,URI=\"high-subs.m3u8\"\n#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID=\"low\",NAME=\"English\",URI=\"low-audio.m3u8\"\n#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID=\"high\",NAME=\"English\",URI=\"high-audio.m3u8\"\n#EXT-X-STREAM-INF:BANDWIDTH=1000,CODECS=\"avc1.42E01E,mp4a.40.2\",AUDIO=\"low\",SUBTITLES=\"low-subs\"\nvideo.m3u8\n#EXT-X-STREAM-INF:BANDWIDTH=2000,CODECS=\"avc1.42E01E,mp4a.40.2\",AUDIO=\"high\",SUBTITLES=\"high-subs\"\nvideo.m3u8\n",
-        );
-        let low = store.available_variants()[0].id();
-        let high = store.available_variants()[1].id();
-        for media_type in [MediaType::Video, MediaType::Audio] {
-            for variant_id in [low, high] {
-                let id = store
-                    .media_playlist_id_for_variant(variant_id, media_type)
-                    .unwrap();
-                let manifest = format!(
+        for distinct_subtitle_tracks in [false, true] {
+            let manifest = "#EXTM3U\n#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID=\"low-subs\",NAME=\"English\",DEFAULT=YES,URI=\"low-subs.m3u8\"\n#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID=\"high-subs\",NAME=\"English\",DEFAULT=YES,URI=\"high-subs.m3u8\"\n#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID=\"low\",NAME=\"English\",URI=\"low-audio.m3u8\"\n#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID=\"high\",NAME=\"English\",URI=\"high-audio.m3u8\"\n#EXT-X-STREAM-INF:BANDWIDTH=1000,CODECS=\"avc1.42E01E,mp4a.40.2\",AUDIO=\"low\",SUBTITLES=\"low-subs\"\nvideo.m3u8\n#EXT-X-STREAM-INF:BANDWIDTH=2000,CODECS=\"avc1.42E01E,mp4a.40.2\",AUDIO=\"high\",SUBTITLES=\"high-subs\"\nvideo.m3u8\n";
+            let manifest = if distinct_subtitle_tracks {
+                manifest.replace(
+                    "GROUP-ID=\"high-subs\",NAME=\"English\"",
+                    "GROUP-ID=\"high-subs\",NAME=\"French\"",
+                )
+            } else {
+                manifest.to_owned()
+            };
+            let mut store = selected_playlist(manifest.as_bytes());
+            let low = store.available_variants()[0].id();
+            let high = store.available_variants()[1].id();
+            for media_type in [MediaType::Video, MediaType::Audio] {
+                for variant_id in [low, high] {
+                    let id = store
+                        .media_playlist_id_for_variant(variant_id, media_type)
+                        .unwrap();
+                    let manifest = format!(
                     "#EXTM3U\n#EXT-X-TARGETDURATION:4\n#EXTINF:4,\n{variant_id}-{media_type}.ts\n#EXT-X-ENDLIST\n"
                 );
-                store
-                    .update_media_playlist(
-                        &id,
-                        manifest.as_bytes(),
-                        Url::new("https://example.com/media.m3u8".into()),
-                    )
-                    .unwrap();
+                    store
+                        .update_media_playlist(
+                            &id,
+                            manifest.as_bytes(),
+                            Url::new("https://example.com/media.m3u8".into()),
+                        )
+                        .unwrap();
+                }
             }
-        }
-        let high_audio_id = store
-            .media_playlist_id_for_variant(high, MediaType::Audio)
-            .unwrap();
-        let high_audio_segment = store
-            .media_playlist(&high_audio_id)
-            .unwrap()
-            .segment_list()
-            .media()[0]
-            .clone();
-        store.assume_variant_supported_for_test(low);
-        store.assume_variant_supported_for_test(high);
-        store.set_variant(low);
-        let recommendation = Some(crate::adaptive::AdaptiveVariantSelection {
-            best_variant_id: high,
-            safe_variant_id: low,
-        });
-        let mut dispatcher = Dispatcher::new(3_125_000.);
-        dispatcher.ready_state = PlayerReadyState::AwaitingSegments;
-        dispatcher.playlist_store = Some(store);
-        dispatcher.requester.lock_segment_requests();
-        dispatcher.sync_subtitle_selection();
-        crate::bindings::take_selection_announcements();
+            let high_audio_id = store
+                .media_playlist_id_for_variant(high, MediaType::Audio)
+                .unwrap();
+            let high_audio_segment = store
+                .media_playlist(&high_audio_id)
+                .unwrap()
+                .segment_list()
+                .media()[0]
+                .clone();
+            store.assume_variant_supported_for_test(low);
+            store.assume_variant_supported_for_test(high);
+            store.set_variant(low);
+            let recommendation = Some(crate::adaptive::AdaptiveVariantSelection {
+                best_variant_id: high,
+                safe_variant_id: low,
+            });
+            let mut dispatcher = Dispatcher::new(3_125_000.);
+            dispatcher.ready_state = PlayerReadyState::AwaitingSegments;
+            dispatcher.playlist_store = Some(store);
+            dispatcher.requester.lock_segment_requests();
+            dispatcher.announce_current_subtitle_track();
+            crate::bindings::take_selection_announcements();
 
-        dispatcher.schedule_next_segment_for_type(MediaType::Video, recommendation);
-        assert_eq!(
-            dispatcher
-                .playlist_store
-                .as_ref()
-                .unwrap()
-                .current_variant_id(),
-            Some(low)
-        );
-        assert!(crate::bindings::take_selection_announcements().is_empty());
-        dispatcher.schedule_next_segment_for_type(MediaType::Audio, recommendation);
-        let store = dispatcher.playlist_store.as_ref().unwrap();
-        assert_eq!(
-            crate::bindings::take_selection_announcements(),
-            vec![
-                (None, Some(high)),
-                (Some(MediaType::Text), store.current_subtitle_track_id()),
-            ]
-        );
-        assert_eq!(
-            dispatcher.last_announced_subtitle_selection,
-            Some(store.subtitle_selection_generation())
-        );
-        assert_eq!(
-            dispatcher
-                .playlist_store
-                .as_ref()
-                .unwrap()
-                .current_variant_id(),
-            Some(high)
-        );
-        assert!(dispatcher.requester.is_requesting_segment(
-            MediaType::Audio,
-            high_audio_segment.url(),
-            high_audio_segment.byte_range()
-        ));
+            dispatcher.schedule_next_segment_for_type(MediaType::Video, recommendation);
+            assert_eq!(
+                dispatcher
+                    .playlist_store
+                    .as_ref()
+                    .unwrap()
+                    .current_variant_id(),
+                Some(low)
+            );
+            assert!(crate::bindings::take_selection_announcements().is_empty());
+            dispatcher.check_segments_to_request();
+            let mut expected = Vec::new();
+            if distinct_subtitle_tracks {
+                expected.push((
+                    Some(MediaType::Text),
+                    dispatcher
+                        .playlist_store
+                        .as_ref()
+                        .unwrap()
+                        .current_subtitle_track_id(),
+                ));
+            }
+            expected.push((None, Some(high)));
+            assert_eq!(crate::bindings::take_selection_announcements(), expected);
+            assert_eq!(
+                dispatcher
+                    .playlist_store
+                    .as_ref()
+                    .unwrap()
+                    .current_variant_id(),
+                Some(high)
+            );
+            assert!(dispatcher.requester.is_requesting_segment(
+                MediaType::Audio,
+                high_audio_segment.url(),
+                high_audio_segment.byte_range()
+            ));
+        }
     }
 
     fn dispatcher_with_buffer_observation(
