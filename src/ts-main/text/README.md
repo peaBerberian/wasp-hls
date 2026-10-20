@@ -1,3 +1,5 @@
+XXX TODO: Stop talking like some kind of shakespeare here, we sleep before reaching the end
+
 # Subtitle rendering
 
 This directory handles subtitle cue installation, removal and rendering on the

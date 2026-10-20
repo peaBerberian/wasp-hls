@@ -75,8 +75,6 @@ pub struct Dispatcher {
     /// next content being loaded.
     initial_audio_track_selection: Vec<InitialAudioTrackSelection>,
     initial_subtitle_track_selection: Vec<Option<InitialSubtitleTrackSelection>>,
-    // Last subtitle playlist generation sent to JavaScript.
-    last_announced_subtitle_selection: Option<u64>,
 }
 
 #[derive(Clone, Debug, Default)]

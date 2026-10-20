@@ -40,7 +40,6 @@ impl Dispatcher {
             ready_probe_segments: Default::default(),
             initial_audio_track_selection: Vec::new(),
             initial_subtitle_track_selection: Vec::new(),
-            last_announced_subtitle_selection: None,
         }
     }
 
@@ -148,11 +147,7 @@ impl Dispatcher {
     }
 
     pub fn disable_subtitle_track(&mut self) {
-        let Some(store) = self.playlist_store.as_mut() else {
-            return;
-        };
-        store.disable_subtitle_track();
-        self.sync_subtitle_selection();
+        self.disable_subtitle_track_core();
     }
 
     /// Set an audio track whose `id` is given in argument.

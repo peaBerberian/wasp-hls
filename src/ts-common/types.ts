@@ -554,6 +554,7 @@ export interface InitialAudioTrackSelection {
  * Preferred startup audio-track selection criteria, expressed either as a
  * single selector or as an ordered list of selectors.
  */
+// XXX TODO: Can't this be an array in general at this point? This is only an API concern
 export type InitialAudioTrackPreference =
   InitialAudioTrackSelection | InitialAudioTrackSelection[];
 
@@ -566,6 +567,7 @@ export interface InitialSubtitleTrackSelection {
   forced?: boolean | undefined;
 }
 
+// XXX TODO: Can't this be an array in general at this point? This is only an API concern
 export type InitialSubtitleTrackPreference =
   | InitialSubtitleTrackSelection
   | null

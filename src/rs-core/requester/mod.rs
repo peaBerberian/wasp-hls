@@ -1125,6 +1125,7 @@ fn pending_segment_could_fill_before<T: RequesterSegmentInfo>(
 ) -> bool {
     requests.iter().any(
         |req| match (req.lane_tag().media_type(), req.start_time()) {
+            // XXX TODO: WHY?
             (Some(MediaType::Text), _) => false,
             (Some(_), None) => true,
             (Some(_), Some(start)) => start < range_start,
