@@ -109,7 +109,10 @@ fn ensure_ready_playlists(dispatcher: &mut Dispatcher, wanted_position: f64) -> 
             if audio_track_changed {
                 dispatcher.announce_current_audio_track();
             }
-            dispatcher.sync_subtitle_selection();
+            if changed_media_types.contains(&MediaType::Text) {
+                dispatcher.announce_current_subtitle_track();
+                dispatcher.reset_subtitle_playlist();
+            }
             for media_type in changed_media_types {
                 dispatcher.ready_probe_segments.clear_media_type(media_type);
                 dispatcher.follow_selected_media_playlist(media_type);
@@ -233,7 +236,8 @@ fn advance_awaiting_playlist_info_state(dispatcher: &mut Dispatcher) {
             starting_position,
             lifecycle_announced: true,
         };
-        dispatcher.sync_subtitle_selection();
+        // XXX TODO: badly placed?
+        dispatcher.announce_current_subtitle_track();
     }
 
     if !ensure_ready_playlists(dispatcher, wanted_position) {
