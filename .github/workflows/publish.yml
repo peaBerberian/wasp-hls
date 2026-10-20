@@ -195,6 +195,19 @@ jobs:
       - name: Build artifacts for integration tests
         run: npm run build
 
+      - name: Set up virtual audio output for Firefox
+        if: runner.os == 'Linux' && matrix.browser == 'firefox'
+        run: |
+          sudo apt-get install -y pulseaudio pulseaudio-utils
+          pulseaudio --start --exit-idle-time=-1
+          # Decode and play audio normally, without requiring a physical audio device.
+          pactl load-module module-null-sink sink_name=wasp_test_audio
+          pactl set-default-sink wasp_test_audio
+          echo "PULSE_SINK=wasp_test_audio" >> "$GITHUB_ENV"
+          pactl info
+          pactl list short sinks
+          test "$(pactl get-default-sink)" = wasp_test_audio
+
       - name: Run integration tests
         run: npm test -- integration --browser ${{ matrix.browser }}
 
