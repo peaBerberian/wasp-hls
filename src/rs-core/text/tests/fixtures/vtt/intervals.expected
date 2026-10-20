@@ -1,0 +1,73 @@
+Document {
+    header: Header {
+        timestamp_map: TimestampMap {
+            local_ms: 0,
+            mpegts: 0,
+        },
+        regions: [],
+        style_sheets: [],
+    },
+    cues: [
+        Cue {
+            id: "",
+            start_ms: 2000,
+            end_ms: 2000,
+            settings: Settings {
+                vertical: Horizontal,
+                line: Auto,
+                line_align: Start,
+                position: None,
+                position_align: Auto,
+                size: 100.0,
+                align: Center,
+                region: None,
+            },
+            raw_text: "zero",
+            text: [
+                Node {
+                    parent: None,
+                    kind: Root,
+                },
+                Node {
+                    parent: Some(
+                        0,
+                    ),
+                    kind: Text(
+                        "zero",
+                    ),
+                },
+            ],
+        },
+        Cue {
+            id: "",
+            start_ms: 3000,
+            end_ms: 1000,
+            settings: Settings {
+                vertical: Horizontal,
+                line: Auto,
+                line_align: Start,
+                position: None,
+                position_align: Auto,
+                size: 100.0,
+                align: Center,
+                region: None,
+            },
+            raw_text: "reverse",
+            text: [
+                Node {
+                    parent: None,
+                    kind: Root,
+                },
+                Node {
+                    parent: Some(
+                        0,
+                    ),
+                    kind: Text(
+                        "reverse",
+                    ),
+                },
+            ],
+        },
+    ],
+    diagnostics: [],
+}

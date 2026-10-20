@@ -1,0 +1,207 @@
+Document {
+    rates: Rates {
+        frame_rate: 30.0,
+        tick_rate: 1.0,
+        explicit_frame_rate: false,
+        explicit_tick_rate: false,
+    },
+    root_style: Style {
+        properties: {},
+        unsupported: [],
+    },
+    cell_resolution: (
+        32,
+        15,
+    ),
+    styles: {},
+    regions: {},
+    nodes: [
+        Node {
+            parent: None,
+            children: [
+                1,
+            ],
+            kind: Body,
+            id: None,
+            interval: Interval {
+                begin: 0.0,
+                end: Some(
+                    1.0,
+                ),
+            },
+            region: None,
+            language: Some(
+                "fr",
+            ),
+            space: Preserve,
+            style: Style {
+                properties: {},
+                unsupported: [],
+            },
+            text: None,
+        },
+        Node {
+            parent: Some(
+                0,
+            ),
+            children: [
+                2,
+            ],
+            kind: Division,
+            id: None,
+            interval: Interval {
+                begin: 0.0,
+                end: Some(
+                    1.0,
+                ),
+            },
+            region: None,
+            language: Some(
+                "fr",
+            ),
+            space: Preserve,
+            style: Style {
+                properties: {},
+                unsupported: [],
+            },
+            text: None,
+        },
+        Node {
+            parent: Some(
+                1,
+            ),
+            children: [
+                3,
+                4,
+                6,
+            ],
+            kind: Paragraph,
+            id: Some(
+                "p",
+            ),
+            interval: Interval {
+                begin: 0.0,
+                end: Some(
+                    1.0,
+                ),
+            },
+            region: None,
+            language: Some(
+                "fr",
+            ),
+            space: Preserve,
+            style: Style {
+                properties: {},
+                unsupported: [],
+            },
+            text: None,
+        },
+        Node {
+            parent: Some(
+                2,
+            ),
+            children: [],
+            kind: Text,
+            id: None,
+            interval: Interval {
+                begin: 0.0,
+                end: Some(
+                    1.0,
+                ),
+            },
+            region: None,
+            language: Some(
+                "fr",
+            ),
+            space: Preserve,
+            style: Style {
+                properties: {},
+                unsupported: [],
+            },
+            text: Some(
+                " a  ",
+            ),
+        },
+        Node {
+            parent: Some(
+                2,
+            ),
+            children: [
+                5,
+            ],
+            kind: Span,
+            id: Some(
+                "s",
+            ),
+            interval: Interval {
+                begin: 0.0,
+                end: Some(
+                    1.0,
+                ),
+            },
+            region: None,
+            language: Some(
+                "fr",
+            ),
+            space: Default,
+            style: Style {
+                properties: {},
+                unsupported: [],
+            },
+            text: None,
+        },
+        Node {
+            parent: Some(
+                4,
+            ),
+            children: [],
+            kind: Text,
+            id: None,
+            interval: Interval {
+                begin: 0.0,
+                end: Some(
+                    1.0,
+                ),
+            },
+            region: None,
+            language: Some(
+                "fr",
+            ),
+            space: Default,
+            style: Style {
+                properties: {},
+                unsupported: [],
+            },
+            text: Some(
+                " b ",
+            ),
+        },
+        Node {
+            parent: Some(
+                2,
+            ),
+            children: [],
+            kind: Text,
+            id: None,
+            interval: Interval {
+                begin: 0.0,
+                end: Some(
+                    1.0,
+                ),
+            },
+            region: None,
+            language: Some(
+                "fr",
+            ),
+            space: Preserve,
+            style: Style {
+                properties: {},
+                unsupported: [],
+            },
+            text: Some(
+                " c ",
+            ),
+        },
+    ],
+    diagnostics: [],
+}

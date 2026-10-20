@@ -1,0 +1,161 @@
+Document {
+    header: Header {
+        timestamp_map: TimestampMap {
+            local_ms: 0,
+            mpegts: 0,
+        },
+        regions: [],
+        style_sheets: [],
+    },
+    cues: [
+        Cue {
+            id: "",
+            start_ms: 0,
+            end_ms: 5000,
+            settings: Settings {
+                vertical: Horizontal,
+                line: Auto,
+                line_align: Start,
+                position: None,
+                position_align: Auto,
+                size: 100.0,
+                align: Center,
+                region: None,
+            },
+            raw_text: "<v.speaker Alice><b>A &amp; B</b> <i>é</i></v>\n<ruby>字<rt>ji</rt></ruby><00:02.000><lang fr>oui</lang>",
+            text: [
+                Node {
+                    parent: None,
+                    kind: Root,
+                },
+                Node {
+                    parent: Some(
+                        0,
+                    ),
+                    kind: Element {
+                        tag: Voice,
+                        classes: [
+                            "speaker",
+                        ],
+                        annotation: "Alice",
+                    },
+                },
+                Node {
+                    parent: Some(
+                        1,
+                    ),
+                    kind: Element {
+                        tag: Bold,
+                        classes: [],
+                        annotation: "",
+                    },
+                },
+                Node {
+                    parent: Some(
+                        2,
+                    ),
+                    kind: Text(
+                        "A & B",
+                    ),
+                },
+                Node {
+                    parent: Some(
+                        1,
+                    ),
+                    kind: Text(
+                        " ",
+                    ),
+                },
+                Node {
+                    parent: Some(
+                        1,
+                    ),
+                    kind: Element {
+                        tag: Italic,
+                        classes: [],
+                        annotation: "",
+                    },
+                },
+                Node {
+                    parent: Some(
+                        5,
+                    ),
+                    kind: Text(
+                        "é",
+                    ),
+                },
+                Node {
+                    parent: Some(
+                        0,
+                    ),
+                    kind: Text(
+                        "\n",
+                    ),
+                },
+                Node {
+                    parent: Some(
+                        0,
+                    ),
+                    kind: Element {
+                        tag: Ruby,
+                        classes: [],
+                        annotation: "",
+                    },
+                },
+                Node {
+                    parent: Some(
+                        8,
+                    ),
+                    kind: Text(
+                        "字",
+                    ),
+                },
+                Node {
+                    parent: Some(
+                        8,
+                    ),
+                    kind: Element {
+                        tag: RubyText,
+                        classes: [],
+                        annotation: "",
+                    },
+                },
+                Node {
+                    parent: Some(
+                        10,
+                    ),
+                    kind: Text(
+                        "ji",
+                    ),
+                },
+                Node {
+                    parent: Some(
+                        0,
+                    ),
+                    kind: Timestamp(
+                        2000,
+                    ),
+                },
+                Node {
+                    parent: Some(
+                        0,
+                    ),
+                    kind: Element {
+                        tag: Language,
+                        classes: [],
+                        annotation: "fr",
+                    },
+                },
+                Node {
+                    parent: Some(
+                        13,
+                    ),
+                    kind: Text(
+                        "oui",
+                    ),
+                },
+            ],
+        },
+    ],
+    diagnostics: [],
+}

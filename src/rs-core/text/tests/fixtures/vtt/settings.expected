@@ -1,0 +1,47 @@
+Document {
+    header: Header {
+        timestamp_map: TimestampMap {
+            local_ms: 0,
+            mpegts: 0,
+        },
+        regions: [],
+        style_sheets: [],
+    },
+    cues: [
+        Cue {
+            id: "",
+            start_ms: 1000,
+            end_ms: 2000,
+            settings: Settings {
+                vertical: Rl,
+                line: Number(
+                    -2.0,
+                ),
+                line_align: Start,
+                position: Some(
+                    25.0,
+                ),
+                position_align: Auto,
+                size: 75.0,
+                align: End,
+                region: None,
+            },
+            raw_text: "x",
+            text: [
+                Node {
+                    parent: None,
+                    kind: Root,
+                },
+                Node {
+                    parent: Some(
+                        0,
+                    ),
+                    kind: Text(
+                        "x",
+                    ),
+                },
+            ],
+        },
+    ],
+    diagnostics: [],
+}

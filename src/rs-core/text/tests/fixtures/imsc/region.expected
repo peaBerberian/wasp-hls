@@ -1,0 +1,163 @@
+Document {
+    rates: Rates {
+        frame_rate: 30.0,
+        tick_rate: 1.0,
+        explicit_frame_rate: false,
+        explicit_tick_rate: false,
+    },
+    root_style: Style {
+        properties: {},
+        unsupported: [],
+    },
+    cell_resolution: (
+        32,
+        15,
+    ),
+    styles: {},
+    regions: {
+        "r": Region {
+            id: "r",
+            interval: Interval {
+                begin: 0.0,
+                end: None,
+            },
+            style: Style {
+                properties: {
+                    Origin: Lengths(
+                        [
+                            Length {
+                                value: 10.0,
+                                unit: Percent,
+                            },
+                            Length {
+                                value: 20.0,
+                                unit: Percent,
+                            },
+                        ],
+                    ),
+                    Extent: Lengths(
+                        [
+                            Length {
+                                value: 80.0,
+                                unit: Percent,
+                            },
+                            Length {
+                                value: 70.0,
+                                unit: Percent,
+                            },
+                        ],
+                    ),
+                },
+                unsupported: [],
+            },
+            sets: [],
+        },
+    },
+    nodes: [
+        Node {
+            parent: None,
+            children: [
+                1,
+            ],
+            kind: Body,
+            id: None,
+            interval: Interval {
+                begin: 0.0,
+                end: Some(
+                    2.0,
+                ),
+            },
+            region: Some(
+                "r",
+            ),
+            language: None,
+            space: Default,
+            style: Style {
+                properties: {},
+                unsupported: [],
+            },
+            text: None,
+        },
+        Node {
+            parent: Some(
+                0,
+            ),
+            children: [
+                2,
+            ],
+            kind: Division,
+            id: None,
+            interval: Interval {
+                begin: 0.0,
+                end: Some(
+                    2.0,
+                ),
+            },
+            region: Some(
+                "r",
+            ),
+            language: None,
+            space: Default,
+            style: Style {
+                properties: {},
+                unsupported: [],
+            },
+            text: None,
+        },
+        Node {
+            parent: Some(
+                1,
+            ),
+            children: [
+                3,
+            ],
+            kind: Paragraph,
+            id: Some(
+                "p",
+            ),
+            interval: Interval {
+                begin: 1.0,
+                end: Some(
+                    2.0,
+                ),
+            },
+            region: Some(
+                "r",
+            ),
+            language: None,
+            space: Default,
+            style: Style {
+                properties: {},
+                unsupported: [],
+            },
+            text: None,
+        },
+        Node {
+            parent: Some(
+                2,
+            ),
+            children: [],
+            kind: Text,
+            id: None,
+            interval: Interval {
+                begin: 1.0,
+                end: Some(
+                    2.0,
+                ),
+            },
+            region: Some(
+                "r",
+            ),
+            language: None,
+            space: Default,
+            style: Style {
+                properties: {},
+                unsupported: [],
+            },
+            text: Some(
+                "x",
+            ),
+        },
+    ],
+    diagnostics: [],
+}

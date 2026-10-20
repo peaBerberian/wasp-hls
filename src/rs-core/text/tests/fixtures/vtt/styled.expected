@@ -1,0 +1,213 @@
+Document {
+    header: Header {
+        timestamp_map: TimestampMap {
+            local_ms: 0,
+            mpegts: 0,
+        },
+        regions: [
+            Region {
+                id: "lower",
+                width: 80.0,
+                lines: 3,
+                region_anchor: (
+                    50.0,
+                    100.0,
+                ),
+                viewport_anchor: (
+                    50.0,
+                    95.0,
+                ),
+                scroll_up: false,
+            },
+        ],
+        style_sheets: [
+            Stylesheet {
+                source: "::cue { color: white; font-family: proportionalSansSerif; }\n::cue(.warning) { color: #ff0; background-color: rgba(0,0,0,0.5); font-weight: bold; }\n::cue(v[voice=\"Alice\"]) { font-style: italic; future-property: keep-me; }",
+                rules: [
+                    Rule {
+                        selectors: [
+                            Cue,
+                        ],
+                        declarations: [
+                            Declaration {
+                                name: "color",
+                                value: "white",
+                                important: false,
+                                portable: Some(
+                                    (
+                                        Color,
+                                        Color(
+                                            Color(
+                                                255,
+                                                255,
+                                                255,
+                                                255,
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            },
+                            Declaration {
+                                name: "font-family",
+                                value: "proportionalSansSerif",
+                                important: false,
+                                portable: Some(
+                                    (
+                                        FontFamily,
+                                        Text(
+                                            "proportionalSansSerif",
+                                        ),
+                                    ),
+                                ),
+                            },
+                        ],
+                    },
+                    Rule {
+                        selectors: [
+                            Class(
+                                "warning",
+                            ),
+                        ],
+                        declarations: [
+                            Declaration {
+                                name: "color",
+                                value: "#ff0",
+                                important: false,
+                                portable: Some(
+                                    (
+                                        Color,
+                                        Color(
+                                            Color(
+                                                255,
+                                                255,
+                                                0,
+                                                255,
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            },
+                            Declaration {
+                                name: "background-color",
+                                value: "rgba(0,0,0,0.5)",
+                                important: false,
+                                portable: Some(
+                                    (
+                                        BackgroundColor,
+                                        Color(
+                                            Color(
+                                                0,
+                                                0,
+                                                0,
+                                                128,
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            },
+                            Declaration {
+                                name: "font-weight",
+                                value: "bold",
+                                important: false,
+                                portable: Some(
+                                    (
+                                        FontWeight,
+                                        Keyword(
+                                            "bold",
+                                        ),
+                                    ),
+                                ),
+                            },
+                        ],
+                    },
+                    Rule {
+                        selectors: [
+                            Voice(
+                                "Alice",
+                            ),
+                        ],
+                        declarations: [
+                            Declaration {
+                                name: "font-style",
+                                value: "italic",
+                                important: false,
+                                portable: Some(
+                                    (
+                                        FontStyle,
+                                        Keyword(
+                                            "italic",
+                                        ),
+                                    ),
+                                ),
+                            },
+                            Declaration {
+                                name: "future-property",
+                                value: "keep-me",
+                                important: false,
+                                portable: None,
+                            },
+                        ],
+                    },
+                ],
+                unsupported: [],
+            },
+        ],
+    },
+    cues: [
+        Cue {
+            id: "intro",
+            start_ms: 1000,
+            end_ms: 4000,
+            settings: Settings {
+                vertical: Horizontal,
+                line: Auto,
+                line_align: Start,
+                position: None,
+                position_align: Auto,
+                size: 100.0,
+                align: Center,
+                region: Some(
+                    "lower",
+                ),
+            },
+            raw_text: "<v Alice><c.warning>Watch out!</c></v>",
+            text: [
+                Node {
+                    parent: None,
+                    kind: Root,
+                },
+                Node {
+                    parent: Some(
+                        0,
+                    ),
+                    kind: Element {
+                        tag: Voice,
+                        classes: [],
+                        annotation: "Alice",
+                    },
+                },
+                Node {
+                    parent: Some(
+                        1,
+                    ),
+                    kind: Element {
+                        tag: Class,
+                        classes: [
+                            "warning",
+                        ],
+                        annotation: "",
+                    },
+                },
+                Node {
+                    parent: Some(
+                        2,
+                    ),
+                    kind: Text(
+                        "Watch out!",
+                    ),
+                },
+            ],
+        },
+    ],
+    diagnostics: [],
+}

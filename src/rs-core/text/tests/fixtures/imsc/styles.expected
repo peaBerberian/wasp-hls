@@ -1,0 +1,172 @@
+Document {
+    rates: Rates {
+        frame_rate: 30.0,
+        tick_rate: 1.0,
+        explicit_frame_rate: false,
+        explicit_tick_rate: false,
+    },
+    root_style: Style {
+        properties: {},
+        unsupported: [],
+    },
+    cell_resolution: (
+        32,
+        15,
+    ),
+    styles: {
+        "a": Style {
+            properties: {
+                Color: Color(
+                    Color(
+                        255,
+                        0,
+                        0,
+                        255,
+                    ),
+                ),
+            },
+            unsupported: [],
+        },
+        "b": Style {
+            properties: {
+                Color: Color(
+                    Color(
+                        255,
+                        0,
+                        0,
+                        255,
+                    ),
+                ),
+                FontWeight: Keyword(
+                    "bold",
+                ),
+            },
+            unsupported: [],
+        },
+        "c": Style {
+            properties: {
+                Color: Color(
+                    Color(
+                        0,
+                        0,
+                        255,
+                        255,
+                    ),
+                ),
+            },
+            unsupported: [],
+        },
+    },
+    regions: {},
+    nodes: [
+        Node {
+            parent: None,
+            children: [
+                1,
+            ],
+            kind: Body,
+            id: None,
+            interval: Interval {
+                begin: 0.0,
+                end: Some(
+                    2.0,
+                ),
+            },
+            region: None,
+            language: None,
+            space: Default,
+            style: Style {
+                properties: {},
+                unsupported: [],
+            },
+            text: None,
+        },
+        Node {
+            parent: Some(
+                0,
+            ),
+            children: [
+                2,
+            ],
+            kind: Division,
+            id: None,
+            interval: Interval {
+                begin: 0.0,
+                end: Some(
+                    2.0,
+                ),
+            },
+            region: None,
+            language: None,
+            space: Default,
+            style: Style {
+                properties: {},
+                unsupported: [],
+            },
+            text: None,
+        },
+        Node {
+            parent: Some(
+                1,
+            ),
+            children: [
+                3,
+            ],
+            kind: Paragraph,
+            id: Some(
+                "p",
+            ),
+            interval: Interval {
+                begin: 1.0,
+                end: Some(
+                    2.0,
+                ),
+            },
+            region: None,
+            language: None,
+            space: Default,
+            style: Style {
+                properties: {
+                    Color: Color(
+                        Color(
+                            0,
+                            255,
+                            0,
+                            128,
+                        ),
+                    ),
+                    FontWeight: Keyword(
+                        "bold",
+                    ),
+                },
+                unsupported: [],
+            },
+            text: None,
+        },
+        Node {
+            parent: Some(
+                2,
+            ),
+            children: [],
+            kind: Text,
+            id: None,
+            interval: Interval {
+                begin: 1.0,
+                end: Some(
+                    2.0,
+                ),
+            },
+            region: None,
+            language: None,
+            space: Default,
+            style: Style {
+                properties: {},
+                unsupported: [],
+            },
+            text: Some(
+                "x",
+            ),
+        },
+    ],
+    diagnostics: [],
+}
