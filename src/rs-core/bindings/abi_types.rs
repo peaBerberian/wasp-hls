@@ -487,23 +487,6 @@ impl LogLevel {
 
 #[repr(u32)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum AvPlaybackMediaType {
-    Audio = 0,
-    Video = 1,
-}
-
-impl AvPlaybackMediaType {
-    pub fn from_raw(value: u32) -> Self {
-        match value {
-            0 => Self::Audio,
-            1 => Self::Video,
-            _ => Self::Audio,
-        }
-    }
-}
-
-#[repr(u32)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PlaylistNature {
     Event = 0,
     VoD = 1,

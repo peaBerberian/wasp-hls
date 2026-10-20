@@ -2,7 +2,7 @@ use std::collections::VecDeque;
 
 use crate::bindings::{
     jsAddSourceBuffer, jsAppendBuffer, jsFlush, jsRemoveBuffer, AddSourceBufferErrorCode,
-    AvPlaybackMediaType, ParsedSegmentInfo, ResourceId, SegmentParsingErrorCode, SourceBufferId,
+    MediaType, ParsedSegmentInfo, ResourceId, SegmentParsingErrorCode, SourceBufferId,
     TimescaledTimestamp,
 };
 use crate::dispatcher::JsMemoryBlob;
@@ -41,8 +41,8 @@ pub(super) struct SourceBuffer {
     /// Cleared if data is removed or a buffer operation fails.
     end_when_done: bool,
 
-    /// The AvPlaybackMediaType associated to this `SourceBuffer`.
-    media_type: AvPlaybackMediaType,
+    /// The MediaType associated to this `SourceBuffer`.
+    media_type: MediaType,
 
     /// If `true`, the `SourceBuffer` was very recently emptied.
     ///
@@ -80,20 +80,17 @@ struct LastSegmentContinuityInfo {
 }
 
 impl SourceBuffer {
-    /// Create a new `SourceBuffer` for the given `AvPlaybackMediaType` and the mime-type indicated by `typ`.
+    /// Create a new `SourceBuffer` for the given `MediaType` and the mime-type indicated by `typ`.
     ///
     /// # Arguments
     ///
-    /// * `media_type` - The `AvPlaybackMediaType` that will handle this `SourceBuffer`. A `SourceBuffer`
+    /// * `media_type` - The `MediaType` that will handle this `SourceBuffer`. A `SourceBuffer`
     ///   handling multiple times at once is expected to:
     ///     1. At least contain video content
-    ///     2. Be set to `AvPlaybackMediaType::Video`, even if it also contains audio for example
+    ///     2. Be set to `MediaType::Video`, even if it also contains audio for example
     ///
     /// * `mime_type` - Mime-type to use when creating this `SourceBuffer` on the JavaScript-side.
-    pub(super) fn new(
-        media_type: AvPlaybackMediaType,
-        typ: String,
-    ) -> Result<Self, AddSourceBufferError> {
+    pub(super) fn new(media_type: MediaType, typ: String) -> Result<Self, AddSourceBufferError> {
         log_info!("Creating new {} SourceBuffer", media_type);
         match jsAddSourceBuffer(media_type, &typ) {
             Ok(x) => Ok(Self {
@@ -119,8 +116,8 @@ impl SourceBuffer {
         self.id
     }
 
-    /// Returns the `AvPlaybackMediaType` linked to that SourceBuffer.
-    pub(super) fn media_type(&self) -> AvPlaybackMediaType {
+    /// Returns the `MediaType` linked to that SourceBuffer.
+    pub(super) fn media_type(&self) -> MediaType {
         self.media_type
     }
 
@@ -544,18 +541,18 @@ impl AddSourceBufferError {
 #[derive(Error, Debug)]
 pub(crate) enum PushSegmentError {
     #[error("No SourceBuffer created for {0}")]
-    NoSourceBuffer(AvPlaybackMediaType),
+    NoSourceBuffer(MediaType),
     #[error("The {0} resource appended did not exist.")]
-    NoResource(AvPlaybackMediaType),
+    NoResource(MediaType),
     #[error("Could not transmux {0} resource: {1}.")]
-    TransmuxerError(AvPlaybackMediaType, String),
+    TransmuxerError(MediaType, String),
     #[error("Uncategorized Error with {0} buffer: {1}")]
-    UnknownError(AvPlaybackMediaType, String),
+    UnknownError(MediaType, String),
 }
 
 impl PushSegmentError {
-    /// Returns the `AvPlaybackMediaType` associated to the `PushSegmentError`.
-    pub(crate) fn media_type(&self) -> AvPlaybackMediaType {
+    /// Returns the `MediaType` associated to the `PushSegmentError`.
+    pub(crate) fn media_type(&self) -> MediaType {
         match self {
             PushSegmentError::NoResource(m) => *m,
             PushSegmentError::NoSourceBuffer(m) => *m,
@@ -564,16 +561,16 @@ impl PushSegmentError {
         }
     }
 
-    /// Creates a new `PushSegmentError` based on a given `AvPlaybackMediaType` and the original error as
+    /// Creates a new `PushSegmentError` based on a given `MediaType` and the original error as
     /// returned by the `jsAppendBuffer` binding.
     ///
     /// # Arguments
     ///
-    /// * `media_type` - The `AvPlaybackMediaType` linked to the corresponding `SourceBuffer`.
+    /// * `media_type` - The `MediaType` linked to the corresponding `SourceBuffer`.
     ///
     /// * `err` - The error received from the `jsAppendBuffer` JavaScript function.
     fn from_js_append_buffer_error(
-        media_type: AvPlaybackMediaType,
+        media_type: MediaType,
         err: (SegmentParsingErrorCode, Option<String>),
     ) -> Self {
         match err.0 {
@@ -596,7 +593,7 @@ impl PushSegmentError {
 #[derive(Error, Debug)]
 pub(crate) enum RemoveDataError {
     #[error("No SourceBuffer created for {0}")]
-    NoSourceBuffer(AvPlaybackMediaType),
+    NoSourceBuffer(MediaType),
 }
 
 /// Context about the continuity context of a pushed segment with a previously-pushed one.

@@ -1,8 +1,8 @@
 #![allow(non_snake_case)]
 
 use super::{
-    AddSourceBufferErrorCode, AttachMediaSourceErrorCode, AvPlaybackMediaType,
-    ContentCompatibilityErrorCode, EndOfStreamErrorCode, LogLevel, MediaPlaylistParsingErrorCode,
+    AddSourceBufferErrorCode, AttachMediaSourceErrorCode, ContentCompatibilityErrorCode,
+    EndOfStreamErrorCode, LogLevel, MediaPlaylistParsingErrorCode,
     MediaSourceDurationUpdateErrorCode, MediaType, MultivariantPlaylistParsingErrorCode,
     OtherErrorCode, PlaylistNature, PlaylistType, PushedSegmentErrorCode, RemoveBufferErrorCode,
     RemoveMediaSourceErrorCode, RequestErrorReason, SegmentParsingErrorCode,
@@ -260,7 +260,7 @@ pub fn jsSetMediaSourceDuration(
 /// This function performs this operation synchronously and may fail, see
 /// `AddSourceBufferResult` for more details on the return value.
 pub fn jsAddSourceBuffer(
-    media_type: AvPlaybackMediaType,
+    media_type: MediaType,
     typ: &str,
 ) -> Result<SourceBufferId, (AddSourceBufferErrorCode, Option<String>)> {
     let mut source_buffer_id = 0;
@@ -680,7 +680,7 @@ pub fn jsSendMediaPlaylistRequestError(
 pub fn jsSendSourceBufferCreationError(
     fatal: bool,
     code: SourceBufferCreationErrorCode,
-    media_type: AvPlaybackMediaType,
+    media_type: MediaType,
     message: &str,
 ) {
     unsafe {
@@ -751,7 +751,7 @@ pub fn jsSendSegmentParsingError(
 pub fn jsSendPushedSegmentError(
     fatal: bool,
     code: PushedSegmentErrorCode,
-    media_type: AvPlaybackMediaType,
+    media_type: MediaType,
     message: &str,
 ) {
     unsafe {
@@ -767,7 +767,7 @@ pub fn jsSendPushedSegmentError(
 
 /// Function to call to indicate that an error arised when removing data from a
 /// `SourceBuffer`.
-pub fn jsSendRemoveBufferError(fatal: bool, media_type: AvPlaybackMediaType, message: &str) {
+pub fn jsSendRemoveBufferError(fatal: bool, media_type: MediaType, message: &str) {
     unsafe {
         __js_func__send_remove_buffer_error(
             bool_to_raw(fatal),
@@ -988,18 +988,6 @@ pub type TimerId = f64;
 /// Identify a SourceBuffer.
 pub type SourceBufferId = u32;
 
-impl fmt::Display for AvPlaybackMediaType {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                AvPlaybackMediaType::Audio => "audio",
-                AvPlaybackMediaType::Video => "video",
-            }
-        )
-    }
-}
 impl fmt::Display for MediaType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(

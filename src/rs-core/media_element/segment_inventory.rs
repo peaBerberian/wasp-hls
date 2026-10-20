@@ -1,7 +1,7 @@
 // XXX TODO: Maybe SegmentInventory should apply to text? Maybe MediaElementRef also?
 
 use crate::{
-    bindings::{AvPlaybackMediaType, TimescaledTimestamp},
+    bindings::{MediaType, TimescaledTimestamp},
     dispatcher::JsTimeRanges,
     parser::MediaPlaylistPermanentId,
     utils::logger::*,
@@ -266,7 +266,7 @@ pub(super) struct SegmentInventory {
     inventory: Vec<BufferedChunk>,
 
     /// The concerned media type. This is just used for logs.
-    media_type: AvPlaybackMediaType,
+    media_type: MediaType,
 
     /// Identifier for the next inserted media segment.
     next_segment_id: u64,
@@ -274,14 +274,14 @@ pub(super) struct SegmentInventory {
 
 impl SegmentInventory {
     /// Create a new `SegmentInventory` linked to a `SourceBuffer` of the corresponding
-    /// `AvPlaybackMediaType`.
+    /// `MediaType`.
     ///
     /// When created, the `SegmentInventory` will initially be empty. Segments should be inserted
     /// to it through the `insert_segment` method as soon as it is being pushed to the
     /// `SourceBuffer`, `validate_segment` should then be called after that push operation
     /// succeeds, to ensure that the `SegmentInventory` knows where that segment is initially
     /// buffered.
-    pub(super) fn new(media_type: AvPlaybackMediaType) -> Self {
+    pub(super) fn new(media_type: MediaType) -> Self {
         Self {
             inventory: vec![],
             media_type,
@@ -1122,7 +1122,7 @@ fn end_correction_looks_coherent(seg: &BufferedChunk, end_correction: f64) -> bo
 fn guess_start_correction_from_range_start(
     first_seg_in_range: &BufferedChunk,
     range_start: f64,
-    media_type: AvPlaybackMediaType,
+    media_type: MediaType,
 ) -> f64 {
     if first_seg_in_range.start - range_start <= 0.4 {
         let start_correction = range_start - first_seg_in_range.start;
@@ -1155,7 +1155,7 @@ fn guess_start_correction_from_range_start(
 fn guess_end_correction_from_range_end(
     last_segment_in_range: &BufferedChunk,
     range_end: f64,
-    media_type: AvPlaybackMediaType,
+    media_type: MediaType,
 ) -> f64 {
     if range_end - last_segment_in_range.end <= 0.4 {
         let end_correction = range_end - last_segment_in_range.end;
@@ -1211,7 +1211,7 @@ fn check_next_overlapping_segments(
     end: f64,
     base_idx: usize,
     inventory: &[BufferedChunk],
-    media_type: AvPlaybackMediaType,
+    media_type: MediaType,
 ) -> Vec<PendingBufferedChunkModificationTask> {
     let mut updates = vec![];
     let mut new_idx = base_idx;
@@ -1304,7 +1304,7 @@ fn matches_discontinuity(seg: &BufferedChunk, discontinuity_sequence: u32) -> bo
 mod tests {
     use super::{BufferedSegmentMetadata, SegmentInventory, SegmentQualityContext};
     use crate::{
-        bindings::{AvPlaybackMediaType, TimescaledTimestamp},
+        bindings::{MediaType, TimescaledTimestamp},
         dispatcher::JsTimeRanges,
         parser::MediaPlaylistPermanentId,
     };
@@ -1330,7 +1330,7 @@ mod tests {
 
     #[test]
     fn an_empty_report_can_remove_pending_entries_before_their_results() {
-        let mut inventory = SegmentInventory::new(AvPlaybackMediaType::Video);
+        let mut inventory = SegmentInventory::new(MediaType::Video);
         let id = inventory.insert_segment(metadata(10., 12.));
         inventory.insert_segment(metadata(12., 14.));
         inventory.synchronize(&JsTimeRanges::new(vec![]), 0.);
@@ -1341,7 +1341,7 @@ mod tests {
 
     #[test]
     fn cancellation_keeps_other_entries_and_reconciles_the_failed_append() {
-        let mut inventory = SegmentInventory::new(AvPlaybackMediaType::Video);
+        let mut inventory = SegmentInventory::new(MediaType::Video);
         let earlier = inventory.insert_segment(metadata(0., 4.));
         inventory.reconcile_push_result(earlier, &JsTimeRanges::new(vec![0., 4.]), 0., true);
         let failed = inventory.insert_segment(metadata(4., 8.));
@@ -1375,7 +1375,7 @@ mod tests {
 
     #[test]
     fn timing_anchor_prefers_precise_start_on_current_overlapping_segment() {
-        let mut inventory = SegmentInventory::new(AvPlaybackMediaType::Video);
+        let mut inventory = SegmentInventory::new(MediaType::Video);
         let seg_id = inventory.insert_segment(metadata(10.0, 20.0));
         inventory.update_precise_timing(
             seg_id,
@@ -1392,7 +1392,7 @@ mod tests {
 
     #[test]
     fn timing_anchor_prefers_overlapping_precise_start_over_previous_end() {
-        let mut inventory = SegmentInventory::new(AvPlaybackMediaType::Video);
+        let mut inventory = SegmentInventory::new(MediaType::Video);
 
         let prev_id = inventory.insert_segment(metadata(0.0, 10.0));
         inventory.update_precise_timing(
@@ -1417,7 +1417,7 @@ mod tests {
 
     #[test]
     fn timing_anchor_falls_back_to_previous_precise_end_without_overlap() {
-        let mut inventory = SegmentInventory::new(AvPlaybackMediaType::Video);
+        let mut inventory = SegmentInventory::new(MediaType::Video);
         let prev_id = inventory.insert_segment(metadata(0.0, 10.0));
         inventory.update_precise_timing(
             prev_id,
@@ -1434,7 +1434,7 @@ mod tests {
 
     #[test]
     fn timing_anchor_don_t_include_different_timing() {
-        let mut inventory = SegmentInventory::new(AvPlaybackMediaType::Video);
+        let mut inventory = SegmentInventory::new(MediaType::Video);
         let prev_id = inventory.insert_segment(metadata(3.0, 13.0));
         inventory.update_precise_timing(
             prev_id,
@@ -1448,7 +1448,7 @@ mod tests {
 
     #[test]
     fn timing_anchor_should_have_tolerance() {
-        let mut inventory = SegmentInventory::new(AvPlaybackMediaType::Video);
+        let mut inventory = SegmentInventory::new(MediaType::Video);
         let prev_id = inventory.insert_segment(metadata(10.01, 20.01));
         inventory.update_precise_timing(
             prev_id,
@@ -1465,7 +1465,7 @@ mod tests {
 
     #[test]
     fn timing_anchor_ignores_different_discontinuity_sequence() {
-        let mut inventory = SegmentInventory::new(AvPlaybackMediaType::Video);
+        let mut inventory = SegmentInventory::new(MediaType::Video);
         let seg_id = inventory.insert_segment(metadata_with_discontinuity(10.0, 20.0, 7));
         inventory.update_precise_timing(
             seg_id,
@@ -1479,7 +1479,7 @@ mod tests {
 
     #[test]
     fn timing_anchor_accepts_matching_discontinuity_sequence() {
-        let mut inventory = SegmentInventory::new(AvPlaybackMediaType::Video);
+        let mut inventory = SegmentInventory::new(MediaType::Video);
         let seg_id = inventory.insert_segment(metadata_with_discontinuity(10.0, 20.0, 7));
         inventory.update_precise_timing(
             seg_id,

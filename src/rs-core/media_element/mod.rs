@@ -3,7 +3,7 @@ use self::source_buffers::SourceBufferQueueElement;
 use crate::bindings::{
     jsAttachMediaSource, jsEndOfStream, jsRemoveMediaSource, jsSeek, jsSetMediaOffset,
     jsSetPlaybackRate, jsStartRebuffering, jsStopRebuffering, AddSourceBufferErrorCode,
-    AttachMediaSourceErrorCode, AvPlaybackMediaType, SourceBufferId, TimescaledTimestamp,
+    AttachMediaSourceErrorCode, MediaType, SourceBufferId, TimescaledTimestamp,
 };
 use crate::dispatcher::{JsMemoryBlob, JsTimeRanges, MediaObservation, MediaSourceReadyState};
 use crate::parser::SegmentTimeInfo;
@@ -70,6 +70,9 @@ pub(crate) struct MediaElementReference {
     /// Empty if no video buffer is present.
     video_inventory: SegmentInventory,
 
+    /// Inventory reserved for retained text segments.
+    text_inventory: SegmentInventory,
+
     /// When rebuffering, this is the minimum ammount of time to have ahead
     /// before playing the content
     min_buffer_time: f64,
@@ -91,8 +94,9 @@ impl MediaElementReference {
             video_buffer: None,
             audio_buffer: None,
             wanted_speed: 1.,
-            audio_inventory: SegmentInventory::new(AvPlaybackMediaType::Audio),
-            video_inventory: SegmentInventory::new(AvPlaybackMediaType::Video),
+            audio_inventory: SegmentInventory::new(MediaType::Audio),
+            video_inventory: SegmentInventory::new(MediaType::Video),
+            text_inventory: SegmentInventory::new(MediaType::Text),
             min_buffer_time: 5.,
         }
     }
@@ -114,6 +118,7 @@ impl MediaElementReference {
         self.min_buffer_time = 5.;
         self.audio_inventory.reset();
         self.video_inventory.reset();
+        self.text_inventory.reset();
     }
 
     /// Returns `true` if we're currently rebuffering due to not enough media data
@@ -194,15 +199,14 @@ impl MediaElementReference {
 
     /// Reported ranges for this buffer, converted to playlist time.
     /// None while the ranges or timestamp offset are unknown.
-    pub(crate) fn buffered_ranges_for(
-        &self,
-        media_type: AvPlaybackMediaType,
-    ) -> Option<Vec<(f64, f64)>> {
+    pub(crate) fn buffered_ranges_for(&self, media_type: MediaType) -> Option<Vec<(f64, f64)>> {
         let offset = self.media_offset?;
         let observation = self.last_observation.as_ref()?;
         let buffered = match media_type {
-            AvPlaybackMediaType::Audio => observation.audio_buffered(),
-            AvPlaybackMediaType::Video => observation.video_buffered(),
+            MediaType::Audio => observation.audio_buffered(),
+            MediaType::Video => observation.video_buffered(),
+            // XXX TODO: Read text ranges from observation.text_buffered().
+            MediaType::Text => None,
         }?;
         Some(
             buffered
@@ -216,15 +220,17 @@ impl MediaElementReference {
     /// Returns media seconds, or zero when the corresponding ranges are unavailable.
     ///
     /// `None` if unknown.
-    pub(crate) fn buffer_ahead_for(&self, media_type: AvPlaybackMediaType) -> Option<f64> {
+    pub(crate) fn buffer_ahead_for(&self, media_type: MediaType) -> Option<f64> {
         let observation = self.last_observation.as_ref()?;
         let position = match self.queued_seek {
             Some(position) => self.playlist_pos_to_media_pos(position)?,
             None => observation.current_time(),
         };
         let buffered = match media_type {
-            AvPlaybackMediaType::Audio => observation.audio_buffered(),
-            AvPlaybackMediaType::Video => observation.video_buffered(),
+            MediaType::Audio => observation.audio_buffered(),
+            MediaType::Video => observation.video_buffered(),
+            // XXX TODO: Read text ranges from observation.text_buffered().
+            MediaType::Text => None,
         };
         buffered.map(|ranges| ranges.buffer_gap(position).unwrap_or(0.))
     }
@@ -278,7 +284,7 @@ impl MediaElementReference {
     /// created (see `attach_media_source` method).
     pub(crate) fn create_source_buffer(
         &mut self,
-        media_type: AvPlaybackMediaType,
+        media_type: MediaType,
         mime_type: &str,
         codec: &str,
     ) -> Result<(), SourceBufferCreationError> {
@@ -295,7 +301,12 @@ impl MediaElementReference {
         }
         let sb_codec = format!("{};codecs=\"{}\"", mime_type, codec);
         match media_type {
-            AvPlaybackMediaType::Audio => {
+            // XXX TODO: Create text storage through a shared buffer interface.
+            MediaType::Text => Err(SourceBufferCreationError::CantPlayType {
+                mime_type: sb_codec,
+                message: "Text is not stored in an MSE SourceBuffer".to_string(),
+            }),
+            MediaType::Audio => {
                 if self.audio_buffer.is_some() {
                     Err(SourceBufferCreationError::AlreadyCreatedWithSameType { media_type })
                 } else {
@@ -305,7 +316,7 @@ impl MediaElementReference {
                     Ok(())
                 }
             }
-            AvPlaybackMediaType::Video => {
+            MediaType::Video => {
                 if self.video_buffer.is_some() {
                     Err(SourceBufferCreationError::AlreadyCreatedWithSameType { media_type })
                 } else {
@@ -325,7 +336,7 @@ impl MediaElementReference {
     /// `NoSourceBuffer` error.
     pub(crate) fn push_init_segment(
         &mut self,
-        media_type: AvPlaybackMediaType,
+        media_type: MediaType,
         segment_data: JsMemoryBlob,
     ) -> Result<(), PushSegmentError> {
         match self.buffer_mut_for(media_type) {
@@ -380,10 +391,9 @@ impl MediaElementReference {
             playlist_start: metadata_start,
             playlist_end: metadata_end,
         };
-        let id = match md.media_type {
-            AvPlaybackMediaType::Audio => self.audio_inventory.insert_segment(inventory_metadata),
-            AvPlaybackMediaType::Video => self.video_inventory.insert_segment(inventory_metadata),
-        };
+        let id = self
+            .inventory_mut_for(md.media_type)
+            .insert_segment(inventory_metadata);
         PreparedPushData {
             id,
             segment_data: md.data,
@@ -407,7 +417,7 @@ impl MediaElementReference {
     ///      and here use the return value of that method.
     pub(crate) fn push_media_segment(
         &mut self,
-        media_type: AvPlaybackMediaType,
+        media_type: MediaType,
         metadata: PreparedPushData,
     ) -> Result<(), PushSegmentError> {
         match self.buffer_mut_for(media_type) {
@@ -417,18 +427,11 @@ impl MediaElementReference {
                 let metadata_start = metadata.time_info.start();
                 let seg_id = metadata.id;
                 let response = sb.push_media_segment(metadata)?;
-                match media_type {
-                    AvPlaybackMediaType::Audio => self.audio_inventory.update_precise_timing(
-                        seg_id,
-                        response.precise_start(),
-                        response.precise_end(),
-                    ),
-                    AvPlaybackMediaType::Video => self.video_inventory.update_precise_timing(
-                        seg_id,
-                        response.precise_start(),
-                        response.precise_end(),
-                    ),
-                }
+                self.inventory_mut_for(media_type).update_precise_timing(
+                    seg_id,
+                    response.precise_start(),
+                    response.precise_end(),
+                );
                 if let Some(media_start) = response.media_start() {
                     let media_offset = media_start - metadata_start;
                     log_info!("Setting media offset: {}", media_start - metadata_start,);
@@ -441,19 +444,28 @@ impl MediaElementReference {
         }
     }
 
+    fn inventory_mut_for(&mut self, media_type: MediaType) -> &mut SegmentInventory {
+        match media_type {
+            MediaType::Audio => &mut self.audio_inventory,
+            MediaType::Video => &mut self.video_inventory,
+            MediaType::Text => &mut self.text_inventory,
+        }
+    }
+
     fn infer_probable_base_dts(
         &self,
-        media_type: AvPlaybackMediaType,
+        media_type: MediaType,
         time_info: &SegmentTimeInfo,
         discontinuity_sequence: u32,
     ) -> Option<TimescaledTimestamp> {
         match media_type {
-            AvPlaybackMediaType::Audio => self.audio_inventory.infer_probable_base_dts(
+            MediaType::Text => None,
+            MediaType::Audio => self.audio_inventory.infer_probable_base_dts(
                 time_info.start(),
                 time_info.end(),
                 discontinuity_sequence,
             ),
-            AvPlaybackMediaType::Video => self.video_inventory.infer_probable_base_dts(
+            MediaType::Video => self.video_inventory.infer_probable_base_dts(
                 time_info.start(),
                 time_info.end(),
                 discontinuity_sequence,
@@ -472,7 +484,7 @@ impl MediaElementReference {
     /// `flush` instead.
     pub(crate) fn remove_data(
         &mut self,
-        media_type: AvPlaybackMediaType,
+        media_type: MediaType,
         start: f64,
         end: f64,
     ) -> Result<(), RemoveDataError> {
@@ -485,7 +497,7 @@ impl MediaElementReference {
         }
     }
 
-    /// Empty the buffer of the given `AvPlaybackMediaType`.
+    /// Empty the buffer of the given `MediaType`.
     ///
     /// Note that it may lead to some seek in-place to ensure that the lower-level buffers are up
     /// to date.
@@ -493,7 +505,7 @@ impl MediaElementReference {
     /// You should have created a SourceBuffer of the corresponding type with
     /// `create_source_buffer` before calling this method. If you did not this method will return a
     /// `NoSourceBuffer` error.
-    pub(crate) fn flush(&mut self, media_type: AvPlaybackMediaType) -> Result<(), RemoveDataError> {
+    pub(crate) fn flush(&mut self, media_type: MediaType) -> Result<(), RemoveDataError> {
         match self.buffer_mut_for(media_type) {
             None => Err(RemoveDataError::NoSourceBuffer(media_type)),
             Some(sb) => {
@@ -512,15 +524,17 @@ impl MediaElementReference {
     /// want the corresponding segment to be included. Then synchronizations to the lower-level
     /// buffers are performed automatically on lifecycle methods such as `on_observation` and
     /// `on_source_buffer_update`.
-    pub(crate) fn inventory(&self, media_type: AvPlaybackMediaType) -> &[BufferedChunk] {
+    pub(crate) fn inventory(&self, media_type: MediaType) -> &[BufferedChunk] {
         match media_type {
-            AvPlaybackMediaType::Audio => self.audio_inventory.inventory(),
-            AvPlaybackMediaType::Video => self.video_inventory.inventory(),
+            MediaType::Audio => self.audio_inventory.inventory(),
+            MediaType::Video => self.video_inventory.inventory(),
+            MediaType::Text => self.text_inventory.inventory(),
         }
     }
 
     /// Method to call once a `MediaObservation` has been received.
     pub(crate) fn on_observation(&mut self, observation: MediaObservation) {
+        // XXX TODO: Reconcile text inventory with observation.text_buffered() too.
         if let Some(media_offset) = self.media_offset {
             if let Some(buffered) = observation.video_buffered() {
                 self.video_inventory.synchronize(buffered, media_offset);
@@ -544,8 +558,8 @@ impl MediaElementReference {
             // readyState may stay at 2 while playing the last buffered frames.
             // Keep playing even if buffered data ends slightly before the duration.
             let can_play_to_end = last_observation.ready_state() >= 2
-                && self.is_buffer_ended(AvPlaybackMediaType::Audio)
-                && self.is_buffer_ended(AvPlaybackMediaType::Video);
+                && self.is_buffer_ended(MediaType::Audio)
+                && self.is_buffer_ended(MediaType::Video);
             if !self.is_rebuffering {
                 if !last_observation.ended() && !can_play_to_end {
                     match buffer_gap {
@@ -669,7 +683,7 @@ impl MediaElementReference {
         &mut self,
         source_buffer_id: SourceBufferId,
         error: (AddSourceBufferErrorCode, Option<String>),
-    ) -> Option<(AvPlaybackMediaType, SourceBufferCreationError)> {
+    ) -> Option<(MediaType, SourceBufferCreationError)> {
         self.source_buffer(source_buffer_id).map(|sb| {
             (
                 sb.media_type(),
@@ -678,33 +692,37 @@ impl MediaElementReference {
         })
     }
 
-    /// Returns `true` if a `SourceBuffer` of the given `AvPlaybackMediaType` is currently
+    /// Returns `true` if a `SourceBuffer` of the given `MediaType` is currently
     /// linked to this `MediaElementReference`.
-    pub(crate) fn has_buffer(&self, media_type: AvPlaybackMediaType) -> bool {
+    pub(crate) fn has_buffer(&self, media_type: MediaType) -> bool {
         match media_type {
-            AvPlaybackMediaType::Audio => self.audio_buffer.is_some(),
-            AvPlaybackMediaType::Video => self.video_buffer.is_some(),
+            MediaType::Audio => self.audio_buffer.is_some(),
+            MediaType::Video => self.video_buffer.is_some(),
+            // XXX TODO: Report whether the text buffer has been created.
+            MediaType::Text => false,
         }
     }
 
-    /// Returns the AvPlaybackMediaType associated to the `SourceBuffer` which has the given `SourceBufferId`.
+    /// Returns the MediaType associated to the `SourceBuffer` which has the given `SourceBufferId`.
     /// Returns `None` if no such `SourceBuffer` was found.
-    pub(crate) fn media_type_for(&self, id: SourceBufferId) -> Option<AvPlaybackMediaType> {
+    pub(crate) fn media_type_for(&self, id: SourceBufferId) -> Option<MediaType> {
         if let Some(ref buf) = self.audio_buffer {
             if buf.id() == id {
-                return Some(AvPlaybackMediaType::Audio);
+                return Some(MediaType::Audio);
             }
         }
         if let Some(ref buf) = self.video_buffer {
             if buf.id() == id {
-                return Some(AvPlaybackMediaType::Video);
+                return Some(MediaType::Video);
             }
         }
         None
     }
 
     /// Set whether this buffer should signal the end once its pending operations finish.
-    pub(crate) fn set_end_when_done(&mut self, media_type: AvPlaybackMediaType, complete: bool) {
+    pub(crate) fn set_end_when_done(&mut self, media_type: MediaType, complete: bool) {
+        // XXX TODO: Track text buffer completion through the shared buffer interface.
+        // Only audio/video completion should determine MSE end-of-stream.
         if let Some(buffer) = self.buffer_mut_for(media_type) {
             buffer.set_end_when_done(complete);
         }
@@ -713,25 +731,29 @@ impl MediaElementReference {
     /// Get reference to SourceBuffer attached to this `MediaElementReference` for this
     /// `media_type`.
     ///
-    /// `None` if no SourceBuffer has been created for this `AvPlaybackMediaType`
-    fn buffer_for(&self, media_type: AvPlaybackMediaType) -> Option<&source_buffers::SourceBuffer> {
+    /// `None` if no SourceBuffer has been created for this `MediaType`
+    fn buffer_for(&self, media_type: MediaType) -> Option<&source_buffers::SourceBuffer> {
         match media_type {
-            AvPlaybackMediaType::Audio => self.audio_buffer.as_ref(),
-            AvPlaybackMediaType::Video => self.video_buffer.as_ref(),
+            MediaType::Audio => self.audio_buffer.as_ref(),
+            MediaType::Video => self.video_buffer.as_ref(),
+            // XXX TODO: Access text storage through a shared buffer interface.
+            MediaType::Text => None,
         }
     }
 
     /// Get mutable reference to SourceBuffer attached to this `MediaElementReference` for this
     /// `media_type`.
     ///
-    /// `None` if no SourceBuffer has been created for this `AvPlaybackMediaType`
+    /// `None` if no SourceBuffer has been created for this `MediaType`
     fn buffer_mut_for(
         &mut self,
-        media_type: AvPlaybackMediaType,
+        media_type: MediaType,
     ) -> Option<&mut source_buffers::SourceBuffer> {
         match media_type {
-            AvPlaybackMediaType::Audio => self.audio_buffer.as_mut(),
-            AvPlaybackMediaType::Video => self.video_buffer.as_mut(),
+            MediaType::Audio => self.audio_buffer.as_mut(),
+            MediaType::Video => self.video_buffer.as_mut(),
+            // XXX TODO: Access text storage through a shared buffer interface.
+            MediaType::Text => None,
         }
     }
 
@@ -764,8 +786,8 @@ impl MediaElementReference {
         if self.video_buffer.is_none() && self.audio_buffer.is_none() {
             return;
         }
-        if self.is_buffer_ended(AvPlaybackMediaType::Audio)
-            && self.is_buffer_ended(AvPlaybackMediaType::Video)
+        if self.is_buffer_ended(MediaType::Audio)
+            && self.is_buffer_ended(MediaType::Video)
             && self.media_source_ready_state == Some(MediaSourceReadyState::Open)
         {
             let _ = jsEndOfStream();
@@ -775,7 +797,7 @@ impl MediaElementReference {
     /// Returns `true` if the `SourceBuffer` of the corresponding `media_type` has ended, that is:
     ///   - selection has supplied everything needed through the end.
     ///   - it has no operation left to perform.
-    fn is_buffer_ended(&self, media_type: AvPlaybackMediaType) -> bool {
+    fn is_buffer_ended(&self, media_type: MediaType) -> bool {
         match self.buffer_for(media_type) {
             None => true,
             Some(sb) => sb.should_end_when_done() && !sb.has_operations_pending(),
@@ -834,7 +856,7 @@ fn should_perform_queued_seek(observation: &MediaObservation, media_pos: f64) ->
 mod tests {
     use super::MediaElementReference;
     use crate::{
-        bindings::{AvPlaybackMediaType, TimescaledTimestamp},
+        bindings::{MediaType, TimescaledTimestamp},
         dispatcher::{JsTimeRanges, MediaObservation, PlaybackTickReason},
         media_element::{segment_inventory::BufferedSegmentMetadata, SegmentQualityContext},
         parser::{MediaPlaylistPermanentId, SegmentTimeInfo},
@@ -902,7 +924,7 @@ mod tests {
         let time_info = SegmentTimeInfo::new(10.0, 10.0);
 
         let hint_before_insert = media_element
-            .infer_probable_base_dts(AvPlaybackMediaType::Video, &time_info, 0)
+            .infer_probable_base_dts(MediaType::Video, &time_info, 0)
             .expect("expected overlap anchor before replacement");
         assert_eq!(hint_before_insert.value(), 950_000);
         assert_eq!(hint_before_insert.timescale(), 90_000);
@@ -912,7 +934,7 @@ mod tests {
             .insert_segment(metadata(10.0, 20.0));
 
         let hint_after_insert =
-            media_element.infer_probable_base_dts(AvPlaybackMediaType::Video, &time_info, 0);
+            media_element.infer_probable_base_dts(MediaType::Video, &time_info, 0);
         assert!(hint_after_insert.is_none());
     }
 
@@ -946,14 +968,8 @@ mod tests {
             Some(vec![0., 40.]),
         ));
 
-        assert_eq!(
-            media_element.buffer_ahead_for(AvPlaybackMediaType::Video),
-            Some(30.)
-        );
-        assert_eq!(
-            media_element.buffer_ahead_for(AvPlaybackMediaType::Audio),
-            Some(0.)
-        );
+        assert_eq!(media_element.buffer_ahead_for(MediaType::Video), Some(30.));
+        assert_eq!(media_element.buffer_ahead_for(MediaType::Audio), Some(0.));
     }
 
     #[test]
@@ -966,14 +982,8 @@ mod tests {
             Some(vec![0., 40.]),
         ));
 
-        assert_eq!(
-            media_element.buffer_ahead_for(AvPlaybackMediaType::Video),
-            Some(30.)
-        );
-        assert_eq!(
-            media_element.buffer_ahead_for(AvPlaybackMediaType::Audio),
-            Some(5.)
-        );
+        assert_eq!(media_element.buffer_ahead_for(MediaType::Video), Some(30.));
+        assert_eq!(media_element.buffer_ahead_for(MediaType::Audio), Some(5.));
         assert_eq!(
             super::get_buffer_gap(media_element.last_observation.as_ref().unwrap()),
             Some(5.)
@@ -983,7 +993,7 @@ mod tests {
     #[test]
     fn buffer_ahead_distinguishes_unavailable_information_from_an_empty_buffer() {
         let mut media_element = MediaElementReference::new();
-        for media_type in [AvPlaybackMediaType::Audio, AvPlaybackMediaType::Video] {
+        for media_type in [MediaType::Audio, MediaType::Video] {
             assert_eq!(media_element.buffer_ahead_for(media_type), None);
         }
         for ranges in [None, Some(vec![]), Some(vec![0., 5., 15., 40.])] {
@@ -994,7 +1004,7 @@ mod tests {
                 ranges.clone(),
                 ranges,
             ));
-            for media_type in [AvPlaybackMediaType::Audio, AvPlaybackMediaType::Video] {
+            for media_type in [MediaType::Audio, MediaType::Video] {
                 assert_eq!(media_element.buffer_ahead_for(media_type), expected);
             }
         }
@@ -1011,35 +1021,26 @@ mod tests {
             Some(vec![0., 4., 8., 12.]),
         ));
         assert_eq!(
-            media_element.buffered_ranges_for(AvPlaybackMediaType::Video),
+            media_element.buffered_ranges_for(MediaType::Video),
             Some(vec![
                 (1_704_164_645., 1_704_164_649.),
                 (1_704_164_653., 1_704_164_657.),
             ])
         );
-        assert_eq!(
-            media_element.buffered_ranges_for(AvPlaybackMediaType::Audio),
-            None
-        );
+        assert_eq!(media_element.buffered_ranges_for(MediaType::Audio), None);
     }
 
     #[test]
     fn reported_ranges_distinguish_empty_from_unknown() {
         let mut media_element = MediaElementReference::new();
         media_element.last_observation = Some(buffer_observation(0., vec![], None, Some(vec![])));
-        assert_eq!(
-            media_element.buffered_ranges_for(AvPlaybackMediaType::Video),
-            None
-        );
+        assert_eq!(media_element.buffered_ranges_for(MediaType::Video), None);
         media_element.media_offset = Some(0.);
         assert_eq!(
-            media_element.buffered_ranges_for(AvPlaybackMediaType::Video),
+            media_element.buffered_ranges_for(MediaType::Video),
             Some(vec![])
         );
-        assert_eq!(
-            media_element.buffered_ranges_for(AvPlaybackMediaType::Audio),
-            None
-        );
+        assert_eq!(media_element.buffered_ranges_for(MediaType::Audio), None);
     }
 
     #[test]
@@ -1052,10 +1053,7 @@ mod tests {
             Some(vec![0., 20., 30., 60.]),
         ));
 
-        assert_eq!(
-            media_element.buffer_ahead_for(AvPlaybackMediaType::Video),
-            Some(10.)
-        );
+        assert_eq!(media_element.buffer_ahead_for(MediaType::Video), Some(10.));
     }
 
     #[test]
@@ -1069,7 +1067,7 @@ mod tests {
             Some(vec![100., 130.]),
         ));
 
-        for media_type in [AvPlaybackMediaType::Audio, AvPlaybackMediaType::Video] {
+        for media_type in [MediaType::Audio, MediaType::Video] {
             assert_eq!(media_element.buffer_ahead_for(media_type), Some(20.));
         }
     }
@@ -1086,7 +1084,7 @@ mod tests {
             Some(vec![100., 115., 120., 150.]),
         ));
 
-        for media_type in [AvPlaybackMediaType::Audio, AvPlaybackMediaType::Video] {
+        for media_type in [MediaType::Audio, MediaType::Video] {
             assert_eq!(media_element.buffer_ahead_for(media_type), Some(30.));
         }
     }
@@ -1102,7 +1100,7 @@ mod tests {
             Some(vec![0., 40.]),
         ));
 
-        for media_type in [AvPlaybackMediaType::Audio, AvPlaybackMediaType::Video] {
+        for media_type in [MediaType::Audio, MediaType::Video] {
             assert_eq!(media_element.buffer_ahead_for(media_type), None);
         }
     }
@@ -1181,7 +1179,7 @@ pub(crate) enum SourceBufferCreationError {
     #[error("Could not create SourceBuffer because no mime-type was defined.")]
     EmptyMimeType,
     #[error("A SourceBuffer was already created for the {media_type} type.")]
-    AlreadyCreatedWithSameType { media_type: AvPlaybackMediaType },
+    AlreadyCreatedWithSameType { media_type: MediaType },
     #[error("Uncategorized Error when creating SourceBuffer: {message}")]
     UnknownError { message: String },
 }
@@ -1252,7 +1250,7 @@ pub(crate) struct SegmentPushMetadata {
     pub(crate) data: JsMemoryBlob,
 
     /// Type of data to push
-    pub(crate) media_type: AvPlaybackMediaType,
+    pub(crate) media_type: MediaType,
 
     /// Id of the init segment linked to that segment
     pub(crate) init_segment_id: Option<f64>,
