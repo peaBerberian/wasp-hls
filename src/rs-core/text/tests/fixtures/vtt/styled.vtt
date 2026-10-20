@@ -1,0 +1,14 @@
+WEBVTT
+
+REGION
+id:lower width:80% lines:3
+regionanchor:50%,100% viewportanchor:50%,95%
+
+STYLE
+::cue { color: white; font-family: proportionalSansSerif; }
+::cue(.warning) { color: #ff0; background-color: rgba(0,0,0,0.5); font-weight: bold; }
+::cue(v[voice="Alice"]) { font-style: italic; future-property: keep-me; }
+
+intro
+00:01.000 --> 00:04.000 region:lower
+<v Alice><c.warning>Watch out!</c></v>

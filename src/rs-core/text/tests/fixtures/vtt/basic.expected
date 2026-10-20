@@ -1,0 +1,73 @@
+Document {
+    header: Header {
+        timestamp_map: TimestampMap {
+            local_ms: 0,
+            mpegts: 0,
+        },
+        regions: [],
+        style_sheets: [],
+    },
+    cues: [
+        Cue {
+            id: "first",
+            start_ms: 1250,
+            end_ms: 2750,
+            settings: Settings {
+                vertical: Horizontal,
+                line: Auto,
+                line_align: Start,
+                position: None,
+                position_align: Auto,
+                size: 100.0,
+                align: Center,
+                region: None,
+            },
+            raw_text: "Hello world",
+            text: [
+                Node {
+                    parent: None,
+                    kind: Root,
+                },
+                Node {
+                    parent: Some(
+                        0,
+                    ),
+                    kind: Text(
+                        "Hello world",
+                    ),
+                },
+            ],
+        },
+        Cue {
+            id: "",
+            start_ms: 3000,
+            end_ms: 5000,
+            settings: Settings {
+                vertical: Horizontal,
+                line: Auto,
+                line_align: Start,
+                position: None,
+                position_align: Auto,
+                size: 100.0,
+                align: Center,
+                region: None,
+            },
+            raw_text: "second line\nthird line",
+            text: [
+                Node {
+                    parent: None,
+                    kind: Root,
+                },
+                Node {
+                    parent: Some(
+                        0,
+                    ),
+                    kind: Text(
+                        "second line\nthird line",
+                    ),
+                },
+            ],
+        },
+    ],
+    diagnostics: [],
+}

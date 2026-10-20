@@ -1,0 +1,2 @@
+# This fixture tests CRLF bytes. Keep its line endings when checking it out.
+fixtures/vtt/crlf.vtt -text whitespace=cr-at-eol
