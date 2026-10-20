@@ -815,6 +815,22 @@ function initializeSideBarLinks() {
       loadSidebarLink(link, { display: false, updateURL: false });
     }
     function onClick(evt) {
+      // Let browser handle modified clicks
+      if (evt.ctrlKey || evt.metaKey || evt.shiftKey || evt.altKey) {
+        return;
+      }
+
+      // Let browser handle non-left clicks (middle click, right click)
+      if (evt.button !== 0) {
+        return;
+      }
+
+      // Let browser handle links that open in new windows/tabs
+      const link = evt.currentTarget;
+      if (link.target && link.target !== "_self") {
+        return;
+      }
+
       evt.preventDefault();
       loadSidebarLink(link, { display: true, updateURL: true });
     }
@@ -851,6 +867,22 @@ function initializeContentLinks() {
         contentLink.removeEventListener("mouseover", onMouseOver);
       });
       function onClick(evt) {
+        // Let browser handle modified clicks
+        if (evt.ctrlKey || evt.metaKey || evt.shiftKey || evt.altKey) {
+          return;
+        }
+
+        // Let browser handle non-left clicks (middle click, right click)
+        if (evt.button !== 0) {
+          return;
+        }
+
+        // Let browser handle links that open in new windows/tabs
+        const link = evt.currentTarget;
+        if (link.target && link.target !== "_self") {
+          return;
+        }
+
         evt.preventDefault();
         loadSidebarLink(correspondingElt, {
           display: true,
