@@ -1,6 +1,6 @@
 {
   "name": "wasp-hls",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "WebAssembly HLS Player Proof Of Concept",
   "type": "module",
   "main": "build/es6/ts-main/index.js",
