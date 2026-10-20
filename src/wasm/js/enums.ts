@@ -7,7 +7,6 @@ export {
   MediaPlaylistParsingErrorCode,
   MediaSourceDurationUpdateErrorCode,
   MediaSourceReadyState,
-  AvPlaybackMediaType,
   MediaType,
   MultivariantPlaylistParsingErrorCode,
   OtherErrorCode,
