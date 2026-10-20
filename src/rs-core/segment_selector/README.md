@@ -3,7 +3,7 @@
 This directory is where we figure out which segment should be loaded next from
 the available playlists and what appears to be buffered already. The main entry
 point is `NextSegmentSelectors` in `mod.rs`, which keeps a separate
-`NextSegmentSelector` for audio and video.
+`NextSegmentSelector` for audio, video and text.
 
 Its job is to:
 

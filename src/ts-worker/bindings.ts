@@ -34,7 +34,6 @@ import {
   SegmentParsingErrorCode,
 } from "../wasm/index.js";
 import type {
-  AvPlaybackMediaType,
   ContentCompatibilityErrorCode,
   SegmentHints,
   HostBindings,
@@ -176,7 +175,7 @@ export function sendMediaPlaylistRequestError(
 export function sendPushedSegmentError(
   fatal: boolean,
   code: PushedSegmentErrorCode,
-  mediaType: AvPlaybackMediaType,
+  mediaType: MediaType,
   message: string,
 ): void {
   const contentId = playerInstance.getContentInfo()?.contentId;
@@ -204,7 +203,7 @@ export function sendPushedSegmentError(
 
 export function sendRemoveBufferError(
   fatal: boolean,
-  mediaType: AvPlaybackMediaType,
+  mediaType: MediaType,
   message: string,
 ): void {
   const contentId = playerInstance.getContentInfo()?.contentId;
@@ -365,7 +364,7 @@ export function sendMediaPlaylistParsingError(
 export function sendSourceBufferCreationError(
   fatal: boolean,
   code: SourceBufferCreationErrorCode,
-  mediaType: AvPlaybackMediaType,
+  mediaType: MediaType,
   message: string,
 ): void {
   const contentId = playerInstance.getContentInfo()?.contentId;
@@ -829,9 +828,16 @@ export function setMediaSourceDuration(
  * @returns {Object}
  */
 export function addSourceBuffer(
-  mediaType: AvPlaybackMediaType,
+  mediaType: MediaType,
   typ: string,
 ): AddSourceBufferResult {
+  // XXX TODO: Create text storage through a shared buffer interface.
+  if (mediaType === MediaType.Text) {
+    return AddSourceBufferResult.error(
+      AddSourceBufferErrorCode.TypeNotSupportedError,
+      "Text is not stored in an MSE SourceBuffer",
+    );
+  }
   const contentInfo = playerInstance.getContentInfo();
   if (contentInfo === null) {
     return AddSourceBufferResult.error(
