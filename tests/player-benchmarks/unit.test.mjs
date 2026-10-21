@@ -1,8 +1,14 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { parseOptions, samplePlan } from "./config.mjs";
+import {
+  parseOptions,
+  samplePlan,
+  scenarios as scenarioNames,
+} from "./config.mjs";
 import { manifestVariant, describeMediaPlaylist } from "./fixtures.mjs";
 import { Observations } from "./src/observations.ts";
+import { scenarios } from "./src/scenarios/index.ts";
+import { loadContent } from "./src/scenarios/startup.ts";
 
 test("selection validates values, deduplicates and preserves equals in paths", () => {
   const options = parseOptions(
@@ -28,6 +34,7 @@ test("sample blocks interleave controls, rotating player and condition order", (
       "--scenario=pressure",
       "--iterations=2",
       "--format=mpegts",
+      "--manifest=master",
     ],
     "/tmp",
   );
@@ -48,6 +55,32 @@ test("sample blocks interleave controls, rotating player and condition order", (
     ],
   );
   assert.equal(new Set(plan.map((x) => JSON.stringify(x))).size, plan.length);
+});
+
+test("default matrix includes known codecs and explicit probing cases without mixing cells", () => {
+  const options = parseOptions(["--iterations=1"], "/tmp");
+  assert.deepEqual(options.manifests, ["master", "no-codecs"]);
+  const plan = [...samplePlan(options)];
+  assert.equal(plan.length, 12);
+  for (const player of options.players)
+    for (const format of options.formats)
+      assert.deepEqual(
+        plan
+          .filter((x) => x.player === player && x.format === format)
+          .map((x) => x.manifest)
+          .sort(),
+        ["master", "no-codecs"],
+      );
+});
+
+test("CLI scenario names match implementations without separate pressure/large-playlist algorithms", () => {
+  assert.deepEqual(Object.keys(scenarios).sort(), [...scenarioNames].sort());
+  assert.equal(
+    scenarios.playback.afterStartup,
+    scenarios.pressure.afterStartup,
+  );
+  assert.equal(scenarios.startup.afterStartup, undefined);
+  assert.equal(scenarios["large-playlist"].afterStartup, undefined);
 });
 
 test("codec omission changes only the declared codecs", () => {
@@ -121,4 +154,43 @@ test("disposing removes pending frame callbacks and event observers", () => {
   video.dispatchEvent(new Event("seeked"));
   assert.equal(video.frames.size, 0);
   assert.deepEqual(marks, []);
+});
+
+test("shared load observes canplay, not the player load promise, before requesting play", async () => {
+  const video = new FakeVideo();
+  const calls = [];
+  let finishLoad;
+  video.play = async () => {
+    calls.push("play");
+    video.dispatchEvent(new Event("playing"));
+    video.display();
+    finishLoad();
+  };
+  const times = await loadContent({
+    video,
+    player: {
+      load() {
+        calls.push("load");
+        queueMicrotask(() => {
+          video.dispatchEvent(new Event("loadedmetadata"));
+          calls.push("canplay");
+          video.dispatchEvent(new Event("canplay"));
+        });
+        return new Promise((resolve) => {
+          finishLoad = resolve;
+        });
+      },
+    },
+    url: "fixture.m3u8",
+    mark() {},
+    healthy: (promise) => promise,
+    fail: (error) => assert.fail(String(error)),
+  });
+  assert.deepEqual(calls, ["load", "canplay", "play"]);
+  assert.ok(
+    times.start <= times.metadata &&
+      times.metadata <= times.canPlay &&
+      times.canPlay <= times.firstFrame,
+  );
+  assert.equal(video.frames.size, 0);
 });

@@ -1,5 +1,6 @@
 import { createAdapter, type Adapter, type PlayerName } from "./adapters.ts";
-import { Observations, type Mark } from "./observations.ts";
+import type { Mark } from "./observations.ts";
+import { scenarios, startup } from "./scenarios/index.ts";
 import { startPressure } from "./workload.ts";
 import { installDiagnostics } from "./diagnostics.js";
 
@@ -48,136 +49,32 @@ async function main() {
   video.playsInline = true;
   const diagnostics = params.has("diagnostic") ? installDiagnostics() : [];
   activeDiagnostics = diagnostics;
-  const stopPressure = scenario === "pressure" ? startPressure() : () => ({});
+  const selected = scenarios[scenario];
+  if (!selected) throw new Error(`Unknown scenario ${scenario}`);
+  const stopPressure = selected.pressure ? startPressure() : () => ({});
   let player: Adapter | undefined;
-  let observations = new Observations(mark);
   const metrics: Record<string, number> = {};
-  const sustained = scenario === "playback" || scenario === "pressure";
-  const bufferGoal = sustained ? 4 : undefined;
+  const bufferGoal = selected.bufferGoal;
+  const fail = (error: unknown) => {
+    failure ??= error;
+  };
   try {
-    const load = observations.load(video);
     const start = performance.now();
     mark("initialize-call");
-    player = await healthy(
-      createAdapter(
-        name,
-        video,
-        (error) => {
-          failure ??= error;
-        },
-        bufferGoal,
-      ),
-    );
+    player = await healthy(createAdapter(name, video, fail, bufferGoal));
     metrics.initializeMs = performance.now() - start;
-    const loadStart = performance.now();
-    mark("load-call");
-    const loading = player.load(url);
-    // Observe load rejection immediately, even if canplay has not fired.
-    void loading.catch((error) => {
-      failure ??= error;
-    });
-    await healthy(load.canPlay);
-    mark("play-call");
-    await healthy(video.play());
-    await healthy(
-      Promise.all([loading, load.metadata, load.playing, load.firstFrame]),
-    );
-    metrics.initializeToFirstFrameMs = (await load.firstFrame) - start;
-    metrics.loadToFirstFrameMs = (await load.firstFrame) - loadStart;
-    metrics.loadToMetadataMs = (await load.metadata) - loadStart;
-    metrics.loadToCanPlayMs = (await load.canPlay) - loadStart;
-    metrics.loadToPlayingMs = (await load.playing) - loadStart;
-    observations.dispose();
-    observations = new Observations(mark);
-    if (scenario === "seek") {
-      const target = 1;
-      if (!Number.isFinite(target) || target < 1)
-        throw new Error("Invalid seek target");
-      const buffered = Array.from({ length: video.buffered.length }, (_, i) => [
-        video.buffered.start(i),
-        video.buffered.end(i),
-      ]);
-      mark("seek-call", { target, buffered });
-      if (!buffered.some(([start, end]) => start <= target && target < end))
-        throw new Error(
-          "Buffered seek target must be buffered in every player",
-        );
-      const seekStart = performance.now();
-      const seeked = observations.event(video, "seeked");
-      const displayed = observations.frame(
-        video,
-        (metadata) =>
-          !video.seeking && Math.abs(metadata.mediaTime - target) < 0.5,
-      );
-      video.currentTime = target;
-      await healthy(Promise.all([seeked, displayed]));
-      metrics.seekToFrameMs = (await displayed) - seekStart;
-    }
-    if (scenario === "reload") {
-      const reloadStart = performance.now();
-      video.pause();
-      const reloaded = observations.load(video);
-      const loadingAgain = player.load(url);
-      void loadingAgain.catch((error) => {
-        failure ??= error;
-      });
-      await healthy(reloaded.canPlay);
-      await healthy(video.play());
-      await healthy(
-        Promise.all([
-          loadingAgain,
-          reloaded.firstFrame,
-          reloaded.metadata,
-          reloaded.playing,
-        ]),
-      );
-      metrics.reloadToFrameMs = (await reloaded.firstFrame) - reloadStart;
-    }
-    if (sustained) {
-      let waitingCount = 0;
-      let stalledMs = 0;
-      let waitingAt: number | undefined;
-      const onWaiting = () => {
-        waitingCount++;
-        waitingAt ??= performance.now();
-      };
-      const onPlaying = () => {
-        if (waitingAt !== undefined) {
-          stalledMs += performance.now() - waitingAt;
-          waitingAt = undefined;
-        }
-      };
-      video.addEventListener("waiting", onWaiting);
-      video.addEventListener("playing", onPlaying);
-      const initialQuality = video.getVideoPlaybackQuality();
-      const initialTime = video.currentTime;
-      const bufferedAhead = () => {
-        for (let i = 0; i < video.buffered.length; i++) {
-          if (
-            video.buffered.start(i) <= video.currentTime &&
-            video.buffered.end(i) >= video.currentTime
-          )
-            return video.buffered.end(i) - video.currentTime;
-        }
-        return 0;
-      };
-      const bufferedAheadStartSeconds = bufferedAhead();
-      const wallStart = performance.now();
-      await healthy(new Promise((resolve) => setTimeout(resolve, 16000)));
-      if (waitingAt !== undefined) stalledMs += performance.now() - waitingAt;
-      const quality = video.getVideoPlaybackQuality();
-      Object.assign(metrics, {
-        playbackWallMs: performance.now() - wallStart,
-        playbackProgressSeconds: video.currentTime - initialTime,
-        bufferedAheadStartSeconds,
-        bufferedAheadEndSeconds: bufferedAhead(),
-        waitingCount,
-        stalledMs,
-        droppedFrames:
-          quality.droppedVideoFrames - initialQuality.droppedVideoFrames,
-        totalFrames: quality.totalVideoFrames - initialQuality.totalVideoFrames,
-      });
-    }
+    const context = {
+      video,
+      player,
+      url,
+      initializeStartedAt: start,
+      metrics,
+      mark,
+      healthy,
+      fail,
+    };
+    await startup(context);
+    await selected.afterStartup?.(context);
     return {
       player: name,
       contentUrl: url,
@@ -199,11 +96,13 @@ async function main() {
         .map((item) => item.toJSON()),
     };
   } finally {
-    observations.dispose();
     stopPressure();
-    if (player) await player.dispose();
-    video.removeAttribute("src");
-    video.load();
+    try {
+      if (player) await player.dispose();
+    } finally {
+      video.removeAttribute("src");
+      video.load();
+    }
   }
 }
 

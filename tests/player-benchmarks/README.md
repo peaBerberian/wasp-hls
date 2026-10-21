@@ -13,7 +13,8 @@ npm test --prefix tests/player-benchmarks
 ```
 
 Use `--help` for selections. Flags can be repeated. Defaults: all three players,
-both formats, startup, five samples. Scenario names are local conveniences,
+both formats, declared/missing-codec masters, startup, five samples per cell.
+Scenario names are local conveniences,
 not a versioned API.
 
 Measurement boundaries:
@@ -33,8 +34,8 @@ Content:
 
 - GPAC packages one shared 60-second H.264/AAC encode as separate-track fMP4
   or muxed TS: 960×540, 24 fps, ~1600/128 kbps, two-second segments.
-- Default masters declare CODECS. `--manifest no-codecs|direct` explicitly
-  selects metadata-poor cases. Direct separate-track fMP4 is rejected because
+- Defaults cover declared CODECS and the explicit `no-codecs` probe case.
+  Repeat `--manifest master|no-codecs|direct` to select cases. Direct separate-track fMP4 is rejected because
   it would omit audio; optional `--format fmp4-muxed` keeps both tracks.
 - Large playlists have real two-hour timelines and unique segment URLs, not
   repeated discontinuities. FFmpeg loops encoded samples with new timestamps;
@@ -46,9 +47,14 @@ Each sample uses a fresh Chrome process/profile and no-store content. Player
 and condition orders rotate. Raw samples are retained; no ranking blocks CI.
 The local server uses an ephemeral port, with a per-sample watchdog and cleanup.
 
-Keep player setup in `src/adapters.ts`, common observations in
-`src/observations.ts`, workload in `src/workload.ts`, and scenario orchestration
-in `src/runner.ts`. Node helpers handle configuration, fixtures and browser lifetime.
+Scenario implementations live in `src/scenarios/`. Pressure reuses playback;
+large playlists reuse startup. Formats and manifest metadata select fixtures,
+not duplicate scenario implementations. `src/runner.ts` owns setup and cleanup.
+Node helpers handle configuration, fixtures and browser lifetime.
+
+Use this opt-in suite when changing startup, scheduling or buffering; run a
+short selection while developing, then repeated comparisons before drawing
+conclusions. Pressure and large-playlist runs remain explicit, not routine CI gates.
 
 `--diagnostic` is session-only tracing that rewrites built workers and changes
 costs: never mix it with baseline results. Document Resource Timing omits

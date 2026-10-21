@@ -76,7 +76,7 @@ const server = createServer(async (request, response) => {
   }
 });
 const metadata = {
-  schemaVersion: 2,
+  schemaVersion: 3,
   fixtures: fixtures.metadata,
   date: new Date().toISOString(),
   chrome: execFileSync(chrome, ["--version"], { encoding: "utf8" }).trim(),
@@ -110,7 +110,9 @@ await new Promise((resolve, reject) => {
 });
 const pagePort = server.address().port;
 try {
-  for (const { scenario, format, player, iteration } of samplePlan(options)) {
+  for (const { scenario, format, player, iteration, manifest } of samplePlan(
+    options,
+  )) {
     const token = randomUUID();
     const url = new URL(`http://127.0.0.1:${pagePort}/`);
     url.search = new URLSearchParams({
@@ -118,7 +120,7 @@ try {
       scenario,
       token,
       content: new URL(
-        fixtures.entry(format, options.manifest, scenario === "large-playlist"),
+        fixtures.entry(format, manifest, scenario === "large-playlist"),
         url,
       ).href,
       ...(options.diagnostic ? { diagnostic: "1" } : {}),
@@ -134,7 +136,7 @@ try {
           format,
           scenario,
           iteration,
-          manifest: options.manifest,
+          manifest,
           error: result.error,
           marks: result.marks,
           diagnostics: result.diagnostics,
@@ -146,12 +148,12 @@ try {
       const sample = {
         format,
         iteration,
-        manifest: options.manifest,
+        manifest,
         ...result.result,
       };
       samples.push(sample);
       console.log(
-        `${player.padEnd(6)} ${format.padEnd(6)} ${scenario.padEnd(8)} ${iteration}/${options.iterations} first frame: ${sample.metrics.initializeToFirstFrameMs.toFixed(1)} ms`,
+        `${player.padEnd(6)} ${format.padEnd(6)} ${manifest.padEnd(9)} ${scenario.padEnd(8)} ${iteration}/${options.iterations} first frame: ${sample.metrics.initializeToFirstFrameMs.toFixed(1)} ms`,
       );
     } catch (error) {
       if (
@@ -160,6 +162,7 @@ try {
             sample.player === player &&
             sample.format === format &&
             sample.scenario === scenario &&
+            sample.manifest === manifest &&
             sample.iteration === iteration,
         )
       )
@@ -168,7 +171,7 @@ try {
           format,
           scenario,
           iteration,
-          manifest: options.manifest,
+          manifest,
           error: String(error),
         });
       throw error;
@@ -190,37 +193,39 @@ try {
 const rows = [];
 for (const scenario of options.scenarios)
   for (const format of options.formats)
-    for (const player of options.players) {
-      const group = samples.filter(
-        (sample) =>
-          sample.player === player &&
-          sample.format === format &&
-          sample.scenario === scenario,
-      );
-      const row = { player, format, scenario, n: group.length };
-      row.firstFrameMinMs = Number(
-        Math.min(
-          ...group.map((sample) => sample.metrics.initializeToFirstFrameMs),
-        ).toFixed(2),
-      );
-      row.firstFrameMaxMs = Number(
-        Math.max(
-          ...group.map((sample) => sample.metrics.initializeToFirstFrameMs),
-        ).toFixed(2),
-      );
-      for (const key of Object.keys(group[0]?.metrics ?? {})) {
-        const values = group
-          .map((sample) => sample.metrics[key])
-          .sort((a, b) => a - b);
-        const midpoint = Math.floor(values.length / 2);
-        row[key] = Number(
-          (values.length % 2
-            ? values[midpoint]
-            : (values[midpoint - 1] + values[midpoint]) / 2
+    for (const manifest of options.manifests)
+      for (const player of options.players) {
+        const group = samples.filter(
+          (sample) =>
+            sample.player === player &&
+            sample.format === format &&
+            sample.manifest === manifest &&
+            sample.scenario === scenario,
+        );
+        const row = { player, format, manifest, scenario, n: group.length };
+        row.firstFrameMinMs = Number(
+          Math.min(
+            ...group.map((sample) => sample.metrics.initializeToFirstFrameMs),
           ).toFixed(2),
         );
+        row.firstFrameMaxMs = Number(
+          Math.max(
+            ...group.map((sample) => sample.metrics.initializeToFirstFrameMs),
+          ).toFixed(2),
+        );
+        for (const key of Object.keys(group[0]?.metrics ?? {})) {
+          const values = group
+            .map((sample) => sample.metrics[key])
+            .sort((a, b) => a - b);
+          const midpoint = Math.floor(values.length / 2);
+          row[key] = Number(
+            (values.length % 2
+              ? values[midpoint]
+              : (values[midpoint - 1] + values[midpoint]) / 2
+            ).toFixed(2),
+          );
+        }
+        rows.push(row);
       }
-      rows.push(row);
-    }
 console.table(rows);
 console.log(`Raw results: ${options.report}`);

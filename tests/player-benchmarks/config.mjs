@@ -18,7 +18,7 @@ export function parseOptions(args, directory) {
     players: [],
     formats: [],
     scenarios: [],
-    manifest: "master",
+    manifests: [],
     iterations: 5,
     diagnostic: false,
     report: resolve(directory, "results/latest.json"),
@@ -27,6 +27,7 @@ export function parseOptions(args, directory) {
     "--player": "players",
     "--format": "formats",
     "--scenario": "scenarios",
+    "--manifest": "manifests",
   };
   for (let i = 0; i < args.length; i++) {
     const separator = args[i].indexOf("=");
@@ -36,36 +37,27 @@ export function parseOptions(args, directory) {
       options.diagnostic = true;
       continue;
     }
-    if (
-      ![
-        ...Object.keys(repeated),
-        "--manifest",
-        "--iterations",
-        "--report",
-      ].includes(flag)
-    )
+    if (![...Object.keys(repeated), "--iterations", "--report"].includes(flag))
       throw new Error(`Unknown option ${flag}`);
     const value = inline ?? args[++i];
     if (!value || value.startsWith("--"))
       throw new Error(`Missing value for ${flag}`);
     if (flag in repeated) options[repeated[flag]].push(value);
     else if (flag === "--iterations") options.iterations = Number(value);
-    else if (flag === "--manifest") options.manifest = value;
     else options.report = resolve(value);
   }
   for (const [key, allowed, defaults] of [
     ["players", players, players],
     ["formats", formats, ["fmp4", "mpegts"]],
     ["scenarios", scenarios, ["startup"]],
+    ["manifests", ["master", "direct", "no-codecs"], ["master", "no-codecs"]],
   ]) {
     if (!options[key].length) options[key] = defaults;
     options[key] = [...new Set(options[key])];
     for (const value of options[key])
       if (!allowed.includes(value)) throw new Error(`Invalid ${key}: ${value}`);
   }
-  if (!["master", "direct", "no-codecs"].includes(options.manifest))
-    throw new Error("Invalid manifest kind");
-  if (options.manifest === "direct" && options.formats.includes("fmp4"))
+  if (options.manifests.includes("direct") && options.formats.includes("fmp4"))
     throw new Error(
       "Direct fMP4 would omit audio; select fmp4-muxed explicitly",
     );
@@ -76,15 +68,17 @@ export function parseOptions(args, directory) {
 
 /** Interleave conditions within each player block, rotating both orders. */
 export function* samplePlan(options) {
+  const conditions = options.scenarios.flatMap((scenario) =>
+    options.manifests.map((manifest) => ({ scenario, manifest })),
+  );
   for (const format of options.formats)
     for (let iteration = 0; iteration < options.iterations; iteration++)
       for (let p = 0; p < options.players.length; p++)
-        for (let s = 0; s < options.scenarios.length; s++)
+        for (let s = 0; s < conditions.length; s++)
           yield {
             format,
             iteration: iteration + 1,
             player: options.players[(p + iteration) % options.players.length],
-            scenario:
-              options.scenarios[(s + iteration) % options.scenarios.length],
+            ...conditions[(s + iteration) % conditions.length],
           };
 }
