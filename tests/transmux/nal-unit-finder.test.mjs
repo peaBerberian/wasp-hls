@@ -1,5 +1,9 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import test, { after } from "node:test";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { build } from "esbuild";
 import {
   referenceNals,
@@ -7,16 +11,17 @@ import {
   randomGenerator,
 } from "./helpers/nal-reference.mjs";
 
-const bundle = await build({
-  entryPoints: ["src/ts-transmux/src/NalUnitFinder.ts"],
+const directory = await mkdtemp(join(tmpdir(), "wasp-nal-tests-"));
+after(() => rm(directory, { recursive: true, force: true }));
+const outfile = join(directory, "nal-finder.mjs");
+await build({
+  entryPoints: ["src/ts-transmux/src/H264NalUnitProducer.ts"],
   bundle: true,
   format: "esm",
   platform: "node",
-  write: false,
+  outfile,
 });
-const { default: Finder } = await import(
-  `data:text/javascript;base64,${Buffer.from(bundle.outputFiles[0].contents).toString("base64")}`
-);
+const { NalUnitFinder: Finder } = await import(pathToFileURL(outfile).href);
 const arrays = (units) => units.map((unit) => [...unit]);
 
 function split(chunks, finder = new Finder()) {

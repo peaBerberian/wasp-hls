@@ -26,7 +26,10 @@ state when the next segment should be handled separately from previous ones.
 
 Most of the code is in `src/`, split between packet and frame parsers, timestamp
 helpers and MP4 generators. `FullMp4SegmentConstructor.ts` puts the generated
-audio and video data together.
+audio and video data together. Track generators keep payload references and
+small `moof` headers; `mp4-fragment.ts` writes the init segment, headers and
+audio/video payloads into one final media-sized buffer. Payloads are borrowed
+only until synchronous assembly finishes; the returned bytes own their storage.
 
 ## Where it stops
 

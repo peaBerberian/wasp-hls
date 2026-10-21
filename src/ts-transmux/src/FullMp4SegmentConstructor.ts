@@ -1,4 +1,5 @@
 import * as clock from "./clock-utils.ts";
+import { assembleSegment, type Mp4Fragment } from "./mp4-fragment.ts";
 import { createInitSegment } from "./mp4-utils.ts";
 
 interface ConstructedMp4Segment {
@@ -7,7 +8,7 @@ interface ConstructedMp4Segment {
   metadata: any;
   captionStreams: any;
   info: any;
-  initSegment: Uint8Array | null;
+  /** Complete init + audio/video media bytes. */
   data: Uint8Array | null;
 }
 
@@ -23,20 +24,18 @@ export default class FullMp4SegmentConstructor {
   private pendingTracks: any[];
   private audioTrack: any;
   private videoTrack: any;
-  private pendingBoxes: any[];
+  private pendingFragments: Mp4Fragment[];
   private pendingCaptions: any[];
   private pendingMetadata: any[];
-  private pendingBytes: number;
 
   constructor(keepOriginalTimestamps: boolean, metadataDispatchType: string) {
     this.metadataDispatchType = metadataDispatchType;
     this.keepOriginalTimestamps = keepOriginalTimestamps;
     this.pendingTracks = [];
     this.videoTrack = null;
-    this.pendingBoxes = [];
+    this.pendingFragments = [];
     this.pendingCaptions = [];
     this.pendingMetadata = [];
-    this.pendingBytes = 0;
     this.audioTrack = null;
   }
 
@@ -57,7 +56,6 @@ export default class FullMp4SegmentConstructor {
     // important information required for the construction of
     // the final segment
     this.pendingTracks.push(output.trackInfo);
-    this.pendingBytes += output.boxes.byteLength;
 
     // TODO: is there an issue for this against chrome?
     // We unshift audio and push video because
@@ -67,23 +65,21 @@ export default class FullMp4SegmentConstructor {
     // only audio will play for the duration of our transmux.
     if (output.trackInfo.type === "video") {
       this.videoTrack = output.trackInfo;
-      this.pendingBoxes.push(output.boxes);
+      this.pendingFragments.push(output.fragment);
     }
     if (output.trackInfo.type === "audio") {
       this.audioTrack = output.trackInfo;
-      this.pendingBoxes.unshift(output.boxes);
+      this.pendingFragments.unshift(output.fragment);
     }
   }
 
   public finishSegment(): ConstructedMp4Segment | null {
-    let offset = 0;
     const seg: ConstructedMp4Segment = {
       type: undefined,
       captions: [],
       captionStreams: {},
       metadata: [],
       info: {},
-      initSegment: null,
       data: null,
     };
     const AUDIO_PROPERTIES = [
@@ -128,19 +124,7 @@ export default class FullMp4SegmentConstructor {
 
       const initSegment = createInitSegment(this.pendingTracks);
 
-      // Create a new typed array to hold the init segment
-      seg.initSegment = new Uint8Array(initSegment.byteLength);
-
-      // Create an init segment containing a moov
-      // and track definitions
-      seg.initSegment.set(initSegment);
-
-      // Append each moof+mdat (one per track) together
-      seg.data = this.pendingBoxes.reduce((acc, box) => {
-        acc.set(box, offset);
-        offset += box.byteLength;
-        return acc;
-      }, new Uint8Array(this.pendingBytes));
+      seg.data = assembleSegment(initSegment, this.pendingFragments);
 
       if (timelineStartPts !== undefined) {
         const timelinePts: number = timelineStartPts;
@@ -183,9 +167,8 @@ export default class FullMp4SegmentConstructor {
       this.pendingTracks.length = 0;
       this.videoTrack = null;
       this.audioTrack = null;
-      this.pendingBoxes.length = 0;
+      this.pendingFragments.length = 0;
       this.pendingCaptions.length = 0;
-      this.pendingBytes = 0;
       this.pendingMetadata.length = 0;
 
       return seg;
@@ -197,9 +180,8 @@ export default class FullMp4SegmentConstructor {
     this.pendingTracks.length = 0;
     this.videoTrack = null;
     this.audioTrack = null;
-    this.pendingBoxes.length = 0;
+    this.pendingFragments.length = 0;
     this.pendingCaptions.length = 0;
-    this.pendingBytes = 0;
     this.pendingMetadata.length = 0;
   }
 }

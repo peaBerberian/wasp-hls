@@ -3,6 +3,7 @@ import { execFileSync } from "node:child_process";
 import { mkdtemp, mkdir, readFile, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import test from "node:test";
 import { build } from "esbuild";
 import {
@@ -64,16 +65,16 @@ function packets(path, type) {
     ),
   ).packets;
 }
-function frames(path) {
+function frames(path, type = "v:0") {
   return ffmpeg(
     [
       "-i",
       path,
       "-map",
-      "0:v:0",
-      "-an",
-      "-pix_fmt",
-      "rgb24",
+      `0:${type}`,
+      ...(type === "v:0"
+        ? ["-an", "-pix_fmt", "rgb24"]
+        : ["-vn", "-c:a", "pcm_s16le"]),
       "-f",
       "framemd5",
       "-hash",
@@ -90,18 +91,19 @@ function frames(path) {
 test("real H.264/AAC TS preserves NAL bytes, packet timing and decoded video", async (t) => {
   // Do not silently skip missing tools/encoders: this is correctness coverage.
   execFileSync("ffprobe", ["-version"], { stdio: "ignore" });
-  const bundle = await build({
-    entryPoints: ["tests/transmux/helpers/nal-media-test-entry.ts"],
-    bundle: true,
-    format: "esm",
-    platform: "node",
-    write: false,
-  });
-  const { Finder, Transmuxer, videoPes } = await import(
-    `data:text/javascript;base64,${Buffer.from(bundle.outputFiles[0].contents).toString("base64")}`
-  );
   const directory = await mkdtemp(join(tmpdir(), "wasp-nal-roundtrip-"));
   try {
+    const outfile = join(directory, "transmuxer.mjs");
+    await build({
+      entryPoints: ["tests/transmux/helpers/nal-media-test-entry.ts"],
+      bundle: true,
+      format: "esm",
+      platform: "node",
+      outfile,
+    });
+    const { Finder, Transmuxer, videoPes } = await import(
+      pathToFileURL(outfile).href
+    );
     for (const item of cases)
       await t.test(item.id, async () => {
         const output = join(directory, item.id);
@@ -238,6 +240,49 @@ test("real H.264/AAC TS preserves NAL bytes, packet timing and decoded video", a
               }
           }
         }
+      });
+    // These use the same encoder output, isolating the single-track/container paths.
+    for (const [name, type, format] of [
+      ["video-only-ts", "v:0", "mpegts"],
+      ["audio-only-ts", "a:0", "mpegts"],
+    ])
+      await t.test(name, async () => {
+        const input = join(directory, `${name}.bin`);
+        ffmpeg([
+          "-i",
+          join(directory, "baseline-short-gop", "segment-0.ts"),
+          "-map",
+          `0:${type}`,
+          "-c",
+          "copy",
+          "-f",
+          format,
+          input,
+        ]);
+        const converted = new Transmuxer({
+          keepOriginalTimestamps: true,
+        }).transmuxSegment(new Uint8Array(await readFile(input)));
+        assert.ok(converted?.data.length);
+        const output = join(directory, `${name}.mp4`);
+        await writeFile(output, converted.data);
+        assert.deepEqual(
+          frames(output, type),
+          frames(input, type),
+          `${name}: decoded frame hashes`,
+        );
+        const before = packets(input, type),
+          after = packets(output, type);
+        assert.equal(after.length, before.length, `${name}: packet count`);
+        const offset = Number(after[0].dts_time) - Number(before[0].dts_time);
+        for (let index = 0; index < before.length; index++)
+          for (const key of ["pts_time", "dts_time"])
+            assert.ok(
+              Math.abs(
+                Number(after[index][key]) - Number(before[index][key]) - offset,
+              ) <
+                2 / 90000,
+              `${name}: packet ${index} ${key}`,
+            );
       });
   } finally {
     await rm(directory, { recursive: true, force: true });

@@ -1,4 +1,4 @@
-export { default as Finder } from "../../../src/ts-transmux/src/NalUnitFinder.ts";
+export { NalUnitFinder as Finder } from "../../../src/ts-transmux/src/H264NalUnitProducer.ts";
 export { default as Transmuxer } from "../../../src/ts-transmux/index.ts";
 import TransportStreamSplitter from "../../../src/ts-transmux/src/TransportStreamSplitter.ts";
 import TransportPacketParser from "../../../src/ts-transmux/src/TransportPacketParser.ts";
