@@ -1,0 +1,55 @@
+# Player benchmarks
+
+Independent, opt-in comparisons. Competitor packages and TypeScript are local
+to this private package; normal tests and the published library are unaffected.
+Requires Chrome, FFmpeg, GPAC, root build dependencies, and Node 22.18+ for tests.
+
+```sh
+npm ci --prefix tests/player-benchmarks
+npm run build -- --release
+npm run test -- player-benchmarks --iterations 7 --report /tmp/players.json
+npm run check --prefix tests/player-benchmarks
+npm test --prefix tests/player-benchmarks
+```
+
+Use `--help` for selections. Flags can be repeated. Defaults: all three players,
+both formats, startup, five samples. Scenario names are local conveniences,
+not a versioned API.
+
+Measurement boundaries:
+
+- Startup reports initialization separately from load-to-metadata, canplay,
+  playing and first-frame callback. Script evaluation is excluded.
+- All players receive HTML media-element play at canplay; player-specific
+  load promises do not define readiness. A paused preview frame can precede playing.
+- Reload uses the existing player; new metadata gates readiness and frame
+  observations. Seek checks that the same one-second target is buffered.
+- Playback/pressure run 16 seconds with a four-second forward-buffer target.
+  Pressure updates 400 DOM nodes, forces layout and performs 48 JSON round
+  trips per batch, then waits 16 ms. This is main-thread work, not memory stress.
+  Select both scenarios for interleaved controls; actual work and stalls are recorded.
+
+Content:
+
+- GPAC packages one shared 60-second H.264/AAC encode as separate-track fMP4
+  or muxed TS: 960×540, 24 fps, ~1600/128 kbps, two-second segments.
+- Default masters declare CODECS. `--manifest no-codecs|direct` explicitly
+  selects metadata-poor cases. Direct separate-track fMP4 is rejected because
+  it would omit audio; optional `--format fmp4-muxed` keeps both tracks.
+- Large playlists have real two-hour timelines and unique segment URLs, not
+  repeated discontinuities. FFmpeg loops encoded samples with new timestamps;
+  images repeat every minute. Generation is opt-in, caching ~3 GB for both formats.
+- Generation precedes timing. Recipe/tool versions key the cache; source and
+  manifest hashes are recorded. Incomplete generation is not reused.
+
+Each sample uses a fresh Chrome process/profile and no-store content. Player
+and condition orders rotate. Raw samples are retained; no ranking blocks CI.
+The local server uses an ephemeral port, with a per-sample watchdog and cleanup.
+
+Keep player setup in `src/adapters.ts`, common observations in
+`src/observations.ts`, workload in `src/workload.ts`, and scenario orchestration
+in `src/runner.ts`. Node helpers handle configuration, fixtures and browser lifetime.
+
+`--diagnostic` is session-only tracing that rewrites built workers and changes
+costs: never mix it with baseline results. Document Resource Timing omits
+worker requests and is not a cross-player request total.
