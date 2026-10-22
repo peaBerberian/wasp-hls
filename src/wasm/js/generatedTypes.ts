@@ -65,6 +65,7 @@ export interface HostBindings {
   announceVariantUpdate(variantId: number | undefined): void;
   /**
    * Append one media segment to a SourceBuffer.
+   * The transmuxer address is borrowed from Rust for this synchronous call only. Never retain or free it.
    *
    * Notes:
    * - The JS marshalling for this binding is intentionally still handwritten because the return payload is packed.
@@ -73,6 +74,7 @@ export interface HostBindings {
     sourceBufferId: number,
     resourceId: number,
     segmentHints: SegmentHints,
+    transmuxer: number,
   ): HostResult<AppendBufferValue, SegmentParsingErrorCode>;
   /**
    * Create and attach a MediaSource to the host media element.
@@ -318,6 +320,30 @@ export interface WaspWasmExports {
    * Free raw bytes previously allocated in wasm memory.
    */
   wasp_free(ptr: number, len: number): void;
+  /**
+   * Create a Rust transmuxer; the host must explicitly free its handle.
+   */
+  wasp_transmuxer_new(keepOriginal: number): number;
+  /**
+   * Free a Rust transmuxer and all retained state.
+   */
+  wasp_transmuxer_free(session: number): void;
+  /**
+   * Release the last transmux output after the host copies it.
+   */
+  wasp_transmuxer_release(session: number): void;
+  /**
+   * Transmux one complete segment. Return a session-owned 40-byte descriptor: output pointer/length, start/end f64, timescale/status u32, static error text pointer/length. Status is 0 for output, 1 for empty, otherwise Rust transmux error code plus 1.
+   */
+  wasp_transmuxer_run(
+    session: number,
+    input: number,
+    length: number,
+    reset: number,
+    hasSeed: number,
+    seed: number,
+    timescale: number,
+  ): number;
   /**
    * Update the Rust core logger level.
    */

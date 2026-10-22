@@ -361,6 +361,7 @@ pub fn jsAppendBuffer(
     source_buffer_id: SourceBufferId,
     segment_id: ResourceId,
     segment_hints: &SegmentHints,
+    transmuxer: &mut crate::transmux::Session,
 ) -> Result<Option<ParsedSegmentInfo>, (SegmentParsingErrorCode, Option<String>)> {
     let mut has_start = 0;
     let mut start_value_hi = 0;
@@ -381,6 +382,7 @@ pub fn jsAppendBuffer(
             segment_hints.base_decode_time_start() as u32,
             segment_hints.base_decode_time_start_timescale(),
             segment_hints.reset_transmuxer_state() as u32,
+            transmuxer as *mut crate::transmux::Session as usize,
             &mut has_start,
             &mut start_value_hi,
             &mut start_value_lo,

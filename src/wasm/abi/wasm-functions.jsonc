@@ -113,6 +113,7 @@
       "wasmSymbol": "__js_func__append_buffer",
       "doc": [
         "Append one media segment to a SourceBuffer.",
+        "The transmuxer address is borrowed from Rust for this synchronous call only. Never retain or free it.",
         "",
         "Notes:",
         "- The JS marshalling for this binding is intentionally still handwritten because the return payload is packed.",
@@ -123,6 +124,7 @@
           { "name": "sourceBufferId", "type": "number" },
           { "name": "resourceId", "type": "number" },
           { "name": "segmentHints", "type": "SegmentHints" },
+          { "name": "transmuxer", "type": "number" },
         ],
         "returnType": "HostResult<AppendBufferValue, SegmentParsingErrorCode>",
       },
@@ -134,6 +136,7 @@
           { "name": "base_decode_time_start_lo", "type": "u32" },
           { "name": "base_decode_time_start_timescale", "type": "u32" },
           { "name": "reset_transmuxer_state", "type": "u32" },
+          { "name": "transmuxer", "type": "usize" },
           { "name": "has_start_out", "type": "*mut u32" },
           { "name": "start_value_hi_out", "type": "*mut u32" },
           { "name": "start_value_lo_out", "type": "*mut u32" },
@@ -881,6 +884,85 @@
           { "name": "len", "type": "number" },
         ],
         "returnType": "void",
+      },
+    },
+    {
+      "wasmSymbol": "wasp_transmuxer_new",
+      "doc": [
+        "Create a Rust transmuxer; the host must explicitly free its handle.",
+      ],
+      "wasm": {
+        "kind": "method",
+        "args": [{ "name": "keepOriginal", "type": "number" }],
+        "returnType": "number",
+      },
+    },
+    {
+      "wasmSymbol": "wasp_transmuxer_free",
+      "doc": ["Free a Rust transmuxer and all retained state."],
+      "wasm": {
+        "kind": "method",
+        "args": [
+          {
+            "name": "session",
+            "type": "number",
+          },
+        ],
+        "returnType": "void",
+      },
+    },
+    {
+      "wasmSymbol": "wasp_transmuxer_release",
+      "doc": ["Release the last transmux output after the host copies it."],
+      "wasm": {
+        "kind": "method",
+        "args": [
+          {
+            "name": "session",
+            "type": "number",
+          },
+        ],
+        "returnType": "void",
+      },
+    },
+    {
+      "wasmSymbol": "wasp_transmuxer_run",
+      "doc": [
+        "Transmux one complete segment. Return a session-owned 40-byte descriptor: output pointer/length, start/end f64, timescale/status u32, static error text pointer/length. Status is 0 for output, 1 for empty, otherwise Rust transmux error code plus 1.",
+      ],
+      "wasm": {
+        "kind": "method",
+        "args": [
+          {
+            "name": "session",
+            "type": "number",
+          },
+          {
+            "name": "input",
+            "type": "number",
+          },
+          {
+            "name": "length",
+            "type": "number",
+          },
+          {
+            "name": "reset",
+            "type": "number",
+          },
+          {
+            "name": "hasSeed",
+            "type": "number",
+          },
+          {
+            "name": "seed",
+            "type": "number",
+          },
+          {
+            "name": "timescale",
+            "type": "number",
+          },
+        ],
+        "returnType": "number",
       },
     },
     {

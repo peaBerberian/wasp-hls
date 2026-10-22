@@ -32,6 +32,7 @@ unsafe extern "C" {
     /// Report the currently selected variant update.
     pub(super) fn __js_func__announce_variant_update(variant_id: u32);
     /// Append one media segment to a SourceBuffer.
+    /// The transmuxer address is borrowed from Rust for this synchronous call only. Never retain or free it.
     ///
     /// Notes:
     /// - The JS marshalling for this binding is intentionally still handwritten because the return payload is packed.
@@ -42,6 +43,7 @@ unsafe extern "C" {
         base_decode_time_start_lo: u32,
         base_decode_time_start_timescale: u32,
         reset_transmuxer_state: u32,
+        transmuxer: usize,
         has_start_out: *mut u32,
         start_value_hi_out: *mut u32,
         start_value_lo_out: *mut u32,

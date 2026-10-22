@@ -30,7 +30,8 @@ Its job is to:
 keeps the worker's player instance, current content, resources, pending requests
 and codec support results. There is one player instance per worker.
 
-`transmux.ts` handles transmuxer creation and media type conversion.
+`transmux.ts` handles probe transmuxer creation and media type conversion.
+Playback transmuxer state belongs to Rust's SourceBuffer.
 `isobmff-utils.ts` reads codec and timing information from MP4 data.
 `postMessage.ts` sends messages to the main thread, and `utils.ts` contains
 small helpers.

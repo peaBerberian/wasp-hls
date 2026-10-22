@@ -57,6 +57,11 @@ pub(super) struct SourceBuffer {
 
     // See `LastSegmentContinuityInfo`
     last_pushed_segment_info: Option<LastSegmentContinuityInfo>,
+
+    /// State belongs to the buffer and is dropped with it, including on errors
+    /// and content changes. JavaScript borrows it only during a synchronous
+    /// append. It never owns a second handle or needs a matching teardown call.
+    transmuxer: crate::transmux::Session,
 }
 
 /// To better handle dts continuity shenanigans unique to mpeg-ts segment, we maintain a complex
@@ -103,6 +108,7 @@ impl SourceBuffer {
                 media_type,
                 reset_transmuxer_on_next_segment: false,
                 last_pushed_segment_info: None,
+                transmuxer: crate::transmux::Session::default(),
             }),
             Err(err) => Err(AddSourceBufferError::from_js_add_source_buffer_error(
                 err, &typ,
@@ -151,7 +157,12 @@ impl SourceBuffer {
             self.id,
             self.typ
         );
-        match jsAppendBuffer(self.id, segment_data.id(), &SegmentHints::new(0, 1, true)) {
+        match jsAppendBuffer(
+            self.id,
+            segment_data.id(),
+            &SegmentHints::new(0, 1, true),
+            &mut self.transmuxer,
+        ) {
             Err(err) => Err(PushSegmentError::from_js_append_buffer_error(
                 self.media_type,
                 err,
@@ -214,15 +225,16 @@ impl SourceBuffer {
         );
         self.queue
             .push_back(SourceBufferQueueElement::PushMedia { data, id });
-        let parsed = match jsAppendBuffer(self.id, segment_data, &segment_hints) {
-            Err(err) => {
-                return Err(PushSegmentError::from_js_append_buffer_error(
-                    self.media_type,
-                    err,
-                ));
-            }
-            Ok(parsed) => parsed,
-        };
+        let parsed =
+            match jsAppendBuffer(self.id, segment_data, &segment_hints, &mut self.transmuxer) {
+                Err(err) => {
+                    return Err(PushSegmentError::from_js_append_buffer_error(
+                        self.media_type,
+                        err,
+                    ));
+                }
+                Ok(parsed) => parsed,
+            };
 
         // Use the parsed segment end as a good basis for the next decode time
         self.last_pushed_segment_info = Some(LastSegmentContinuityInfo {

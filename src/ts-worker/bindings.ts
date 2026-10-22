@@ -48,6 +48,7 @@ import type {
   SourceBufferCreationErrorCode,
   TimerReason,
 } from "../wasm/index.js";
+import { transmuxWithSession } from "../wasm/js/transmuxer.js";
 import {
   cachedCodecsSupport,
   jsMemoryResources,
@@ -853,7 +854,7 @@ export function addSourceBuffer(
       sourceBuffers.push({
         lastInitTrackInfoByTrackId: undefined,
         id: sourceBufferId,
-        transmuxer: mimeType === typ ? null : createTransmuxer(),
+        needsTransmux: mimeType !== typ,
         sourceBuffer: null,
         mediaType,
       });
@@ -902,7 +903,7 @@ export function addSourceBuffer(
         lastInitTrackInfoByTrackId: undefined,
         id: sourceBufferId,
         sourceBuffer: queuedSourceBuffer,
-        transmuxer: mimeType === typ ? null : createTransmuxer(),
+        needsTransmux: mimeType !== typ,
         mediaType,
       });
       contentInfo.mediaSourceObj.nextSourceBufferId++;
@@ -949,6 +950,7 @@ export function appendBuffer(
   sourceBufferId: SourceBufferId,
   resourceId: ResourceId,
   segmentHints: SegmentHints,
+  transmuxer: number,
 ): AppendBufferResult {
   let segment = jsMemoryResources.get(resourceId);
   const mediaSourceObj = getMediaSourceObj();
@@ -986,22 +988,19 @@ export function appendBuffer(
     | undefined;
 
   const sourceBufferObj = mediaSourceObj.sourceBuffers[sourceBufferObjIdx];
-  if (sourceBufferObj.transmuxer !== null) {
+  if (sourceBufferObj.needsTransmux) {
     try {
       const dtsHint = combineSafeTimeValue(
         segmentHints.baseDecodeTimeStartHi,
         segmentHints.baseDecodeTimeStartLo,
       );
-      const transmuxedData = sourceBufferObj.transmuxer.transmuxSegment(
-        segment,
-        {
-          reset: segmentHints.resetTransmuxerState,
-          baseMediaDecodeTimeSeed: {
-            value: dtsHint,
-            timescale: segmentHints.baseDecodeTimeStartTimescale,
-          },
+      const transmuxedData = transmuxWithSession(transmuxer, segment, {
+        reset: segmentHints.resetTransmuxerState,
+        baseMediaDecodeTimeSeed: {
+          value: dtsHint,
+          timescale: segmentHints.baseDecodeTimeStartTimescale,
         },
-      );
+      });
       if (transmuxedData !== null) {
         segment = transmuxedData.data;
         if (transmuxedData.timingInfo !== undefined) {
@@ -1208,7 +1207,13 @@ function inspectProbeSegment(
     };
   }
 
-  const transmuxedSegment = createTransmuxer().transmuxSegment(segment);
+  const transmuxer = createTransmuxer();
+  let transmuxedSegment;
+  try {
+    transmuxedSegment = transmuxer.transmuxSegment(segment);
+  } finally {
+    transmuxer.dispose();
+  }
   if (transmuxedSegment === null) {
     return undefined;
   }

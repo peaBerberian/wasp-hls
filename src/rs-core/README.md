@@ -34,6 +34,8 @@ The code is split into:
 - `bindings/`: defines the JavaScript functions callable from Rust and converts
   values between the Rust and JavaScript representations.
 
+- `transmux/`: converts MPEG-TS and packed AAC segments to fragmented MP4.
+
 - `utils/`: shared helpers.
 
 Each directory has its own README describing its responsibilities and limits.
@@ -42,7 +44,7 @@ Each directory has its own README describing its responsibilities and limits.
 
 Here we decide what to request and what to do with the results. JavaScript
 performs the actual network requests, runs timers, calls browser media APIs and
-inspects or transmuxes segments. Downloaded segments can stay in JavaScript
+inspects segments and copies bytes for Rust transmuxing. Downloaded segments can stay in JavaScript
 memory, with Rust only keeping an identifier for them. This avoids copying data
 when Rust doesn't need to read it.
 

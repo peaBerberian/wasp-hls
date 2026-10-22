@@ -7,6 +7,9 @@ fragmented MP4 that can be pushed to media buffers. The entry point is
 This code was initially forked from mux.js, then adapted to TypeScript and a
 procedural approach. Its license is kept in `LICENSE`.
 
+Playback now uses `src/rs-core/transmux`. This version remains a reference for
+correctness tests and the opt-in transmux benchmark.
+
 Its job is to:
 
 - Read transport packets and extract audio/video data, or read AAC frames

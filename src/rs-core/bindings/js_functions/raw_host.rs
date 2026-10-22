@@ -51,6 +51,7 @@ pub(super) unsafe fn __js_func__announce_variant_update(_variant_id: u32) {
 }
 
 /// Append one media segment to a SourceBuffer.
+/// The transmuxer address is borrowed from Rust for this synchronous call only. Never retain or free it.
 ///
 /// Notes:
 /// - The JS marshalling for this binding is intentionally still handwritten because the return payload is packed.
@@ -61,6 +62,7 @@ pub(super) unsafe fn __js_func__append_buffer(
     _base_decode_time_start_lo: u32,
     _base_decode_time_start_timescale: u32,
     _reset_transmuxer_state: u32,
+    _transmuxer: usize,
     _has_start_out: *mut u32,
     _start_value_hi_out: *mut u32,
     _start_value_lo_out: *mut u32,

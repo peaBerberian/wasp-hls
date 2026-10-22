@@ -40,7 +40,8 @@ The code is splitted into several directories:
   hang of it, cut what I don't need and add what I need.
   A majority of the code is still theirs, so I kept their license.
 
-  A potential long-term goal is to reimplement it in Rust.
+  Playback uses the Rust implementation in `rs-core/transmux`; this version
+  remains a reference for tests and benchmarks.
 
   That code is always used by the worker code in **ts-worker**, even if they're
   in two separate directories.
