@@ -3,6 +3,7 @@ import type { Mark } from "./observations.ts";
 import { scenarios, startup } from "./scenarios/index.ts";
 import { startPressure } from "./workload.ts";
 import { installDiagnostics } from "./diagnostics.js";
+import { measureMemory, type MemorySnapshot } from "./memory.ts";
 
 const params = new URLSearchParams(location.search);
 const marks: Mark[] = [];
@@ -54,21 +55,33 @@ async function main() {
   const stopPressure = selected.pressure ? startPressure() : () => ({});
   let player: Adapter | undefined;
   const metrics: Record<string, number> = {};
+  const memorySnapshots: MemorySnapshot[] = [];
   const bufferGoal = selected.bufferGoal;
   const fail = (error: unknown) => {
     failure ??= error;
   };
   try {
+    if (selected.memory)
+      memorySnapshots.push(await healthy(measureMemory("empty", video)));
     const start = performance.now();
     mark("initialize-call");
-    player = await healthy(createAdapter(name, video, fail, bufferGoal));
+    player = await healthy(
+      createAdapter(name, video, fail, {
+        bufferGoal,
+        retainBackBuffer: selected.memory,
+        segmentTimeoutMs: selected.memory ? 600000 : undefined,
+      }),
+    );
     metrics.initializeMs = performance.now() - start;
+    if (selected.memory)
+      memorySnapshots.push(await healthy(measureMemory("initialized", video)));
     const context = {
       video,
       player,
       url,
       initializeStartedAt: start,
       metrics,
+      memorySnapshots,
       mark,
       healthy,
       fail,
@@ -83,9 +96,18 @@ async function main() {
         bufferGoalSeconds: bufferGoal ?? "player-default",
         cache: "no-store",
         scriptEvaluation: "excluded",
+        memoryInstrumented: selected.memory ?? false,
+        ...(selected.memory
+          ? {
+              mediaWindowSeconds: 20,
+              backBuffer: "retain all",
+              pendingLaterRequests: true,
+            }
+          : {}),
       },
       metrics,
       marks,
+      memorySnapshots,
       workload: stopPressure(),
       diagnostics: diagnostics.map((entry: { time: number }) => ({
         ...entry,

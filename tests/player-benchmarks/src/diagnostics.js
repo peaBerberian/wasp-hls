@@ -79,6 +79,23 @@ function instrument(send) {
     };
   }
   const originalFetch = globalThis.fetch;
+  const originalOpen = XMLHttpRequest.prototype.open;
+  const originalSend = XMLHttpRequest.prototype.send;
+  const urls = new WeakMap();
+  XMLHttpRequest.prototype.open = function (method, url, ...rest) {
+    urls.set(this, String(url));
+    return originalOpen.call(this, method, url, ...rest);
+  };
+  XMLHttpRequest.prototype.send = function (...args) {
+    const url = urls.get(this);
+    emit("xhr", { url });
+    this.addEventListener(
+      "loadend",
+      () => emit("xhr-end", { url, status: this.status }),
+      { once: true },
+    );
+    return originalSend.apply(this, args);
+  };
   globalThis.fetch = async function (...args) {
     emit("fetch", { url: String(args[0]) });
     const response = await originalFetch.apply(this, args);

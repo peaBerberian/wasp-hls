@@ -114,6 +114,9 @@ export async function testMemory(root, { browser, filters, watch }) {
   }
 
   reportStep("TEST", "running browser memory tests...");
+  await exec(NODE, ["--test", "tests/memory/accounting.test.mjs"], {
+    cwd: root,
+  });
   const args = ["tests/testing-lib/simple-test-runner.mjs"];
   if (browser != null) {
     args.push("--browser", browser);

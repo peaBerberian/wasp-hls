@@ -245,6 +245,7 @@ test("real H.264/AAC TS preserves NAL bytes, packet timing and decoded video", a
     for (const [name, type, format] of [
       ["video-only-ts", "v:0", "mpegts"],
       ["audio-only-ts", "a:0", "mpegts"],
+      ["raw-aac", "a:0", "adts"],
     ])
       await t.test(name, async () => {
         const input = join(directory, `${name}.bin`);
@@ -259,9 +260,11 @@ test("real H.264/AAC TS preserves NAL bytes, packet timing and decoded video", a
           format,
           input,
         ]);
-        const converted = new Transmuxer({
+        const transmuxer = new Transmuxer({
           keepOriginalTimestamps: true,
-        }).transmuxSegment(new Uint8Array(await readFile(input)));
+        });
+        const inputBytes = new Uint8Array(await readFile(input));
+        const converted = transmuxer.transmuxSegment(inputBytes);
         assert.ok(converted?.data.length);
         const output = join(directory, `${name}.mp4`);
         await writeFile(output, converted.data);
@@ -283,6 +286,49 @@ test("real H.264/AAC TS preserves NAL bytes, packet timing and decoded video", a
                 2 / 90000,
               `${name}: packet ${index} ${key}`,
             );
+        if (format === "adts") {
+          for (const reset of [false, true]) {
+            const next = transmuxer.transmuxSegment(inputBytes, { reset });
+            assert.ok(next?.data.length);
+            const path = join(directory, `aac-repeat-${reset}.mp4`);
+            await writeFile(path, next.data);
+            assert.deepEqual(frames(path, type), frames(input, type));
+            const streams = JSON.parse(
+              execFileSync(
+                "ffprobe",
+                [
+                  "-v",
+                  "error",
+                  "-show_entries",
+                  "stream=id",
+                  "-of",
+                  "json",
+                  path,
+                ],
+                { encoding: "utf8" },
+              ),
+            ).streams;
+            assert.deepEqual(
+              streams.map((stream) => stream.id),
+              ["0x1"],
+            );
+          }
+          transmuxer.transmuxSegment(
+            new Uint8Array(
+              await readFile(
+                join(directory, "baseline-short-gop", "segment-0.ts"),
+              ),
+            ),
+            { reset: true },
+          );
+          const switched = transmuxer.transmuxSegment(inputBytes, {
+            reset: true,
+          });
+          assert.ok(switched?.data.length);
+          const path = join(directory, "aac-after-ts-reset.mp4");
+          await writeFile(path, switched.data);
+          assert.deepEqual(frames(path, type), frames(input, type));
+        }
       });
   } finally {
     await rm(directory, { recursive: true, force: true });

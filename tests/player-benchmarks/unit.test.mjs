@@ -9,6 +9,8 @@ import { manifestVariant, describeMediaPlaylist } from "./fixtures.mjs";
 import { Observations } from "./src/observations.ts";
 import { scenarios } from "./src/scenarios/index.ts";
 import { loadContent } from "./src/scenarios/startup.ts";
+import { checkMemoryBuffer } from "./src/memory.ts";
+import { readProcessTreePss } from "./process-memory.mjs";
 
 test("selection validates values, deduplicates and preserves equals in paths", () => {
   const options = parseOptions(
@@ -60,17 +62,67 @@ test("sample blocks interleave controls, rotating player and condition order", (
 test("default matrix includes known codecs and explicit probing cases without mixing cells", () => {
   const options = parseOptions(["--iterations=1"], "/tmp");
   assert.deepEqual(options.manifests, ["master", "no-codecs"]);
+  assert.deepEqual(options.scenarios, ["startup", "reload"]);
   const plan = [...samplePlan(options)];
-  assert.equal(plan.length, 12);
+  assert.equal(plan.length, 24);
   for (const player of options.players)
     for (const format of options.formats)
-      assert.deepEqual(
-        plan
-          .filter((x) => x.player === player && x.format === format)
-          .map((x) => x.manifest)
-          .sort(),
-        ["master", "no-codecs"],
-      );
+      for (const scenario of options.scenarios)
+        assert.deepEqual(
+          plan
+            .filter(
+              (x) =>
+                x.player === player &&
+                x.format === format &&
+                x.scenario === scenario,
+            )
+            .map((x) => x.manifest)
+            .sort(),
+          ["master", "no-codecs"],
+        );
+});
+
+test("memory checkpoints reject different buffered workloads", () => {
+  const snapshot = {
+    phase: "steady",
+    time: 0,
+    bytes: 100,
+    breakdown: [],
+    currentTime: 16.2,
+    buffered: [[0, 19.99]],
+  };
+  assert.doesNotThrow(() => checkMemoryBuffer(snapshot));
+  for (const buffered of [
+    [],
+    [[0, 22]],
+    [[2, 20]],
+    [
+      [0, 10],
+      [12, 20],
+    ],
+  ])
+    assert.throws(() => checkMemoryBuffer({ ...snapshot, buffered }));
+});
+
+test("PSS includes children launched on non-main threads, without double counting", async () => {
+  const files = {
+    "/proc/1/smaps_rollup": "Pss: 10 kB\n",
+    "/proc/1/task/1/children": "",
+    "/proc/1/task/7/children": "2 2 3",
+    "/proc/2/smaps_rollup": "Pss: 20 kB\n",
+    "/proc/2/task/2/children": "",
+  };
+  const fs = {
+    async readFile(path) {
+      if (!(path in files))
+        throw Object.assign(new Error("gone"), { code: "ENOENT" });
+      return files[path];
+    },
+    async readdir(path) {
+      return path === "/proc/1/task" ? ["1", "7"] : ["2"];
+    },
+  };
+  assert.equal(await readProcessTreePss(1, fs), 30 * 1024);
 });
 
 test("CLI scenario names match implementations without separate pressure/large-playlist algorithms", () => {

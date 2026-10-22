@@ -9,9 +9,11 @@ export const scenarios = [
   "playback",
   "pressure",
   "large-playlist",
+  "memory",
+  "memory-large-playlist",
+  "memory-churn",
 ];
-export const help =
-  "npm run test -- player-benchmarks [--player wasp|hlsjs|shaka] [--format fmp4|mpegts|fmp4-muxed] [--manifest master|direct|no-codecs] [--scenario startup|seek|reload|playback|pressure|large-playlist] [--iterations 5] [--diagnostic] [--report path]";
+export const help = `npm run test -- player-benchmarks [--player wasp|hlsjs|shaka] [--format fmp4|mpegts|fmp4-muxed] [--manifest master|direct|no-codecs] [--scenario ${scenarios.join("|")}] [--iterations 5] [--diagnostic] [--report path]`;
 
 export function parseOptions(args, directory) {
   const options = {
@@ -49,7 +51,7 @@ export function parseOptions(args, directory) {
   for (const [key, allowed, defaults] of [
     ["players", players, players],
     ["formats", formats, ["fmp4", "mpegts"]],
-    ["scenarios", scenarios, ["startup"]],
+    ["scenarios", scenarios, ["startup", "reload"]],
     ["manifests", ["master", "direct", "no-codecs"], ["master", "no-codecs"]],
   ]) {
     if (!options[key].length) options[key] = defaults;

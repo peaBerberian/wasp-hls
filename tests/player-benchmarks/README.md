@@ -3,6 +3,8 @@
 Independent, opt-in comparisons. Competitor packages and TypeScript are local
 to this private package; normal tests and the published library are unaffected.
 Requires Chrome, FFmpeg, GPAC, root build dependencies, and Node 22.18+ for tests.
+The hls.js ES-module build uses its shipped external worker; worker errors fail
+the run instead of silently falling back to main-thread transmuxing.
 
 ```sh
 npm ci --prefix tests/player-benchmarks
@@ -13,7 +15,7 @@ npm test --prefix tests/player-benchmarks
 ```
 
 Use `--help` for selections. Flags can be repeated. Defaults: all three players,
-both formats, declared/missing-codec masters, startup, five samples per cell.
+both formats, declared/missing-codec masters, startup/reload, five samples per cell.
 Scenario names are local conveniences,
 not a versioned API.
 
@@ -29,6 +31,16 @@ Measurement boundaries:
   Pressure updates 400 DOM nodes, forces layout and performs 48 JSON round
   trips per batch, then waits 16 ms. This is main-thread work, not memory stress.
   Select both scenarios for interleaved controls; actual work and stalls are recorded.
+- `memory` compares all players after 16 seconds of playback, paused with the same
+  first 20 seconds buffered. Later media requests remain pending; their timeout is
+  extended for these cases only. Back buffers are retained. Range mismatches fail.
+- `memory-large-playlist` keeps the full two-hour playlist but the same media window.
+  Compare it with `memory` to investigate playlist overhead.
+- `memory-churn` adds three buffered seeks and reloads with post-GC checkpoints.
+  These measure retained application memory, including workers, not decoder/GPU totals.
+- Memory runs use isolated pages and forced GC; their timing is not reported as a
+  performance result. Linux also samples Chrome process-tree PSS every 250 ms,
+  including native allocations. Its sampled high-water mark can miss short peaks.
 
 Content:
 
@@ -55,6 +67,11 @@ Node helpers handle configuration, fixtures and browser lifetime.
 Use this opt-in suite when changing startup, scheduling or buffering; run a
 short selection while developing, then repeated comparisons before drawing
 conclusions. Pressure and large-playlist runs remain explicit, not routine CI gates.
+
+- Use the Wasp-versus-baseline suite for regressions; competitors provide context.
+- Run cross-player cases for relevant scheduling, parsing or buffering changes and
+  before releases, not on every PR. Keep JSON reports; small timing gaps do not gate CI.
+- Memory example: `npm run test -- player-benchmarks --scenario memory --manifest master --iterations 3`.
 
 `--diagnostic` is session-only tracing that rewrites built workers and changes
 costs: never mix it with baseline results. Document Resource Timing omits

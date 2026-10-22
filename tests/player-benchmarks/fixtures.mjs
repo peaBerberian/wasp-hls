@@ -120,6 +120,7 @@ export async function prepareFixtures(directory, formats, large) {
     .update(await readFile(source))
     .digest("hex");
   const records = {};
+  const memoryMedia = new Set();
   for (const format of formats) {
     const output = join(base, format);
     await mkdir(output, { recursive: true });
@@ -201,6 +202,16 @@ export async function prepareFixtures(directory, formats, large) {
       media[child] = describeMediaPlaylist(
         await readFile(join(output, child), "utf8"),
       );
+      for (const prefix of large ? ["", "long/"] : [""]) {
+        const text = await readFile(join(output, prefix, child), "utf8");
+        const init = /#EXT-X-MAP:URI="([^"]+)"/.exec(text)?.[1];
+        if (init) memoryMedia.add(`${format}/${prefix}${init}`);
+        for (const url of text
+          .split(/\r?\n/)
+          .filter((line) => line && !line.startsWith("#"))
+          .slice(0, 10))
+          memoryMedia.add(`${format}/${prefix}${url}`);
+      }
       if (large) {
         const long = describeMediaPlaylist(
           await readFile(join(output, "long", child), "utf8"),
@@ -229,7 +240,7 @@ export async function prepareFixtures(directory, formats, large) {
   return {
     metadata: records,
     /** Direct media is meaningful only for a multiplexed A/V playlist. */
-    entry(format, kind, isLarge = false) {
+    entry(format, kind, isLarge = false, memory = false) {
       const record = records[format];
       if (kind === "direct" && format === "fmp4")
         throw new Error(
@@ -241,13 +252,19 @@ export async function prepareFixtures(directory, formats, large) {
           : kind === "no-codecs"
             ? "no-codecs.m3u8"
             : "master.m3u8";
-      return `/media/${format}/${isLarge ? "long/" : ""}${entry}`;
+      return `/media/${memory ? "bounded/" : ""}${format}/${isLarge ? "long/" : ""}${entry}`;
     },
     async serve(path, response) {
       if (!path.startsWith("/media/")) return false;
-      const relative = decodeURIComponent(path.slice("/media/".length));
+      let relative = decodeURIComponent(path.slice("/media/".length));
+      const bounded = relative.startsWith("bounded/");
+      if (bounded) relative = relative.slice("bounded/".length);
       const file = resolve(base, relative);
       if (!file.startsWith(base + sep)) throw new Error("Invalid fixture path");
+      // Leave later media requests pending. Playlists stay intact (including
+      // two-hour metadata), while every player retains the same first 20 s.
+      if (bounded && !relative.endsWith(".m3u8") && !memoryMedia.has(relative))
+        return true;
       const text = file.endsWith("/no-codecs.m3u8")
         ? manifestVariant(
             await readFile(join(file, "..", "master.m3u8"), "utf8"),

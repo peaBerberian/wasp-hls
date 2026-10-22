@@ -61,20 +61,16 @@ export async function takeMemoryMeasurement(workerTelemetry) {
  * }} workerSnapshot
  * @returns {MemoryMeasurement}
  */
-function formatMeasurement(pageMemory, workerSnapshot) {
+export function formatMeasurement(pageMemory, workerSnapshot) {
   const pageUserAgentSpecificBytes = pageMemory.bytes;
   const pageJsHeapUsedBytes = pageMemory.usedJSHeapSize ?? null;
-  const workerUserAgentSpecificBytes =
-    workerSnapshot.userAgentSpecificBytes ?? null;
-  const workerJsHeapUsedBytes = workerSnapshot.jsHeapUsedBytes ?? null;
   const workerWasmMemoryBytes = workerSnapshot.wasmMemoryBytes ?? null;
   const breakdownEntryCount = Array.isArray(pageMemory.breakdown)
     ? pageMemory.breakdown.length
     : null;
-  const workerTrackedBytes =
-    workerUserAgentSpecificBytes ??
-    (workerJsHeapUsedBytes ?? 0) + (workerWasmMemoryBytes ?? 0);
-  const totalMemoryBytes = pageMemory.bytes + workerTrackedBytes;
+  // The page measurement includes its dedicated workers. Worker telemetry is
+  // a separate diagnostic, not additional memory to add to this total.
+  const totalMemoryBytes = pageMemory.bytes;
 
   return {
     totalMemoryBytes,

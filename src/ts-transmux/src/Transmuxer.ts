@@ -233,6 +233,8 @@ export default class Transmuxer {
         const aacFrames = pipeline.adtsParser.parsePacket(packet);
         if (pipeline.mp4AudioSegmentGenerator === null) {
           this._audioTrack = this._audioTrack ?? {
+            // Raw AAC has one track and no PMT to supply its MP4 track ID.
+            id: 1,
             timelineStartInfo: {
               baseMediaDecodeTime: this._getCurrentBaseMediaDecodeTime(),
             },

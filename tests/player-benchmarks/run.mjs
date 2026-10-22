@@ -35,13 +35,25 @@ const bundle = await build({
 const fixtures = await prepareFixtures(
   directory,
   options.formats,
-  options.scenarios.includes("large-playlist"),
+  options.scenarios.some((name) => name.includes("large-playlist")),
 );
 const samples = [];
+const hlsWorker = await readFile(
+  join(directory, "node_modules/hls.js/dist/hls.worker.js"),
+);
 let pending;
 const server = createServer(async (request, response) => {
   try {
+    response.setHeader("Cross-Origin-Opener-Policy", "same-origin");
+    response.setHeader("Cross-Origin-Embedder-Policy", "require-corp");
     const path = new URL(request.url, "http://localhost").pathname;
+    if (path === "/hls.worker.js") {
+      if (pending) pending.hlsWorkerRequests++;
+      response.setHeader("Content-Type", "text/javascript");
+      response.setHeader("Cache-Control", "no-store");
+      response.end(hlsWorker);
+      return;
+    }
     if (await fixtures.serve(path, response)) return;
     if (path === "/result" && request.method === "POST") {
       let body = "";
@@ -85,6 +97,9 @@ const metadata = {
   cpu: cpus()[0]?.model,
   buildHashes: {},
   releaseBuildRequired: true,
+  competitorArtifacts: {
+    hlsWorkerSha256: createHash("sha256").update(hlsWorker).digest("hex"),
+  },
   options,
   versions: {},
 };
@@ -120,16 +135,23 @@ try {
       scenario,
       token,
       content: new URL(
-        fixtures.entry(format, manifest, scenario === "large-playlist"),
+        fixtures.entry(
+          format,
+          manifest,
+          scenario.includes("large-playlist"),
+          scenario.startsWith("memory"),
+        ),
         url,
       ).href,
       ...(options.diagnostic ? { diagnostic: "1" } : {}),
     }).toString();
     try {
       const message = new Promise((resolve) => {
-        pending = { token, resolve };
+        pending = { token, resolve, hlsWorkerRequests: 0 };
       });
-      const result = await runBrowser(chrome, url, message);
+      const result = await runBrowser(chrome, url, message, {
+        memory: scenario.startsWith("memory"),
+      });
       if (result.error) {
         samples.push({
           player,
@@ -145,15 +167,39 @@ try {
           `${player}/${format}/${scenario}: ${result.error}; marks=${JSON.stringify(result.marks)}`,
         );
       }
+      if (player === "hlsjs" && pending.hlsWorkerRequests === 0)
+        throw new Error(
+          "hls.js did not request its configured transmux worker",
+        );
       const sample = {
+        hlsWorkerRequests: pending.hlsWorkerRequests,
         format,
         iteration,
         manifest,
         ...result.result,
+        ...(result.processMemory
+          ? { processMemory: result.processMemory }
+          : {}),
       };
+      if (scenario.startsWith("memory")) {
+        const initialized = sample.memorySnapshots.find(
+          (x) => x.phase === "initialized",
+        );
+        const loaded = sample.processMemory.samples.filter(
+          (x) => x.bytes !== undefined && x.time >= initialized.time,
+        );
+        if (loaded.length)
+          sample.metrics.sampledLoadedProcessPeakPssBytes = Math.max(
+            ...loaded.map((x) => x.bytes),
+          );
+        // Forced-GC checkpoints interrupt startup; never present their timing
+        // as an ordinary performance sample.
+        for (const key of Object.keys(sample.metrics))
+          if (!key.endsWith("Bytes")) delete sample.metrics[key];
+      }
       samples.push(sample);
       console.log(
-        `${player.padEnd(6)} ${format.padEnd(6)} ${manifest.padEnd(9)} ${scenario.padEnd(8)} ${iteration}/${options.iterations} first frame: ${sample.metrics.initializeToFirstFrameMs.toFixed(1)} ms`,
+        `${player.padEnd(6)} ${format.padEnd(6)} ${manifest.padEnd(9)} ${scenario.padEnd(8)} ${iteration}/${options.iterations} ${scenario.startsWith("memory") ? `steady: ${sample.metrics.steadyApplicationBytes} bytes` : `first frame: ${sample.metrics.initializeToFirstFrameMs.toFixed(1)} ms`}`,
       );
     } catch (error) {
       if (
@@ -203,16 +249,18 @@ for (const scenario of options.scenarios)
             sample.scenario === scenario,
         );
         const row = { player, format, manifest, scenario, n: group.length };
-        row.firstFrameMinMs = Number(
-          Math.min(
-            ...group.map((sample) => sample.metrics.initializeToFirstFrameMs),
-          ).toFixed(2),
-        );
-        row.firstFrameMaxMs = Number(
-          Math.max(
-            ...group.map((sample) => sample.metrics.initializeToFirstFrameMs),
-          ).toFixed(2),
-        );
+        if (!scenario.startsWith("memory"))
+          row.firstFrameMinMs = Number(
+            Math.min(
+              ...group.map((sample) => sample.metrics.initializeToFirstFrameMs),
+            ).toFixed(2),
+          );
+        if (!scenario.startsWith("memory"))
+          row.firstFrameMaxMs = Number(
+            Math.max(
+              ...group.map((sample) => sample.metrics.initializeToFirstFrameMs),
+            ).toFixed(2),
+          );
         for (const key of Object.keys(group[0]?.metrics ?? {})) {
           const values = group
             .map((sample) => sample.metrics[key])
