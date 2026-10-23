@@ -1,0 +1,335 @@
+Document {
+    nodes: [
+        Node {
+            parent: None,
+            kind: Region,
+            start: 1.0,
+            end: 4.0,
+            text: None,
+            language: None,
+            appearance: Appearance {
+                color: [
+                    255,
+                    255,
+                    255,
+                    255,
+                ],
+                background: [
+                    0,
+                    0,
+                    0,
+                    0,
+                ],
+                font_family: None,
+                font_size: VideoHeight(
+                    0.05,
+                ),
+                font_style: Normal,
+                font_weight: 400.0,
+                decoration: Decoration {
+                    underline: false,
+                    overline: false,
+                    line_through: false,
+                },
+                line_height: Multiple(
+                    1.2,
+                ),
+                wrap: true,
+                text_align: Center,
+                direction: Ltr,
+                writing_mode: Horizontal,
+            },
+            placement: Some(
+                Placement {
+                    x: Anchor {
+                        offset: Percent(
+                            50.0,
+                        ),
+                        from_end: false,
+                        fraction: 0.5,
+                    },
+                    y: Anchor {
+                        offset: Percent(
+                            95.0,
+                        ),
+                        from_end: false,
+                        fraction: 1.0,
+                    },
+                    width: Some(
+                        Percent(
+                            80.0,
+                        ),
+                    ),
+                    height: Some(
+                        Em(
+                            3.5999999999999996,
+                        ),
+                    ),
+                    content_align: End,
+                    padding: [
+                        Pixels(
+                            0.0,
+                        ),
+                        Pixels(
+                            0.0,
+                        ),
+                        Pixels(
+                            0.0,
+                        ),
+                        Pixels(
+                            0.0,
+                        ),
+                    ],
+                },
+            ),
+            effects: Effects {
+                opacity: 1.0,
+                visible: true,
+                displayed: true,
+                clip: false,
+                z_index: None,
+                outline: None,
+                bidi: Normal,
+            },
+        },
+        Node {
+            parent: Some(
+                0,
+            ),
+            kind: Paragraph,
+            start: 1.0,
+            end: 4.0,
+            text: None,
+            language: None,
+            appearance: Appearance {
+                color: [
+                    255,
+                    255,
+                    255,
+                    255,
+                ],
+                background: [
+                    0,
+                    0,
+                    0,
+                    204,
+                ],
+                font_family: Some(
+                    [
+                        FontFamily {
+                            name: "proportionalSansSerif",
+                            generic: false,
+                        },
+                    ],
+                ),
+                font_size: VideoHeight(
+                    0.05,
+                ),
+                font_style: Normal,
+                font_weight: 400.0,
+                decoration: Decoration {
+                    underline: false,
+                    overline: false,
+                    line_through: false,
+                },
+                line_height: Multiple(
+                    1.2,
+                ),
+                wrap: true,
+                text_align: Center,
+                direction: Ltr,
+                writing_mode: Horizontal,
+            },
+            placement: None,
+            effects: Effects {
+                opacity: 1.0,
+                visible: true,
+                displayed: true,
+                clip: false,
+                z_index: None,
+                outline: None,
+                bidi: Normal,
+            },
+        },
+        Node {
+            parent: Some(
+                1,
+            ),
+            kind: Span,
+            start: 1.0,
+            end: 4.0,
+            text: None,
+            language: None,
+            appearance: Appearance {
+                color: [
+                    255,
+                    255,
+                    255,
+                    255,
+                ],
+                background: [
+                    0,
+                    0,
+                    0,
+                    0,
+                ],
+                font_family: Some(
+                    [
+                        FontFamily {
+                            name: "proportionalSansSerif",
+                            generic: false,
+                        },
+                    ],
+                ),
+                font_size: VideoHeight(
+                    0.05,
+                ),
+                font_style: Italic,
+                font_weight: 400.0,
+                decoration: Decoration {
+                    underline: false,
+                    overline: false,
+                    line_through: false,
+                },
+                line_height: Multiple(
+                    1.2,
+                ),
+                wrap: true,
+                text_align: Center,
+                direction: Ltr,
+                writing_mode: Horizontal,
+            },
+            placement: None,
+            effects: Effects {
+                opacity: 1.0,
+                visible: true,
+                displayed: true,
+                clip: false,
+                z_index: None,
+                outline: None,
+                bidi: Normal,
+            },
+        },
+        Node {
+            parent: Some(
+                2,
+            ),
+            kind: Span,
+            start: 1.0,
+            end: 4.0,
+            text: None,
+            language: None,
+            appearance: Appearance {
+                color: [
+                    255,
+                    255,
+                    0,
+                    255,
+                ],
+                background: [
+                    0,
+                    0,
+                    0,
+                    128,
+                ],
+                font_family: Some(
+                    [
+                        FontFamily {
+                            name: "proportionalSansSerif",
+                            generic: false,
+                        },
+                    ],
+                ),
+                font_size: VideoHeight(
+                    0.05,
+                ),
+                font_style: Italic,
+                font_weight: 700.0,
+                decoration: Decoration {
+                    underline: false,
+                    overline: false,
+                    line_through: false,
+                },
+                line_height: Multiple(
+                    1.2,
+                ),
+                wrap: true,
+                text_align: Center,
+                direction: Ltr,
+                writing_mode: Horizontal,
+            },
+            placement: None,
+            effects: Effects {
+                opacity: 1.0,
+                visible: true,
+                displayed: true,
+                clip: false,
+                z_index: None,
+                outline: None,
+                bidi: Normal,
+            },
+        },
+        Node {
+            parent: Some(
+                3,
+            ),
+            kind: Span,
+            start: 1.0,
+            end: 4.0,
+            text: Some(
+                "Watch out!",
+            ),
+            language: None,
+            appearance: Appearance {
+                color: [
+                    255,
+                    255,
+                    0,
+                    255,
+                ],
+                background: [
+                    0,
+                    0,
+                    0,
+                    128,
+                ],
+                font_family: Some(
+                    [
+                        FontFamily {
+                            name: "proportionalSansSerif",
+                            generic: false,
+                        },
+                    ],
+                ),
+                font_size: VideoHeight(
+                    0.05,
+                ),
+                font_style: Italic,
+                font_weight: 700.0,
+                decoration: Decoration {
+                    underline: false,
+                    overline: false,
+                    line_through: false,
+                },
+                line_height: Multiple(
+                    1.2,
+                ),
+                wrap: true,
+                text_align: Center,
+                direction: Ltr,
+                writing_mode: Horizontal,
+            },
+            placement: None,
+            effects: Effects {
+                opacity: 1.0,
+                visible: true,
+                displayed: true,
+                clip: false,
+                z_index: None,
+                outline: None,
+                bidi: Normal,
+            },
+        },
+    ],
+    diagnostics: [],
+}

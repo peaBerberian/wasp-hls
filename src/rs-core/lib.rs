@@ -10,7 +10,7 @@ mod parser;
 mod playlist_store;
 mod requester;
 mod segment_selector;
-mod text;
+pub mod text;
 mod utils;
 
 #[unsafe(no_mangle)]

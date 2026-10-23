@@ -1,0 +1,1 @@
+<x:tt xmlns:x="http://www.w3.org/ns/ttml" xmlns:s="http://www.w3.org/ns/ttml#styling"><x:body><x:div><x:p xml:id="p" begin="1s" end="2s" s:color="red">Hello <x:span>world &amp; all</x:span><x:br/>!</x:p></x:div></x:body></x:tt>

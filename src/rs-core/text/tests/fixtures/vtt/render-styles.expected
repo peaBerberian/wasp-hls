@@ -1,0 +1,305 @@
+Document {
+    nodes: [
+        Node {
+            parent: None,
+            kind: Paragraph,
+            start: 1.0,
+            end: 3.0,
+            text: None,
+            language: None,
+            appearance: Appearance {
+                color: [
+                    0,
+                    0,
+                    255,
+                    255,
+                ],
+                background: [
+                    0,
+                    0,
+                    0,
+                    204,
+                ],
+                font_family: None,
+                font_size: VideoHeight(
+                    0.05,
+                ),
+                font_style: Normal,
+                font_weight: 700.0,
+                decoration: Decoration {
+                    underline: false,
+                    overline: false,
+                    line_through: false,
+                },
+                line_height: Multiple(
+                    1.2,
+                ),
+                wrap: true,
+                text_align: Center,
+                direction: Ltr,
+                writing_mode: Horizontal,
+            },
+            placement: Some(
+                Placement {
+                    x: Anchor {
+                        offset: Percent(
+                            50.0,
+                        ),
+                        from_end: false,
+                        fraction: 0.5,
+                    },
+                    y: Anchor {
+                        offset: Pixels(
+                            0.0,
+                        ),
+                        from_end: true,
+                        fraction: 1.0,
+                    },
+                    width: Some(
+                        Percent(
+                            100.0,
+                        ),
+                    ),
+                    height: None,
+                    content_align: Start,
+                    padding: [
+                        Pixels(
+                            0.0,
+                        ),
+                        Pixels(
+                            0.0,
+                        ),
+                        Pixels(
+                            0.0,
+                        ),
+                        Pixels(
+                            0.0,
+                        ),
+                    ],
+                },
+            ),
+            effects: Effects {
+                opacity: 1.0,
+                visible: true,
+                displayed: true,
+                clip: false,
+                z_index: None,
+                outline: None,
+                bidi: Normal,
+            },
+        },
+        Node {
+            parent: Some(
+                0,
+            ),
+            kind: Span,
+            start: 1.0,
+            end: 3.0,
+            text: None,
+            language: None,
+            appearance: Appearance {
+                color: [
+                    0,
+                    0,
+                    255,
+                    255,
+                ],
+                background: [
+                    0,
+                    0,
+                    0,
+                    0,
+                ],
+                font_family: None,
+                font_size: VideoHeight(
+                    0.05,
+                ),
+                font_style: Italic,
+                font_weight: 700.0,
+                decoration: Decoration {
+                    underline: false,
+                    overline: false,
+                    line_through: false,
+                },
+                line_height: Multiple(
+                    1.2,
+                ),
+                wrap: true,
+                text_align: Center,
+                direction: Ltr,
+                writing_mode: Horizontal,
+            },
+            placement: None,
+            effects: Effects {
+                opacity: 1.0,
+                visible: true,
+                displayed: true,
+                clip: false,
+                z_index: None,
+                outline: None,
+                bidi: Normal,
+            },
+        },
+        Node {
+            parent: Some(
+                1,
+            ),
+            kind: Span,
+            start: 1.0,
+            end: 3.0,
+            text: None,
+            language: None,
+            appearance: Appearance {
+                color: [
+                    0,
+                    255,
+                    0,
+                    255,
+                ],
+                background: [
+                    0,
+                    0,
+                    0,
+                    0,
+                ],
+                font_family: None,
+                font_size: VideoHeight(
+                    0.05,
+                ),
+                font_style: Italic,
+                font_weight: 700.0,
+                decoration: Decoration {
+                    underline: false,
+                    overline: false,
+                    line_through: false,
+                },
+                line_height: Multiple(
+                    1.2,
+                ),
+                wrap: true,
+                text_align: Center,
+                direction: Ltr,
+                writing_mode: Horizontal,
+            },
+            placement: None,
+            effects: Effects {
+                opacity: 1.0,
+                visible: true,
+                displayed: true,
+                clip: false,
+                z_index: None,
+                outline: None,
+                bidi: Normal,
+            },
+        },
+        Node {
+            parent: Some(
+                2,
+            ),
+            kind: Span,
+            start: 1.0,
+            end: 3.0,
+            text: Some(
+                "Hello",
+            ),
+            language: None,
+            appearance: Appearance {
+                color: [
+                    0,
+                    255,
+                    0,
+                    255,
+                ],
+                background: [
+                    0,
+                    0,
+                    0,
+                    0,
+                ],
+                font_family: None,
+                font_size: VideoHeight(
+                    0.05,
+                ),
+                font_style: Italic,
+                font_weight: 700.0,
+                decoration: Decoration {
+                    underline: false,
+                    overline: false,
+                    line_through: false,
+                },
+                line_height: Multiple(
+                    1.2,
+                ),
+                wrap: true,
+                text_align: Center,
+                direction: Ltr,
+                writing_mode: Horizontal,
+            },
+            placement: None,
+            effects: Effects {
+                opacity: 1.0,
+                visible: true,
+                displayed: true,
+                clip: false,
+                z_index: None,
+                outline: None,
+                bidi: Normal,
+            },
+        },
+        Node {
+            parent: Some(
+                1,
+            ),
+            kind: Span,
+            start: 1.0,
+            end: 3.0,
+            text: Some(
+                " world",
+            ),
+            language: None,
+            appearance: Appearance {
+                color: [
+                    0,
+                    0,
+                    255,
+                    255,
+                ],
+                background: [
+                    0,
+                    0,
+                    0,
+                    0,
+                ],
+                font_family: None,
+                font_size: VideoHeight(
+                    0.05,
+                ),
+                font_style: Italic,
+                font_weight: 700.0,
+                decoration: Decoration {
+                    underline: false,
+                    overline: false,
+                    line_through: false,
+                },
+                line_height: Multiple(
+                    1.2,
+                ),
+                wrap: true,
+                text_align: Center,
+                direction: Ltr,
+                writing_mode: Horizontal,
+            },
+            placement: None,
+            effects: Effects {
+                opacity: 1.0,
+                visible: true,
+                displayed: true,
+                clip: false,
+                z_index: None,
+                outline: None,
+                bidi: Normal,
+            },
+        },
+    ],
+    diagnostics: [],
+}

@@ -1,0 +1,29 @@
+ttml	+	unicodeBidi	bidiOverride
+ttml	+	display	none
+ttml	+	visibility	hidden
+ttml	+	overflow	visible
+ttml	+	zIndex	auto
+ttml	-	unicodeBidi	bidi-override
+ttml	-	display	block
+ttml	+	textOutline	red 2px
+ttml	+	textOutline	rgb(1, 2, 3) 2px
+ttml	+	textOutline	2px 0px
+ttml	-	textOutline	red -2px
+ttml	-	textOutline	red 2px 1px
+ttml	-	textOutline	2px 1px 0px
+ttml	-	textOutline	bogus 2px
+ttml	+	opacity	NaN
+ttml	+	opacity	INF
+ttml	+	opacity	-INF
+ttml	+	opacity	2
+ttml	+	opacity	-1
+ttml	+	opacity	5e-1
+ttml	-	opacity	inf
+ttml	-	opacity	infinity
+ttml	-	opacity	50%
+ttml	-	opacity	bogus
+css	+	visibility	collapse
+css	-	visibility	none
+css	+	opacity	50%
+css	+	opacity	2
+css	-	opacity	NaN

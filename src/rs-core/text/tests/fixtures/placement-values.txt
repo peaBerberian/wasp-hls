@@ -1,0 +1,13 @@
+ttml	+	textAlign	end
+ttml	+	displayAlign	after
+ttml	+	writingMode	tbrl
+ttml	+	direction	rtl
+ttml	+	origin	10% 20%
+ttml	+	extent	640px 360px
+ttml	+	padding	1px 2px 3px 4px
+ttml	-	origin	1px
+ttml	-	origin	1em 2em
+ttml	-	extent	1px 2px 3px
+ttml	-	padding	0
+ttml	-	padding	1px 2px 3px 4px 5px
+ttml	-	textAlign	justify

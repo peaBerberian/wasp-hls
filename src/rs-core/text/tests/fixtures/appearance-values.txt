@@ -1,0 +1,104 @@
+# grammar accepted property value (tab separated)
+ttml	+	fontWeight	bold
+ttml	-	fontWeight	BOLD
+ttml	-	fontWeight	700
+ttml	+	fontStyle	italic
+ttml	-	fontStyle	bold
+ttml	+	fontSize	12px
+ttml	+	fontSize	12px 12.0px
+ttml	+	fontSize	1.5em
+ttml	-	fontSize	10px 20px
+ttml	-	fontSize	1c
+ttml	-	fontSize	-1px
+ttml	-	fontSize	1e2px
+ttml	-	fontSize	1.px
+ttml	+	lineHeight	120%
+ttml	-	lineHeight	1.5
+ttml	+	textDecoration	noUnderline lineThrough
+ttml	+	textDecoration	underline overline noLineThrough
+ttml	-	textDecoration	line-through
+ttml	-	textDecoration	none underline
+ttml	-	textDecoration	underline underline
+ttml	-	textDecoration	underline noUnderline
+ttml	-	textDecoration	noLineThrough lineThrough
+ttml	+	fontFamily	default
+ttml	+	fontFamily	Arial, proportionalSansSerif
+ttml	+	fontFamily	'A, B', serif
+ttml	+	fontFamily	Noto Sans
+ttml	-	fontFamily	Arial,
+ttml	-	fontFamily	Arial,,serif
+ttml	-	fontFamily	'unfinished
+ttml	-	fontFamily	'A' junk
+ttml	-	fontFamily	font()
+ttml	+	color	rgba(1,2,3,128)
+ttml	-	color	rgba(1,2,3,0.5)
+ttml	-	color	rgb(256,0,0)
+css	+	font-size	12px
+css	+	font-size	1.5em
+css	+	font-size	120%
+css	+	font-size	1e2px
+css	+	font-size	0
+css	+	font-size	MEDIUM
+css	+	font-size	larger
+css	-	font-size	10px 20px
+css	-	font-size	1c
+css	-	font-size	-1px
+css	-	font-size	2
+css	-	font-size	1.px
+css	-	font-size	bogus
+css	-	font-size	NaNpx
+css	-	font-size	12px junk
+css	+	font-weight	normal
+css	+	font-weight	BOLD
+css	+	font-weight	bolder
+css	+	font-weight	lighter
+css	+	font-weight	100
+css	+	font-weight	450.5
+css	+	font-weight	1000
+css	-	font-weight	bogus
+css	-	font-weight	0
+css	-	font-weight	1001
+css	-	font-weight	-1
+css	-	font-weight	NaN
+css	-	font-weight	700 junk
+css	+	font-style	ITALIC
+css	-	font-style	bold
+css	+	line-height	1.5
+css	+	line-height	normal
+css	+	line-height	120%
+css	+	line-height	20px
+css	+	line-height	0
+css	-	line-height	-1
+css	-	line-height	1c
+css	-	line-height	10px 20px
+css	-	line-height	NaN
+css	+	text-decoration	underline overline
+css	+	text-decoration	LINE-THROUGH
+css	-	text-decoration	noUnderline
+css	-	text-decoration	lineThrough
+css	-	text-decoration	none underline
+css	-	text-decoration	underline underline
+css	-	text-decoration	underline red
+css	+	color	rgba(1,2,3,.5)
+css	+	color	rgb(100%,0%,50%)
+css	+	color	rgba(999,-1,3,128)
+css	+	color	#1234
+css	-	color	rgb(1%,2,3)
+css	-	color	rgb(1,2,3,4)
+css	-	color	rgba(1,2,3)
+css	-	color	#+12345
+css	-	color	#xyf
+css	-	color	rgb(NaN,0,0)
+css	+	font-family	Arial, sans-serif
+css	+	font-family	'A,B', serif
+css	+	font-family	Noto Sans
+css	-	font-family	Arial,
+css	-	font-family	inherit
+css	-	font-family	initial
+css	-	font-family	font()
+css	-	color	currentColor
+css	-	font-size	calc(1em + 1px)
+css	-	font-size	1rem
+css	-	font-weight	inherit
+css	-	font-family	"escaped\ name"
+ttml	-	font-size	12px
