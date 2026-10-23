@@ -75,6 +75,7 @@ pub(super) fn parse(
                 let mut n = Node::new(Some(previous.parent), kind, start, end);
                 n.language = frame.language.clone();
                 n.appearance = frame.computed.appearance.clone();
+                n.effects = frame.computed.effects;
                 frame.parent = out.push(n, budget)?;
             }
             // Use cue IDs, classes and voice names to find the styles here.
@@ -109,9 +110,11 @@ pub(super) fn parse(
                 let mut n = Node::new(Some(previous.parent), Kind::Span, start, end);
                 n.language = frame.language.clone();
                 n.appearance = frame.computed.appearance.clone();
+                n.effects = frame.computed.effects;
                 frame.parent = out.push(n, budget)?;
             } else {
                 out.nodes[frame.parent].appearance = frame.computed.appearance.clone();
+                out.nodes[frame.parent].effects = frame.computed.effects;
             }
             stack.push(frame);
         } else {
@@ -122,6 +125,7 @@ pub(super) fn parse(
             n.text = Some(entities::decode(&tail[..end_text]));
             n.language = frame.language.clone();
             n.appearance = frame.computed.appearance.clone();
+            n.effects = frame.computed.effects.child();
             out.push(n, budget)?;
             tail = &tail[end_text..];
         }

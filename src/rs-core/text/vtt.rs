@@ -192,6 +192,7 @@ fn read(
                 let mut n = Node::new(None, Kind::Region, start, end);
                 n.appearance = computed.appearance.clone();
                 n.placement = Some(placement::region_box(r));
+                n.effects = computed.effects;
                 parent = Some(out.push(n, &mut budget)?);
                 computed = computed.child();
             }
@@ -211,6 +212,7 @@ fn read(
             computed.appearance.text_align = settings.align;
             computed.appearance.writing_mode = settings.writing;
             node.appearance = computed.appearance.clone();
+            node.effects = computed.effects;
             let parent = out.push(node, &mut budget)?;
             budget.bytes(lines[begin..i].iter().map(|s| s.len() + 1).sum())?;
             text::parse(

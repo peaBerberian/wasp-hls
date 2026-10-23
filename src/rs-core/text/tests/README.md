@@ -16,6 +16,7 @@
   specificity/importance and a scanner work counter independent of machine speed.
 - Placement tests cover TTML document coordinates, region alignment, WebVTT cue
   anchors, settings order, region dimensions and both vertical writing modes.
+- Effect tests cover opacity composition, visibility/display and rejected blur.
 
 Reference material:
 

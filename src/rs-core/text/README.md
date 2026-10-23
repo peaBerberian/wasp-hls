@@ -31,7 +31,10 @@ Use `vtt::parse`, `imsc::parse`, or `imsc::parse_sample` for extracted MP4 sampl
   for left/right. Pixel TTML geometry scales when a root pixel extent is given.
 - TODO: Scrolling/collisions, paragraphs split across regions, and shared region
   backgrounds when several paragraphs are active together.
-- TODO: Add opacity, visibility, outlines, clipping and stacking order.
+- Effects use numeric opacity, visibility flags and a single outline width/color.
+  Parent opacity also applies to children. Hidden nodes may have visible children;
+  undisplayed nodes exclude their whole subtree.
+- Region clipping and stacking are explicit. Outlines have no blur grammar.
 
 `model.rs` defines the output. `imsc/` and `vtt/` read each format; `mp4.rs` reads
 its container. Native and browser backends call the same parser functions.

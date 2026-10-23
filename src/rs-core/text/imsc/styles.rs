@@ -206,10 +206,11 @@ impl Styles {
         &self,
         parent: &Computed,
         local: &[Property],
+        multiply_opacity: bool,
         budget: &mut Budget,
     ) -> Result<Computed, Error> {
         budget.bytes(256 + local.len() * 32)?;
-        Ok(parent.apply(local, self.pixels))
+        Ok(parent.apply(local, self.pixels, multiply_opacity))
     }
     pub fn region(
         &self,
@@ -218,7 +219,7 @@ impl Styles {
         budget: &mut Budget,
     ) -> Result<Computed, Error> {
         if let Some(i) = i {
-            self.apply(&self.base, &self.specified(i, xml, budget)?, budget)
+            self.apply(&self.base, &self.specified(i, xml, budget)?, false, budget)
         } else {
             Ok(self.base.clone())
         }

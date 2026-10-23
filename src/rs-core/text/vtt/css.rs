@@ -293,7 +293,7 @@ pub(super) fn apply(
     for (_, _, p) in chosen {
         properties::put(&mut values, p.clone());
     }
-    *computed = computed.apply(&values, None);
+    *computed = computed.apply(&values, None, false);
     Ok(())
 }
 pub(super) fn reserve(rules: &[Rule], budget: &mut Budget) -> Result<(), Error> {

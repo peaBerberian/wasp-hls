@@ -11,6 +11,8 @@ mod syntax;
 pub use appearance::*;
 mod placement;
 pub use placement::*;
+mod effects;
+pub use effects::*;
 /// Fatal errors mean no document can be used. Recoverable WebVTT cue errors are
 /// returned alongside the successfully parsed cues instead.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]

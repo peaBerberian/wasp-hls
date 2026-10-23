@@ -21,6 +21,13 @@ pub(crate) enum Property {
     BlockAlign(Align),
     Direction(Direction),
     WritingMode(WritingMode, bool),
+    Opacity(f64),
+    Visible(bool),
+    Displayed(bool),
+    Clip(bool),
+    ZIndex(Option<i32>),
+    Outline(Option<Outline>),
+    Bidi(Bidi),
 }
 impl Property {
     pub fn ruby(&self) -> Option<Kind> {
@@ -53,6 +60,7 @@ pub(crate) fn put(out: &mut Vec<Property>, p: Property) {
 pub(crate) struct Computed {
     pub appearance: Appearance,
     pub placement: Placement,
+    pub effects: Effects,
 }
 impl Computed {
     pub fn vtt() -> Self {
@@ -66,9 +74,10 @@ impl Computed {
         let mut out = self.clone();
         out.appearance.background = [0; 4];
         out.placement = Placement::default();
+        out.effects = self.effects.child();
         out
     }
-    pub fn apply(&self, local: &[Property], pixels: Option<f64>) -> Self {
+    pub fn apply(&self, local: &[Property], pixels: Option<f64>, multiply_opacity: bool) -> Self {
         let mut out = self.child();
         // Line height may use the font size. Read the font size first, even if
         // line height appeared first in the subtitle file.
@@ -157,7 +166,24 @@ impl Computed {
                         a.direction = super::Direction::Rtl;
                     }
                 }
+                Opacity(v) => out.effects.opacity = *v,
+                Visible(v) => out.effects.visible = *v,
+                Displayed(v) => out.effects.displayed = *v && self.effects.displayed,
+                Clip(v) => out.effects.clip = *v,
+                ZIndex(v) => out.effects.z_index = *v,
+                Bidi(v) => out.effects.bidi = *v,
+                Outline(v) => {
+                    out.effects.outline = v.map(|o| super::Outline {
+                        color: o.color,
+                        width: o.width.relative(a.font_size, pixels),
+                    })
+                }
             }
+        }
+        // body/div have no output nodes. Apply their opacity here. Inline
+        // parents have output nodes, so their children must not repeat it.
+        if multiply_opacity {
+            out.effects.opacity *= self.effects.opacity;
         }
         out
     }
@@ -181,6 +207,8 @@ pub(crate) fn parse(
             "font-weight" => "fontWeight",
             "line-height" => "lineHeight",
             "text-decoration" | "text-decoration-line" => "textDecoration",
+            "opacity" => "opacity",
+            "visibility" => "visibility",
             _ => return Ok(None),
         }
     } else {
@@ -330,6 +358,48 @@ fn read(name: &str, source: &str, css: bool) -> Option<Property> {
             },
             matches!(s, "rltb" | "rl"),
         ),
+        "opacity" => {
+            let n = match s {
+                "NaN" | "-INF" if !css => 0.0,
+                "INF" if !css => 1.0,
+                _ => {
+                    if css && s.ends_with('%') {
+                        super::syntax::number(&s[..s.len() - 1], true)? / 100.0
+                    } else {
+                        super::syntax::number(s, true)?
+                    }
+                }
+            };
+            Opacity(n.clamp(0.0, 1.0))
+        }
+        "visibility" => Visible(match s {
+            "visible" => true,
+            "hidden" => false,
+            "collapse" if css => false,
+            _ => return None,
+        }),
+        "display" => Displayed(match s {
+            "auto" => true,
+            "none" => false,
+            _ => return None,
+        }),
+        "overflow" => Clip(match s {
+            "visible" => false,
+            "hidden" => true,
+            _ => return None,
+        }),
+        "zIndex" => ZIndex(if s == "auto" {
+            None
+        } else {
+            Some(s.parse().ok()?)
+        }),
+        "textOutline" => Outline(if s == "none" { None } else { Some(outline(s)?) }),
+        "unicodeBidi" => Bidi(match s {
+            "normal" => super::Bidi::Normal,
+            "embed" => super::Bidi::Embed,
+            "bidiOverride" => super::Bidi::Override,
+            _ => return None,
+        }),
         // TODO: EBU linePadding/multiRowAlign, escaped font names and complex CSS.
         _ => return None,
     })
@@ -547,5 +617,40 @@ fn color(s: &str, css: bool) -> Option<Color> {
         "teal" => [0, 128, 128, 255],
         "aqua" | "cyan" => [0, 255, 255, 255],
         _ => return None,
+    })
+}
+
+fn outline(s: &str) -> Option<Outline> {
+    // A color function can contain spaces, so do not split inside its brackets.
+    let (outline_color, rest) = if s.starts_with("rgb(") || s.starts_with("rgba(") {
+        let end = s.find(')')? + 1;
+        if !s[end..].starts_with(|c: char| c.is_ascii_whitespace()) {
+            return None;
+        }
+        (
+            Some(color(&s[..end], false)?),
+            s[end..].trim_matches(|c: char| c.is_ascii_whitespace()),
+        )
+    } else {
+        let end = s.find(|c: char| c.is_ascii_whitespace()).unwrap_or(s.len());
+        if let Some(c) = color(&s[..end], false) {
+            (
+                Some(c),
+                s[end..].trim_matches(|c: char| c.is_ascii_whitespace()),
+            )
+        } else {
+            (None, s)
+        }
+    };
+    let values = lengths(rest, 1, 2, false)?;
+    // A blur radius is prohibited by IMSC1.
+    if values.get(1).is_some_and(|v| {
+        *v != Length::Pixels(0.0) && *v != Length::Em(0.0) && *v != Length::Percent(0.0)
+    }) {
+        return None;
+    }
+    Some(Outline {
+        color: outline_color,
+        width: values[0],
     })
 }

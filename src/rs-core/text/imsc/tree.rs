@@ -139,17 +139,23 @@ impl Reader<'_> {
             let mut region = Node::new(None, Kind::Region, region_start, region_end);
             region.appearance = c.computed.appearance.clone();
             region.placement = Some(self.styles.placement(c.region, &c.computed));
+            region.effects = c.computed.effects;
+            // This region node already applies opacity to its children.
+            // Start the paragraph at opacity 1 so it is not applied twice.
+            c.computed.effects.opacity = 1.0;
             c.parent = Some(self.out.push(region, self.budget)?);
             self.preserved.resize(self.out.nodes.len(), false);
             for &g in &self.groups {
                 let group = self.styles.specified(g, self.xml, self.budget)?;
-                c.computed = self.styles.apply(&c.computed, &group, self.budget)?;
+                c.computed = self.styles.apply(&c.computed, &group, true, self.budget)?;
             }
         }
         if group {
             self.groups.push(i);
         } else {
-            c.computed = self.styles.apply(&c.computed, &local, self.budget)?;
+            c.computed = self
+                .styles
+                .apply(&c.computed, &local, paragraph, self.budget)?;
             if let Some(role) = local.iter().find_map(|p| p.ruby()) {
                 kind = role;
             }
@@ -162,6 +168,7 @@ impl Reader<'_> {
             }
             node.language = c.language.clone();
             node.appearance = c.computed.appearance.clone();
+            node.effects = c.computed.effects;
             parent = Some(self.out.push(node, self.budget)?);
             self.preserved.resize(self.out.nodes.len(), c.preserve);
         }

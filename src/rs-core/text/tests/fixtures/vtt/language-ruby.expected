@@ -78,6 +78,15 @@ Document {
                     ],
                 },
             ),
+            effects: Effects {
+                opacity: 1.0,
+                visible: true,
+                displayed: true,
+                clip: false,
+                z_index: None,
+                outline: None,
+                bidi: Normal,
+            },
         },
         Node {
             parent: Some(
@@ -123,6 +132,15 @@ Document {
                 writing_mode: Horizontal,
             },
             placement: None,
+            effects: Effects {
+                opacity: 1.0,
+                visible: true,
+                displayed: true,
+                clip: false,
+                z_index: None,
+                outline: None,
+                bidi: Normal,
+            },
         },
         Node {
             parent: Some(
@@ -168,6 +186,15 @@ Document {
                 writing_mode: Horizontal,
             },
             placement: None,
+            effects: Effects {
+                opacity: 1.0,
+                visible: true,
+                displayed: true,
+                clip: false,
+                z_index: None,
+                outline: None,
+                bidi: Normal,
+            },
         },
         Node {
             parent: Some(
@@ -215,6 +242,15 @@ Document {
                 writing_mode: Horizontal,
             },
             placement: None,
+            effects: Effects {
+                opacity: 1.0,
+                visible: true,
+                displayed: true,
+                clip: false,
+                z_index: None,
+                outline: None,
+                bidi: Normal,
+            },
         },
         Node {
             parent: Some(
@@ -260,6 +296,15 @@ Document {
                 writing_mode: Horizontal,
             },
             placement: None,
+            effects: Effects {
+                opacity: 1.0,
+                visible: true,
+                displayed: true,
+                clip: false,
+                z_index: None,
+                outline: None,
+                bidi: Normal,
+            },
         },
         Node {
             parent: Some(
@@ -307,6 +352,15 @@ Document {
                 writing_mode: Horizontal,
             },
             placement: None,
+            effects: Effects {
+                opacity: 1.0,
+                visible: true,
+                displayed: true,
+                clip: false,
+                z_index: None,
+                outline: None,
+                bidi: Normal,
+            },
         },
         Node {
             parent: Some(
@@ -352,6 +406,15 @@ Document {
                 writing_mode: Horizontal,
             },
             placement: None,
+            effects: Effects {
+                opacity: 1.0,
+                visible: true,
+                displayed: true,
+                clip: false,
+                z_index: None,
+                outline: None,
+                bidi: Normal,
+            },
         },
         Node {
             parent: Some(
@@ -397,6 +460,15 @@ Document {
                 writing_mode: Horizontal,
             },
             placement: None,
+            effects: Effects {
+                opacity: 1.0,
+                visible: true,
+                displayed: true,
+                clip: false,
+                z_index: None,
+                outline: None,
+                bidi: Normal,
+            },
         },
         Node {
             parent: Some(
@@ -444,6 +516,15 @@ Document {
                 writing_mode: Horizontal,
             },
             placement: None,
+            effects: Effects {
+                opacity: 1.0,
+                visible: true,
+                displayed: true,
+                clip: false,
+                z_index: None,
+                outline: None,
+                bidi: Normal,
+            },
         },
     ],
     diagnostics: [],

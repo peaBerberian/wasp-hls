@@ -29,6 +29,7 @@ pub struct Node {
     pub appearance: super::Appearance,
     /// Position and size of an outer box. Other nodes stay inside their parent.
     pub placement: Option<super::Placement>,
+    pub effects: super::Effects,
 }
 impl Node {
     pub(super) fn new(parent: Option<usize>, kind: Kind, start: f64, end: f64) -> Self {
@@ -41,6 +42,7 @@ impl Node {
             language: None,
             appearance: super::Appearance::default(),
             placement: None,
+            effects: super::Effects::default(),
         }
     }
 }
@@ -80,3 +82,4 @@ impl Timeline {
 // TODO: Add language labels and ruby kinds to the arrays sent to JS.
 // TODO: Send each different appearance once. Nodes can use its array index.
 // TODO: Add positions and sizes to the arrays sent to JS. Include their units.
+// TODO: Add these effect fields to the arrays sent to JS. Send one document per call.

@@ -80,6 +80,15 @@ Document {
                     ],
                 },
             ),
+            effects: Effects {
+                opacity: 0.8,
+                visible: true,
+                displayed: true,
+                clip: false,
+                z_index: None,
+                outline: None,
+                bidi: Normal,
+            },
         },
         Node {
             parent: Some(
@@ -121,6 +130,15 @@ Document {
                 writing_mode: Horizontal,
             },
             placement: None,
+            effects: Effects {
+                opacity: 1.0,
+                visible: true,
+                displayed: true,
+                clip: false,
+                z_index: None,
+                outline: None,
+                bidi: Normal,
+            },
         },
         Node {
             parent: Some(
@@ -162,6 +180,29 @@ Document {
                 writing_mode: Horizontal,
             },
             placement: None,
+            effects: Effects {
+                opacity: 1.0,
+                visible: true,
+                displayed: true,
+                clip: false,
+                z_index: None,
+                outline: Some(
+                    Outline {
+                        color: Some(
+                            [
+                                0,
+                                0,
+                                0,
+                                255,
+                            ],
+                        ),
+                        width: VideoHeight(
+                            0.002777777777777778,
+                        ),
+                    },
+                ),
+                bidi: Normal,
+            },
         },
         Node {
             parent: Some(
@@ -205,6 +246,29 @@ Document {
                 writing_mode: Horizontal,
             },
             placement: None,
+            effects: Effects {
+                opacity: 1.0,
+                visible: true,
+                displayed: true,
+                clip: false,
+                z_index: None,
+                outline: Some(
+                    Outline {
+                        color: Some(
+                            [
+                                0,
+                                0,
+                                0,
+                                255,
+                            ],
+                        ),
+                        width: VideoHeight(
+                            0.002777777777777778,
+                        ),
+                    },
+                ),
+                bidi: Normal,
+            },
         },
         Node {
             parent: Some(
@@ -248,6 +312,15 @@ Document {
                 writing_mode: Horizontal,
             },
             placement: None,
+            effects: Effects {
+                opacity: 1.0,
+                visible: true,
+                displayed: true,
+                clip: false,
+                z_index: None,
+                outline: None,
+                bidi: Normal,
+            },
         },
         Node {
             parent: Some(
@@ -289,6 +362,15 @@ Document {
                 writing_mode: Horizontal,
             },
             placement: None,
+            effects: Effects {
+                opacity: 0.5,
+                visible: true,
+                displayed: true,
+                clip: false,
+                z_index: None,
+                outline: None,
+                bidi: Normal,
+            },
         },
         Node {
             parent: Some(
@@ -332,6 +414,15 @@ Document {
                 writing_mode: Horizontal,
             },
             placement: None,
+            effects: Effects {
+                opacity: 1.0,
+                visible: true,
+                displayed: true,
+                clip: false,
+                z_index: None,
+                outline: None,
+                bidi: Normal,
+            },
         },
     ],
     diagnostics: [],
