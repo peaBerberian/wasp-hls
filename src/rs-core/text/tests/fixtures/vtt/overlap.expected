@@ -6,6 +6,7 @@ Document {
             start: 0.0,
             end: 10.0,
             text: None,
+            language: None,
         },
         Node {
             parent: Some(
@@ -17,6 +18,7 @@ Document {
             text: Some(
                 "long",
             ),
+            language: None,
         },
         Node {
             parent: None,
@@ -24,6 +26,7 @@ Document {
             start: 2.0,
             end: 4.0,
             text: None,
+            language: None,
         },
         Node {
             parent: Some(
@@ -35,6 +38,7 @@ Document {
             text: Some(
                 "short",
             ),
+            language: None,
         },
     ],
     diagnostics: [],

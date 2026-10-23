@@ -6,6 +6,9 @@ Document {
             start: 0.0,
             end: 1.0,
             text: None,
+            language: Some(
+                "fr",
+            ),
         },
         Node {
             parent: Some(
@@ -17,6 +20,9 @@ Document {
             text: Some(
                 " a  ",
             ),
+            language: Some(
+                "fr",
+            ),
         },
         Node {
             parent: Some(
@@ -26,6 +32,9 @@ Document {
             start: 0.0,
             end: 1.0,
             text: None,
+            language: Some(
+                "fr",
+            ),
         },
         Node {
             parent: Some(
@@ -37,6 +46,9 @@ Document {
             text: Some(
                 "b ",
             ),
+            language: Some(
+                "fr",
+            ),
         },
         Node {
             parent: Some(
@@ -47,6 +59,9 @@ Document {
             end: 1.0,
             text: Some(
                 " c ",
+            ),
+            language: Some(
+                "fr",
             ),
         },
     ],

@@ -38,6 +38,7 @@ pub fn parse_with_timeline(
     }
     let rates = rates(root)?;
     let preserve = tree::space(root, false)?;
+    let language = tree::language(root, None, &mut budget)?;
     let out = Document::default();
     let mut reader = tree::Reader {
         xml: &mut xml,
@@ -58,6 +59,7 @@ pub fn parse_with_timeline(
                     end: None,
                     sequence: false,
                     preserve,
+                    language: language.clone(),
                 },
             )?;
         }

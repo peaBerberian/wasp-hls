@@ -6,6 +6,7 @@ Document {
             start: 1.0,
             end: 3.0,
             text: None,
+            language: None,
         },
         Node {
             parent: Some(
@@ -17,6 +18,7 @@ Document {
             text: Some(
                 "Hello world",
             ),
+            language: None,
         },
     ],
     diagnostics: [],

@@ -1,4 +1,5 @@
 use super::*;
+use std::sync::Arc;
 #[derive(Clone)]
 pub(super) struct Context {
     pub parent: Option<usize>,
@@ -6,6 +7,7 @@ pub(super) struct Context {
     pub end: Option<f64>,
     pub sequence: bool,
     pub preserve: bool,
+    pub language: Option<Arc<str>>,
 }
 pub(super) struct Reader<'a> {
     pub xml: &'a mut [Element],
@@ -21,6 +23,18 @@ pub(super) fn space(e: &Element, parent: bool) -> Result<bool, Error> {
         Some("default") => Ok(false),
         Some("preserve") => Ok(true),
         _ => Err(Error::Invalid("xml:space".into())),
+    }
+}
+pub(super) fn language(
+    e: &Element,
+    parent: Option<Arc<str>>,
+    budget: &mut Budget,
+) -> Result<Option<Arc<str>>, Error> {
+    if let Some(v) = e.attr(XML, "lang") {
+        budget.bytes(v.len() + 32)?;
+        Ok(Some(v.into()))
+    } else {
+        Ok(parent)
     }
 }
 impl Reader<'_> {
@@ -51,6 +65,7 @@ impl Reader<'_> {
             }
         }
         c.preserve = space(e, c.preserve)?;
+        c.language = language(e, c.language, self.budget)?;
         let value = |name| {
             e.attr("", name)
                 .map(|v| parse_time(v, self.rates))
@@ -79,8 +94,11 @@ impl Reader<'_> {
         // Ruby has normal text and a separate pronunciation guide.
         // Text-only output includes the normal text, without the guide.
         let ruby = e.attr(TTS, "ruby");
-        if ruby == Some("text") {
-            return Ok(end.or(Some(start)));
+        let mut kind = kind;
+        match ruby {
+            Some("container") => kind = Kind::Ruby,
+            Some("text") => kind = Kind::RubyText,
+            _ => {}
         }
         let mut parent = c.parent;
         if !group && (paragraph || parent.is_some()) {
@@ -88,6 +106,7 @@ impl Reader<'_> {
             if text {
                 node.text = self.xml[i].text.take();
             }
+            node.language = c.language.clone();
             parent = Some(self.out.push(node, self.budget)?);
             self.preserved.resize(self.out.nodes.len(), c.preserve);
         }
@@ -169,6 +188,16 @@ impl Reader<'_> {
         let mut trailing: Option<usize> = None;
         let mut i = first;
         while i < last {
+            if self.out.nodes[i].kind == Kind::RubyText {
+                let stop = (i + 1..last)
+                    .find(|&j| self.out.nodes[j].parent.is_none_or(|p| p < i))
+                    .unwrap_or(last);
+                // The pronunciation guide has its own spaces. It must not
+                // change the spaces before or after the normal ruby text.
+                self.whitespace(i + 1, stop)?;
+                i = stop;
+                continue;
+            }
             let index = i;
             i += 1;
             let i = index;

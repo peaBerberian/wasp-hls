@@ -6,6 +6,7 @@ Document {
             start: 1.0,
             end: 2.0,
             text: None,
+            language: None,
         },
         Node {
             parent: Some(
@@ -17,6 +18,7 @@ Document {
             text: Some(
                 "Hello ",
             ),
+            language: None,
         },
         Node {
             parent: Some(
@@ -26,6 +28,7 @@ Document {
             start: 1.0,
             end: 2.0,
             text: None,
+            language: None,
         },
         Node {
             parent: Some(
@@ -37,6 +40,7 @@ Document {
             text: Some(
                 "world & all",
             ),
+            language: None,
         },
         Node {
             parent: Some(
@@ -46,6 +50,7 @@ Document {
             start: 1.0,
             end: 2.0,
             text: None,
+            language: None,
         },
         Node {
             parent: Some(
@@ -57,6 +62,7 @@ Document {
             text: Some(
                 "!",
             ),
+            language: None,
         },
     ],
     diagnostics: [],

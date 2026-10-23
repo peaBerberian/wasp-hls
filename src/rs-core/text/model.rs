@@ -1,5 +1,6 @@
 //! Both parsers return the same text structure.
 use super::{budget::Budget, Diagnostic, Error};
+use std::sync::Arc;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[non_exhaustive]
@@ -7,6 +8,8 @@ pub enum Kind {
     Paragraph,
     Span,
     Break,
+    Ruby,
+    RubyText,
 }
 #[derive(Debug, Clone, PartialEq)]
 #[non_exhaustive]
@@ -20,6 +23,8 @@ pub struct Node {
     pub end: f64,
     /// Text after reading character references. A Break node starts a new line.
     pub text: Option<String>,
+    /// A label such as "fr". The parser also applies labels from parent nodes.
+    pub language: Option<Arc<str>>,
 }
 impl Node {
     pub(super) fn new(parent: Option<usize>, kind: Kind, start: f64, end: f64) -> Self {
@@ -29,6 +34,7 @@ impl Node {
             start,
             end,
             text: None,
+            language: None,
         }
     }
 }
@@ -66,3 +72,4 @@ impl Timeline {
 // TODO: Send each document to JS as arrays of nodes, times and UTF-8 text.
 // JS must copy the data before Rust frees it. Native code can use Document directly.
 // TODO: Add styles from the subtitle file. Keep the same parser functions.
+// TODO: Add language labels and ruby kinds to the arrays sent to JS.

@@ -6,6 +6,7 @@ Document {
             start: 1.0,
             end: 4.0,
             text: None,
+            language: None,
         },
         Node {
             parent: Some(
@@ -14,8 +15,61 @@ Document {
             kind: Span,
             start: 1.0,
             end: 4.0,
+            text: None,
+            language: Some(
+                "ja",
+            ),
+        },
+        Node {
+            parent: Some(
+                1,
+            ),
+            kind: Ruby,
+            start: 1.0,
+            end: 4.0,
+            text: None,
+            language: Some(
+                "ja",
+            ),
+        },
+        Node {
+            parent: Some(
+                2,
+            ),
+            kind: Span,
+            start: 1.0,
+            end: 4.0,
             text: Some(
                 "漢",
+            ),
+            language: Some(
+                "ja",
+            ),
+        },
+        Node {
+            parent: Some(
+                2,
+            ),
+            kind: RubyText,
+            start: 1.0,
+            end: 4.0,
+            text: None,
+            language: Some(
+                "ja",
+            ),
+        },
+        Node {
+            parent: Some(
+                4,
+            ),
+            kind: Span,
+            start: 1.0,
+            end: 4.0,
+            text: Some(
+                "かん",
+            ),
+            language: Some(
+                "ja",
             ),
         },
         Node {
@@ -28,6 +82,7 @@ Document {
             text: Some(
                 " ",
             ),
+            language: None,
         },
         Node {
             parent: Some(
@@ -36,8 +91,23 @@ Document {
             kind: Span,
             start: 1.0,
             end: 4.0,
+            text: None,
+            language: Some(
+                "en",
+            ),
+        },
+        Node {
+            parent: Some(
+                7,
+            ),
+            kind: Span,
+            start: 1.0,
+            end: 4.0,
             text: Some(
                 "English",
+            ),
+            language: Some(
+                "en",
             ),
         },
     ],

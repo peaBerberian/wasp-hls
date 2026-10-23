@@ -1,8 +1,9 @@
 use super::*;
+use std::sync::Arc;
 struct Frame<'a> {
     tag: &'a str,
     parent: usize,
-    hidden: bool,
+    language: Option<Arc<str>>,
 }
 pub(super) fn parse(
     source: &str,
@@ -15,7 +16,7 @@ pub(super) fn parse(
     let mut stack = vec![Frame {
         tag: "",
         parent,
-        hidden: false,
+        language: None,
     }];
     let mut tail = source;
     while !tail.is_empty() {
@@ -51,19 +52,31 @@ pub(super) fn parse(
             let mut frame = Frame {
                 tag,
                 parent: previous.parent,
-                hidden: previous.hidden,
+                language: previous.language.clone(),
             };
-            frame.hidden |= tag == "rt";
+            if tag == "lang" {
+                budget.bytes(token[split..].len().saturating_mul(4) + 32)?;
+                frame.language = Some(entities::decode(token[split..].trim()).into());
+            }
+            if matches!(tag, "ruby" | "rt" | "lang") {
+                let kind = match tag {
+                    "ruby" => Kind::Ruby,
+                    "rt" => Kind::RubyText,
+                    _ => Kind::Span,
+                };
+                let mut n = Node::new(Some(previous.parent), kind, start, end);
+                n.language = frame.language.clone();
+                frame.parent = out.push(n, budget)?;
+            }
             stack.push(frame);
         } else {
             let end_text = tail.find('<').unwrap_or(tail.len());
             let frame = stack.last().unwrap();
-            if !frame.hidden {
-                budget.bytes(end_text.saturating_mul(4))?;
-                let mut n = Node::new(Some(frame.parent), Kind::Span, start, end);
-                n.text = Some(entities::decode(&tail[..end_text]));
-                out.push(n, budget)?;
-            }
+            budget.bytes(end_text.saturating_mul(4))?;
+            let mut n = Node::new(Some(frame.parent), Kind::Span, start, end);
+            n.text = Some(entities::decode(&tail[..end_text]));
+            n.language = frame.language.clone();
+            out.push(n, budget)?;
             tail = &tail[end_text..];
         }
     }

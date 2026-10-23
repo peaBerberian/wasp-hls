@@ -15,8 +15,8 @@ Use `vtt::parse`, `imsc::parse`, or `imsc::parse_sample` for extracted MP4 sampl
   samples. `imsc::parse_sample` applies sample coverage before returning text.
 - UTF-8 XML, namespaces, CDATA, media timing and bounded parsing are supported.
   DTDs, image profiles and encrypted/subsampled MP4 documents are rejected.
-- Language labels are omitted. Ruby keeps its base text and drops inline reading
-  annotations. Both can be added without changing the parser functions.
+- Languages are inherited and attached to subtitle nodes. Ruby base and reading
+  text have distinct kinds; a renderer can build ruby elements from them.
 - TODO: Add colors, fonts and positions from the subtitle file. Apply styles
   from parent nodes too. Styles and cue settings are skipped for now.
 

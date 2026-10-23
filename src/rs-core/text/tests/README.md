@@ -9,6 +9,8 @@
   namespaces, whitespace, references and allocation limits are checked separately.
 - MP4 tests cover timing defaults, sample boundaries, corrupt boxes, extraction
   restrictions and truncation. Extracted sample data borrows the input.
+- Language/ruby tests distinguish base text from pronunciation guides and check
+  inherited language on subtitle nodes, without altering application elements.
 
 Reference material:
 

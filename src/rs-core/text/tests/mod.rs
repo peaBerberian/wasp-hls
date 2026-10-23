@@ -1,5 +1,6 @@
 //! Each parser change has authored fixtures and tests of its public output.
 mod fixture_tests;
+mod language;
 mod text;
 use super::*;
 fn ttml(s: &str) -> Document {

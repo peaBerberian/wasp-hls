@@ -6,6 +6,7 @@ Document {
             start: 0.0,
             end: 5.0,
             text: None,
+            language: None,
         },
         Node {
             parent: Some(
@@ -17,6 +18,7 @@ Document {
             text: Some(
                 "A & B",
             ),
+            language: None,
         },
         Node {
             parent: Some(
@@ -28,6 +30,7 @@ Document {
             text: Some(
                 " ",
             ),
+            language: None,
         },
         Node {
             parent: Some(
@@ -39,6 +42,7 @@ Document {
             text: Some(
                 "é",
             ),
+            language: None,
         },
         Node {
             parent: Some(
@@ -50,10 +54,21 @@ Document {
             text: Some(
                 "\n",
             ),
+            language: None,
         },
         Node {
             parent: Some(
                 0,
+            ),
+            kind: Ruby,
+            start: 0.0,
+            end: 5.0,
+            text: None,
+            language: None,
+        },
+        Node {
+            parent: Some(
+                5,
             ),
             kind: Span,
             start: 0.0,
@@ -61,6 +76,29 @@ Document {
             text: Some(
                 "字",
             ),
+            language: None,
+        },
+        Node {
+            parent: Some(
+                5,
+            ),
+            kind: RubyText,
+            start: 0.0,
+            end: 5.0,
+            text: None,
+            language: None,
+        },
+        Node {
+            parent: Some(
+                7,
+            ),
+            kind: Span,
+            start: 0.0,
+            end: 5.0,
+            text: Some(
+                "ji",
+            ),
+            language: None,
         },
         Node {
             parent: Some(
@@ -69,8 +107,23 @@ Document {
             kind: Span,
             start: 0.0,
             end: 5.0,
+            text: None,
+            language: Some(
+                "fr",
+            ),
+        },
+        Node {
+            parent: Some(
+                9,
+            ),
+            kind: Span,
+            start: 0.0,
+            end: 5.0,
             text: Some(
                 "oui",
+            ),
+            language: Some(
+                "fr",
             ),
         },
     ],
