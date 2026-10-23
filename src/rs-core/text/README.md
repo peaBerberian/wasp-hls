@@ -1,46 +1,41 @@
 # Subtitle parsers
 
-This directory turns WebVTT and IMSC1 text subtitles into the same small tree.
-The main entry points are `vtt::parse`, `imsc::parse`, and `imsc::parse_sample`.
+This directory reads WebVTT and IMSC1 text subtitles into the same small tree.
+Use `vtt::parse`, `imsc::parse`, or `imsc::parse_sample` for extracted MP4 samples.
 
-Its job is to:
+- `Document::nodes` contains paragraphs, inline text and line breaks. The parent
+  has a lower index than its children. Times use seconds during playback.
+  A node is active at its start time, but not at its end time.
+  It can be displayed only while its parent is active too.
+- Whitespace and character references are processed here. Display the returned
+  text without changing its spaces or newlines. Cues keep their full time ranges.
+- `Timeline` supplies matching media and playback times. Give a fresh reference
+  after a discontinuity. Only the parser uses WebVTT initialization headers.
+- `mp4::parse_init` and `mp4::extract` return track information and borrowed XML
+  samples. `imsc::parse_sample` applies sample coverage before returning text.
+- UTF-8 XML, namespaces, CDATA, media timing and bounded parsing are supported.
+  DTDs, image profiles and encrypted/subsampled MP4 documents are rejected.
+- Language labels are omitted. Ruby keeps its base text and drops inline reading
+  annotations. Both can be added without changing the parser functions.
+- TODO: Add colors, fonts and positions from the subtitle file. Apply styles
+  from parent nodes too. Styles and cue settings are skipped for now.
 
-- Return text, HTML element names, CSS styles, parent indices and times in seconds.
-- Resolve ordinary TTML parent and region styles, relative font sizes and whitespace.
-- Apply supported WebVTT CSS rules, cue settings and markup.
-- Map times to playback when given a `Timeline`. WebVTT cues keep their full range.
-- Extract borrowed XML samples from MP4 with `mp4::parse_init` / `mp4::extract`.
-- Skip unsupported styles and timed `<set>` elements. Source preservation is a non-goal.
-- Return diagnostics for recoverable problems and errors when parsing cannot continue.
-
-The renderer sets `viewport_style(width, height)` on a container covering the video
-image, then builds elements from `Document::nodes` in order. A node is visible when
-`start <= playback_time < end` and its parent is visible. `end` can be infinity.
-Set the supplied styles, language and text directly; no format-specific data is needed.
-Update the viewport styles when the video image size changes.
-
-`parse_with_timeline` takes matching media and playback times. Use a new reference
-after a discontinuity. `vtt::parse_init` reads an external WebVTT header for later
-segments; it is parser state. `imsc::parse_sample` also applies MP4 sample coverage.
-
-`render.rs` defines the shared output. `style.rs` contains internal checked values.
-`imsc/` and `vtt/` handle each format; `mp4.rs` handles the container.
-Trees use vectors and parent indices. Shared strings avoid copying large font names.
-Tests and specification references are in [tests](tests/README.md).
+`model.rs` defines the output. `imsc/` and `vtt/` read each format; `mp4.rs` reads
+its container. Native and browser backends call the same parser functions.
 
 ## Where it stops
 
-- The renderer handles CSS layout and font selection. Collision avoidance, scrolling
-  WebVTT regions and inline timestamp highlighting remain TODOs.
-- TTML timed styles, paragraphs split across regions and persistent region
-  backgrounds remain TODOs. Basic region placement is supported.
-- Extension styles such as EBU `linePadding` and `multiRowAlign` are ignored.
-  Invalid values, unequal TTML font-size axes and IMSC-prohibited blur are discarded.
-- IMSC support covers the text profile and media time. XML must be UTF-8 without DTDs.
-- MP4 extraction rejects encrypted/subsampled documents, external resources and
-  sample-description switches. These parsers do not check every authoring rule.
+There is no renderer, FFI, CSS stylesheet or application CSS variable here.
+TODO: Transfer whole documents through flat numeric tables and UTF-8 strings,
+with JS copying the WASM data before Rust frees it. See `model.rs`.
+
+Timed `<set>` changes and external resources are unsupported. Foreign XML and
+metadata cannot introduce visible content or global styles. Source preservation
+is a non-goal. These readers do not check every authoring rule.
 
 XXX TODO: Is it overkill?
-`Limits` bounds input size, tree size, nesting and estimated allocations. The
-`output_bytes` allowance counts temporary copies too, without refunding freed space.
-It is not a cap on total process or WebAssembly memory.
+`Limits` bounds input size, nesting, entries and estimated allocations, including
+temporary copies. Freeing temporary data does not increase the allowance.
+This is not a hard limit on total process or WebAssembly memory.
+
+Tests and source references are in [tests](tests/README.md).

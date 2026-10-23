@@ -1,58 +1,23 @@
 # Subtitle parser tests
 
-- Run fixture tests: `cargo test text::tests::fixture_tests` (native Rust only).
 - Run all subtitle tests: `cargo test text::`.
-- The runner is `fixture_tests.rs`; its inputs and expected results are in `fixtures/`.
-- Authored fixtures have complete shared-tree `.expected` snapshots.
-- Update them explicitly: `UPDATE_SUBTITLE_FIXTURES=1 cargo test text::tests::fixture_tests`.
-- Unit tests cover times, cue settings, error recovery, styles, XML namespaces, limits, truncated input, timestamp wraparound and MP4 sample boundaries.
-- Memory tests check that repeated references share large style strings and that combined styles share large text values.
-- Budget tests cover XML/style output, external headers, CSS rules, selectors, property values and nested blocks.
-- A scanner-work counter checks that CSS work grows with input size. It does not depend on machine speed.
-- Hidden-style tests cover foreign XML, metadata, ignored duplicate IDs and ignored style cycles.
-- Normal test runs need no JavaScript parser, player checkout or browser.
+- Run snapshots: `cargo test text::tests::fixture_tests`.
+- Update snapshots explicitly: `UPDATE_SUBTITLE_FIXTURES=1 cargo test text::tests::fixture_tests`.
+- Keep the existing fixture inputs. Expected files show the complete output at
+  each stage. Normal test runs do not update these files.
+- Timing matrices, malformed input, every truncation, many XML attributes,
+  namespaces, whitespace, references and allocation limits are checked separately.
+- MP4 tests cover timing defaults, sample boundaries, corrupt boxes, extraction
+  restrictions and truncation. Extracted sample data borrows the input.
 
-Earlier source-parser comparison, 2026-10-20 (before the shared rendering tree):
+Reference material:
 
-| Reference checkout  | Values compared                                                    | Inputs | Matches |
-| ------------------- | ------------------------------------------------------------------ | -----: | ------: |
-| `vtt.js` `42ca104`  | Cue IDs, millisecond intervals, raw text, alignment, size and line |    340 |     333 |
-| `imscJS` `6aef62f6` | Content-node kinds, active time ranges, color and font weight      |    141 |     140 |
+- Local `hls2026.txt`, especially WebVTT and IMSC segment boundaries.
+- [WebVTT parsing](https://www.w3.org/TR/2026/CRD-webvtt1-20260520/#parsing).
+- [IMSC1 text profile](https://www.w3.org/TR/2016/REC-ttml-imsc1-20160421/).
+- [TTML1 timing and styles](https://www.w3.org/TR/ttml1/).
+- Local Shaka/hls.js parsers and dash.js/RxPlayer subtitle fixtures are useful
+  comparison targets. Normal test runs need none of these checkouts or a browser.
 
-- Inputs included authored fixtures, generated timing/style matrices and the available reference test files. External inputs were not copied into this suite.
-- Normalization maps legacy `middle` to `center`, equates negative zero with zero, clips reference IMSC intervals to ancestor activity and treats fatal-header errors as equivalent.
-- WebVTT differences: recovery without a separator/after a malformed arrow; cues immediately after the header; invalid two-component hour timestamps; obsolete `middle` and invalid line alignment. Regression tests follow current WebVTT parsing rules.
-- IMSC difference: one SMPTE image metadata fixture. Foreign image content is diagnosed/ignored by this text-profile parser.
-- Additional unit tests cover differences outside that projection: HTML character references, repeated settings, fractional lines, markup, CSS syntax and ignored timed styles.
-
-Specification baseline:
-
-- HLS 2026 §§3.1.2, 3.1.4, 3.1.5 and referenced editions.
-- [WebVTT, 20 May 2026](https://www.w3.org/TR/2026/CRD-webvtt1-20260520/), especially §6.
-- [WebVTT metadata headers, December 2015](https://www.w3.org/TR/2015/WD-webvtt1-20151208/#webvtt-metadata-header).
-- [IMSC1 text profile, April 2016](https://www.w3.org/TR/2016/REC-ttml-imsc1-20160421/), with TTML timing/styling semantics.
-- HLS names ISO/IEC 14496-12:2015 and 14496-30:2014 for MP4 carriage. Their full normative texts were not available during this task; extraction was cross-checked against local player code and fixtures.
-
-The WebVTT named-reference table is WHATWG HTML data from Python's standard-library `html.entities.html5`; lookup/tokenization is Rust-only.
-
-Earlier source-parser memory check (native debug build, temporary allocator probe):
-
-- 1,000 references to one 10 KB font-family style: about 1.0 MB peak heap use during parsing.
-- 1,000 references to a two-style combination: about 1.6 MB peak heap use during parsing.
-- These are measurements of those inputs, not guaranteed WASM memory limits.
-
-Style-value checks:
-
-- CSS and TTML tests use separate tables of accepted and rejected values.
-- Tests cover font weight, size counts, length units, decoration words, family lists, color alpha, opacity and line height.
-- Full parser tests check that invalid values are discarded without losing readable text or valid referenced styles.
-- The region-set snapshot discards its blurred outline: IMSC1 prohibits blur.
-- Property rules were checked against [TTML1 style rules](https://www.w3.org/TR/ttml1/#styling-attribute-vocabulary), [IMSC1 text-profile limits](https://www.w3.org/TR/2016/REC-ttml-imsc1-20160421/#text-profile-constraints), [CSS Fonts](https://www.w3.org/TR/css-fonts-4/) and [CSS text decoration](https://www.w3.org/TR/css-text-decor-3/).
-
-Shared output checks:
-
-- Both formats return ordinary HTML tags, playback times and CSS styles.
-- Tests cover parent/region inheritance, relative fonts, opacity, decoration cancellation, whitespace, CSS cascade, timestamp mapping and MP4 coverage.
-- Timed `<set>` styles and unsupported declarations leave no source-only output.
-- Browser checks used local Shaka/hls.js sources and dash.js/RxPlayer fixtures.
-- A generic DOM builder checked the output against Shaka for mixed text, whitespace, inherited styles and ordinary WebVTT markup.
+The named WebVTT entity table is WHATWG HTML data from Python's standard library;
+the reader itself is Rust-only. No serializer dependency or FFI is introduced.

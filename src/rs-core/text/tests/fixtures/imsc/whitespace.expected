@@ -2,118 +2,49 @@ Document {
     nodes: [
         Node {
             parent: None,
-            tag: Div,
+            kind: Paragraph,
             start: 0.0,
             end: 1.0,
-            style: {
-                "color": "#ffffffff",
-                "display": "flex",
-                "flex-direction": "column",
-                "font-family": "sans-serif",
-                "font-size": "calc(var(--subtitle-height) * 0.06666666666666667)",
-                "height": "100%",
-                "justify-content": "flex-end",
-                "left": "0%",
-                "position": "absolute",
-                "top": "0%",
-                "width": "100%",
-            },
-            language: None,
             text: None,
         },
         Node {
             parent: Some(
                 0,
             ),
-            tag: P,
+            kind: Span,
             start: 0.0,
             end: 1.0,
-            style: {
-                "color": "#ffffffff",
-                "font-family": "sans-serif",
-                "font-size": "calc(var(--subtitle-height) * 0.06666666666666667)",
-                "margin": "0",
-                "white-space": "pre-wrap",
-            },
-            language: Some(
-                "fr",
-            ),
-            text: None,
-        },
-        Node {
-            parent: Some(
-                1,
-            ),
-            tag: Span,
-            start: 0.0,
-            end: 1.0,
-            style: {
-                "color": "#ffffffff",
-                "font-family": "sans-serif",
-                "font-size": "calc(var(--subtitle-height) * 0.06666666666666667)",
-                "white-space": "pre-wrap",
-            },
-            language: Some(
-                "fr",
-            ),
             text: Some(
                 " a  ",
             ),
         },
         Node {
             parent: Some(
-                1,
+                0,
             ),
-            tag: Span,
+            kind: Span,
             start: 0.0,
             end: 1.0,
-            style: {
-                "color": "#ffffffff",
-                "font-family": "sans-serif",
-                "font-size": "calc(var(--subtitle-height) * 0.06666666666666667)",
-                "white-space": "normal",
-            },
-            language: Some(
-                "fr",
-            ),
             text: None,
         },
         Node {
             parent: Some(
-                3,
+                2,
             ),
-            tag: Span,
+            kind: Span,
             start: 0.0,
             end: 1.0,
-            style: {
-                "color": "#ffffffff",
-                "font-family": "sans-serif",
-                "font-size": "calc(var(--subtitle-height) * 0.06666666666666667)",
-                "white-space": "normal",
-            },
-            language: Some(
-                "fr",
-            ),
             text: Some(
-                " b ",
+                "b ",
             ),
         },
         Node {
             parent: Some(
-                1,
+                0,
             ),
-            tag: Span,
+            kind: Span,
             start: 0.0,
             end: 1.0,
-            style: {
-                "color": "#ffffffff",
-                "font-family": "sans-serif",
-                "font-size": "calc(var(--subtitle-height) * 0.06666666666666667)",
-                "white-space": "pre-wrap",
-            },
-            language: Some(
-                "fr",
-            ),
             text: Some(
                 " c ",
             ),

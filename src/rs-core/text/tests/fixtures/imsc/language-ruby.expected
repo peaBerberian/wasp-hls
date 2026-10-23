@@ -1,0 +1,72 @@
+Document {
+    nodes: [
+        Node {
+            parent: None,
+            kind: Paragraph,
+            start: 1.0,
+            end: 4.0,
+            text: None,
+        },
+        Node {
+            parent: Some(
+                0,
+            ),
+            kind: Span,
+            start: 1.0,
+            end: 4.0,
+            text: None,
+        },
+        Node {
+            parent: Some(
+                1,
+            ),
+            kind: Span,
+            start: 1.0,
+            end: 4.0,
+            text: None,
+        },
+        Node {
+            parent: Some(
+                2,
+            ),
+            kind: Span,
+            start: 1.0,
+            end: 4.0,
+            text: Some(
+                "漢",
+            ),
+        },
+        Node {
+            parent: Some(
+                0,
+            ),
+            kind: Span,
+            start: 1.0,
+            end: 4.0,
+            text: Some(
+                " ",
+            ),
+        },
+        Node {
+            parent: Some(
+                0,
+            ),
+            kind: Span,
+            start: 1.0,
+            end: 4.0,
+            text: None,
+        },
+        Node {
+            parent: Some(
+                5,
+            ),
+            kind: Span,
+            start: 1.0,
+            end: 4.0,
+            text: Some(
+                "English",
+            ),
+        },
+    ],
+    diagnostics: [],
+}
