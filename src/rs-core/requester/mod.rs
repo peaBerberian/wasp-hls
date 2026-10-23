@@ -19,8 +19,6 @@ pub(crate) enum RequestLaneTag {
     Audio,
     Video,
     Probe,
-    // XXX TODO: Why out of urgency? Why out of ABR samples?
-    // TODO(subtitles): queue this lane independently; exclude it from A/V urgency and ABR samples.
     Subtitles,
 }
 
@@ -741,6 +739,7 @@ impl Requester {
         }
     }
 
+    // XXX TODO: Why would this ever be needed?
     pub(crate) fn abort_playlists_with_type(&mut self, media_type: MediaType) {
         let mut index = 0;
         while index < self.pending_playlist_requests.len() {

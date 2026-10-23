@@ -71,9 +71,12 @@ pub struct Dispatcher {
     /// the regular buffering pipeline to be ready before being pushed.
     ready_probe_segments: ReadyProbeSegments,
 
-    /// Preferred criteria to resolve the initial audio track selection for the
-    /// next content being loaded.
+    /// Preferred criteria to resolve the initial audio track selection for the next content being
+    /// loaded.
     initial_audio_track_selection: Vec<InitialAudioTrackSelection>,
+
+    /// Preferred criteria to resolve the initial subtitles track selection for the next content
+    /// being loaded.
     initial_subtitle_track_selection: Vec<Option<InitialSubtitleTrackSelection>>,
 }
 
