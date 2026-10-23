@@ -25,6 +25,7 @@ pub struct Node {
     pub text: Option<String>,
     /// A label such as "fr". The parser also applies labels from parent nodes.
     pub language: Option<Arc<str>>,
+    pub appearance: super::Appearance,
 }
 impl Node {
     pub(super) fn new(parent: Option<usize>, kind: Kind, start: f64, end: f64) -> Self {
@@ -35,6 +36,7 @@ impl Node {
             end,
             text: None,
             language: None,
+            appearance: super::Appearance::default(),
         }
     }
 }
@@ -71,5 +73,5 @@ impl Timeline {
 }
 // TODO: Send each document to JS as arrays of nodes, times and UTF-8 text.
 // JS must copy the data before Rust frees it. Native code can use Document directly.
-// TODO: Add styles from the subtitle file. Keep the same parser functions.
 // TODO: Add language labels and ruby kinds to the arrays sent to JS.
+// TODO: Send each different appearance once. Nodes can use its array index.

@@ -1,4 +1,5 @@
 //! Each parser change has authored fixtures and tests of its public output.
+mod appearance;
 mod fixture_tests;
 mod language;
 mod text;
@@ -31,4 +32,21 @@ fn plain(d: &Document) -> String {
             }
         })
         .collect()
+}
+fn values(source: &str) {
+    for line in source
+        .lines()
+        .filter(|s| !s.is_empty() && !s.starts_with('#'))
+    {
+        let parts: Vec<_> = line.split('\t').collect();
+        assert_eq!(parts.len(), 4, "{line}");
+        let got = super::properties::parse(
+            parts[2],
+            parts[3],
+            parts[0] == "css",
+            &mut super::budget::Budget::new(Limits::default()),
+        )
+        .unwrap();
+        assert_eq!(got.is_some(), parts[1] == "+", "{line}");
+    }
 }

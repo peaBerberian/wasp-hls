@@ -7,10 +7,117 @@ Document {
             end: 5.0,
             text: None,
             language: None,
+            appearance: Appearance {
+                color: [
+                    255,
+                    255,
+                    255,
+                    255,
+                ],
+                background: [
+                    0,
+                    0,
+                    0,
+                    204,
+                ],
+                font_family: None,
+                font_size: VideoHeight(
+                    0.05,
+                ),
+                font_style: Normal,
+                font_weight: 400.0,
+                decoration: Decoration {
+                    underline: false,
+                    overline: false,
+                    line_through: false,
+                },
+                line_height: Multiple(
+                    1.2,
+                ),
+                wrap: true,
+            },
         },
         Node {
             parent: Some(
                 0,
+            ),
+            kind: Span,
+            start: 0.0,
+            end: 5.0,
+            text: None,
+            language: None,
+            appearance: Appearance {
+                color: [
+                    255,
+                    255,
+                    255,
+                    255,
+                ],
+                background: [
+                    0,
+                    0,
+                    0,
+                    0,
+                ],
+                font_family: None,
+                font_size: VideoHeight(
+                    0.05,
+                ),
+                font_style: Normal,
+                font_weight: 400.0,
+                decoration: Decoration {
+                    underline: false,
+                    overline: false,
+                    line_through: false,
+                },
+                line_height: Multiple(
+                    1.2,
+                ),
+                wrap: true,
+            },
+        },
+        Node {
+            parent: Some(
+                1,
+            ),
+            kind: Span,
+            start: 0.0,
+            end: 5.0,
+            text: None,
+            language: None,
+            appearance: Appearance {
+                color: [
+                    255,
+                    255,
+                    255,
+                    255,
+                ],
+                background: [
+                    0,
+                    0,
+                    0,
+                    0,
+                ],
+                font_family: None,
+                font_size: VideoHeight(
+                    0.05,
+                ),
+                font_style: Normal,
+                font_weight: 700.0,
+                decoration: Decoration {
+                    underline: false,
+                    overline: false,
+                    line_through: false,
+                },
+                line_height: Multiple(
+                    1.2,
+                ),
+                wrap: true,
+            },
+        },
+        Node {
+            parent: Some(
+                2,
             ),
             kind: Span,
             start: 0.0,
@@ -19,10 +126,39 @@ Document {
                 "A & B",
             ),
             language: None,
+            appearance: Appearance {
+                color: [
+                    255,
+                    255,
+                    255,
+                    255,
+                ],
+                background: [
+                    0,
+                    0,
+                    0,
+                    0,
+                ],
+                font_family: None,
+                font_size: VideoHeight(
+                    0.05,
+                ),
+                font_style: Normal,
+                font_weight: 700.0,
+                decoration: Decoration {
+                    underline: false,
+                    overline: false,
+                    line_through: false,
+                },
+                line_height: Multiple(
+                    1.2,
+                ),
+                wrap: true,
+            },
         },
         Node {
             parent: Some(
-                0,
+                1,
             ),
             kind: Span,
             start: 0.0,
@@ -31,10 +167,78 @@ Document {
                 " ",
             ),
             language: None,
+            appearance: Appearance {
+                color: [
+                    255,
+                    255,
+                    255,
+                    255,
+                ],
+                background: [
+                    0,
+                    0,
+                    0,
+                    0,
+                ],
+                font_family: None,
+                font_size: VideoHeight(
+                    0.05,
+                ),
+                font_style: Normal,
+                font_weight: 400.0,
+                decoration: Decoration {
+                    underline: false,
+                    overline: false,
+                    line_through: false,
+                },
+                line_height: Multiple(
+                    1.2,
+                ),
+                wrap: true,
+            },
         },
         Node {
             parent: Some(
-                0,
+                1,
+            ),
+            kind: Span,
+            start: 0.0,
+            end: 5.0,
+            text: None,
+            language: None,
+            appearance: Appearance {
+                color: [
+                    255,
+                    255,
+                    255,
+                    255,
+                ],
+                background: [
+                    0,
+                    0,
+                    0,
+                    0,
+                ],
+                font_family: None,
+                font_size: VideoHeight(
+                    0.05,
+                ),
+                font_style: Italic,
+                font_weight: 400.0,
+                decoration: Decoration {
+                    underline: false,
+                    overline: false,
+                    line_through: false,
+                },
+                line_height: Multiple(
+                    1.2,
+                ),
+                wrap: true,
+            },
+        },
+        Node {
+            parent: Some(
+                5,
             ),
             kind: Span,
             start: 0.0,
@@ -43,6 +247,35 @@ Document {
                 "é",
             ),
             language: None,
+            appearance: Appearance {
+                color: [
+                    255,
+                    255,
+                    255,
+                    255,
+                ],
+                background: [
+                    0,
+                    0,
+                    0,
+                    0,
+                ],
+                font_family: None,
+                font_size: VideoHeight(
+                    0.05,
+                ),
+                font_style: Italic,
+                font_weight: 400.0,
+                decoration: Decoration {
+                    underline: false,
+                    overline: false,
+                    line_through: false,
+                },
+                line_height: Multiple(
+                    1.2,
+                ),
+                wrap: true,
+            },
         },
         Node {
             parent: Some(
@@ -55,6 +288,35 @@ Document {
                 "\n",
             ),
             language: None,
+            appearance: Appearance {
+                color: [
+                    255,
+                    255,
+                    255,
+                    255,
+                ],
+                background: [
+                    0,
+                    0,
+                    0,
+                    204,
+                ],
+                font_family: None,
+                font_size: VideoHeight(
+                    0.05,
+                ),
+                font_style: Normal,
+                font_weight: 400.0,
+                decoration: Decoration {
+                    underline: false,
+                    overline: false,
+                    line_through: false,
+                },
+                line_height: Multiple(
+                    1.2,
+                ),
+                wrap: true,
+            },
         },
         Node {
             parent: Some(
@@ -65,10 +327,39 @@ Document {
             end: 5.0,
             text: None,
             language: None,
+            appearance: Appearance {
+                color: [
+                    255,
+                    255,
+                    255,
+                    255,
+                ],
+                background: [
+                    0,
+                    0,
+                    0,
+                    0,
+                ],
+                font_family: None,
+                font_size: VideoHeight(
+                    0.05,
+                ),
+                font_style: Normal,
+                font_weight: 400.0,
+                decoration: Decoration {
+                    underline: false,
+                    overline: false,
+                    line_through: false,
+                },
+                line_height: Multiple(
+                    1.2,
+                ),
+                wrap: true,
+            },
         },
         Node {
             parent: Some(
-                5,
+                8,
             ),
             kind: Span,
             start: 0.0,
@@ -77,20 +368,78 @@ Document {
                 "字",
             ),
             language: None,
+            appearance: Appearance {
+                color: [
+                    255,
+                    255,
+                    255,
+                    255,
+                ],
+                background: [
+                    0,
+                    0,
+                    0,
+                    0,
+                ],
+                font_family: None,
+                font_size: VideoHeight(
+                    0.05,
+                ),
+                font_style: Normal,
+                font_weight: 400.0,
+                decoration: Decoration {
+                    underline: false,
+                    overline: false,
+                    line_through: false,
+                },
+                line_height: Multiple(
+                    1.2,
+                ),
+                wrap: true,
+            },
         },
         Node {
             parent: Some(
-                5,
+                8,
             ),
             kind: RubyText,
             start: 0.0,
             end: 5.0,
             text: None,
             language: None,
+            appearance: Appearance {
+                color: [
+                    255,
+                    255,
+                    255,
+                    255,
+                ],
+                background: [
+                    0,
+                    0,
+                    0,
+                    0,
+                ],
+                font_family: None,
+                font_size: VideoHeight(
+                    0.025,
+                ),
+                font_style: Normal,
+                font_weight: 400.0,
+                decoration: Decoration {
+                    underline: false,
+                    overline: false,
+                    line_through: false,
+                },
+                line_height: Multiple(
+                    1.2,
+                ),
+                wrap: true,
+            },
         },
         Node {
             parent: Some(
-                7,
+                10,
             ),
             kind: Span,
             start: 0.0,
@@ -99,6 +448,35 @@ Document {
                 "ji",
             ),
             language: None,
+            appearance: Appearance {
+                color: [
+                    255,
+                    255,
+                    255,
+                    255,
+                ],
+                background: [
+                    0,
+                    0,
+                    0,
+                    0,
+                ],
+                font_family: None,
+                font_size: VideoHeight(
+                    0.025,
+                ),
+                font_style: Normal,
+                font_weight: 400.0,
+                decoration: Decoration {
+                    underline: false,
+                    overline: false,
+                    line_through: false,
+                },
+                line_height: Multiple(
+                    1.2,
+                ),
+                wrap: true,
+            },
         },
         Node {
             parent: Some(
@@ -111,10 +489,39 @@ Document {
             language: Some(
                 "fr",
             ),
+            appearance: Appearance {
+                color: [
+                    255,
+                    255,
+                    255,
+                    255,
+                ],
+                background: [
+                    0,
+                    0,
+                    0,
+                    0,
+                ],
+                font_family: None,
+                font_size: VideoHeight(
+                    0.05,
+                ),
+                font_style: Normal,
+                font_weight: 400.0,
+                decoration: Decoration {
+                    underline: false,
+                    overline: false,
+                    line_through: false,
+                },
+                line_height: Multiple(
+                    1.2,
+                ),
+                wrap: true,
+            },
         },
         Node {
             parent: Some(
-                9,
+                12,
             ),
             kind: Span,
             start: 0.0,
@@ -125,6 +532,35 @@ Document {
             language: Some(
                 "fr",
             ),
+            appearance: Appearance {
+                color: [
+                    255,
+                    255,
+                    255,
+                    255,
+                ],
+                background: [
+                    0,
+                    0,
+                    0,
+                    0,
+                ],
+                font_family: None,
+                font_size: VideoHeight(
+                    0.05,
+                ),
+                font_style: Normal,
+                font_weight: 400.0,
+                decoration: Decoration {
+                    underline: false,
+                    overline: false,
+                    line_through: false,
+                },
+                line_height: Multiple(
+                    1.2,
+                ),
+                wrap: true,
+            },
         },
     ],
     diagnostics: [],

@@ -1,4 +1,5 @@
 //! Read IMSC XML and return text with its start and end times.
+mod styles;
 mod time;
 mod tree;
 mod xml;
@@ -39,7 +40,12 @@ pub fn parse_with_timeline(
     let rates = rates(root)?;
     let preserve = tree::space(root, false)?;
     let language = tree::language(root, None, &mut budget)?;
+    let mut styles = styles::Styles::read(&xml, limits, &mut budget)?;
     let out = Document::default();
+    let out = Document {
+        diagnostics: std::mem::take(&mut styles.diagnostics),
+        ..out
+    };
     let mut reader = tree::Reader {
         xml: &mut xml,
         rates,
@@ -47,6 +53,8 @@ pub fn parse_with_timeline(
         preserved: Vec::new(),
         ids: std::collections::BTreeSet::new(),
         budget: &mut budget,
+        styles,
+        groups: Vec::new(),
     };
     // Start reading text and times at body, not at the tt root.
     for child in std::mem::take(&mut reader.xml[0].children) {
@@ -60,6 +68,8 @@ pub fn parse_with_timeline(
                     sequence: false,
                     preserve,
                     language: language.clone(),
+                    computed: reader.styles.base.clone(),
+                    region: None,
                 },
             )?;
         }

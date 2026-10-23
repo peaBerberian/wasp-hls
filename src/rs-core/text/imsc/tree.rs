@@ -8,6 +8,8 @@ pub(super) struct Context {
     pub sequence: bool,
     pub preserve: bool,
     pub language: Option<Arc<str>>,
+    pub computed: crate::text::properties::Computed,
+    pub region: Option<usize>,
 }
 pub(super) struct Reader<'a> {
     pub xml: &'a mut [Element],
@@ -16,6 +18,8 @@ pub(super) struct Reader<'a> {
     pub preserved: Vec<bool>,
     pub ids: std::collections::BTreeSet<String>,
     pub budget: &'a mut Budget,
+    pub styles: styles::Styles,
+    pub groups: Vec<usize>,
 }
 pub(super) fn space(e: &Element, parent: bool) -> Result<bool, Error> {
     match e.attr(XML, "space") {
@@ -100,6 +104,34 @@ impl Reader<'_> {
             Some("text") => kind = Kind::RubyText,
             _ => {}
         }
+        // TODO: Support region changes inside a paragraph.
+        if group || paragraph {
+            if let Some(id) = e.attr("", "region") {
+                c.region = Some(
+                    *self
+                        .styles
+                        .regions
+                        .get(id)
+                        .ok_or_else(|| Error::Invalid(format!("unknown region {id}")))?,
+                );
+            }
+        }
+        let local = self.styles.specified(i, self.xml, self.budget)?;
+        if paragraph {
+            c.computed = self.styles.region(c.region, self.xml, self.budget)?;
+            for &g in &self.groups {
+                let group = self.styles.specified(g, self.xml, self.budget)?;
+                c.computed = self.styles.apply(&c.computed, &group, self.budget)?;
+            }
+        }
+        if group {
+            self.groups.push(i);
+        } else {
+            c.computed = self.styles.apply(&c.computed, &local, self.budget)?;
+            if let Some(role) = local.iter().find_map(|p| p.ruby()) {
+                kind = role;
+            }
+        }
         let mut parent = c.parent;
         if !group && (paragraph || parent.is_some()) {
             let mut node = Node::new(parent, kind, start, end.unwrap_or(f64::INFINITY));
@@ -107,6 +139,7 @@ impl Reader<'_> {
                 node.text = self.xml[i].text.take();
             }
             node.language = c.language.clone();
+            node.appearance = c.computed.appearance.clone();
             parent = Some(self.out.push(node, self.budget)?);
             self.preserved.resize(self.out.nodes.len(), c.preserve);
         }
@@ -152,6 +185,9 @@ impl Reader<'_> {
                     _ => None,
                 };
             }
+        }
+        if group {
+            self.groups.pop();
         }
         // A span containing only text has a default duration of zero in seq.
         // In par, it lasts as long as its parent. CDATA can split the stored

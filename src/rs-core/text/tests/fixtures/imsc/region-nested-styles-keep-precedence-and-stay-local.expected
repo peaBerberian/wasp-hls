@@ -7,6 +7,33 @@ Document {
             end: 2.0,
             text: None,
             language: None,
+            appearance: Appearance {
+                color: [
+                    0,
+                    128,
+                    0,
+                    255,
+                ],
+                background: [
+                    0,
+                    0,
+                    0,
+                    0,
+                ],
+                font_family: None,
+                font_size: VideoHeight(
+                    0.06666666666666667,
+                ),
+                font_style: Normal,
+                font_weight: 700.0,
+                decoration: Decoration {
+                    underline: false,
+                    overline: false,
+                    line_through: false,
+                },
+                line_height: Normal,
+                wrap: true,
+            },
         },
         Node {
             parent: Some(
@@ -19,7 +46,39 @@ Document {
                 "Hello",
             ),
             language: None,
+            appearance: Appearance {
+                color: [
+                    0,
+                    128,
+                    0,
+                    255,
+                ],
+                background: [
+                    0,
+                    0,
+                    0,
+                    0,
+                ],
+                font_family: None,
+                font_size: VideoHeight(
+                    0.06666666666666667,
+                ),
+                font_style: Normal,
+                font_weight: 700.0,
+                decoration: Decoration {
+                    underline: false,
+                    overline: false,
+                    line_through: false,
+                },
+                line_height: Normal,
+                wrap: true,
+            },
         },
     ],
-    diagnostics: [],
+    diagnostics: [
+        Diagnostic {
+            line: None,
+            message: "ignored unknown style reference local",
+        },
+    ],
 }

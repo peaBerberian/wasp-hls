@@ -7,6 +7,33 @@ Document {
             end: 4.0,
             text: None,
             language: None,
+            appearance: Appearance {
+                color: [
+                    255,
+                    255,
+                    255,
+                    255,
+                ],
+                background: [
+                    0,
+                    0,
+                    0,
+                    0,
+                ],
+                font_family: None,
+                font_size: VideoHeight(
+                    0.06666666666666667,
+                ),
+                font_style: Normal,
+                font_weight: 700.0,
+                decoration: Decoration {
+                    underline: true,
+                    overline: false,
+                    line_through: false,
+                },
+                line_height: Normal,
+                wrap: true,
+            },
         },
         Node {
             parent: Some(
@@ -17,6 +44,33 @@ Document {
             end: 4.0,
             text: None,
             language: None,
+            appearance: Appearance {
+                color: [
+                    255,
+                    255,
+                    255,
+                    255,
+                ],
+                background: [
+                    0,
+                    0,
+                    0,
+                    0,
+                ],
+                font_family: None,
+                font_size: VideoHeight(
+                    0.06666666666666667,
+                ),
+                font_style: Normal,
+                font_weight: 700.0,
+                decoration: Decoration {
+                    underline: false,
+                    overline: false,
+                    line_through: false,
+                },
+                line_height: Normal,
+                wrap: true,
+            },
         },
         Node {
             parent: Some(
@@ -29,6 +83,33 @@ Document {
                 "Plain",
             ),
             language: None,
+            appearance: Appearance {
+                color: [
+                    255,
+                    255,
+                    255,
+                    255,
+                ],
+                background: [
+                    0,
+                    0,
+                    0,
+                    0,
+                ],
+                font_family: None,
+                font_size: VideoHeight(
+                    0.06666666666666667,
+                ),
+                font_style: Normal,
+                font_weight: 700.0,
+                decoration: Decoration {
+                    underline: false,
+                    overline: false,
+                    line_through: false,
+                },
+                line_height: Normal,
+                wrap: true,
+            },
         },
         Node {
             parent: Some(
@@ -41,6 +122,33 @@ Document {
                 " ",
             ),
             language: None,
+            appearance: Appearance {
+                color: [
+                    255,
+                    255,
+                    255,
+                    255,
+                ],
+                background: [
+                    0,
+                    0,
+                    0,
+                    0,
+                ],
+                font_family: None,
+                font_size: VideoHeight(
+                    0.06666666666666667,
+                ),
+                font_style: Normal,
+                font_weight: 700.0,
+                decoration: Decoration {
+                    underline: true,
+                    overline: false,
+                    line_through: false,
+                },
+                line_height: Normal,
+                wrap: true,
+            },
         },
         Node {
             parent: Some(
@@ -51,6 +159,33 @@ Document {
             end: 4.0,
             text: None,
             language: None,
+            appearance: Appearance {
+                color: [
+                    255,
+                    255,
+                    255,
+                    255,
+                ],
+                background: [
+                    0,
+                    0,
+                    0,
+                    0,
+                ],
+                font_family: None,
+                font_size: VideoHeight(
+                    0.06666666666666667,
+                ),
+                font_style: Italic,
+                font_weight: 700.0,
+                decoration: Decoration {
+                    underline: true,
+                    overline: false,
+                    line_through: false,
+                },
+                line_height: Normal,
+                wrap: true,
+            },
         },
         Node {
             parent: Some(
@@ -63,6 +198,33 @@ Document {
                 "emphasis",
             ),
             language: None,
+            appearance: Appearance {
+                color: [
+                    255,
+                    255,
+                    255,
+                    255,
+                ],
+                background: [
+                    0,
+                    0,
+                    0,
+                    0,
+                ],
+                font_family: None,
+                font_size: VideoHeight(
+                    0.06666666666666667,
+                ),
+                font_style: Italic,
+                font_weight: 700.0,
+                decoration: Decoration {
+                    underline: true,
+                    overline: false,
+                    line_through: false,
+                },
+                line_height: Normal,
+                wrap: true,
+            },
         },
     ],
     diagnostics: [],

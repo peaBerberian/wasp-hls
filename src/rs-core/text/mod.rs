@@ -5,6 +5,10 @@ mod model;
 pub mod mp4;
 pub mod vtt;
 pub use model::{Document, Kind, Node, Timeline};
+mod appearance;
+mod properties;
+mod syntax;
+pub use appearance::*;
 /// Fatal errors mean no document can be used. Recoverable WebVTT cue errors are
 /// returned alongside the successfully parsed cues instead.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]

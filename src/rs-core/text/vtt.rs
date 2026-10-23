@@ -1,4 +1,5 @@
 //! Read WebVTT segments. Save the initialization header for later segments.
+mod css;
 mod entities;
 mod text;
 mod timestamp;
@@ -24,6 +25,7 @@ impl TimestampMap {
 #[derive(Debug, Clone, Default)]
 pub struct Header {
     map: TimestampMap,
+    rules: Vec<css::Rule>,
 }
 pub fn parse_init(bytes: &[u8]) -> Result<Header, Error> {
     let mut header = None;
@@ -87,6 +89,7 @@ fn read(
     let mut header = Header::default();
     if !signature {
         let previous = init.unwrap();
+        css::reserve(&previous.rules, &mut budget)?;
         header = previous.clone();
     }
     let mut i = usize::from(signature);
@@ -127,8 +130,14 @@ fn read(
                     &mut budget,
                 )?;
             } else {
-                // TODO: Read CSS and region settings from the subtitle file.
-                let _ = begin;
+                if first == "STYLE" {
+                    budget.bytes(lines[begin..i].iter().map(|s| s.len() + 1).sum())?;
+                    header.rules.extend(css::parse(
+                        &lines[begin..i].join("\n"),
+                        limits,
+                        &mut budget,
+                    )?);
+                }
             }
             continue;
         }
@@ -151,7 +160,15 @@ fn read(
             let start = header.map.map_seconds(start, timeline.media_time) + offset;
             let end = start + duration;
             let parent = None;
-            let node = Node::new(parent, Kind::Paragraph, start, end);
+            let mut computed = super::properties::Computed::vtt();
+            let mut node = Node::new(parent, Kind::Paragraph, start, end);
+            css::apply(
+                &header.rules,
+                css::Target::Root(id),
+                &mut computed,
+                &mut budget,
+            )?;
+            node.appearance = computed.appearance.clone();
             let parent = out.push(node, &mut budget)?;
             budget.bytes(lines[begin..i].iter().map(|s| s.len() + 1).sum())?;
             text::parse(
@@ -160,11 +177,14 @@ fn read(
                 &mut out,
                 limits,
                 &mut budget,
+                text::Styles {
+                    rules: &header.rules,
+                    computed,
+                },
             )?;
         } else {
             diagnostic(&mut out, line, "invalid cue timings", &mut budget)?;
         }
-        let _ = id;
     }
     *save = Some(header);
     Ok(out)

@@ -7,6 +7,35 @@ Document {
             end: 2.75,
             text: None,
             language: None,
+            appearance: Appearance {
+                color: [
+                    255,
+                    255,
+                    255,
+                    255,
+                ],
+                background: [
+                    0,
+                    0,
+                    0,
+                    204,
+                ],
+                font_family: None,
+                font_size: VideoHeight(
+                    0.05,
+                ),
+                font_style: Normal,
+                font_weight: 400.0,
+                decoration: Decoration {
+                    underline: false,
+                    overline: false,
+                    line_through: false,
+                },
+                line_height: Multiple(
+                    1.2,
+                ),
+                wrap: true,
+            },
         },
         Node {
             parent: Some(
@@ -19,6 +48,35 @@ Document {
                 "Hello world",
             ),
             language: None,
+            appearance: Appearance {
+                color: [
+                    255,
+                    255,
+                    255,
+                    255,
+                ],
+                background: [
+                    0,
+                    0,
+                    0,
+                    204,
+                ],
+                font_family: None,
+                font_size: VideoHeight(
+                    0.05,
+                ),
+                font_style: Normal,
+                font_weight: 400.0,
+                decoration: Decoration {
+                    underline: false,
+                    overline: false,
+                    line_through: false,
+                },
+                line_height: Multiple(
+                    1.2,
+                ),
+                wrap: true,
+            },
         },
         Node {
             parent: None,
@@ -27,6 +85,35 @@ Document {
             end: 5.0,
             text: None,
             language: None,
+            appearance: Appearance {
+                color: [
+                    255,
+                    255,
+                    255,
+                    255,
+                ],
+                background: [
+                    0,
+                    0,
+                    0,
+                    204,
+                ],
+                font_family: None,
+                font_size: VideoHeight(
+                    0.05,
+                ),
+                font_style: Normal,
+                font_weight: 400.0,
+                decoration: Decoration {
+                    underline: false,
+                    overline: false,
+                    line_through: false,
+                },
+                line_height: Multiple(
+                    1.2,
+                ),
+                wrap: true,
+            },
         },
         Node {
             parent: Some(
@@ -39,6 +126,35 @@ Document {
                 "second line\nthird line",
             ),
             language: None,
+            appearance: Appearance {
+                color: [
+                    255,
+                    255,
+                    255,
+                    255,
+                ],
+                background: [
+                    0,
+                    0,
+                    0,
+                    204,
+                ],
+                font_family: None,
+                font_size: VideoHeight(
+                    0.05,
+                ),
+                font_style: Normal,
+                font_weight: 400.0,
+                decoration: Decoration {
+                    underline: false,
+                    overline: false,
+                    line_through: false,
+                },
+                line_height: Multiple(
+                    1.2,
+                ),
+                wrap: true,
+            },
         },
     ],
     diagnostics: [],

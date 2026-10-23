@@ -7,6 +7,33 @@ Document {
             end: inf,
             text: None,
             language: None,
+            appearance: Appearance {
+                color: [
+                    255,
+                    255,
+                    255,
+                    255,
+                ],
+                background: [
+                    0,
+                    0,
+                    0,
+                    0,
+                ],
+                font_family: None,
+                font_size: Pixels(
+                    12.0,
+                ),
+                font_style: Normal,
+                font_weight: 700.0,
+                decoration: Decoration {
+                    underline: false,
+                    overline: false,
+                    line_through: false,
+                },
+                line_height: Normal,
+                wrap: true,
+            },
         },
         Node {
             parent: Some(
@@ -19,6 +46,33 @@ Document {
                 "Still visible",
             ),
             language: None,
+            appearance: Appearance {
+                color: [
+                    255,
+                    255,
+                    255,
+                    255,
+                ],
+                background: [
+                    0,
+                    0,
+                    0,
+                    0,
+                ],
+                font_family: None,
+                font_size: Pixels(
+                    12.0,
+                ),
+                font_style: Normal,
+                font_weight: 700.0,
+                decoration: Decoration {
+                    underline: false,
+                    overline: false,
+                    line_through: false,
+                },
+                line_height: Normal,
+                wrap: true,
+            },
         },
     ],
     diagnostics: [],

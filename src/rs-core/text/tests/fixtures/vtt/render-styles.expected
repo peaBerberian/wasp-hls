@@ -7,10 +7,117 @@ Document {
             end: 3.0,
             text: None,
             language: None,
+            appearance: Appearance {
+                color: [
+                    0,
+                    0,
+                    255,
+                    255,
+                ],
+                background: [
+                    0,
+                    0,
+                    0,
+                    204,
+                ],
+                font_family: None,
+                font_size: VideoHeight(
+                    0.05,
+                ),
+                font_style: Normal,
+                font_weight: 700.0,
+                decoration: Decoration {
+                    underline: false,
+                    overline: false,
+                    line_through: false,
+                },
+                line_height: Multiple(
+                    1.2,
+                ),
+                wrap: true,
+            },
         },
         Node {
             parent: Some(
                 0,
+            ),
+            kind: Span,
+            start: 1.0,
+            end: 3.0,
+            text: None,
+            language: None,
+            appearance: Appearance {
+                color: [
+                    0,
+                    0,
+                    255,
+                    255,
+                ],
+                background: [
+                    0,
+                    0,
+                    0,
+                    0,
+                ],
+                font_family: None,
+                font_size: VideoHeight(
+                    0.05,
+                ),
+                font_style: Italic,
+                font_weight: 700.0,
+                decoration: Decoration {
+                    underline: false,
+                    overline: false,
+                    line_through: false,
+                },
+                line_height: Multiple(
+                    1.2,
+                ),
+                wrap: true,
+            },
+        },
+        Node {
+            parent: Some(
+                1,
+            ),
+            kind: Span,
+            start: 1.0,
+            end: 3.0,
+            text: None,
+            language: None,
+            appearance: Appearance {
+                color: [
+                    0,
+                    255,
+                    0,
+                    255,
+                ],
+                background: [
+                    0,
+                    0,
+                    0,
+                    0,
+                ],
+                font_family: None,
+                font_size: VideoHeight(
+                    0.05,
+                ),
+                font_style: Italic,
+                font_weight: 700.0,
+                decoration: Decoration {
+                    underline: false,
+                    overline: false,
+                    line_through: false,
+                },
+                line_height: Multiple(
+                    1.2,
+                ),
+                wrap: true,
+            },
+        },
+        Node {
+            parent: Some(
+                2,
             ),
             kind: Span,
             start: 1.0,
@@ -19,10 +126,39 @@ Document {
                 "Hello",
             ),
             language: None,
+            appearance: Appearance {
+                color: [
+                    0,
+                    255,
+                    0,
+                    255,
+                ],
+                background: [
+                    0,
+                    0,
+                    0,
+                    0,
+                ],
+                font_family: None,
+                font_size: VideoHeight(
+                    0.05,
+                ),
+                font_style: Italic,
+                font_weight: 700.0,
+                decoration: Decoration {
+                    underline: false,
+                    overline: false,
+                    line_through: false,
+                },
+                line_height: Multiple(
+                    1.2,
+                ),
+                wrap: true,
+            },
         },
         Node {
             parent: Some(
-                0,
+                1,
             ),
             kind: Span,
             start: 1.0,
@@ -31,6 +167,35 @@ Document {
                 " world",
             ),
             language: None,
+            appearance: Appearance {
+                color: [
+                    0,
+                    0,
+                    255,
+                    255,
+                ],
+                background: [
+                    0,
+                    0,
+                    0,
+                    0,
+                ],
+                font_family: None,
+                font_size: VideoHeight(
+                    0.05,
+                ),
+                font_style: Italic,
+                font_weight: 700.0,
+                decoration: Decoration {
+                    underline: false,
+                    overline: false,
+                    line_through: false,
+                },
+                line_height: Multiple(
+                    1.2,
+                ),
+                wrap: true,
+            },
         },
     ],
     diagnostics: [],

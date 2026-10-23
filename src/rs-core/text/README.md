@@ -17,8 +17,16 @@ Use `vtt::parse`, `imsc::parse`, or `imsc::parse_sample` for extracted MP4 sampl
   DTDs, image profiles and encrypted/subsampled MP4 documents are rejected.
 - Languages are inherited and attached to subtitle nodes. Ruby base and reading
   text have distinct kinds; a renderer can build ruby elements from them.
-- TODO: Add colors, fonts and positions from the subtitle file. Apply styles
-  from parent nodes too. Styles and cue settings are skipped for now.
+- `Appearance` contains computed text properties. Font lists are shared; colors,
+  sizes and decorations are typed. The output does not include style definitions or CSS selectors.
+- Named TTML styles, ordinary inheritance and supported WebVTT CSS are resolved
+  while parsing. Invalid declarations cannot replace a valid referenced value.
+- Apply decorations only to nodes that contain text. Ancestor CSS underlines cannot be
+  cancelled by a descendant, whereas TTML permits that cancellation.
+- Resolve `Length::VideoHeight` against the displayed video image height, not
+  the browser viewport. A browser backend can then set ordinary pixel values.
+- TODO: Add region geometry, cue positioning and vertical writing.
+- TODO: Add opacity, visibility, outlines, clipping and stacking order.
 
 `model.rs` defines the output. `imsc/` and `vtt/` read each format; `mp4.rs` reads
 its container. Native and browser backends call the same parser functions.
@@ -32,6 +40,7 @@ with JS copying the WASM data before Rust frees it. See `model.rs`.
 Timed `<set>` changes and external resources are unsupported. Foreign XML and
 metadata cannot introduce visible content or global styles. Source preservation
 is a non-goal. These readers do not check every authoring rule.
+EBU linePadding/multiRowAlign, escaped font names and complex CSS remain TODOs.
 
 XXX TODO: Is it overkill?
 `Limits` bounds input size, nesting, entries and estimated allocations, including

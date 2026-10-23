@@ -9,6 +9,33 @@ Document {
             language: Some(
                 "fr",
             ),
+            appearance: Appearance {
+                color: [
+                    255,
+                    255,
+                    255,
+                    255,
+                ],
+                background: [
+                    0,
+                    0,
+                    0,
+                    0,
+                ],
+                font_family: None,
+                font_size: VideoHeight(
+                    0.06666666666666667,
+                ),
+                font_style: Normal,
+                font_weight: 400.0,
+                decoration: Decoration {
+                    underline: false,
+                    overline: false,
+                    line_through: false,
+                },
+                line_height: Normal,
+                wrap: true,
+            },
         },
         Node {
             parent: Some(
@@ -23,6 +50,33 @@ Document {
             language: Some(
                 "fr",
             ),
+            appearance: Appearance {
+                color: [
+                    255,
+                    255,
+                    255,
+                    255,
+                ],
+                background: [
+                    0,
+                    0,
+                    0,
+                    0,
+                ],
+                font_family: None,
+                font_size: VideoHeight(
+                    0.06666666666666667,
+                ),
+                font_style: Normal,
+                font_weight: 400.0,
+                decoration: Decoration {
+                    underline: false,
+                    overline: false,
+                    line_through: false,
+                },
+                line_height: Normal,
+                wrap: true,
+            },
         },
         Node {
             parent: Some(
@@ -35,6 +89,33 @@ Document {
             language: Some(
                 "fr",
             ),
+            appearance: Appearance {
+                color: [
+                    255,
+                    255,
+                    255,
+                    255,
+                ],
+                background: [
+                    0,
+                    0,
+                    0,
+                    0,
+                ],
+                font_family: None,
+                font_size: VideoHeight(
+                    0.06666666666666667,
+                ),
+                font_style: Normal,
+                font_weight: 400.0,
+                decoration: Decoration {
+                    underline: false,
+                    overline: false,
+                    line_through: false,
+                },
+                line_height: Normal,
+                wrap: true,
+            },
         },
         Node {
             parent: Some(
@@ -49,6 +130,33 @@ Document {
             language: Some(
                 "fr",
             ),
+            appearance: Appearance {
+                color: [
+                    255,
+                    255,
+                    255,
+                    255,
+                ],
+                background: [
+                    0,
+                    0,
+                    0,
+                    0,
+                ],
+                font_family: None,
+                font_size: VideoHeight(
+                    0.06666666666666667,
+                ),
+                font_style: Normal,
+                font_weight: 400.0,
+                decoration: Decoration {
+                    underline: false,
+                    overline: false,
+                    line_through: false,
+                },
+                line_height: Normal,
+                wrap: true,
+            },
         },
         Node {
             parent: Some(
@@ -63,6 +171,33 @@ Document {
             language: Some(
                 "fr",
             ),
+            appearance: Appearance {
+                color: [
+                    255,
+                    255,
+                    255,
+                    255,
+                ],
+                background: [
+                    0,
+                    0,
+                    0,
+                    0,
+                ],
+                font_family: None,
+                font_size: VideoHeight(
+                    0.06666666666666667,
+                ),
+                font_style: Normal,
+                font_weight: 400.0,
+                decoration: Decoration {
+                    underline: false,
+                    overline: false,
+                    line_through: false,
+                },
+                line_height: Normal,
+                wrap: true,
+            },
         },
     ],
     diagnostics: [],

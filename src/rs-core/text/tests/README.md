@@ -11,6 +11,9 @@
   restrictions and truncation. Extracted sample data borrows the input.
 - Language/ruby tests distinguish base text from pronunciation guides and check
   inherited language on subtitle nodes, without altering application elements.
+- Property-value fixture tables keep CSS and TTML grammars separate. Tests cover
+  invalid overrides, style cycles, hidden definitions, font-list sharing, CSS
+  specificity/importance and a scanner work counter independent of machine speed.
 
 Reference material:
 

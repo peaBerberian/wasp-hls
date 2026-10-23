@@ -4,6 +4,11 @@ struct Frame<'a> {
     tag: &'a str,
     parent: usize,
     language: Option<Arc<str>>,
+    computed: crate::text::properties::Computed,
+}
+pub(super) struct Styles<'a> {
+    pub rules: &'a [super::css::Rule],
+    pub computed: crate::text::properties::Computed,
 }
 pub(super) fn parse(
     source: &str,
@@ -11,12 +16,14 @@ pub(super) fn parse(
     out: &mut Document,
     limits: Limits,
     budget: &mut Budget,
+    styles: Styles<'_>,
 ) -> Result<(), Error> {
     let (start, end) = (out.nodes[parent].start, out.nodes[parent].end);
     let mut stack = vec![Frame {
         tag: "",
         parent,
         language: None,
+        computed: styles.computed,
     }];
     let mut tail = source;
     while !tail.is_empty() {
@@ -53,6 +60,7 @@ pub(super) fn parse(
                 tag,
                 parent: previous.parent,
                 language: previous.language.clone(),
+                computed: previous.computed.child(),
             };
             if tag == "lang" {
                 budget.bytes(token[split..].len().saturating_mul(4) + 32)?;
@@ -66,7 +74,44 @@ pub(super) fn parse(
                 };
                 let mut n = Node::new(Some(previous.parent), kind, start, end);
                 n.language = frame.language.clone();
+                n.appearance = frame.computed.appearance.clone();
                 frame.parent = out.push(n, budget)?;
+            }
+            // Use cue IDs, classes and voice names to find the styles here.
+            // Return the resulting appearance, without that source data.
+            budget.bytes(
+                classes.clone().count() * std::mem::size_of::<&str>()
+                    + token[split..].len().saturating_mul(4),
+            )?;
+            let decoded = if matches!(tag, "v" | "lang") {
+                entities::decode(token[split..].trim())
+            } else {
+                String::new()
+            };
+            let mut annotation = String::with_capacity(decoded.len());
+            for word in decoded.split_ascii_whitespace() {
+                if !annotation.is_empty() {
+                    annotation.push(' ');
+                }
+                annotation.push_str(word);
+            }
+            css::apply(
+                styles.rules,
+                css::Target::Inline {
+                    tag,
+                    classes: classes.collect(),
+                    annotation: &annotation,
+                },
+                &mut frame.computed,
+                budget,
+            )?;
+            if !matches!(tag, "ruby" | "rt" | "lang") {
+                let mut n = Node::new(Some(previous.parent), Kind::Span, start, end);
+                n.language = frame.language.clone();
+                n.appearance = frame.computed.appearance.clone();
+                frame.parent = out.push(n, budget)?;
+            } else {
+                out.nodes[frame.parent].appearance = frame.computed.appearance.clone();
             }
             stack.push(frame);
         } else {
@@ -76,6 +121,7 @@ pub(super) fn parse(
             let mut n = Node::new(Some(frame.parent), Kind::Span, start, end);
             n.text = Some(entities::decode(&tail[..end_text]));
             n.language = frame.language.clone();
+            n.appearance = frame.computed.appearance.clone();
             out.push(n, budget)?;
             tail = &tail[end_text..];
         }
