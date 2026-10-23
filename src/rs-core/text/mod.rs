@@ -1,13 +1,10 @@
-//! Shared subtitle trees with playback times and CSS styles.
-//! Supply a fresh timeline reference after each discontinuity.
+//! Text subtitles with one shared output and no host bindings.
 mod budget;
 pub mod imsc;
+mod model;
 pub mod mp4;
-mod render;
-pub(crate) mod style;
 pub mod vtt;
-pub use render::{viewport_style, CssStyle, Document, Node, Tag, Timeline};
-
+pub use model::{Document, Kind, Node, Timeline};
 /// Fatal errors mean no document can be used. Recoverable WebVTT cue errors are
 /// returned alongside the successfully parsed cues instead.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]

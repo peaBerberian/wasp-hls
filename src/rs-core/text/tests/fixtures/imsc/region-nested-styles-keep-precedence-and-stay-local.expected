@@ -2,68 +2,22 @@ Document {
     nodes: [
         Node {
             parent: None,
-            tag: Div,
+            kind: Paragraph,
             start: 1.0,
             end: 2.0,
-            style: {
-                "color": "#008000ff",
-                "display": "flex",
-                "flex-direction": "column",
-                "font-family": "sans-serif",
-                "font-size": "calc(var(--subtitle-height) * 0.06666666666666667)",
-                "font-weight": "bold",
-                "height": "20%",
-                "justify-content": "flex-end",
-                "left": "10%",
-                "position": "absolute",
-                "top": "80%",
-                "width": "80%",
-            },
-            language: None,
             text: None,
         },
         Node {
             parent: Some(
                 0,
             ),
-            tag: P,
+            kind: Span,
             start: 1.0,
             end: 2.0,
-            style: {
-                "color": "#008000ff",
-                "font-family": "sans-serif",
-                "font-size": "calc(var(--subtitle-height) * 0.06666666666666667)",
-                "font-weight": "bold",
-                "margin": "0",
-                "white-space": "normal",
-            },
-            language: None,
-            text: None,
-        },
-        Node {
-            parent: Some(
-                1,
-            ),
-            tag: Span,
-            start: 1.0,
-            end: 2.0,
-            style: {
-                "color": "#008000ff",
-                "font-family": "sans-serif",
-                "font-size": "calc(var(--subtitle-height) * 0.06666666666666667)",
-                "font-weight": "bold",
-                "white-space": "normal",
-            },
-            language: None,
             text: Some(
                 "Hello",
             ),
         },
     ],
-    diagnostics: [
-        Diagnostic {
-            line: None,
-            message: "ignored unknown style reference local",
-        },
-    ],
+    diagnostics: [],
 }

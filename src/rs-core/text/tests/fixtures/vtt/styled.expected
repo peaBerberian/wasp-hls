@@ -2,80 +2,18 @@ Document {
     nodes: [
         Node {
             parent: None,
-            tag: Div,
+            kind: Paragraph,
             start: 1.0,
             end: 4.0,
-            style: {
-                "color": "white",
-                "font-size": "calc(var(--subtitle-height) * 0.05)",
-                "height": "3.5999999999999996em",
-                "left": "50%",
-                "line-height": "1.2",
-                "margin": "0",
-                "overflow": "hidden",
-                "position": "absolute",
-                "text-align": "center",
-                "top": "95%",
-                "transform": "translate(-50%, -100%)",
-                "white-space": "pre-wrap",
-                "width": "80%",
-            },
-            language: None,
             text: None,
         },
         Node {
             parent: Some(
                 0,
             ),
-            tag: Span,
+            kind: Span,
             start: 1.0,
             end: 4.0,
-            style: {
-                "background-color": "rgba(0, 0, 0, 0.8)",
-                "box-decoration-break": "clone",
-                "color": "#ffffffff",
-                "font-family": "proportionalSansSerif",
-            },
-            language: None,
-            text: None,
-        },
-        Node {
-            parent: Some(
-                1,
-            ),
-            tag: Span,
-            start: 1.0,
-            end: 4.0,
-            style: {
-                "font-style": "italic",
-            },
-            language: None,
-            text: None,
-        },
-        Node {
-            parent: Some(
-                2,
-            ),
-            tag: Span,
-            start: 1.0,
-            end: 4.0,
-            style: {
-                "background-color": "#00000080",
-                "color": "#ffff00ff",
-                "font-weight": "bold",
-            },
-            language: None,
-            text: None,
-        },
-        Node {
-            parent: Some(
-                3,
-            ),
-            tag: Span,
-            start: 1.0,
-            end: 4.0,
-            style: {},
-            language: None,
             text: Some(
                 "Watch out!",
             ),

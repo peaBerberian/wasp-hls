@@ -2,49 +2,18 @@ Document {
     nodes: [
         Node {
             parent: None,
-            tag: Div,
+            kind: Paragraph,
             start: 1.0,
             end: 2.0,
-            style: {
-                "color": "white",
-                "font-size": "calc(var(--subtitle-height) * 0.05)",
-                "height": "25%",
-                "left": "1.2em",
-                "line-height": "1.2",
-                "margin": "0",
-                "position": "absolute",
-                "text-align": "end",
-                "top": "25%",
-                "transform": "translate(-0%, -100%)",
-                "white-space": "pre-wrap",
-                "writing-mode": "vertical-rl",
-            },
-            language: None,
             text: None,
         },
         Node {
             parent: Some(
                 0,
             ),
-            tag: Span,
+            kind: Span,
             start: 1.0,
             end: 2.0,
-            style: {
-                "background-color": "rgba(0, 0, 0, 0.8)",
-                "box-decoration-break": "clone",
-            },
-            language: None,
-            text: None,
-        },
-        Node {
-            parent: Some(
-                1,
-            ),
-            tag: Span,
-            start: 1.0,
-            end: 2.0,
-            style: {},
-            language: None,
             text: Some(
                 "x",
             ),
