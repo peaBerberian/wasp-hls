@@ -220,7 +220,8 @@ impl TimelineReference {
         Some(delta)
     }
 
-    // Try sequence numbers when discontinuities and PDT give no offset, like hls.js and Shaka.
+    // Try sequence numbers when discontinuities and PDT give no offset, like other popular players
+    // (seen on hls.js and shaka-player, 2026-10).
     // Different playlists may use different sequence numbers. This is only a guess;
     // media timestamps are still needed for exact synchronization.
     fn estimate_by_sequence_number(&self, media_segments: &[MediaSegmentInfo]) -> Option<f64> {
