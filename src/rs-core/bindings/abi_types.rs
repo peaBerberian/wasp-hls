@@ -487,6 +487,25 @@ impl LogLevel {
 
 #[repr(u32)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MediaType {
+    Audio = 0,
+    Video = 1,
+    Text = 2,
+}
+
+impl MediaType {
+    pub fn from_raw(value: u32) -> Self {
+        match value {
+            0 => Self::Audio,
+            1 => Self::Video,
+            2 => Self::Text,
+            _ => Self::Audio,
+        }
+    }
+}
+
+#[repr(u32)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PlaylistNature {
     Event = 0,
     VoD = 1,
@@ -627,25 +646,6 @@ impl TrackSelectionErrorCode {
             0 => Self::UnknownTrack,
             1 => Self::NoCompatibleVariant,
             _ => Self::UnknownTrack,
-        }
-    }
-}
-
-#[repr(u32)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum MediaType {
-    Audio = 0,
-    Video = 1,
-    Text = 2,
-}
-
-impl MediaType {
-    pub fn from_raw(value: u32) -> Self {
-        match value {
-            0 => Self::Audio,
-            1 => Self::Video,
-            2 => Self::Text,
-            _ => Self::Audio,
         }
     }
 }
