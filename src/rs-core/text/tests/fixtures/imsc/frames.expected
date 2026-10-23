@@ -1,113 +1,57 @@
 Document {
-    rates: Rates {
-        frame_rate: 29.97002997002997,
-        tick_rate: 29.97002997002997,
-        explicit_frame_rate: true,
-        explicit_tick_rate: false,
-    },
-    root_style: Style {
-        properties: {},
-        unsupported: [],
-    },
-    cell_resolution: (
-        32,
-        15,
-    ),
-    styles: {},
-    regions: {},
     nodes: [
         Node {
             parent: None,
-            children: [
-                1,
-            ],
-            kind: Body,
-            id: None,
-            interval: Interval {
-                begin: 0.0,
-                end: Some(
-                    2.0020000000000002,
-                ),
+            tag: Div,
+            start: 1.0010000000000001,
+            end: 2.0020000000000002,
+            style: {
+                "color": "#ffffffff",
+                "display": "flex",
+                "flex-direction": "column",
+                "font-family": "sans-serif",
+                "font-size": "calc(var(--subtitle-height) * 0.06666666666666667)",
+                "height": "100%",
+                "justify-content": "flex-end",
+                "left": "0%",
+                "position": "absolute",
+                "top": "0%",
+                "width": "100%",
             },
-            region: None,
             language: None,
-            space: Default,
-            style: Style {
-                properties: {},
-                unsupported: [],
-            },
             text: None,
         },
         Node {
             parent: Some(
                 0,
             ),
-            children: [
-                2,
-            ],
-            kind: Division,
-            id: None,
-            interval: Interval {
-                begin: 0.0,
-                end: Some(
-                    2.0020000000000002,
-                ),
+            tag: P,
+            start: 1.0010000000000001,
+            end: 2.0020000000000002,
+            style: {
+                "color": "#ffffffff",
+                "font-family": "sans-serif",
+                "font-size": "calc(var(--subtitle-height) * 0.06666666666666667)",
+                "margin": "0",
+                "white-space": "normal",
             },
-            region: None,
             language: None,
-            space: Default,
-            style: Style {
-                properties: {},
-                unsupported: [],
-            },
             text: None,
         },
         Node {
             parent: Some(
                 1,
             ),
-            children: [
-                3,
-            ],
-            kind: Paragraph,
-            id: Some(
-                "p",
-            ),
-            interval: Interval {
-                begin: 1.0010000000000001,
-                end: Some(
-                    2.0020000000000002,
-                ),
+            tag: Span,
+            start: 1.0010000000000001,
+            end: 2.0020000000000002,
+            style: {
+                "color": "#ffffffff",
+                "font-family": "sans-serif",
+                "font-size": "calc(var(--subtitle-height) * 0.06666666666666667)",
+                "white-space": "normal",
             },
-            region: None,
             language: None,
-            space: Default,
-            style: Style {
-                properties: {},
-                unsupported: [],
-            },
-            text: None,
-        },
-        Node {
-            parent: Some(
-                2,
-            ),
-            children: [],
-            kind: Text,
-            id: None,
-            interval: Interval {
-                begin: 1.0010000000000001,
-                end: Some(
-                    2.0020000000000002,
-                ),
-            },
-            region: None,
-            language: None,
-            space: Default,
-            style: Style {
-                properties: {},
-                unsupported: [],
-            },
             text: Some(
                 "x",
             ),

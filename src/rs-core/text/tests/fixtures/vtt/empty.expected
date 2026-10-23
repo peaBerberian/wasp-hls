@@ -1,12 +1,4 @@
 Document {
-    header: Header {
-        timestamp_map: TimestampMap {
-            local_ms: 0,
-            mpegts: 0,
-        },
-        regions: [],
-        style_sheets: [],
-    },
-    cues: [],
+    nodes: [],
     diagnostics: [],
 }

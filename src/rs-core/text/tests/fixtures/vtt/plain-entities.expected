@@ -1,42 +1,53 @@
 Document {
-    header: Header {
-        timestamp_map: TimestampMap {
-            local_ms: 0,
-            mpegts: 0,
-        },
-        regions: [],
-        style_sheets: [],
-    },
-    cues: [
-        Cue {
-            id: "",
-            start_ms: 0,
-            end_ms: 1000,
-            settings: Settings {
-                vertical: Horizontal,
-                line: Auto,
-                line_align: Start,
-                position: None,
-                position_align: Auto,
-                size: 100.0,
-                align: Center,
-                region: None,
+    nodes: [
+        Node {
+            parent: None,
+            tag: Div,
+            start: 0.0,
+            end: 1.0,
+            style: {
+                "bottom": "0",
+                "color": "white",
+                "font-size": "calc(var(--subtitle-height) * 0.05)",
+                "left": "50%",
+                "line-height": "1.2",
+                "margin": "0",
+                "position": "absolute",
+                "text-align": "center",
+                "transform": "translate(-50%, -0%)",
+                "white-space": "pre-wrap",
+                "width": "100%",
+                "writing-mode": "horizontal-tb",
             },
-            raw_text: "&lt;&gt;&amp;&nbsp;&lrm;&rlm;",
-            text: [
-                Node {
-                    parent: None,
-                    kind: Root,
-                },
-                Node {
-                    parent: Some(
-                        0,
-                    ),
-                    kind: Text(
-                        "<>&\u{a0}\u{200e}\u{200f}",
-                    ),
-                },
-            ],
+            language: None,
+            text: None,
+        },
+        Node {
+            parent: Some(
+                0,
+            ),
+            tag: Span,
+            start: 0.0,
+            end: 1.0,
+            style: {
+                "background-color": "rgba(0, 0, 0, 0.8)",
+                "box-decoration-break": "clone",
+            },
+            language: None,
+            text: None,
+        },
+        Node {
+            parent: Some(
+                1,
+            ),
+            tag: Span,
+            start: 0.0,
+            end: 1.0,
+            style: {},
+            language: None,
+            text: Some(
+                "<>&\u{a0}\u{200e}\u{200f}",
+            ),
         },
     ],
     diagnostics: [],

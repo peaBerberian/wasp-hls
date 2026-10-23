@@ -1,0 +1,1 @@
+<tt xmlns="http://www.w3.org/ns/ttml" xmlns:tts="http://www.w3.org/ns/ttml#styling" xmlns:ttp="http://www.w3.org/ns/ttml#parameter"><head><styling><style xml:id="a" style="b"><style tts:fontWeight="bold"/></style><style xml:id="b" tts:color="blue"/></styling></head><body><div><p xml:id="p" style="a">x</p></div></body></tt>

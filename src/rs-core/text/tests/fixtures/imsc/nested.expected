@@ -1,164 +1,91 @@
 Document {
-    rates: Rates {
-        frame_rate: 30.0,
-        tick_rate: 1.0,
-        explicit_frame_rate: false,
-        explicit_tick_rate: false,
-    },
-    root_style: Style {
-        properties: {},
-        unsupported: [],
-    },
-    cell_resolution: (
-        32,
-        15,
-    ),
-    styles: {},
-    regions: {},
     nodes: [
         Node {
             parent: None,
-            children: [
-                1,
-            ],
-            kind: Body,
-            id: None,
-            interval: Interval {
-                begin: 10.0,
-                end: Some(
-                    20.0,
-                ),
+            tag: Div,
+            start: 13.0,
+            end: 16.0,
+            style: {
+                "color": "#ffffffff",
+                "display": "flex",
+                "flex-direction": "column",
+                "font-family": "sans-serif",
+                "font-size": "calc(var(--subtitle-height) * 0.06666666666666667)",
+                "height": "100%",
+                "justify-content": "flex-end",
+                "left": "0%",
+                "position": "absolute",
+                "top": "0%",
+                "width": "100%",
             },
-            region: None,
             language: None,
-            space: Default,
-            style: Style {
-                properties: {},
-                unsupported: [],
-            },
             text: None,
         },
         Node {
             parent: Some(
                 0,
             ),
-            children: [
-                2,
-            ],
-            kind: Division,
-            id: None,
-            interval: Interval {
-                begin: 11.0,
-                end: Some(
-                    16.0,
-                ),
+            tag: P,
+            start: 13.0,
+            end: 16.0,
+            style: {
+                "color": "#ffffffff",
+                "font-family": "sans-serif",
+                "font-size": "calc(var(--subtitle-height) * 0.06666666666666667)",
+                "margin": "0",
+                "white-space": "normal",
             },
-            region: None,
             language: None,
-            space: Default,
-            style: Style {
-                properties: {},
-                unsupported: [],
-            },
             text: None,
         },
         Node {
             parent: Some(
                 1,
             ),
-            children: [
-                3,
-                4,
-            ],
-            kind: Paragraph,
-            id: Some(
-                "p",
-            ),
-            interval: Interval {
-                begin: 13.0,
-                end: Some(
-                    16.0,
-                ),
+            tag: Span,
+            start: 13.0,
+            end: 16.0,
+            style: {
+                "color": "#ffffffff",
+                "font-family": "sans-serif",
+                "font-size": "calc(var(--subtitle-height) * 0.06666666666666667)",
+                "white-space": "normal",
             },
-            region: None,
             language: None,
-            space: Default,
-            style: Style {
-                properties: {},
-                unsupported: [],
-            },
-            text: None,
-        },
-        Node {
-            parent: Some(
-                2,
-            ),
-            children: [],
-            kind: Text,
-            id: None,
-            interval: Interval {
-                begin: 13.0,
-                end: Some(
-                    16.0,
-                ),
-            },
-            region: None,
-            language: None,
-            space: Default,
-            style: Style {
-                properties: {},
-                unsupported: [],
-            },
             text: Some(
                 "A",
             ),
         },
         Node {
             parent: Some(
-                2,
+                1,
             ),
-            children: [
-                5,
-            ],
-            kind: Span,
-            id: Some(
-                "s",
-            ),
-            interval: Interval {
-                begin: 14.0,
-                end: Some(
-                    16.0,
-                ),
+            tag: Span,
+            start: 14.0,
+            end: 16.0,
+            style: {
+                "color": "#ffffffff",
+                "font-family": "sans-serif",
+                "font-size": "calc(var(--subtitle-height) * 0.06666666666666667)",
+                "white-space": "normal",
             },
-            region: None,
             language: None,
-            space: Default,
-            style: Style {
-                properties: {},
-                unsupported: [],
-            },
             text: None,
         },
         Node {
             parent: Some(
-                4,
+                3,
             ),
-            children: [],
-            kind: Text,
-            id: None,
-            interval: Interval {
-                begin: 14.0,
-                end: Some(
-                    16.0,
-                ),
+            tag: Span,
+            start: 14.0,
+            end: 16.0,
+            style: {
+                "color": "#ffffffff",
+                "font-family": "sans-serif",
+                "font-size": "calc(var(--subtitle-height) * 0.06666666666666667)",
+                "white-space": "normal",
             },
-            region: None,
             language: None,
-            space: Default,
-            style: Style {
-                properties: {},
-                unsupported: [],
-            },
             text: Some(
                 "B",
             ),

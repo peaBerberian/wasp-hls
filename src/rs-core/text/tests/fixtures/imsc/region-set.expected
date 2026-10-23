@@ -1,190 +1,59 @@
 Document {
-    rates: Rates {
-        frame_rate: 30.0,
-        tick_rate: 1.0,
-        explicit_frame_rate: false,
-        explicit_tick_rate: false,
-    },
-    root_style: Style {
-        properties: {},
-        unsupported: [],
-    },
-    cell_resolution: (
-        32,
-        15,
-    ),
-    styles: {},
-    regions: {
-        "r": Region {
-            id: "r",
-            interval: Interval {
-                begin: 0.0,
-                end: None,
-            },
-            style: Style {
-                properties: {
-                    Origin: Lengths(
-                        [
-                            Length {
-                                value: 10.0,
-                                unit: Percent,
-                            },
-                            Length {
-                                value: 70.0,
-                                unit: Percent,
-                            },
-                        ],
-                    ),
-                    Extent: Lengths(
-                        [
-                            Length {
-                                value: 80.0,
-                                unit: Percent,
-                            },
-                            Length {
-                                value: 25.0,
-                                unit: Percent,
-                            },
-                        ],
-                    ),
-                },
-                unsupported: [],
-            },
-            sets: [
-                Animation {
-                    interval: Interval {
-                        begin: 2.0,
-                        end: Some(
-                            4.0,
-                        ),
-                    },
-                    style: Style {
-                        properties: {
-                            BackgroundColor: Color(
-                                Color(
-                                    0,
-                                    0,
-                                    0,
-                                    255,
-                                ),
-                            ),
-                        },
-                        unsupported: [],
-                    },
-                },
-            ],
-        },
-    },
     nodes: [
         Node {
             parent: None,
-            children: [
-                1,
-            ],
-            kind: Body,
-            id: None,
-            interval: Interval {
-                begin: 0.0,
-                end: Some(
-                    5.0,
-                ),
+            tag: Div,
+            start: 1.0,
+            end: 5.0,
+            style: {
+                "color": "#ffffffff",
+                "display": "flex",
+                "flex-direction": "column",
+                "font-family": "sans-serif",
+                "font-size": "calc(var(--subtitle-height) * 0.06666666666666667)",
+                "height": "25%",
+                "justify-content": "flex-end",
+                "left": "10%",
+                "position": "absolute",
+                "top": "70%",
+                "width": "80%",
             },
-            region: None,
             language: None,
-            space: Default,
-            style: Style {
-                properties: {},
-                unsupported: [],
-            },
             text: None,
         },
         Node {
             parent: Some(
                 0,
             ),
-            children: [
-                2,
-            ],
-            kind: Division,
-            id: None,
-            interval: Interval {
-                begin: 0.0,
-                end: Some(
-                    5.0,
-                ),
+            tag: P,
+            start: 1.0,
+            end: 5.0,
+            style: {
+                "color": "#ffffffff",
+                "font-family": "sans-serif",
+                "font-size": "calc(var(--subtitle-height) * 0.06666666666666667)",
+                "line-height": "calc(var(--subtitle-height) * 0.08)",
+                "margin": "0",
+                "white-space": "normal",
             },
-            region: None,
             language: None,
-            space: Default,
-            style: Style {
-                properties: {},
-                unsupported: [],
-            },
             text: None,
         },
         Node {
             parent: Some(
                 1,
             ),
-            children: [
-                3,
-            ],
-            kind: Paragraph,
-            id: None,
-            interval: Interval {
-                begin: 1.0,
-                end: Some(
-                    5.0,
-                ),
+            tag: Span,
+            start: 1.0,
+            end: 5.0,
+            style: {
+                "color": "#ffffffff",
+                "font-family": "sans-serif",
+                "font-size": "calc(var(--subtitle-height) * 0.06666666666666667)",
+                "line-height": "calc(var(--subtitle-height) * 0.08)",
+                "white-space": "normal",
             },
-            region: Some(
-                "r",
-            ),
             language: None,
-            space: Default,
-            style: Style {
-                properties: {
-                    LineHeight: Lengths(
-                        [
-                            Length {
-                                value: 120.0,
-                                unit: Percent,
-                            },
-                        ],
-                    ),
-                },
-                unsupported: [
-                    Declaration {
-                        namespace: "http://www.w3.org/ns/ttml#styling",
-                        name: "textOutline",
-                        value: "black 2px 1px",
-                    },
-                ],
-            },
-            text: None,
-        },
-        Node {
-            parent: Some(
-                2,
-            ),
-            children: [],
-            kind: Text,
-            id: None,
-            interval: Interval {
-                begin: 1.0,
-                end: Some(
-                    5.0,
-                ),
-            },
-            region: Some(
-                "r",
-            ),
-            language: None,
-            space: Default,
-            style: Style {
-                properties: {},
-                unsupported: [],
-            },
             text: Some(
                 "Outlined text",
             ),

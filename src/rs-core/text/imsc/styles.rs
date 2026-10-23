@@ -15,16 +15,13 @@ fn copy_bytes(style: &Style) -> usize {
             bytes += v.len() * std::mem::size_of::<super::super::style::Length>();
         }
     }
-    for _ in &style.unsupported {
-        bytes += 256;
-    }
     bytes
 }
 fn merge(target: &mut Arc<Style>, source: Arc<Style>, budget: &mut Budget) -> Result<(), Error> {
-    if source.properties.is_empty() && source.unsupported.is_empty() {
+    if source.properties.is_empty() {
         return Ok(());
     }
-    if target.properties.is_empty() && target.unsupported.is_empty() {
+    if target.properties.is_empty() {
         // The first reference can be shared without copying its strings or map.
         *target = source;
         return Ok(());
@@ -41,25 +38,19 @@ pub(super) fn inline_style(
     empty: &Arc<Style>,
     budget: &mut Budget,
 ) -> Result<Arc<Style>, Error> {
+    // TODO: Add usual EBU linePadding/multiRowAlign values if content needs them.
     let mut result = None;
     for a in &e.attrs {
-        if a.ns != TTS && (a.ns.is_empty() || a.ns == XML || a.ns == TTP) {
+        if a.ns != TTS {
             continue;
         }
-        budget.nodes(1)?;
-        budget.bytes(256 + a.ns.len() + a.name.len() + a.value.len() * 2)?;
-        let style = result.get_or_insert_with(Style::default);
-        if let Some((property, value)) = (a.ns == TTS)
-            .then(|| style_values::parse(&a.name, &a.value))
-            .flatten()
-        {
-            style.properties.insert(property, value);
-        } else {
-            style.unsupported.push(super::super::style::Declaration {
-                namespace: a.ns.as_str().into(),
-                name: a.name.as_str().into(),
-                value: a.value.as_str().into(),
-            });
+        budget.bytes(256 + a.value.len())?;
+        if let Some((property, value)) = style_values::parse(&a.name, &a.value) {
+            budget.nodes(1)?;
+            result
+                .get_or_insert_with(Style::default)
+                .properties
+                .insert(property, value);
         }
     }
     if let Some(style) = result {

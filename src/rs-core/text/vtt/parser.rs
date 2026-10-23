@@ -8,18 +8,15 @@ use super::{
 use crate::text::{budget::Budget, Diagnostic, Error, Limits};
 use std::collections::BTreeMap;
 
-pub fn parse(bytes: &[u8], initialization: Option<&Header>) -> Result<Document, Error> {
-    parse_with_limits(bytes, initialization, Limits::default())
-}
-pub fn parse_with_limits(
+pub(super) fn read(
     bytes: &[u8],
     initialization: Option<&Header>,
     limits: Limits,
+    budget: &mut Budget,
 ) -> Result<Document, Error> {
     if bytes.len() > limits.bytes {
         return Err(Error::Limit("bytes"));
     }
-    let mut budget = Budget::new(limits);
     // Valid UTF-8 normally needs no copy. Invalid bytes can expand to three
     // bytes each when replaced, so check that space before decoding them.
     let decoded = match std::str::from_utf8(bytes) {
@@ -72,7 +69,7 @@ pub fn parse_with_limits(
     let header = if signature {
         Header::default()
     } else if let Some(header) = initialization {
-        reserve_header_copy(header, &mut budget)?;
+        reserve_header_copy(header, budget)?;
         header.clone()
     } else {
         Header::default()
@@ -86,7 +83,7 @@ pub fn parse_with_limits(
     // last definition of each ID without scanning that list for every cue.
     let mut region_index = BTreeMap::new();
     for (index, region) in doc.header.regions.iter().enumerate() {
-        index_region(&mut region_index, &region.id, index, &mut budget)?;
+        index_region(&mut region_index, &region.id, index, budget)?;
     }
     let mut i = 0;
     if signature {
@@ -103,13 +100,13 @@ pub fn parse_with_limits(
                     region
                         .split_ascii_whitespace()
                         .filter_map(|s| s.split_once('=')),
-                    &mut budget,
+                    budget,
                 )?;
                 index_region(
                     &mut region_index,
                     &region.id,
                     doc.header.regions.len(),
-                    &mut budget,
+                    budget,
                 )?;
                 doc.header.regions.push(region);
             }
@@ -145,7 +142,7 @@ pub fn parse_with_limits(
                     &mut doc,
                     line_number,
                     "invalid or late style/region block",
-                    &mut budget,
+                    budget,
                 )?;
             } else if first == "STYLE" {
                 let length = lines[begin..i].iter().map(|s| s.len() + 1).sum::<usize>();
@@ -153,7 +150,7 @@ pub fn parse_with_limits(
                 let source = lines[begin..i].join("\n");
                 doc.header
                     .style_sheets
-                    .push(css::parse(&source, limits, &mut budget)?);
+                    .push(css::parse(&source, limits, budget)?);
             } else {
                 // Settings cannot span words, so joining lines would only make
                 // an unnecessary temporary copy of the complete region block.
@@ -162,13 +159,13 @@ pub fn parse_with_limits(
                         .iter()
                         .flat_map(|line| line.split_ascii_whitespace())
                         .filter_map(|s| s.split_once(':')),
-                    &mut budget,
+                    budget,
                 )?;
                 index_region(
                     &mut region_index,
                     &region.id,
                     doc.header.regions.len(),
-                    &mut budget,
+                    budget,
                 )?;
                 doc.header.regions.push(region);
             }
@@ -182,7 +179,7 @@ pub fn parse_with_limits(
         if i >= lines.len() {
             break;
         }
-        let timing = timings(lines[i], &doc.header.regions, &region_index, &mut budget)?;
+        let timing = timings(lines[i], &doc.header.regions, &region_index, budget)?;
         i += 1;
         let begin = i;
         // A new timing line starts a new cue even without an empty separator.
@@ -194,7 +191,7 @@ pub fn parse_with_limits(
             budget.bytes(length + id.len() + 32 + std::mem::size_of::<Cue>() * 2)?;
             budget.nodes(1)?;
             let raw_text = lines[begin..i].join("\n");
-            let text = cue_text(&raw_text, limits, &mut budget)?;
+            let text = cue_text(&raw_text, limits, budget)?;
             node_count = node_count
                 .checked_add(text.len())
                 .ok_or(Error::Limit("nodes"))?;
@@ -206,18 +203,17 @@ pub fn parse_with_limits(
                 start_ms,
                 end_ms,
                 settings,
-                raw_text,
                 text,
             });
         } else {
-            diagnostic(&mut doc, line_number, "invalid cue timings", &mut budget)?;
+            diagnostic(&mut doc, line_number, "invalid cue timings", budget)?;
         }
     }
     Ok(doc)
 }
 
 /// An external header belongs to the caller. Check the cost before cloning it,
-/// including its CSS source. A segment with its own header never needs this copy.
+/// including checked rules. A segment with its own header never needs this copy.
 fn reserve_header_copy(header: &Header, budget: &mut Budget) -> Result<(), Error> {
     budget.bytes(std::mem::size_of::<Header>() + 64)?;
     for region in &header.regions {
@@ -226,10 +222,7 @@ fn reserve_header_copy(header: &Header, budget: &mut Budget) -> Result<(), Error
     }
     for sheet in &header.style_sheets {
         budget.nodes(1)?;
-        budget.bytes(256 + sheet.source.len())?;
-        for raw in &sheet.unsupported {
-            budget.bytes(64 + raw.len())?;
-        }
+        budget.bytes(256)?;
         for rule in &sheet.rules {
             budget.nodes(1)?;
             budget.bytes(256)?;
@@ -240,17 +233,16 @@ fn reserve_header_copy(header: &Header, budget: &mut Budget) -> Result<(), Error
                     | css::Selector::Tag(s)
                     | css::Selector::CueId(s)
                     | css::Selector::Voice(s)
-                    | css::Selector::Language(s)
-                    | css::Selector::Unsupported(s) => s.len(),
+                    | css::Selector::Language(s) => s.len(),
                     _ => 0,
                 };
                 budget.bytes(256 + text)?;
             }
-            for d in &rule.declarations {
+            for _ in &rule.declarations {
                 budget.nodes(1)?;
                 // Portable text values share their strings. This also covers
                 // the small length list, if the property has one.
-                budget.bytes(512 + d.name.len() + d.value.len())?;
+                budget.bytes(512)?;
             }
         }
     }

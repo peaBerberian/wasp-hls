@@ -27,11 +27,11 @@ pub(super) fn collect(arena: &[Element], budget: &mut Budget) -> Result<Structur
             "head" => matches!(e.name.as_str(), "styling" | "layout"),
             "styling" | "style" => e.name == "style",
             "layout" => e.name == "region",
-            "region" => matches!(e.name.as_str(), "set" | "style"),
+            "region" => e.name == "style",
             // Content checks stay with the tree reader. These paths only
             // collect IDs and references; they cannot introduce definitions.
             "body" | "div" | "p" | "span" => {
-                matches!(e.name.as_str(), "div" | "p" | "span" | "br" | "set")
+                matches!(e.name.as_str(), "div" | "p" | "span" | "br")
             }
             _ => false,
         };

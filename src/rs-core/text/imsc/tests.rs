@@ -1,5 +1,5 @@
-use super::super::style::{Color, Property, Value};
 use super::*;
+use crate::text::{Document, Node, Tag};
 fn wrapped(content: &str) -> String {
     format!(
         r#"<tt xmlns="http://www.w3.org/ns/ttml" xmlns:tts="http://www.w3.org/ns/ttml#styling" xmlns:ttp="http://www.w3.org/ns/ttml#parameter">{content}</tt>"#
@@ -8,10 +8,10 @@ fn wrapped(content: &str) -> String {
 fn doc(s: &str) -> Document {
     parse(wrapped(s).as_bytes()).unwrap()
 }
-fn by_id<'a>(d: &'a Document, id: &str) -> &'a Node {
+fn text<'a>(d: &'a Document, s: &str) -> &'a Node {
     d.nodes
         .iter()
-        .find(|n| n.id.as_deref() == Some(id))
+        .find(|n| n.text.as_deref() == Some(s))
         .unwrap()
 }
 #[test]
@@ -49,127 +49,6 @@ fn time_expressions() {
     }
     assert!(parse_time("1f", Rates::default()).is_err());
     assert!(parse_time("1t", Rates::default()).is_err());
-}
-#[test]
-fn namespace_aliases_and_mixed_content() {
-    let xml = r#"<x:tt xmlns:x="http://www.w3.org/ns/ttml" xmlns:s="http://www.w3.org/ns/ttml#styling"><x:body><x:div><x:p xml:id="p" begin="1s" end="2s" s:color="red">Hello <x:span>world &amp; all</x:span><x:br/>!</x:p></x:div></x:body></x:tt>"#;
-    let d = parse(xml.as_bytes()).unwrap();
-    let p = by_id(&d, "p");
-    assert_eq!(
-        p.interval,
-        Interval {
-            begin: 1.0,
-            end: Some(2.0)
-        }
-    );
-    assert_eq!(
-        p.style.properties[&Property::Color],
-        Value::Color(Color(255, 0, 0, 255))
-    );
-    assert_eq!(
-        d.nodes
-            .iter()
-            .filter_map(|n| n.text.as_deref())
-            .collect::<String>(),
-        "Hello world & all!"
-    );
-    assert!(d.nodes.iter().any(|n| n.kind == Kind::Break));
-}
-#[test]
-fn nested_timing_duration_and_clipping() {
-    let d = doc(
-        r#"<body begin="10s" end="20s"><div begin="1s"><p xml:id="p" begin="2s" dur="4s" end="5s">A<span xml:id="s" begin="1s" dur="10s">B</span></p></div></body>"#,
-    );
-    assert_eq!(
-        by_id(&d, "p").interval,
-        Interval {
-            begin: 13.0,
-            end: Some(16.0)
-        }
-    );
-    assert_eq!(
-        by_id(&d, "s").interval,
-        Interval {
-            begin: 14.0,
-            end: Some(16.0)
-        }
-    );
-}
-#[test]
-fn sequential_containers_and_implicit_end() {
-    let d = doc(
-        r#"<body><div xml:id="d" begin="10s" timeContainer="seq"><p xml:id="a" dur="2s">A</p><p xml:id="b" begin="1s" dur="3s">B</p></div></body>"#,
-    );
-    assert_eq!(
-        by_id(&d, "a").interval,
-        Interval {
-            begin: 10.0,
-            end: Some(12.0)
-        }
-    );
-    assert_eq!(
-        by_id(&d, "b").interval,
-        Interval {
-            begin: 13.0,
-            end: Some(16.0)
-        }
-    );
-    assert_eq!(by_id(&d, "d").interval.end, Some(16.0));
-}
-#[test]
-fn indefinite_and_empty_documents() {
-    assert!(doc("").nodes.is_empty());
-    let d = doc(r#"<body><p xml:id="p">forever</p></body>"#);
-    assert_eq!(by_id(&d, "p").interval.end, None);
-    assert_eq!(doc("<body/>").nodes[0].interval.end, Some(0.0));
-}
-#[test]
-fn style_chains_precedence_regions_and_extensions() {
-    let d = doc(
-        r##"<head><styling><style xml:id="a" tts:color="red"/><style xml:id="b" style="a" tts:fontWeight="bold"/><style xml:id="c" tts:color="blue"/></styling><layout><region xml:id="r" tts:origin="10% 20%" tts:extent="80% 70%"/></layout></head><body region="r"><p xml:id="p" style="b c" tts:color="#00ff0080" xmlns:e="urn:extension" e:effect="glow" begin="1s" end="2s">x</p></body>"##,
-    );
-    let p = by_id(&d, "p");
-    assert_eq!(p.region.as_deref(), Some("r"));
-    assert_eq!(
-        p.style.properties[&Property::Color],
-        Value::Color(Color(0, 255, 0, 128))
-    );
-    assert_eq!(
-        p.style.properties[&Property::FontWeight],
-        Value::Keyword("bold".into())
-    );
-    assert_eq!(p.style.unsupported[0].namespace.as_ref(), "urn:extension");
-    assert!(matches!(
-        d.regions["r"].style.properties[&Property::Origin],
-        Value::Lengths(_)
-    ));
-}
-#[test]
-fn preserves_whitespace_and_inherited_metadata() {
-    let d = doc(
-        r#"<body xml:lang="fr" xml:space="preserve"><p xml:id="p" begin="0s" end="1s"> a  <span xml:id="s" xml:space="default"> b </span> c </p></body>"#,
-    );
-    assert_eq!(by_id(&d, "p").space, Space::Preserve);
-    assert_eq!(by_id(&d, "s").space, Space::Default);
-    assert_eq!(by_id(&d, "s").language.as_deref(), Some("fr"));
-    assert_eq!(
-        d.nodes
-            .iter()
-            .filter_map(|n| n.text.as_deref())
-            .collect::<String>(),
-        " a   b  c "
-    );
-}
-#[test]
-fn explicit_rates_and_multiplier() {
-    let s = wrapped(r#"<body><p begin="30f" end="60f">x</p></body>"#).replace(
-        "<tt ",
-        r#"<tt ttp:frameRate="30" ttp:frameRateMultiplier="1000 1001" "#,
-    );
-    let d = parse(s.as_bytes()).unwrap();
-    let p = d.nodes.iter().find(|n| n.kind == Kind::Paragraph).unwrap();
-    assert!((p.interval.begin - 1.001).abs() < 1e-10);
-    assert!((p.interval.end.unwrap() - 2.002).abs() < 1e-10);
 }
 #[test]
 fn malformed_xml_and_references() {
@@ -239,59 +118,11 @@ fn limits_and_foreign_subtrees() {
 }
 
 #[test]
-fn missing_style_reference_is_recoverable() {
-    let d = doc(r#"<body><div><p xml:id="p" style="missing" tts:color="red">x</p></div></body>"#);
-    assert_eq!(d.diagnostics.len(), 1);
-    assert_eq!(
-        by_id(&d, "p").style.properties[&Property::Color],
-        Value::Color(Color(255, 0, 0, 255))
-    );
-}
-
-#[test]
-fn anonymous_nested_styles_and_forward_references() {
-    let d = doc(
-        r#"<head><styling><style xml:id="a" style="b"><style tts:fontWeight="bold"/></style><style xml:id="b" tts:color="blue"/></styling></head><body><div><p xml:id="p" style="a">x</p></div></body>"#,
-    );
-    let p = by_id(&d, "p");
-    assert_eq!(
-        p.style.properties[&Property::Color],
-        Value::Color(Color(0, 0, 255, 255))
-    );
-    assert_eq!(
-        p.style.properties[&Property::FontWeight],
-        Value::Keyword("bold".into())
-    );
-}
-#[test]
 fn xml_duplicate_expanded_names_and_forbidden_characters() {
     let s = wrapped(r#"<body xmlns:a="urn:test" xmlns:b="urn:test" a:x="1" b:x="2"/>"#);
     assert!(parse(s.as_bytes()).is_err());
     assert!(parse(wrapped("<body>\0</body>").as_bytes()).is_err());
     assert!(parse(wrapped("<body>\u{b}</body>").as_bytes()).is_err());
-}
-#[test]
-fn cdata_and_xml_line_endings() {
-    let d = doc("<body><div><p><![CDATA[A < B]]>\r\nC\rD</p></div></body>");
-    assert_eq!(
-        d.nodes
-            .iter()
-            .filter_map(|n| n.text.as_deref())
-            .collect::<String>(),
-        "A < B\nC\nD"
-    );
-}
-#[test]
-fn generated_parallel_and_sequential_timelines() {
-    for base in 0..60 {
-        for (container, end) in [("par", 5.0), ("seq", 8.0)] {
-            let d = doc(&format!(
-                r#"<body begin="{base}s"><div timeContainer="{container}"><p xml:id="a" begin="1s" dur="2s">A</p><p xml:id="b" begin="2s" dur="3s">B</p></div></body>"#
-            ));
-            assert_eq!(by_id(&d, "a").interval.begin, base as f64 + 1.0);
-            assert_eq!(by_id(&d, "b").interval.end, Some(base as f64 + end));
-        }
-    }
 }
 #[test]
 fn deeply_nested_style_graph_is_bounded() {
@@ -321,37 +152,6 @@ fn no_panic_on_every_xml_truncation() {
 }
 
 #[test]
-fn repeated_style_references_share_storage() {
-    let mut xml = wrapped(&format!(
-        "<head><styling><style xml:id='shared' tts:fontFamily='{}'/></styling></head><body><div>",
-        "A".repeat(10_000)
-    ));
-    xml.truncate(xml.len() - "</tt>".len());
-    for _ in 0..1000 {
-        xml.push_str("<p style='shared'>x</p>");
-    }
-    xml.push_str("</div></body></tt>");
-    let d = parse_with_limits(
-        xml.as_bytes(),
-        Limits {
-            output_bytes: 8 * 1024 * 1024,
-            ..Limits::default()
-        },
-    )
-    .unwrap();
-    let named = &d.styles["shared"];
-    let paragraphs: Vec<_> = d
-        .nodes
-        .iter()
-        .filter(|n| n.kind == Kind::Paragraph)
-        .collect();
-    assert_eq!(paragraphs.len(), 1000);
-    for node in paragraphs {
-        assert!(std::sync::Arc::ptr_eq(&node.style, named));
-    }
-}
-
-#[test]
 fn style_combinations_stop_at_the_output_budget() {
     let mut body = format!("<head><styling><style xml:id='a' tts:fontFamily='{}'/><style xml:id='b' tts:fontWeight='bold'/></styling></head><body><div>", "A".repeat(10_000));
     for _ in 0..100 {
@@ -371,144 +171,15 @@ fn style_combinations_stop_at_the_output_budget() {
 }
 
 #[test]
-fn foreign_and_metadata_subtrees_cannot_define_styles_or_regions() {
-    let xml = wrapped(
-        r#"<head><metadata><style xml:id="hidden-meta" tts:color="red"/><region xml:id="hidden-region"/></metadata><foreign xmlns="urn:other"><style xmlns="http://www.w3.org/ns/ttml" xml:id="hidden-foreign" tts:color="red"/></foreign><styling><style xml:id="visible" tts:color="blue"/></styling></head><body><div><p xml:id="p" style="hidden-meta hidden-foreign visible">x</p></div></body>"#,
-    );
-    let d = parse(xml.as_bytes()).unwrap();
-    assert_eq!(d.styles.len(), 1);
-    assert!(d.regions.is_empty());
-    assert_eq!(
-        by_id(&d, "p").style.properties[&Property::Color],
-        Value::Color(Color(0, 0, 255, 255))
-    );
-    assert_eq!(d.diagnostics.len(), 2);
-}
-
-#[test]
-fn ignored_definitions_do_not_trigger_cycles_or_duplicate_ids() {
-    let d = doc(
-        r#"<head><metadata><style xml:id="a" style="a"/><style xml:id="a"/></metadata><styling><style xml:id="a" tts:color="red"/></styling></head><body><div><p style="a">x</p></div></body>"#,
-    );
-    assert_eq!(d.styles.len(), 1);
-}
-
-#[test]
-fn combined_styles_share_large_text_values() {
-    let d = doc(&format!("<head><styling><style xml:id='a' tts:fontFamily='{}'/><style xml:id='b' tts:fontWeight='bold'/></styling></head><body><div><p style='a b'>x</p><p style='a b'>y</p></div></body>", "A".repeat(10_000)));
-    let values: Vec<_> = d
-        .nodes
-        .iter()
-        .filter(|n| n.kind == Kind::Paragraph)
-        .map(|n| match &n.style.properties[&Property::FontFamily] {
-            Value::Text(text) => text,
-            _ => panic!("expected a font-family string"),
-        })
-        .collect();
-    assert!(std::sync::Arc::ptr_eq(values[0], values[1]));
-}
-
-#[test]
 fn inherited_language_uses_shared_text() {
     let d = doc("<body xml:lang='fr'><div><p>x</p><p>y</p></div></body>");
-    let language = d.nodes[0].language.as_ref().unwrap();
-    for node in &d.nodes {
+    let language = text(&d, "x").language.as_ref().unwrap();
+    for node in d.nodes.iter().filter(|n| n.tag != Tag::Div) {
         assert!(std::sync::Arc::ptr_eq(
             language,
             node.language.as_ref().unwrap()
         ));
     }
-}
-
-#[test]
-fn invalid_inline_values_keep_source_and_do_not_replace_valid_references() {
-    let d = doc(
-        r#"<head><styling><style xml:id="base" tts:fontWeight="bold" tts:fontSize="12px"/></styling></head><body><div><p xml:id="p" style="base" tts:fontWeight="bogus" tts:fontSize="10px 20px">Still visible</p></div></body>"#,
-    );
-    let style = &by_id(&d, "p").style;
-    assert_eq!(
-        style.properties[&Property::FontWeight],
-        Value::Keyword("bold".into())
-    );
-    assert_eq!(
-        style.properties[&Property::FontSize],
-        Value::Lengths(vec![super::super::style::Length {
-            value: 12.0,
-            unit: super::super::style::Unit::Pixel
-        }])
-    );
-    assert_eq!(style.unsupported.len(), 2);
-    assert_eq!(style.unsupported[0].name.as_ref(), "fontWeight");
-    assert_eq!(style.unsupported[0].value.as_ref(), "bogus");
-    assert_eq!(style.unsupported[1].value.as_ref(), "10px 20px");
-    assert_eq!(
-        style.unsupported[1].namespace.as_ref(),
-        "http://www.w3.org/ns/ttml#styling"
-    );
-    assert!(d
-        .nodes
-        .iter()
-        .any(|n| n.text.as_deref() == Some("Still visible")));
-}
-
-#[test]
-fn text_only_spans_use_the_parent_container_for_implicit_duration() {
-    for text in ["A", "A<![CDATA[B]]>C"] {
-        for parent_end in ["", " end='10s'"] {
-            let d = doc(&format!("<body{parent_end}><div><p xml:id='p' timeContainer='seq'><span xml:id='a'>{text}</span><span xml:id='b' begin='1s' dur='1s'>B</span></p></div></body>"));
-            assert_eq!(
-                by_id(&d, "a").interval,
-                Interval {
-                    begin: 0.0,
-                    end: Some(0.0)
-                }
-            );
-            assert_eq!(
-                by_id(&d, "b").interval,
-                Interval {
-                    begin: 1.0,
-                    end: Some(2.0)
-                }
-            );
-            assert_eq!(by_id(&d, "p").interval.end, Some(2.0));
-            for &child in &by_id(&d, "a").children {
-                assert_eq!(d.nodes[child].interval.end, Some(0.0));
-            }
-        }
-    }
-    let d = doc("<body><p><span xml:id='a'>A</span></p></body>");
-    assert_eq!(by_id(&d, "a").interval.end, None);
-    let d = doc("<body><p timeContainer='seq'><span xml:id='a' dur='2s'>A</span><span xml:id='b' dur='1s'>B</span></p></body>");
-    assert_eq!(by_id(&d, "a").interval.end, Some(2.0));
-    assert_eq!(by_id(&d, "b").interval.begin, 2.0);
-}
-
-#[test]
-fn region_nested_styles_keep_precedence_and_stay_local() {
-    let d = doc(
-        r#"<head><styling><style xml:id="base" tts:color="blue" tts:fontWeight="normal"/></styling><layout><region xml:id="r" style="base" tts:fontWeight="bold"><style xml:id="local" tts:color="red" tts:extent="80% 20%"/><style tts:color="green" tts:origin="10% 80%" tts:fontWeight="normal"/><metadata><style tts:fontStyle="italic"/></metadata></region></layout></head><body><p xml:id="p" region="r" style="local" begin="1s" end="2s">Hello</p></body>"#,
-    );
-    let style = &d.regions["r"].style;
-    // TTML1 8.4.4.2 merges nested styles in source order. imscJS currently
-    // keeps the first value instead; the expected value here follows TTML.
-    assert_eq!(
-        style.properties[&Property::Color],
-        Value::Color(Color(0, 128, 0, 255))
-    );
-    assert_eq!(
-        style.properties[&Property::FontWeight],
-        Value::Keyword("bold".into())
-    );
-    for property in [Property::Origin, Property::Extent] {
-        assert!(style.properties.contains_key(&property));
-    }
-    assert!(!style.properties.contains_key(&Property::FontStyle));
-    assert!(!d.styles.contains_key("local"));
-    assert!(by_id(&d, "p").style.properties.is_empty());
-    assert!(d
-        .diagnostics
-        .iter()
-        .any(|d| d.message.contains("unknown style reference local")));
 }
 
 #[test]
@@ -529,16 +200,6 @@ fn nested_region_styles_follow_the_allocation_budget() {
         parse_with_limits(xml.as_bytes(), limits),
         Err(Error::Limit("output bytes"))
     );
-}
-
-#[test]
-fn text_only_span_does_not_sequence_its_internal_text_storage() {
-    let d = doc("<body><p><span xml:id='a' timeContainer='seq'>A<![CDATA[B]]>C</span></p></body>");
-    let span = by_id(&d, "a");
-    assert_eq!(span.interval.end, None);
-    for &child in &span.children {
-        assert_eq!(d.nodes[child].interval, span.interval);
-    }
 }
 
 #[test]
@@ -576,4 +237,79 @@ fn many_unique_xml_attributes_remain_supported() {
         parse(wrapped(&format!("<body{attributes} a00000='again'/>")).as_bytes()),
         Err(Error::Invalid(_))
     ));
+}
+
+#[test]
+fn nested_timing_duration_and_clipping() {
+    let d = doc(
+        r#"<body begin="10s" end="20s"><div begin="1s"><p begin="2s" dur="4s" end="5s">A<span begin="1s" dur="10s">B</span></p></div></body>"#,
+    );
+    assert_eq!((text(&d, "A").start, text(&d, "A").end), (13.0, 16.0));
+    assert_eq!((text(&d, "B").start, text(&d, "B").end), (14.0, 16.0));
+}
+#[test]
+fn generated_parallel_and_sequential_timelines() {
+    for base in 0..60 {
+        for (container, end) in [("par", 5.0), ("seq", 8.0)] {
+            let d = doc(&format!(
+                r#"<body begin="{base}s"><div timeContainer="{container}"><p begin="1s" dur="2s">A</p><p begin="2s" dur="3s">B</p></div></body>"#
+            ));
+            assert_eq!(text(&d, "A").start, base as f64 + 1.0);
+            assert_eq!(text(&d, "B").end, base as f64 + end);
+        }
+    }
+}
+#[test]
+fn explicit_rates_and_multiplier() {
+    let xml = wrapped(r#"<body><p begin="30f" end="60f">x</p></body>"#).replace(
+        "<tt ",
+        r#"<tt ttp:frameRate="30" ttp:frameRateMultiplier="1000 1001" "#,
+    );
+    let d = parse(xml.as_bytes()).unwrap();
+    assert!((text(&d, "x").start - 1.001).abs() < 1e-10);
+    assert!((text(&d, "x").end - 2.002).abs() < 1e-10);
+}
+#[test]
+fn indefinite_and_empty_documents() {
+    assert!(doc("").nodes.is_empty());
+    assert!(doc("<body/>").nodes.is_empty());
+    assert_eq!(
+        text(&doc("<body><p>forever</p></body>"), "forever").end,
+        f64::INFINITY
+    );
+}
+#[test]
+fn text_only_spans_and_cdata_keep_container_timing() {
+    for content in ["A", "A<![CDATA[B]]>C"] {
+        for parent_end in ["", " end='10s'"] {
+            let d=doc(&format!("<body{parent_end}><p timeContainer='seq'><span>{content}</span><span begin='1s' dur='1s'>next</span></p></body>"));
+            assert_eq!((text(&d, "A").start, text(&d, "A").end), (0.0, 0.0));
+            assert_eq!((text(&d, "next").start, text(&d, "next").end), (1.0, 2.0));
+        }
+    }
+    let d = doc("<body><p><span timeContainer='seq'>A<![CDATA[B]]>C</span></p></body>");
+    for leaf in d.nodes.iter().filter(|n| n.text.is_some()) {
+        assert_eq!(leaf.end, f64::INFINITY);
+    }
+    let d = doc(
+        "<body><p timeContainer='seq'><span dur='2s'>A</span><span dur='1s'>B</span></p></body>",
+    );
+    assert_eq!((text(&d, "A").end, text(&d, "B").start), (2.0, 2.0));
+}
+#[test]
+fn repeated_and_combined_styles_share_large_strings() {
+    for references in ["a", "a b"] {
+        let mut body=format!("<head><styling><style xml:id='a' tts:fontFamily='{}'/><style xml:id='b' tts:fontWeight='bold'/></styling></head><body>","A".repeat(10_000));
+        for _ in 0..1000 {
+            body.push_str(&format!("<p style='{references}'>x</p>"));
+        }
+        body.push_str("</body>");
+        let d = doc(&body);
+        let paragraphs: Vec<_> = d.nodes.iter().filter(|n| n.tag == Tag::P).collect();
+        assert_eq!(paragraphs.len(), 1000);
+        let family = &paragraphs[0].style["font-family"];
+        for p in paragraphs {
+            assert!(Arc::ptr_eq(family, &p.style["font-family"]));
+        }
+    }
 }

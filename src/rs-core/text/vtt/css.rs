@@ -1,7 +1,6 @@
-//! Read a small set of WebVTT CSS rules and keep the original CSS too.
-//! Unknown selectors, nested rules and unknown property values stay available
-//! as text. This parser does not apply rules or calculate final styles.
-use super::super::{budget::Budget, style::Value, Error, Limits};
+//! Read the supported WebVTT CSS rules. Unknown syntax and values are skipped.
+use super::super::{budget::Budget, render::css_value, Error, Limits};
+use std::sync::Arc;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Selector {
@@ -19,21 +18,14 @@ pub enum Selector {
     Language(String),
     /// ::cue-region, which selects all cue regions.
     Region,
-    /// Preserved rather than guessed; matching is not performed by this parser.
-    Unsupported(String),
 }
 #[derive(Debug, Clone, PartialEq)]
 /// One CSS property/value pair. Order is kept because later rules may replace
 /// earlier values. No rule matching or priority calculation is done here.
 pub struct Declaration {
-    pub name: String,
-    pub value: String,
-    /// True when the source value ends with !important.
+    pub property: &'static str,
+    pub value: Arc<str>,
     pub important: bool,
-    /// A value checked against the supported CSS grammar. None means that the
-    /// raw value is invalid or outside that subset; it must not be applied as a
-    /// shared value without a separate reader that understands it.
-    pub portable: Option<(super::super::style::Property, Value)>,
 }
 #[derive(Debug, Clone, PartialEq)]
 pub struct Rule {
@@ -41,13 +33,9 @@ pub struct Rule {
     pub declarations: Vec<Declaration>,
 }
 #[derive(Debug, Clone, Default, PartialEq)]
-/// CSS source plus the rules this parser understands.
+/// Checked rules needed by a segment or its initialization header.
 pub struct Stylesheet {
-    /// Full source, including comments and unsupported syntax.
-    pub source: String,
     pub rules: Vec<Rule>,
-    /// Blocks that were kept as text because they could not be read as rules.
-    pub unsupported: Vec<String>,
 }
 
 // Count scanner work in tests rather than checking elapsed time. This makes the
@@ -141,27 +129,27 @@ fn identifier(s: &str) -> bool {
         && s.chars()
             .all(|c| c.is_alphanumeric() || c == '-' || c == '_')
 }
-fn selector(s: &str) -> Selector {
+fn selector(s: &str) -> Option<Selector> {
     let s = s.trim_matches(|c: char| c.is_ascii_whitespace());
     if s == "::cue" {
-        return Selector::Cue;
+        return Some(Selector::Cue);
     }
     if s == "::cue-region" {
-        return Selector::Region;
+        return Some(Selector::Region);
     }
     if let Some(inner) = s.strip_prefix("::cue(").and_then(|s| s.strip_suffix(')')) {
         if let Some(class) = inner.strip_prefix('.') {
             if identifier(class) {
-                return Selector::Class(class.into());
+                return Some(Selector::Class(class.into()));
             }
         }
         if let Some(id) = inner.strip_prefix('#') {
             if identifier(id) {
-                return Selector::CueId(id.into());
+                return Some(Selector::CueId(id.into()));
             }
         }
         if matches!(inner, "b" | "i" | "u" | "c" | "v" | "lang" | "ruby" | "rt") {
-            return Selector::Tag(inner.into());
+            return Some(Selector::Tag(inner.into()));
         }
         for (prefix, voice) in [("v[voice=", true), ("lang[lang=", false)] {
             if let Some(v) = inner.strip_prefix(prefix).and_then(|s| s.strip_suffix(']')) {
@@ -171,17 +159,17 @@ fn selector(s: &str) -> Selector {
                     .or_else(|| v.strip_prefix('\'').and_then(|s| s.strip_suffix('\'')))
                 {
                     if !v.contains('\\') {
-                        return if voice {
+                        return Some(if voice {
                             Selector::Voice(v.into())
                         } else {
                             Selector::Language(v.into())
-                        };
+                        });
                     }
                 }
             }
         }
     }
-    Selector::Unsupported(s.into())
+    None
 }
 fn declaration(s: &str) -> Option<Declaration> {
     let name = split(s, ':')
@@ -211,12 +199,12 @@ fn declaration(s: &str) -> Option<Declaration> {
     if value.is_empty() {
         return None;
     }
-    let portable = super::style_values::parse(&name, value);
+    let (property, value) = super::style_values::parse(&name, value)?;
+    let (property, value) = css_value(&property, &value)?;
     Some(Declaration {
-        name,
-        value: value.into(),
+        property,
+        value,
         important,
-        portable,
     })
 }
 pub(super) fn parse(
@@ -224,19 +212,8 @@ pub(super) fn parse(
     limits: Limits,
     budget: &mut Budget,
 ) -> Result<Stylesheet, Error> {
-    // The source is kept for future style engines; the clean copy is temporary.
-    // Reserve both copies before making either one.
-    budget.bytes(
-        source
-            .len()
-            .checked_mul(2)
-            .ok_or(Error::Limit("output bytes"))?
-            + 128,
-    )?;
-    let mut result = Stylesheet {
-        source: source.into(),
-        ..Stylesheet::default()
-    };
+    budget.bytes(source.len() + 128)?;
+    let mut result = Stylesheet::default();
     let clean = strip_comments(source);
     let mut rest = clean.as_str();
     loop {
@@ -290,84 +267,74 @@ pub(super) fn parse(
             }
         }
         let Some(end) = end else {
-            budget.bytes(rest.len() + 32)?;
-            result.unsupported.push(rest.into());
             return Ok(result);
         };
         let body = &body[..end];
-        if selector_text.starts_with('@') || body.contains('{') {
-            budget.bytes(open + end + 34)?;
-            result.unsupported.push(rest[..open + end + 2].into());
-        } else {
+        // TODO: Support compound selectors and nested rules if usual cues need them.
+        if !selector_text.starts_with('@') && !body.contains('{') {
             let mut selectors = Vec::new();
             for part in split(selector_text, ',') {
                 budget.nodes(1)?;
                 budget.bytes(256 + part.len() * 2)?;
-                selectors.push(selector(part));
+                if let Some(s) = selector(part) {
+                    selectors.push(s);
+                }
             }
             let mut declarations = Vec::new();
             for part in split(body, ';')
                 .filter(|s| !s.trim_matches(|c: char| c.is_ascii_whitespace()).is_empty())
             {
                 budget.nodes(1)?;
-                // Include the raw name/value and the optional portable value.
+                // Reserve temporary declaration parsing and checked values.
                 budget.bytes(512 + part.len() * 4)?;
                 if let Some(value) = declaration(part) {
                     declarations.push(value);
                 }
             }
-            result.rules.push(Rule {
-                selectors,
-                declarations,
-            });
+            if !selectors.is_empty() && !declarations.is_empty() {
+                result.rules.push(Rule {
+                    selectors,
+                    declarations,
+                });
+            }
         }
         rest = &rest[open + end + 2..];
-    }
-    if !rest
-        .trim_matches(|c: char| c.is_ascii_whitespace())
-        .is_empty()
-    {
-        budget.bytes(rest.len() + 32)?;
-        result.unsupported.push(rest.into());
     }
     Ok(result)
 }
 
 #[cfg(test)]
 mod tests {
-    use super::super::super::style::{Color, Property};
     use super::*;
     fn parse(source: &str) -> Stylesheet {
         let limits = Limits::default();
         super::parse(source, limits, &mut Budget::new(limits)).unwrap()
     }
     #[test]
-    fn portable_rules_preserve_order_importance_and_unknown_values() {
+    fn rules_keep_order_and_importance_and_drop_unknown_values() {
         let s=parse("/* header */ ::cue(.red), ::cue(v[voice=\"A,B\"]) { color: red; color: blue !important; font-size: 2em; future: value; }");
         assert_eq!(
             s.rules[0].selectors,
             vec![Selector::Class("red".into()), Selector::Voice("A,B".into())]
         );
         let d = &s.rules[0].declarations;
-        assert_eq!(d.len(), 4);
+        assert_eq!(d.len(), 3);
         assert!(!d[0].important);
         assert!(d[1].important);
         assert_eq!(
-            d[0].portable,
-            Some((Property::Color, Value::Color(Color(255, 0, 0, 255))))
+            (&d[0].property, &d[0].value),
+            (&"color", &Arc::<str>::from("#ff0000ff"))
         );
-        assert!(d[3].portable.is_none());
     }
     #[test]
     fn strings_comments_and_unsupported_constructs() {
         let source="::cue { font-family: 'a;/*b*/:c'; } @media screen { ::cue { color: red } } ::cue(.a .b) { color: rgb(1,2,3); }";
         let s = parse(source);
-        assert_eq!(s.source, source);
-        assert_eq!(s.rules.len(), 2);
-        assert_eq!(s.unsupported.len(), 1);
-        assert_eq!(s.rules[0].declarations[0].value, "'a;/*b*/:c'");
-        assert!(matches!(s.rules[1].selectors[0], Selector::Unsupported(_)));
-        assert!(s.rules[1].declarations[0].portable.is_some());
+        assert_eq!(s.rules.len(), 1);
+        assert_eq!(
+            s.rules[0].declarations[0].value,
+            Arc::<str>::from("'a;/*b*/:c'")
+        );
     }
     #[test]
     fn scanner_work_grows_with_the_input() {

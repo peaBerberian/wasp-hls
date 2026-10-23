@@ -3,15 +3,16 @@
 - Run fixture tests: `cargo test text::tests::fixture_tests` (native Rust only).
 - Run all subtitle tests: `cargo test text::`.
 - The runner is `fixture_tests.rs`; its inputs and expected results are in `fixtures/`.
-- 28 authored fixtures have complete parser-output `.expected` snapshots.
+- Authored fixtures have complete shared-tree `.expected` snapshots.
+- Update them explicitly: `UPDATE_SUBTITLE_FIXTURES=1 cargo test text::tests::fixture_tests`.
 - Unit tests cover times, cue settings, error recovery, styles, XML namespaces, limits, truncated input, timestamp wraparound and MP4 sample boundaries.
-- Memory tests check that repeated references share styles and that combined styles share large text values.
+- Memory tests check that repeated references share large style strings and that combined styles share large text values.
 - Budget tests cover XML/style output, external headers, CSS rules, selectors, property values and nested blocks.
 - A scanner-work counter checks that CSS work grows with input size. It does not depend on machine speed.
 - Hidden-style tests cover foreign XML, metadata, ignored duplicate IDs and ignored style cycles.
-- No JavaScript reference parser, player checkout, browser or snapshot-update command is needed by these tests.
+- Normal test runs need no JavaScript parser, player checkout or browser.
 
-Development comparison, 2026-10-20:
+Earlier source-parser comparison, 2026-10-20 (before the shared rendering tree):
 
 | Reference checkout  | Values compared                                                    | Inputs | Matches |
 | ------------------- | ------------------------------------------------------------------ | -----: | ------: |
@@ -22,7 +23,7 @@ Development comparison, 2026-10-20:
 - Normalization maps legacy `middle` to `center`, equates negative zero with zero, clips reference IMSC intervals to ancestor activity and treats fatal-header errors as equivalent.
 - WebVTT differences: recovery without a separator/after a malformed arrow; cues immediately after the header; invalid two-component hour timestamps; obsolete `middle` and invalid line alignment. Regression tests follow current WebVTT parsing rules.
 - IMSC difference: one SMPTE image metadata fixture. Foreign image content is diagnosed/ignored by this text-profile parser.
-- Additional unit tests cover differences outside that projection: HTML character references, repeated settings, fractional lines, markup, CSS syntax and region animation.
+- Additional unit tests cover differences outside that projection: HTML character references, repeated settings, fractional lines, markup, CSS syntax and ignored timed styles.
 
 Specification baseline:
 
@@ -34,7 +35,7 @@ Specification baseline:
 
 The WebVTT named-reference table is WHATWG HTML data from Python's standard-library `html.entities.html5`; lookup/tokenization is Rust-only.
 
-Memory check after the fixes (native debug build, temporary allocator probe):
+Earlier source-parser memory check (native debug build, temporary allocator probe):
 
 - 1,000 references to one 10 KB font-family style: about 1.0 MB peak heap use during parsing.
 - 1,000 references to a two-style combination: about 1.6 MB peak heap use during parsing.
@@ -44,6 +45,14 @@ Style-value checks:
 
 - CSS and TTML tests use separate tables of accepted and rejected values.
 - Tests cover font weight, size counts, length units, decoration words, family lists, color alpha, opacity and line height.
-- Full parser tests check that invalid values remain raw and do not remove readable cue text or replace valid referenced values.
-- The region-set snapshot keeps its blurred outline as raw text: IMSC1 prohibits blurred outlines.
+- Full parser tests check that invalid values are discarded without losing readable text or valid referenced styles.
+- The region-set snapshot discards its blurred outline: IMSC1 prohibits blur.
 - Property rules were checked against [TTML1 style rules](https://www.w3.org/TR/ttml1/#styling-attribute-vocabulary), [IMSC1 text-profile limits](https://www.w3.org/TR/2016/REC-ttml-imsc1-20160421/#text-profile-constraints), [CSS Fonts](https://www.w3.org/TR/css-fonts-4/) and [CSS text decoration](https://www.w3.org/TR/css-text-decor-3/).
+
+Shared output checks:
+
+- Both formats return ordinary HTML tags, playback times and CSS styles.
+- Tests cover parent/region inheritance, relative fonts, opacity, decoration cancellation, whitespace, CSS cascade, timestamp mapping and MP4 coverage.
+- Timed `<set>` styles and unsupported declarations leave no source-only output.
+- Browser checks used local Shaka/hls.js sources and dash.js/RxPlayer fixtures.
+- A generic DOM builder checked the output against Shaka for mixed text, whitespace, inherited styles and ordinary WebVTT markup.

@@ -1,12 +1,12 @@
-//! Owned subtitle documents, independent of playback, host bindings and rendering.
-//!
-//! Parsers retain source timing. The caller supplies the A/V anchor when mapping
-//! WebVTT MPEG timestamps, and owns discontinuity and selection state.
+//! Shared subtitle trees with playback times and CSS styles.
+//! Supply a fresh timeline reference after each discontinuity.
 mod budget;
 pub mod imsc;
 pub mod mp4;
-pub mod style;
+mod render;
+pub(crate) mod style;
 pub mod vtt;
+pub use render::{viewport_style, CssStyle, Document, Node, Tag, Timeline};
 
 /// Fatal errors mean no document can be used. Recoverable WebVTT cue errors are
 /// returned alongside the successfully parsed cues instead.

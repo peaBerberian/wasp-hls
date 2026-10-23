@@ -1,6 +1,4 @@
-//! Style values that a browser or another renderer can read.
-//! These are the values written by the author. Relative units are kept because
-//! the parser does not know the viewport size, font metrics or parent layout.
+//! Checked style values used while preparing the shared CSS tree.
 use std::{collections::BTreeMap, sync::Arc};
 pub(crate) mod syntax;
 
@@ -16,8 +14,8 @@ pub enum Unit {
     Percent,
     /// A multiple of the applicable font size.
     Em,
-    /// TTML cells, based on the document's column and row counts.
-    Cell,
+    /// A fraction of the video image height, resolved before rendering.
+    ViewportHeight,
 }
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Length {
@@ -30,8 +28,6 @@ pub struct Length {
 pub struct Outline {
     pub color: Option<Color>,
     pub thickness: Length,
-    /// Optional blur radius. None means no blur was written.
-    pub blur: Option<Length>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -70,58 +66,30 @@ pub enum Property {
     Display,
     Visibility,
     Overflow,
-    ShowBackground,
     TextOutline,
     WrapOption,
     ZIndex,
 }
 
-/// An invalid or unsupported value kept as source text. It is not an active
-/// shared style value. The namespace avoids confusing a
-/// future extension with a TTML property that happens to have the same name.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Declaration {
-    pub namespace: Arc<str>,
-    pub name: Arc<str>,
-    pub value: Arc<str>,
-}
 #[derive(Debug, Clone, Default, PartialEq)]
-/// Values read from one style or a combination of referenced styles. This does
-/// not contain inherited values or layout results.
+/// Specified or computed properties used internally by both parsers.
 pub struct Style {
     pub properties: BTreeMap<Property, Value>,
-    pub unsupported: Vec<Declaration>,
 }
 impl Style {
     pub fn overlay(&mut self, other: &Self) {
         self.properties.extend(other.properties.clone());
-        for declaration in &other.unsupported {
-            if let Some(existing) = self
-                .unsupported
-                .iter_mut()
-                .find(|d| d.namespace == declaration.namespace && d.name == declaration.name)
-            {
-                *existing = declaration.clone();
-            } else {
-                self.unsupported.push(declaration.clone());
-            }
-        }
     }
 }
 
 pub fn length(s: &str) -> Option<Length> {
-    [
-        ("px", Unit::Pixel),
-        ("%", Unit::Percent),
-        ("em", Unit::Em),
-        ("c", Unit::Cell),
-    ]
-    .into_iter()
-    .find_map(|(suffix, unit)| {
-        let value = s.strip_suffix(suffix)?;
-        let n = syntax::number(value, false)?;
-        n.is_finite().then_some(Length { value: n, unit })
-    })
+    [("px", Unit::Pixel), ("%", Unit::Percent), ("em", Unit::Em)]
+        .into_iter()
+        .find_map(|(suffix, unit)| {
+            let value = s.strip_suffix(suffix)?;
+            let n = syntax::number(value, false)?;
+            n.is_finite().then_some(Length { value: n, unit })
+        })
 }
 pub fn color(s: &str) -> Option<Color> {
     if let Some(body) = s.strip_prefix("rgb(").and_then(|v| v.strip_suffix(')')) {
@@ -230,26 +198,11 @@ mod tests {
             ("12px", Unit::Pixel),
             ("1.5em", Unit::Em),
             ("50%", Unit::Percent),
-            ("2c", Unit::Cell),
         ] {
             assert_eq!(length(s).unwrap().unit, u);
         }
         for s in ["NaNpx", "inf%", "1e3px", "12", "px", "--1px"] {
             assert!(length(s).is_none(), "{s}");
         }
-    }
-    #[test]
-    fn extension_overlay_remains_bounded() {
-        let mut s = Style::default();
-        s.unsupported.push(Declaration {
-            namespace: "urn:test".into(),
-            name: "effect".into(),
-            value: "a".into(),
-        });
-        for _ in 0..100 {
-            let other = s.clone();
-            s.overlay(&other);
-        }
-        assert_eq!(s.unsupported.len(), 1);
     }
 }
