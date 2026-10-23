@@ -1,4 +1,4 @@
-use super::{entities::decode as entities, model::*, timestamp};
+use super::{entities::decode as entities, model::*};
 use crate::text::{budget::Budget, Error, Limits};
 
 fn tag(s: &str) -> Option<Tag> {
@@ -51,15 +51,7 @@ pub(super) fn cue_text(
                 }
                 continue;
             }
-            if let Some(ms) = timestamp(token) {
-                budget.nodes(1)?;
-                budget.bytes(std::mem::size_of::<Node>() * 2)?;
-                nodes.push(Node {
-                    parent: stack.last().copied(),
-                    kind: NodeKind::Timestamp(ms),
-                });
-                continue;
-            }
+            // TODO: Support inline timestamp highlighting (::cue(:past/:future)).
             let split = token
                 .find([' ', '\t', '\n', '\r', '\u{c}'])
                 .unwrap_or(token.len());

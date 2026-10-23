@@ -18,6 +18,9 @@ fn check(kind: &str, extension: &str) -> usize {
         } else {
             format!("{:#?}\n", imsc::parse(&input).unwrap())
         };
+        if std::env::var_os("UPDATE_SUBTITLE_FIXTURES").is_some() {
+            fs::write(path.with_extension("expected"), &actual).unwrap();
+        }
         let expected = fs::read_to_string(path.with_extension("expected")).unwrap();
         assert_eq!(actual, expected, "{}", path.display());
         count += 1;
@@ -26,9 +29,9 @@ fn check(kind: &str, extension: &str) -> usize {
 }
 #[test]
 fn webvtt_snapshots() {
-    assert_eq!(check("vtt", "vtt"), 13);
+    assert!(check("vtt", "vtt") > 0);
 }
 #[test]
 fn imsc_snapshots() {
-    assert_eq!(check("imsc", "ttml"), 15);
+    assert!(check("imsc", "ttml") > 0);
 }

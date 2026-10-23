@@ -1,5 +1,5 @@
 //! Check supported CSS property values without using TTML's grammar. Valid CSS
-//! outside this subset stays in the raw declaration; it is not guessed at here.
+//! outside this subset is discarded.
 use crate::text::style::{color, syntax, Color, Length, Property, Unit, Value};
 
 pub(super) fn parse(name: &str, source: &str) -> Option<(Property, Value)> {
@@ -80,7 +80,7 @@ pub(super) fn parse(name: &str, source: &str) -> Option<(Property, Value)> {
             (Opacity, Value::Number(n.clamp(0.0, 1.0)))
         }
         // This subset handles only decoration lines. Shorthand colors, line
-        // styles and thicknesses remain raw until the model can represent them.
+        // styles and thicknesses are not supported yet.
         "text-decoration" | "text-decoration-line" => {
             if !decoration(s) {
                 return None;
@@ -281,7 +281,7 @@ mod tests {
         assert!(parse("opacity", "NaN").is_none());
     }
     #[test]
-    fn unsupported_valid_syntax_stays_raw() {
+    fn unsupported_valid_syntax_is_discarded() {
         for (name, value) in [
             ("color", "currentColor"),
             ("font-size", "calc(1em + 1px)"),

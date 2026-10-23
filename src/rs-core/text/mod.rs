@@ -24,11 +24,19 @@
 //! TODO(subtitles): batch the browser ABI transfer, release downloaded bytes once
 //! parsed and bound pending/installed cue retention. The native backend should
 //! consume the same model without browser or WASM dependencies.
+//! Owned subtitle documents, independent of playback, host bindings and rendering.
+//!
+//! Parsers retain source timing. The caller supplies the A/V anchor when mapping
+//! WebVTT MPEG timestamps, and owns discontinuity and selection state.
+//! Shared subtitle trees with playback times and CSS styles.
+//! Supply a fresh timeline reference after each discontinuity.
 mod budget;
 pub mod imsc;
 pub mod mp4;
-pub mod style;
+mod render;
+pub(crate) mod style;
 pub mod vtt;
+pub use render::{viewport_style, CssStyle, Document, Node, Tag, Timeline};
 
 /// Formats recognized by the Rust text backend.
 /// TODO: Keep this whitelist aligned with the implemented parsers and supported profiles.

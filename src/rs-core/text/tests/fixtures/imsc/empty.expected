@@ -1,20 +1,4 @@
 Document {
-    rates: Rates {
-        frame_rate: 30.0,
-        tick_rate: 1.0,
-        explicit_frame_rate: false,
-        explicit_tick_rate: false,
-    },
-    root_style: Style {
-        properties: {},
-        unsupported: [],
-    },
-    cell_resolution: (
-        32,
-        15,
-    ),
-    styles: {},
-    regions: {},
     nodes: [],
     diagnostics: [],
 }

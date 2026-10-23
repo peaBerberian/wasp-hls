@@ -1,5 +1,28 @@
+use super::model::Document;
 use super::*;
 use crate::text::{Error, Limits};
+fn parse(bytes: &[u8], init: Option<&Header>) -> Result<super::model::Document, Error> {
+    parse_with_limits(bytes, init, Limits::default())
+}
+fn parse_with_limits(
+    bytes: &[u8],
+    init: Option<&Header>,
+    limits: Limits,
+) -> Result<super::model::Document, Error> {
+    super::parser::read(bytes, init, limits, &mut super::Budget::new(limits))
+}
+fn plain(cue: &super::model::Cue) -> String {
+    cue.text
+        .iter()
+        .filter_map(|n| {
+            if let NodeKind::Text(t) = &n.kind {
+                Some(t.as_str())
+            } else {
+                None
+            }
+        })
+        .collect()
+}
 fn document(body: &str) -> Document {
     parse(format!("WEBVTT\n\n{body}").as_bytes(), None).unwrap()
 }
@@ -30,7 +53,7 @@ fn headers_and_line_endings() {
         let d = parse(s.as_bytes(), None).unwrap();
         assert_eq!(d.cues.len(), 1);
         assert_eq!(d.cues[0].id, "id");
-        assert_eq!(d.cues[0].raw_text, "hello");
+        assert_eq!(plain(&d.cues[0]), "hello");
     }
     for bad in ["", "WEBVTTx\n", "webvtt\n", "\nWEBVTT"] {
         assert!(parse(bad.as_bytes(), None).is_err(), "{bad}");
@@ -132,8 +155,8 @@ fn malformed_recovery_and_missing_separators() {
     let d=document("NOTE comment\nignored\n\nbad\n00:xx.000 --> 00:01.000\nignored\n\n00:01.000 --> 00:02.000\nfirst\n00:03.000 --> 00:04.000\nsecond");
     assert_eq!(d.cues.len(), 2);
     assert_eq!(d.diagnostics.len(), 1);
-    assert_eq!(d.cues[0].raw_text, "first");
-    assert_eq!(d.cues[1].raw_text, "second");
+    assert_eq!(plain(&d.cues[0]), "first");
+    assert_eq!(plain(&d.cues[1]), "second");
 }
 #[test]
 fn region_blocks_and_styles() {
@@ -146,7 +169,6 @@ fn region_blocks_and_styles() {
             lines: 4,
             region_anchor: (10.0, 20.0),
             viewport_anchor: (30.0, 40.0),
-            scroll_up: true
         }
     );
     assert_eq!(d.header.style_sheets.len(), 1);
@@ -168,7 +190,6 @@ fn markup_is_a_portable_arena() {
         }
     );
     assert!(n.iter().any(|n| n.kind == NodeKind::Text("A & B".into())));
-    assert!(n.iter().any(|n| n.kind == NodeKind::Timestamp(2000)));
     for (i, node) in n.iter().enumerate().skip(1) {
         assert!(node.parent.unwrap() < i);
     }
@@ -189,7 +210,7 @@ fn markup_recovery_entities_and_replacement() {
         .collect::<String>();
     assert_eq!(text, "AB<>\u{a0}\u{200e}\u{200f}A&unknown;\u{fffd}");
     let d = parse(b"WEBVTT\n\n00:00.000 --> 00:01.000\n\xff", None).unwrap();
-    assert_eq!(d.cues[0].raw_text, "\u{fffd}");
+    assert_eq!(plain(&d.cues[0]), "\u{fffd}");
 }
 #[test]
 fn bounded_input() {
@@ -306,18 +327,12 @@ fn recovery_and_timestamp_differences_from_legacy_parsers() {
 }
 
 #[test]
-fn invalid_region_scroll_does_not_replace_a_valid_value() {
-    let d = document("REGION\nid:r scroll:up scroll:invalid\n\n");
-    assert!(d.header.regions[0].scroll_up);
-}
-
-#[test]
 fn external_header_copies_follow_the_output_budget() {
-    let mut header = Header::default();
-    header.style_sheets.push(css::Stylesheet {
-        source: "x".repeat(10_000),
-        ..Default::default()
-    });
+    let source = format!(
+        "WEBVTT\n\nSTYLE\n::cue(.{}) {{color:red}}\n\n",
+        "x".repeat(10_000)
+    );
+    let header = parse(source.as_bytes(), None).unwrap().header;
     let limits = Limits {
         output_bytes: 1000,
         ..Limits::default()
@@ -331,20 +346,10 @@ fn external_header_copies_follow_the_output_budget() {
 }
 
 #[test]
-fn invalid_and_unsupported_css_values_keep_their_raw_declarations() {
-    let d = document("STYLE\n::cue { font-weight:bold; font-weight:Bogus; font-size:10px 20px; font-size:calc(1em + 1px); future:keep-me; }\n\n00:00.000 --> 00:01.000\nStill visible");
-    let declarations = &d.header.style_sheets[0].rules[0].declarations;
-    assert_eq!(declarations.len(), 5);
-    assert!(declarations[0].portable.is_some());
-    for declaration in &declarations[1..] {
-        assert!(declaration.portable.is_none());
-    }
-    assert_eq!(declarations[1].value, "Bogus");
-    assert_eq!(declarations[2].value, "10px 20px");
-    assert_eq!(declarations[3].value, "calc(1em + 1px)");
-    assert_eq!(declarations[4].name, "future");
-    assert_eq!(declarations[4].value, "keep-me");
-    assert_eq!(d.cues[0].raw_text, "Still visible");
+fn invalid_css_values_are_discarded() {
+    let d=document("STYLE\n::cue { font-weight:bold; font-weight:Bogus; font-size:10px 20px; font-size:calc(1em + 1px); future:keep-me; }\n\n00:00.000 --> 00:01.000\nStill visible");
+    assert_eq!(d.header.style_sheets[0].rules[0].declarations.len(), 1);
+    assert_eq!(plain(&d.cues[0]), "Still visible");
 }
 
 #[test]

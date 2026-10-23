@@ -164,11 +164,6 @@ pub(super) fn parse_region<'a>(
                     }
                 }
             }
-            "scroll" => {
-                if v == "up" {
-                    r.scroll_up = true;
-                }
-            }
             "regionanchor" | "viewportanchor" => {
                 if let Some((x, y)) = v.split_once(',') {
                     if let (Some(x), Some(y)) = (percent(x), percent(y)) {

@@ -1,0 +1,128 @@
+Document {
+    nodes: [
+        Node {
+            parent: None,
+            tag: Div,
+            start: 1.0,
+            end: 4.0,
+            style: {
+                "color": "#ff0000ff",
+                "display": "flex",
+                "flex-direction": "column",
+                "font-family": "sans-serif",
+                "font-size": "20px",
+                "height": "25%",
+                "justify-content": "flex-end",
+                "left": "10%",
+                "position": "absolute",
+                "top": "70%",
+                "width": "80%",
+            },
+            language: None,
+            text: None,
+        },
+        Node {
+            parent: Some(
+                0,
+            ),
+            tag: P,
+            start: 1.0,
+            end: 4.0,
+            style: {
+                "color": "#ff0000ff",
+                "font-family": "sans-serif",
+                "font-size": "20px",
+                "font-weight": "bold",
+                "margin": "0",
+                "white-space": "normal",
+            },
+            language: Some(
+                "en",
+            ),
+            text: None,
+        },
+        Node {
+            parent: Some(
+                1,
+            ),
+            tag: Span,
+            start: 1.0,
+            end: 4.0,
+            style: {
+                "color": "#ff0000ff",
+                "font-family": "sans-serif",
+                "font-size": "20px",
+                "font-weight": "bold",
+                "white-space": "normal",
+            },
+            language: Some(
+                "en",
+            ),
+            text: Some(
+                "Hello ",
+            ),
+        },
+        Node {
+            parent: Some(
+                1,
+            ),
+            tag: Span,
+            start: 1.0,
+            end: 4.0,
+            style: {
+                "color": "#ffff00ff",
+                "font-family": "sans-serif",
+                "font-size": "20px",
+                "font-weight": "bold",
+                "white-space": "normal",
+            },
+            language: Some(
+                "en",
+            ),
+            text: None,
+        },
+        Node {
+            parent: Some(
+                3,
+            ),
+            tag: Span,
+            start: 1.0,
+            end: 4.0,
+            style: {
+                "color": "#ffff00ff",
+                "font-family": "sans-serif",
+                "font-size": "20px",
+                "font-weight": "bold",
+                "white-space": "normal",
+            },
+            language: Some(
+                "en",
+            ),
+            text: Some(
+                "world",
+            ),
+        },
+        Node {
+            parent: Some(
+                1,
+            ),
+            tag: Span,
+            start: 1.0,
+            end: 4.0,
+            style: {
+                "color": "#ff0000ff",
+                "font-family": "sans-serif",
+                "font-size": "20px",
+                "font-weight": "bold",
+                "white-space": "normal",
+            },
+            language: Some(
+                "en",
+            ),
+            text: Some(
+                "!",
+            ),
+        },
+    ],
+    diagnostics: [],
+}

@@ -12,7 +12,18 @@ pub(super) fn parse(name: &str, source: &str) -> Option<(Property, Value)> {
             if !syntax::family_list(s, false) {
                 return None;
             }
-            (FontFamily, Value::Text(s.into()))
+            (
+                FontFamily,
+                Value::Text(
+                    match s {
+                        "default" | "sansSerif" | "proportionalSansSerif" => "sans-serif",
+                        "monospaceSansSerif" | "monospaceSerif" => "monospace",
+                        "proportionalSerif" => "serif",
+                        _ => s,
+                    }
+                    .into(),
+                ),
+            )
         }
         "fontSize" => {
             let values = lengths(s, 1, 2)?;
@@ -73,7 +84,6 @@ pub(super) fn parse(name: &str, source: &str) -> Option<(Property, Value)> {
                 "display" => (Display, &["auto", "none"]),
                 "visibility" => (Visibility, &["visible", "hidden"]),
                 "overflow" => (Overflow, &["visible", "hidden"]),
-                "showBackground" => (ShowBackground, &["always", "whenActive"]),
                 "wrapOption" => (WrapOption, &["wrap", "noWrap"]),
                 "textOutline" => (TextOutline, &["none"]),
                 "zIndex" => (ZIndex, &["auto"]),
@@ -95,11 +105,8 @@ fn lengths(s: &str, min: usize, max: usize) -> Option<Vec<Length>> {
         .collect();
     let values = values?;
     // IMSC1 forbids negative lengths. Cell units are reserved for the separate
-    // ebutts:linePadding extension, which is kept as raw text by this parser.
-    if values.len() < min
-        || values.len() > max
-        || values.iter().any(|v| v.value < 0.0 || v.unit == Unit::Cell)
-    {
+    // ebutts:linePadding extension, which is ignored by this parser.
+    if values.len() < min || values.len() > max || values.iter().any(|v| v.value < 0.0) {
         return None;
     }
     Some(values)
@@ -127,14 +134,13 @@ fn outline(s: &str) -> Option<Outline> {
         }
     };
     let values = lengths(rest, 1, 2)?;
-    // A blur radius is prohibited by IMSC1. Keep such values as raw text.
+    // A blur radius is prohibited by IMSC1.
     if values.get(1).is_some_and(|v| v.value != 0.0) {
         return None;
     }
     Some(Outline {
         color,
         thickness: values[0],
-        blur: values.get(1).copied(),
     })
 }
 fn decoration(s: &str) -> Option<&str> {
@@ -173,7 +179,6 @@ mod tests {
             ("display", "none"),
             ("visibility", "hidden"),
             ("overflow", "visible"),
-            ("showBackground", "whenActive"),
             ("wrapOption", "noWrap"),
             ("lineHeight", "normal"),
             ("zIndex", "auto"),
