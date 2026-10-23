@@ -2,6 +2,7 @@
 mod appearance;
 mod fixture_tests;
 mod language;
+mod placement;
 mod text;
 use super::*;
 fn ttml(s: &str) -> Document {

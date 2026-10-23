@@ -35,7 +35,49 @@ Document {
                     1.2,
                 ),
                 wrap: true,
+                text_align: Center,
+                direction: Ltr,
+                writing_mode: Horizontal,
             },
+            placement: Some(
+                Placement {
+                    x: Anchor {
+                        offset: Percent(
+                            50.0,
+                        ),
+                        from_end: false,
+                        fraction: 0.5,
+                    },
+                    y: Anchor {
+                        offset: Pixels(
+                            0.0,
+                        ),
+                        from_end: true,
+                        fraction: 1.0,
+                    },
+                    width: Some(
+                        Percent(
+                            100.0,
+                        ),
+                    ),
+                    height: None,
+                    content_align: Start,
+                    padding: [
+                        Pixels(
+                            0.0,
+                        ),
+                        Pixels(
+                            0.0,
+                        ),
+                        Pixels(
+                            0.0,
+                        ),
+                        Pixels(
+                            0.0,
+                        ),
+                    ],
+                },
+            ),
         },
         Node {
             parent: Some(
@@ -74,7 +116,11 @@ Document {
                     1.2,
                 ),
                 wrap: true,
+                text_align: Center,
+                direction: Ltr,
+                writing_mode: Horizontal,
             },
+            placement: None,
         },
         Node {
             parent: Some(
@@ -113,7 +159,11 @@ Document {
                     1.2,
                 ),
                 wrap: true,
+                text_align: Center,
+                direction: Ltr,
+                writing_mode: Horizontal,
             },
+            placement: None,
         },
         Node {
             parent: Some(
@@ -154,7 +204,11 @@ Document {
                     1.2,
                 ),
                 wrap: true,
+                text_align: Center,
+                direction: Ltr,
+                writing_mode: Horizontal,
             },
+            placement: None,
         },
         Node {
             parent: Some(
@@ -195,7 +249,11 @@ Document {
                     1.2,
                 ),
                 wrap: true,
+                text_align: Center,
+                direction: Ltr,
+                writing_mode: Horizontal,
             },
+            placement: None,
         },
     ],
     diagnostics: [],

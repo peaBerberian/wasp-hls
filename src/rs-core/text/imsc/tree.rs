@@ -119,6 +119,28 @@ impl Reader<'_> {
         let local = self.styles.specified(i, self.xml, self.budget)?;
         if paragraph {
             c.computed = self.styles.region(c.region, self.xml, self.budget)?;
+            let (mut region_start, mut region_end) = (start, end.unwrap_or(f64::INFINITY));
+            if let Some(i) = c.region {
+                let value = |name| {
+                    self.xml[i]
+                        .attr("", name)
+                        .map(|v| parse_time(v, self.rates))
+                        .transpose()
+                };
+                let begin = value("begin")?.unwrap_or(0.0);
+                let duration = value("dur")?.map(|d| begin + d);
+                region_start = region_start.max(begin);
+                region_end = [Some(region_end), value("end")?, duration]
+                    .into_iter()
+                    .flatten()
+                    .reduce(f64::min)
+                    .unwrap();
+            }
+            let mut region = Node::new(None, Kind::Region, region_start, region_end);
+            region.appearance = c.computed.appearance.clone();
+            region.placement = Some(self.styles.placement(c.region, &c.computed));
+            c.parent = Some(self.out.push(region, self.budget)?);
+            self.preserved.resize(self.out.nodes.len(), false);
             for &g in &self.groups {
                 let group = self.styles.specified(g, self.xml, self.budget)?;
                 c.computed = self.styles.apply(&c.computed, &group, self.budget)?;

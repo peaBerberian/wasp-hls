@@ -14,6 +14,13 @@ pub(crate) enum Property {
     LineHeight(LineHeight),
     Wrap(bool),
     Ruby(Kind),
+    Origin([Length; 2]),
+    Extent([Length; 2]),
+    Padding([Length; 4]),
+    TextAlign(TextAlign),
+    BlockAlign(Align),
+    Direction(Direction),
+    WritingMode(WritingMode, bool),
 }
 impl Property {
     pub fn ruby(&self) -> Option<Kind> {
@@ -45,17 +52,20 @@ pub(crate) fn put(out: &mut Vec<Property>, p: Property) {
 #[derive(Clone, Default)]
 pub(crate) struct Computed {
     pub appearance: Appearance,
+    pub placement: Placement,
 }
 impl Computed {
     pub fn vtt() -> Self {
         let mut out = Self::default();
         out.appearance.font_size = Length::VideoHeight(0.05);
         out.appearance.line_height = LineHeight::Multiple(1.2);
+        out.appearance.text_align = TextAlign::Center;
         out
     }
     pub fn child(&self) -> Self {
         let mut out = self.clone();
         out.appearance.background = [0; 4];
+        out.placement = Placement::default();
         out
     }
     pub fn apply(&self, local: &[Property], pixels: Option<f64>) -> Self {
@@ -121,6 +131,32 @@ impl Computed {
                 }
                 LineHeight(v) => a.line_height = *v,
                 Wrap(v) => a.wrap = *v,
+                Origin(v) => {
+                    out.placement.x.offset = v[0];
+                    out.placement.y.offset = v[1];
+                }
+                Extent(v) => {
+                    out.placement.width = Some(v[0]);
+                    out.placement.height = Some(v[1]);
+                }
+                Padding(v) => {
+                    out.placement.padding = v.map(|l| {
+                        if matches!(l, Length::Percent(_)) {
+                            l
+                        } else {
+                            l.relative(a.font_size, pixels)
+                        }
+                    })
+                }
+                BlockAlign(v) => out.placement.content_align = *v,
+                TextAlign(v) => a.text_align = *v,
+                Direction(v) => a.direction = *v,
+                WritingMode(v, rtl) => {
+                    a.writing_mode = *v;
+                    if *rtl && !local.iter().any(|p| matches!(p, Property::Direction(_))) {
+                        a.direction = super::Direction::Rtl;
+                    }
+                }
             }
         }
         out
@@ -245,6 +281,55 @@ fn read(name: &str, source: &str, css: bool) -> Option<Property> {
             "base" => Kind::Span,
             _ => return None,
         }),
+        "origin" | "extent" => {
+            let v = lengths(s, 2, 2, false)?;
+            if v.iter().any(|l| matches!(l, Length::Em(_))) {
+                return None;
+            }
+            if name == "origin" {
+                Origin([v[0], v[1]])
+            } else {
+                Extent([v[0], v[1]])
+            }
+        }
+        "padding" => {
+            let v = lengths(s, 1, 4, false)?;
+            Padding(match v.as_slice() {
+                [a] => [*a; 4],
+                [a, b] => [*a, *b, *a, *b],
+                [a, b, c] => [*a, *b, *c, *b],
+                [a, b, c, d] => [*a, *b, *c, *d],
+                _ => return None,
+            })
+        }
+        "textAlign" => TextAlign(match s {
+            "start" => super::TextAlign::Start,
+            "center" => super::TextAlign::Center,
+            "end" => super::TextAlign::End,
+            "left" => super::TextAlign::Left,
+            "right" => super::TextAlign::Right,
+            _ => return None,
+        }),
+        "displayAlign" => BlockAlign(match s {
+            "before" => Align::Start,
+            "center" => Align::Center,
+            "after" => Align::End,
+            _ => return None,
+        }),
+        "direction" => Direction(match s {
+            "ltr" => super::Direction::Ltr,
+            "rtl" => super::Direction::Rtl,
+            _ => return None,
+        }),
+        "writingMode" => WritingMode(
+            match s {
+                "lrtb" | "rltb" | "lr" | "rl" => super::WritingMode::Horizontal,
+                "tbrl" | "tb" => super::WritingMode::VerticalRl,
+                "tblr" => super::WritingMode::VerticalLr,
+                _ => return None,
+            },
+            matches!(s, "rltb" | "rl"),
+        ),
         // TODO: EBU linePadding/multiRowAlign, escaped font names and complex CSS.
         _ => return None,
     })

@@ -1,6 +1,7 @@
 //! Read WebVTT segments. Save the initialization header for later segments.
 mod css;
 mod entities;
+mod placement;
 mod text;
 mod timestamp;
 use super::{budget::Budget, Document, Error, Kind, Limits, Node, Timeline};
@@ -26,6 +27,7 @@ impl TimestampMap {
 pub struct Header {
     map: TimestampMap,
     rules: Vec<css::Rule>,
+    regions: std::collections::BTreeMap<String, placement::Region>,
 }
 pub fn parse_init(bytes: &[u8]) -> Result<Header, Error> {
     let mut header = None;
@@ -90,6 +92,7 @@ fn read(
     if !signature {
         let previous = init.unwrap();
         css::reserve(&previous.rules, &mut budget)?;
+        budget.bytes(previous.regions.keys().map(|id| 128 + id.len()).sum())?;
         header = previous.clone();
     }
     let mut i = usize::from(signature);
@@ -98,6 +101,13 @@ fn read(
             if let Some(v) = lines[i].strip_prefix("X-TIMESTAMP-MAP=") {
                 header.map = timestamp_map(v)
                     .ok_or_else(|| Error::Header("invalid X-TIMESTAMP-MAP".into()))?;
+            }
+            if let Some(v) = lines[i].strip_prefix("Region:") {
+                let (id, r) = placement::region(
+                    v.split_ascii_whitespace().filter_map(|t| t.split_once('=')),
+                    &mut budget,
+                )?;
+                header.regions.insert(id, r);
             }
             i += 1;
         }
@@ -138,6 +148,16 @@ fn read(
                         &mut budget,
                     )?);
                 }
+                if first == "REGION" {
+                    let (id, r) = placement::region(
+                        lines[begin..i]
+                            .iter()
+                            .flat_map(|s| s.split_ascii_whitespace())
+                            .filter_map(|t| t.split_once(':')),
+                        &mut budget,
+                    )?;
+                    header.regions.insert(id, r);
+                }
             }
             continue;
         }
@@ -159,8 +179,22 @@ fn read(
             let duration = (end as f64 - start as f64) / 1000.0;
             let start = header.map.map_seconds(start, timeline.media_time) + offset;
             let end = start + duration;
-            let parent = None;
+            let mut parent = None;
             let mut computed = super::properties::Computed::vtt();
+            let settings = placement::cue(_settings, &header.regions);
+            if let Some(r) = settings.region {
+                css::apply(
+                    &header.rules,
+                    css::Target::Region,
+                    &mut computed,
+                    &mut budget,
+                )?;
+                let mut n = Node::new(None, Kind::Region, start, end);
+                n.appearance = computed.appearance.clone();
+                n.placement = Some(placement::region_box(r));
+                parent = Some(out.push(n, &mut budget)?);
+                computed = computed.child();
+            }
             let mut node = Node::new(parent, Kind::Paragraph, start, end);
             css::apply(
                 &header.rules,
@@ -168,6 +202,14 @@ fn read(
                 &mut computed,
                 &mut budget,
             )?;
+            node.appearance = computed.appearance.clone();
+            node.placement = if settings.region.is_some() {
+                None
+            } else {
+                Some(settings.placement)
+            };
+            computed.appearance.text_align = settings.align;
+            computed.appearance.writing_mode = settings.writing;
             node.appearance = computed.appearance.clone();
             let parent = out.push(node, &mut budget)?;
             budget.bytes(lines[begin..i].iter().map(|s| s.len() + 1).sum())?;

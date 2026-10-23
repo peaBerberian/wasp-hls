@@ -10,6 +10,7 @@ pub enum Kind {
     Break,
     Ruby,
     RubyText,
+    Region,
 }
 #[derive(Debug, Clone, PartialEq)]
 #[non_exhaustive]
@@ -26,6 +27,8 @@ pub struct Node {
     /// A label such as "fr". The parser also applies labels from parent nodes.
     pub language: Option<Arc<str>>,
     pub appearance: super::Appearance,
+    /// Position and size of an outer box. Other nodes stay inside their parent.
+    pub placement: Option<super::Placement>,
 }
 impl Node {
     pub(super) fn new(parent: Option<usize>, kind: Kind, start: f64, end: f64) -> Self {
@@ -37,6 +40,7 @@ impl Node {
             text: None,
             language: None,
             appearance: super::Appearance::default(),
+            placement: None,
         }
     }
 }
@@ -75,3 +79,4 @@ impl Timeline {
 // JS must copy the data before Rust frees it. Native code can use Document directly.
 // TODO: Add language labels and ruby kinds to the arrays sent to JS.
 // TODO: Send each different appearance once. Nodes can use its array index.
+// TODO: Add positions and sizes to the arrays sent to JS. Include their units.

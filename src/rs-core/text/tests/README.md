@@ -14,6 +14,8 @@
 - Property-value fixture tables keep CSS and TTML grammars separate. Tests cover
   invalid overrides, style cycles, hidden definitions, font-list sharing, CSS
   specificity/importance and a scanner work counter independent of machine speed.
+- Placement tests cover TTML document coordinates, region alignment, WebVTT cue
+  anchors, settings order, region dimensions and both vertical writing modes.
 
 Reference material:
 

@@ -25,7 +25,12 @@ Use `vtt::parse`, `imsc::parse`, or `imsc::parse_sample` for extracted MP4 sampl
   cancelled by a descendant, whereas TTML permits that cancellation.
 - Resolve `Length::VideoHeight` against the displayed video image height, not
   the browser viewport. A browser backend can then set ordinary pixel values.
-- TODO: Add region geometry, cue positioning and vertical writing.
+- `Placement` holds bounds and anchors. Measure the text, then resolve anchors
+  using the containing box dimensions. Alignment is an enum, not flexbox syntax.
+- Percent padding uses the containing region's height for top/bottom and width
+  for left/right. Pixel TTML geometry scales when a root pixel extent is given.
+- TODO: Scrolling/collisions, paragraphs split across regions, and shared region
+  backgrounds when several paragraphs are active together.
 - TODO: Add opacity, visibility, outlines, clipping and stacking order.
 
 `model.rs` defines the output. `imsc/` and `vtt/` read each format; `mp4.rs` reads

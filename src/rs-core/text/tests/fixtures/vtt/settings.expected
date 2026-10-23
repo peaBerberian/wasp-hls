@@ -35,7 +35,49 @@ Document {
                     1.2,
                 ),
                 wrap: true,
+                text_align: End,
+                direction: Ltr,
+                writing_mode: VerticalRl,
             },
+            placement: Some(
+                Placement {
+                    x: Anchor {
+                        offset: Em(
+                            1.2,
+                        ),
+                        from_end: false,
+                        fraction: 0.0,
+                    },
+                    y: Anchor {
+                        offset: Percent(
+                            25.0,
+                        ),
+                        from_end: false,
+                        fraction: 1.0,
+                    },
+                    width: None,
+                    height: Some(
+                        Percent(
+                            25.0,
+                        ),
+                    ),
+                    content_align: Start,
+                    padding: [
+                        Pixels(
+                            0.0,
+                        ),
+                        Pixels(
+                            0.0,
+                        ),
+                        Pixels(
+                            0.0,
+                        ),
+                        Pixels(
+                            0.0,
+                        ),
+                    ],
+                },
+            ),
         },
         Node {
             parent: Some(
@@ -76,7 +118,11 @@ Document {
                     1.2,
                 ),
                 wrap: true,
+                text_align: End,
+                direction: Ltr,
+                writing_mode: VerticalRl,
             },
+            placement: None,
         },
     ],
     diagnostics: [],

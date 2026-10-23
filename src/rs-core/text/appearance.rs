@@ -80,6 +80,9 @@ pub struct Appearance {
     pub decoration: Decoration,
     pub line_height: LineHeight,
     pub wrap: bool,
+    pub text_align: TextAlign,
+    pub direction: Direction,
+    pub writing_mode: WritingMode,
 }
 impl Default for Appearance {
     fn default() -> Self {
@@ -93,9 +96,13 @@ impl Default for Appearance {
             decoration: Decoration::default(),
             line_height: LineHeight::Normal,
             wrap: true,
+            text_align: TextAlign::Start,
+            direction: Direction::Ltr,
+            writing_mode: WritingMode::Horizontal,
         }
     }
 }
+use super::{Direction, TextAlign, WritingMode};
 // For CSS, calculate pixel sizes again when the video size changes.
 // Apply decorations only to nodes with text, so a child can remove an underline.
 // TODO: Send these values to JS as arrays, without CSS or a call for each field.

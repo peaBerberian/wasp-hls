@@ -13,6 +13,7 @@ pub(super) struct Styles {
     pixels: Option<f64>,
     depth: usize,
     pub diagnostics: Vec<crate::text::Diagnostic>,
+    extent: Option<[Length; 2]>,
 }
 impl Styles {
     pub fn read(xml: &[Element], limits: Limits, budget: &mut Budget) -> Result<Self, Error> {
@@ -46,6 +47,7 @@ impl Styles {
             pixels,
             depth: limits.depth,
             diagnostics: Vec::new(),
+            extent,
         };
         // Only styles under head/styling can define named styles. Skip styles
         // in metadata or another XML namespace. Styles inside a region apply
@@ -220,5 +222,35 @@ impl Styles {
         } else {
             Ok(self.base.clone())
         }
+    }
+    pub fn placement(&self, _i: Option<usize>, computed: &Computed) -> crate::text::Placement {
+        let mut out = computed.placement.clone();
+        // If tt gives the document size in pixels, convert its pixel positions
+        // and sizes to percentages. They will then follow the video size.
+        for (axis, l) in [(0, &mut out.x.offset), (1, &mut out.y.offset)] {
+            if let (Length::Pixels(n), Some(Length::Pixels(total))) =
+                (*l, self.extent.map(|v| v[axis]))
+            {
+                if total > 0.0 {
+                    let percent = n / total * 100.0;
+                    if percent.is_finite() {
+                        *l = Length::Percent(percent);
+                    }
+                }
+            }
+        }
+        for (axis, l) in [(0, &mut out.width), (1, &mut out.height)] {
+            if let (Some(Length::Pixels(n)), Some(Length::Pixels(total))) =
+                (*l, self.extent.map(|v| v[axis]))
+            {
+                if total > 0.0 {
+                    let percent = n / total * 100.0;
+                    if percent.is_finite() {
+                        *l = Some(Length::Percent(percent));
+                    }
+                }
+            }
+        }
+        out
     }
 }
