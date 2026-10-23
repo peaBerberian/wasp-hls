@@ -109,6 +109,7 @@ fn ensure_ready_playlists(dispatcher: &mut Dispatcher, wanted_position: f64) -> 
             if audio_track_changed {
                 dispatcher.announce_current_audio_track();
             }
+            // XXX TODO: Why not done the same way as audio here?
             if changed_media_types.contains(&MediaType::Text) {
                 dispatcher.announce_current_subtitle_track();
                 dispatcher.reset_subtitle_playlist();
@@ -163,8 +164,7 @@ fn advance_awaiting_playlist_info_state(dispatcher: &mut Dispatcher) {
         utils::get_initial_position(playlist_store, starting_position)
     };
 
-    // XXX TODO: Follow the selected text playlist when text scheduling is connected.
-    for media_type in [MediaType::Video, MediaType::Audio] {
+    for media_type in [MediaType::Video, MediaType::Audio, MediaType::Text] {
         dispatcher.follow_selected_media_playlist(media_type);
     }
 
@@ -221,6 +221,8 @@ fn advance_awaiting_playlist_info_state(dispatcher: &mut Dispatcher) {
         let Some(store) = dispatcher.playlist_store.as_ref() else {
             return;
         };
+
+        // XXX TODO: Why completely different from audio here?
         let subtitle_tracks_info =
             crate::bindings::formatters::format_subtitle_tracks_for_js(store.subtitle_tracks());
         jsAnnounceFetchedContent(
@@ -283,7 +285,6 @@ fn advance_awaiting_media_source_state(dispatcher: &mut Dispatcher) {
 
     sync_media_source_duration(playlist_store);
 
-    // XXX TODO: Initialize text storage through the shared buffer interface too.
     if let Some(Err(e)) = init_source_buffer(dispatcher, MediaType::Audio) {
         let (code, msg) = format_source_buffer_creation_err_for_js(e);
         jsSendSourceBufferCreationError(true, code, MediaType::Audio, &msg);
@@ -293,6 +294,14 @@ fn advance_awaiting_media_source_state(dispatcher: &mut Dispatcher) {
     if let Some(Err(e)) = init_source_buffer(dispatcher, MediaType::Video) {
         let (code, msg) = format_source_buffer_creation_err_for_js(e);
         jsSendSourceBufferCreationError(true, code, MediaType::Video, &msg);
+        dispatcher.stop_current_content();
+        return;
+    }
+    // XXX TODO: Do we really want to send a fatal error when no subs? When could that actually
+    // happen?
+    if let Some(Err(e)) = init_source_buffer(dispatcher, MediaType::Text) {
+        let (code, msg) = format_source_buffer_creation_err_for_js(e);
+        jsSendSourceBufferCreationError(true, code, MediaType::Text, &msg);
         dispatcher.stop_current_content();
         return;
     }
@@ -319,6 +328,7 @@ fn advance_awaiting_media_source_state(dispatcher: &mut Dispatcher) {
     // Generalize behavior?
     let media_type = dispatcher.playlist_store.as_ref().and_then(|store| {
         match (
+            // XXX TODO: Check for if text would be needed here
             store.has_loaded_media_playlist(MediaType::Video),
             store.has_loaded_media_playlist(MediaType::Audio),
         ) {

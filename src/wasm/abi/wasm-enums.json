@@ -479,6 +479,14 @@
         }
       }
     },
+    "MediaType": {
+      "default": "Audio",
+      "members": {
+        "Audio": 0,
+        "Video": 1,
+        "Text": 2
+      }
+    },
     "PlaylistNature": {
       "default": "Unknown",
       "members": {
@@ -636,14 +644,6 @@
       "members": {
         "UnknownTrack": 0,
         "NoCompatibleVariant": 1
-      }
-    },
-    "MediaType": {
-      "default": "Audio",
-      "members": {
-        "Audio": 0,
-        "Video": 1,
-        "Text": 2
       }
     }
   }

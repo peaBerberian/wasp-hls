@@ -459,6 +459,7 @@ impl MediaElementReference {
         discontinuity_sequence: u32,
     ) -> Option<TimescaledTimestamp> {
         match media_type {
+            // XXX TODO: ?
             MediaType::Text => None,
             MediaType::Audio => self.audio_inventory.infer_probable_base_dts(
                 time_info.start(),

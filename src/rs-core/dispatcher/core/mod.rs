@@ -100,10 +100,7 @@ impl Dispatcher {
                         log_info!("Core: {} MediaPlaylist changed on variant lock", media_type);
                         self.ready_probe_segments.clear_media_type(media_type);
                         self.abort_segment_requests_with_type(media_type);
-                        // XXX TODO: Flush text through the shared buffer interface too.
-                        if media_type != MediaType::Text {
-                            self.flush_media_buffer(media_type);
-                        }
+                        self.flush_media_buffer(media_type);
                     }
 
                     // Now iterate on unchanged media types which are in the buffer.
@@ -113,8 +110,7 @@ impl Dispatcher {
                     // contains data from the newly-locked variant. An unchanged playlist
                     // may still have older-quality buffered data, but when it does not this causes
                     // an unnecessary rebuffer and refetch.
-                    // XXX TODO: Include text when its buffer and playlist scheduling are connected.
-                    for media_type in [MediaType::Audio, MediaType::Video] {
+                    for media_type in [MediaType::Audio, MediaType::Video, MediaType::Text] {
                         if self.media_element_ref.has_buffer(media_type)
                             && !changed_media_types.contains(&media_type)
                         {
@@ -123,8 +119,7 @@ impl Dispatcher {
                         }
                     }
 
-                    // XXX TODO: Include text when its buffer and playlist scheduling are connected.
-                    for media_type in [MediaType::Audio, MediaType::Video] {
+                    for media_type in [MediaType::Audio, MediaType::Video, MediaType::Text] {
                         self.follow_selected_media_playlist(media_type);
                     }
 
@@ -178,6 +173,9 @@ impl Dispatcher {
         let Some(pl_store) = self.playlist_store.as_mut() else {
             return;
         };
+
+        // Through audio track changes ww may also change the subtitle tracks (e.g. due to variant
+        // constraints). Just keep in mind what the initial track was.
         let previous_text_id = pl_store.current_media_playlist_id(MediaType::Text).copied();
         match pl_store.set_audio_track(track_id) {
             SetAudioTrackResponse::UnknownTrack => {
@@ -224,10 +222,10 @@ impl Dispatcher {
                     changed_media_types.push(MediaType::Audio);
                 }
 
-                let subtitle_changed =
-                    self.playlist_store.as_ref().and_then(|store| {
-                        store.current_media_playlist_id(MediaType::Text).copied()
-                    }) != previous_text_id;
+                // XXX TODO: Shouldn't the playlist store tell us that?
+                let subtitle_changed = self.playlist_store.as_ref().and_then(|pl_store| {
+                    pl_store.current_media_playlist_id(MediaType::Text).copied()
+                }) != previous_text_id;
                 self.announce_current_audio_track();
                 if subtitle_changed {
                     self.announce_current_subtitle_track();
@@ -243,11 +241,10 @@ impl Dispatcher {
             }
 
             SetAudioTrackResponse::NoPlaylistChange => {
-                if self
-                    .playlist_store
-                    .as_ref()
-                    .and_then(|store| store.current_media_playlist_id(MediaType::Text).copied())
-                    != previous_text_id
+                // XXX TODO: Shouldn't the playlist store tell us that?
+                if self.playlist_store.as_ref().and_then(|pl_store| {
+                    pl_store.current_media_playlist_id(MediaType::Text).copied()
+                }) != previous_text_id
                 {
                     self.announce_current_subtitle_track();
                     self.reset_subtitle_playlist();
@@ -569,8 +566,7 @@ impl Dispatcher {
         // detection and possibly gap jumping? Rebuffering currently uses the
         // previous selection result until the next observation.
         self.media_element_ref.on_observation(observation);
-        // XXX TODO: Check removed text data using observed text buffered ranges too.
-        for media_type in [MediaType::Audio, MediaType::Video] {
+        for media_type in [MediaType::Audio, MediaType::Video, MediaType::Text] {
             if let Some(buffered) = self.media_element_ref.buffered_ranges_for(media_type) {
                 self.segment_selectors
                     .get_mut(media_type)
@@ -604,16 +600,19 @@ impl Dispatcher {
         let previous_subtitle_track = self
             .playlist_store
             .as_ref()
-            .and_then(|store| store.current_subtitle_track_id());
+            .and_then(|pl_store| pl_store.current_subtitle_track_id());
         let recommendation = self.compute_optimal_variant();
         let was_already_locked = self.requester.lock_segment_requests();
         for media_type in [MediaType::Video, MediaType::Audio, MediaType::Text] {
             self.schedule_next_segment_for_type(media_type, recommendation);
         }
+
+        // XXX TODO: Why may it change there? Wouldn't a more focused detection than
+        // this random one be easier to follow?
         if self
             .playlist_store
             .as_ref()
-            .and_then(|store| store.current_subtitle_track_id())
+            .and_then(|pl_store| pl_store.current_subtitle_track_id())
             != previous_subtitle_track
         {
             self.announce_current_subtitle_track();
@@ -627,12 +626,15 @@ impl Dispatcher {
     }
 
     pub(super) fn set_subtitle_track_core(&mut self, track_id: Option<u32>) {
-        let Some(store) = self.playlist_store.as_mut() else {
+        let Some(pl_store) = self.playlist_store.as_mut() else {
             return;
         };
-        let previous_text_id = store.current_media_playlist_id(MediaType::Text).copied();
-        let was_locked = store.is_variant_locked();
-        let needs_variant = match store.set_subtitle_track(track_id) {
+        let previous_text_id = pl_store.current_media_playlist_id(MediaType::Text).copied();
+        let was_locked = pl_store.is_variant_locked();
+
+        // XXX TODO: The difference in response / behavior with `set_audio_track` in
+        // pl_store is not straightforward to me...
+        let needs_variant = match pl_store.set_subtitle_track(track_id) {
             Ok(needs_variant) => needs_variant,
             Err(reason) => {
                 let (code, message) = match reason {
@@ -654,10 +656,10 @@ impl Dispatcher {
         let mut changed = Vec::new();
         if needs_variant {
             if let Some(selection) = self.compute_optimal_variant() {
-                let Some(store) = self.playlist_store.as_mut() else {
+                let Some(pl_store) = self.playlist_store.as_mut() else {
                     return;
                 };
-                changed = store.set_variant(selection.safe_variant_id);
+                changed = pl_store.set_variant(selection.safe_variant_id);
                 self.announce_current_audio_track();
             }
         }
@@ -671,7 +673,7 @@ impl Dispatcher {
         if self
             .playlist_store
             .as_ref()
-            .and_then(|store| store.current_media_playlist_id(MediaType::Text).copied())
+            .and_then(|pl_store| pl_store.current_media_playlist_id(MediaType::Text).copied())
             != previous_text_id
         {
             self.reset_subtitle_playlist();
@@ -682,12 +684,15 @@ impl Dispatcher {
     }
 
     pub(super) fn disable_subtitle_track_core(&mut self) {
-        let Some(store) = self.playlist_store.as_mut() else {
+        let Some(pl_store) = self.playlist_store.as_mut() else {
             return;
         };
-        let previous_text_id = store.current_media_playlist_id(MediaType::Text).copied();
-        store.disable_subtitle_track();
-        let changed = previous_text_id != store.current_media_playlist_id(MediaType::Text).copied();
+        let previous_text_id = pl_store.current_media_playlist_id(MediaType::Text).copied();
+        pl_store.disable_subtitle_track();
+
+        // XXX TODO: Shouldn't the playlist store tell us that?
+        let changed =
+            previous_text_id != pl_store.current_media_playlist_id(MediaType::Text).copied();
         self.announce_current_subtitle_track();
         if changed {
             self.reset_subtitle_playlist();
@@ -696,6 +701,8 @@ impl Dispatcher {
     }
 
     /// Discard work belonging to the previous subtitle playlist.
+    // XXX TODO: I have no idea what this is for. If audio doesn't have this,
+    // we probably don't want it for subtitles
     fn reset_subtitle_playlist(&mut self) {
         self.abort_segment_requests_with_type(MediaType::Text);
         self.requester.abort_playlists_with_type(MediaType::Text);
@@ -712,10 +719,10 @@ impl Dispatcher {
 
     /// Send `trackUpdate` for the selected subtitle track, as for audio.
     fn announce_current_subtitle_track(&self) {
-        let Some(store) = self.playlist_store.as_ref() else {
+        let Some(pl_store) = self.playlist_store.as_ref() else {
             return;
         };
-        jsAnnounceTrackUpdate(MediaType::Text, store.current_subtitle_track_id());
+        jsAnnounceTrackUpdate(MediaType::Text, pl_store.current_subtitle_track_id());
     }
 
     /// Send `trackUpdate` event for the audio track currently-set on the `PlaylistStore`.
@@ -761,6 +768,8 @@ impl Dispatcher {
         // The last playback observation may also still report it after a flush is queued.
         // TODO: If we introduce per-type BOLA, coordinate choices as a playable variant pair
         // and account for their combined bandwidth. For now both selectors share one ABR result.
+        // NOTE: We don't include text here on purpose. It's buffer gap matters less than
+        // Audio/Video
         let buffer_level = [MediaType::Audio, MediaType::Video]
             .into_iter()
             .filter_map(|media_type| self.media_element_ref.buffer_ahead_for(media_type))
@@ -784,6 +793,7 @@ impl Dispatcher {
         requested_media_type: Option<MediaType>,
         data: JsMemoryBlob,
     ) {
+        // XXX TODO: Find out what to do with text probe segments
         let Some(pl_store) = self.playlist_store.as_mut() else {
             log_error!("Core: asked to do segment inspection without having a PlaylistStore",);
             return;
@@ -823,8 +833,7 @@ impl Dispatcher {
             media_type: inspection.media_type,
             codec: inspection.codec,
         };
-        // XXX TODO: Track text playlist changes here too when text scheduling is connected.
-        let previous_playlists = [MediaType::Audio, MediaType::Video]
+        let previous_playlists = [MediaType::Audio, MediaType::Video, MediaType::Text]
             .map(|media_type| pl_store.current_media_playlist_id(media_type).copied());
         pl_store.set_external_media_info(media_info, considered_media_type);
 
@@ -837,9 +846,12 @@ impl Dispatcher {
             pl_store.uses_program_date_time(),
         );
         sync_media_source_duration(pl_store);
-        let updated_playlists = [MediaType::Audio, MediaType::Video]
+        let updated_playlists = [MediaType::Audio, MediaType::Video, MediaType::Text]
             .map(|media_type| pl_store.current_media_playlist_id(media_type).copied());
-        for (index, media_type) in [MediaType::Audio, MediaType::Video].into_iter().enumerate() {
+        for (index, media_type) in [MediaType::Audio, MediaType::Video, MediaType::Text]
+            .into_iter()
+            .enumerate()
+        {
             if previous_playlists[index] != updated_playlists[index] {
                 self.follow_selected_media_playlist(media_type);
             }
@@ -1033,7 +1045,7 @@ impl Dispatcher {
         let normal_threshold = self
             .playlist_store
             .as_ref()
-            .and_then(|store| store.segment_target_duration())
+            .and_then(|pl_store| pl_store.segment_target_duration())
             .map(|duration| (duration - 1.).clamp(2., 8.))
             .unwrap_or(5.);
         let min_buffer_time = normal_threshold.min(self.buffer_goal.max(0.));
@@ -1161,11 +1173,6 @@ impl Dispatcher {
     /// Return whether the pending request survives selection. Reconsider queued requests and
     /// requests waiting for retry even when a switch is nonurgent.
     fn check_requested_segment_still_needed(&mut self, media_type: MediaType) -> bool {
-        if media_type == MediaType::Text {
-            // XXX TODO: Connect text coverage and requests to the shared buffer interface.
-            return true;
-        }
-
         if !self.requester.has_segment_request_pending(media_type) {
             return false;
         }
@@ -1320,11 +1327,6 @@ impl Dispatcher {
         media_type: MediaType,
         recommendation: Option<AdaptiveVariantSelection>,
     ) {
-        if media_type == MediaType::Text {
-            // XXX TODO: Connect text coverage and requests to the shared buffer interface.
-            return;
-        }
-
         if self.requester.has_segment_request_pending(media_type) {
             self.media_element_ref.set_end_when_done(media_type, false);
             return;
@@ -1469,10 +1471,6 @@ impl Dispatcher {
     /// Follow the playback playlist (the one we're loading segments for) when its configuration
     /// changes.
     fn follow_selected_media_playlist(&mut self, media_type: MediaType) {
-        if media_type == MediaType::Text {
-            // XXX TODO: Subscribe the selected text playlist when text scheduling is connected.
-            return;
-        }
         let playlist_id = self
             .playlist_store
             .as_ref()
@@ -1528,10 +1526,7 @@ impl Dispatcher {
 
             self.follow_selected_media_playlist(media_type);
             self.abort_segment_requests_with_type(media_type);
-            // XXX TODO: Flush text through the shared buffer interface too.
-            if media_type != MediaType::Text {
-                self.flush_media_buffer(media_type);
-            }
+            self.flush_media_buffer(media_type);
         }
 
         self.check_segments_to_request();
@@ -1598,13 +1593,11 @@ impl Dispatcher {
                     log_warn!("Loaded media segment with mismatched media type context.");
                 }
                 if req_media_type == MediaType::Text {
-                    // XXX TODO: Parse text in Rust, retain its coverage and send timestamped cue batches.
-                    return;
+                    // XXX TODO: Parse text in Rust here or in MediaElementRef?
                 }
-                let media_type = req_media_type;
                 self.on_media_segment_loaded(SegmentPushMetadata {
                     data: result,
-                    media_type,
+                    media_type: req_media_type,
                     init_segment_id,
                     time_info,
                     context: quality_context,
@@ -1692,8 +1685,7 @@ impl Dispatcher {
 
     fn on_init_segment_loaded(&mut self, data: JsMemoryBlob, media_type: MediaType, init_id: f64) {
         if media_type == MediaType::Text {
-            // XXX TODO: Parse initialization data in the Rust text pipeline.
-            return;
+            // XXX TODO: To think about what to do with text init segment
         }
 
         match self.media_element_ref.push_init_segment(media_type, data) {
@@ -1797,7 +1789,7 @@ fn normalize_abr_selection(
     let other_type = match media_type {
         MediaType::Video => MediaType::Audio,
         MediaType::Audio => MediaType::Video,
-        // XXX TODO WHY?
+        // XXX TODO Adapt here instead
         MediaType::Text => return None,
     };
     if pl_store.media_playlist_id_for_variant(selection.best_variant_id, other_type)
@@ -1843,7 +1835,7 @@ mod tests {
     #[test]
     fn initial_audio_preferences_skip_unused_groups() {
         for mode in 0..3 {
-            let mut store = PlaylistStore::try_new(
+            let mut pl_store = PlaylistStore::try_new(
                 br#"#EXTM3U
 #EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="unused",NAME="Unused",LANGUAGE="fr",ASSOC-LANGUAGE="en",URI="unused.m3u8"
 #EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="audio",NAME="Usable",LANGUAGE="en",ASSOC-LANGUAGE="en",URI="audio.m3u8"
@@ -1873,15 +1865,18 @@ video.m3u8
                     ..Default::default()
                 }]
             };
-            dispatcher.apply_initial_audio_track_selection(&mut store);
-            let usable = store
+            dispatcher.apply_initial_audio_track_selection(&mut pl_store);
+            let usable = pl_store
                 .audio_tracks()
                 .iter()
                 .find(|track| track.name() == Some("Usable"))
                 .unwrap()
                 .id();
-            assert_eq!(store.fixed_audio_track_id(), (mode != 2).then_some(usable));
-            assert_eq!(store.compatible_variants().len(), 1);
+            assert_eq!(
+                pl_store.fixed_audio_track_id(),
+                (mode != 2).then_some(usable)
+            );
+            assert_eq!(pl_store.compatible_variants().len(), 1);
             assert!(dispatcher.initial_audio_track_selection.is_empty());
         }
     }
@@ -1899,14 +1894,14 @@ video.m3u8
 
     #[test]
     fn initial_subtitle_preferences_skip_tracks_incompatible_with_selected_audio() {
-        let mut store = selected_playlist(b"#EXTM3U\n#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID=\"en\",NAME=\"English\",LANGUAGE=\"en\",URI=\"en.m3u8\"\n#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID=\"fr\",NAME=\"French\",LANGUAGE=\"fr\",URI=\"fr.m3u8\"\n#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID=\"a\",NAME=\"English\",LANGUAGE=\"en\",URI=\"en-subs.m3u8\"\n#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID=\"b\",NAME=\"French\",LANGUAGE=\"fr\",URI=\"fr-subs.m3u8\"\n#EXT-X-STREAM-INF:BANDWIDTH=100000,AUDIO=\"en\",SUBTITLES=\"a\"\na.m3u8\n#EXT-X-STREAM-INF:BANDWIDTH=200000,AUDIO=\"fr\",SUBTITLES=\"b\"\nb.m3u8\n");
-        let audio_id = store
+        let mut pl_store = selected_playlist(b"#EXTM3U\n#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID=\"en\",NAME=\"English\",LANGUAGE=\"en\",URI=\"en.m3u8\"\n#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID=\"fr\",NAME=\"French\",LANGUAGE=\"fr\",URI=\"fr.m3u8\"\n#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID=\"a\",NAME=\"English\",LANGUAGE=\"en\",URI=\"en-subs.m3u8\"\n#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID=\"b\",NAME=\"French\",LANGUAGE=\"fr\",URI=\"fr-subs.m3u8\"\n#EXT-X-STREAM-INF:BANDWIDTH=100000,AUDIO=\"en\",SUBTITLES=\"a\"\na.m3u8\n#EXT-X-STREAM-INF:BANDWIDTH=200000,AUDIO=\"fr\",SUBTITLES=\"b\"\nb.m3u8\n");
+        let audio_id = pl_store
             .audio_tracks()
             .iter()
             .find(|track| track.language() == Some("en"))
             .unwrap()
             .id();
-        store.set_audio_track(Some(audio_id));
+        pl_store.set_audio_track(Some(audio_id));
         let mut dispatcher = Dispatcher::new(100000.);
         dispatcher.initial_subtitle_track_selection = vec![
             Some(crate::dispatcher::InitialSubtitleTrackSelection {
@@ -1920,33 +1915,33 @@ video.m3u8
                 ..Default::default()
             }),
         ];
-        let french = store
+        let french = pl_store
             .subtitle_tracks()
             .iter()
             .find(|track| track.language() == Some("fr"))
             .unwrap()
             .id();
         assert_eq!(
-            store.set_subtitle_track(Some(french)),
+            pl_store.set_subtitle_track(Some(french)),
             Err(crate::playlist_store::SubtitleTrackSelectionError::NoCompatibleVariant)
         );
-        dispatcher.apply_initial_subtitle_track_selection(&mut store);
-        let english_subtitle = store
+        dispatcher.apply_initial_subtitle_track_selection(&mut pl_store);
+        let english_subtitle = pl_store
             .subtitle_tracks()
             .iter()
             .find(|track| track.language() == Some("en"))
             .unwrap()
             .id();
-        assert_eq!(store.fixed_audio_track_id(), Some(audio_id));
-        assert_eq!(store.fixed_subtitle_track_id(), Some(english_subtitle));
+        assert_eq!(pl_store.fixed_audio_track_id(), Some(audio_id));
+        assert_eq!(pl_store.fixed_subtitle_track_id(), Some(english_subtitle));
         assert!(dispatcher.initial_subtitle_track_selection.is_empty());
     }
 
     #[test]
     fn changing_subtitle_selection_cancels_only_text_requests_and_contexts() {
-        let mut store = selected_playlist(b"#EXTM3U\n#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID=\"subs\",NAME=\"English\",DEFAULT=YES,URI=\"subs.m3u8\"\n#EXT-X-STREAM-INF:BANDWIDTH=100000,CODECS=\"avc1.42E01E\",SUBTITLES=\"subs\"\nvideo.m3u8\n");
-        let text_id = *store.current_media_playlist_id(MediaType::Text).unwrap();
-        let media = store
+        let mut pl_store = selected_playlist(b"#EXTM3U\n#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID=\"subs\",NAME=\"English\",DEFAULT=YES,URI=\"subs.m3u8\"\n#EXT-X-STREAM-INF:BANDWIDTH=100000,CODECS=\"avc1.42E01E\",SUBTITLES=\"subs\"\nvideo.m3u8\n");
+        let text_id = *pl_store.current_media_playlist_id(MediaType::Text).unwrap();
+        let media = pl_store
             .update_media_playlist(
                 &text_id,
                 &b"#EXTM3U\n#EXT-X-TARGETDURATION:4\n#EXTINF:4,\nseg.vtt\n"[..],
@@ -1957,7 +1952,7 @@ video.m3u8
             .media()[0]
             .clone();
         let mut dispatcher = Dispatcher::new(100000.);
-        dispatcher.playlist_store = Some(store);
+        dispatcher.playlist_store = Some(pl_store);
         dispatcher.requester.lock_segment_requests();
         for media_type in [MediaType::Text, MediaType::Video] {
             let context = dispatcher.segment_request_contexts.insert(
@@ -2056,18 +2051,18 @@ video.m3u8
             } else {
                 manifest.to_owned()
             };
-            let mut store = selected_playlist(manifest.as_bytes());
-            let low = store.available_variants()[0].id();
-            let high = store.available_variants()[1].id();
+            let mut pl_store = selected_playlist(manifest.as_bytes());
+            let low = pl_store.available_variants()[0].id();
+            let high = pl_store.available_variants()[1].id();
             for media_type in [MediaType::Video, MediaType::Audio] {
                 for variant_id in [low, high] {
-                    let id = store
+                    let id = pl_store
                         .media_playlist_id_for_variant(variant_id, media_type)
                         .unwrap();
                     let manifest = format!(
                     "#EXTM3U\n#EXT-X-TARGETDURATION:4\n#EXTINF:4,\n{variant_id}-{media_type}.ts\n#EXT-X-ENDLIST\n"
                 );
-                    store
+                    pl_store
                         .update_media_playlist(
                             &id,
                             manifest.as_bytes(),
@@ -2076,25 +2071,25 @@ video.m3u8
                         .unwrap();
                 }
             }
-            let high_audio_id = store
+            let high_audio_id = pl_store
                 .media_playlist_id_for_variant(high, MediaType::Audio)
                 .unwrap();
-            let high_audio_segment = store
+            let high_audio_segment = pl_store
                 .media_playlist(&high_audio_id)
                 .unwrap()
                 .segment_list()
                 .media()[0]
                 .clone();
-            store.assume_variant_supported_for_test(low);
-            store.assume_variant_supported_for_test(high);
-            store.set_variant(low);
+            pl_store.assume_variant_supported_for_test(low);
+            pl_store.assume_variant_supported_for_test(high);
+            pl_store.set_variant(low);
             let recommendation = Some(crate::adaptive::AdaptiveVariantSelection {
                 best_variant_id: high,
                 safe_variant_id: low,
             });
             let mut dispatcher = Dispatcher::new(3_125_000.);
             dispatcher.ready_state = PlayerReadyState::AwaitingSegments;
-            dispatcher.playlist_store = Some(store);
+            dispatcher.playlist_store = Some(pl_store);
             dispatcher.requester.lock_segment_requests();
             dispatcher.announce_current_subtitle_track();
             crate::bindings::take_selection_announcements();
@@ -2435,13 +2430,17 @@ video.m3u8
         }
         text.push_str("#EXT-X-ENDLIST\n");
         let mut dispatcher = dispatcher_with_abr_playlists(Some(4), 8.1);
-        let store = dispatcher.playlist_store.as_mut().unwrap();
-        let variant_ids: Vec<_> = store.available_variants().iter().map(|v| v.id()).collect();
+        let pl_store = dispatcher.playlist_store.as_mut().unwrap();
+        let variant_ids: Vec<_> = pl_store
+            .available_variants()
+            .iter()
+            .map(|v| v.id())
+            .collect();
         for variant_id in variant_ids {
-            let id = store
+            let id = pl_store
                 .media_playlist_id_for_variant(variant_id, MediaType::Video)
                 .unwrap();
-            store
+            pl_store
                 .update_media_playlist(
                     &id,
                     text.as_bytes(),

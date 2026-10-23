@@ -1,5 +1,3 @@
-// XXX TODO: Maybe SegmentInventory should apply to text? Maybe MediaElementRef also?
-
 use crate::{
     bindings::{MediaType, TimescaledTimestamp},
     dispatcher::JsTimeRanges,
