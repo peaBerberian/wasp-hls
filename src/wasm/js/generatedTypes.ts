@@ -26,10 +26,10 @@ import type {
   TrackSelectionErrorCode,
 } from "./enums.js";
 import type {
+  AddSourceBufferValue,
   AppendBufferValue,
   HostResult,
   InspectSegmentValue,
-  SegmentHints,
 } from "./types.js";
 export interface HostBindings {
   /**
@@ -42,7 +42,7 @@ export interface HostBindings {
   addSourceBuffer(
     mediaType: MediaType,
     typ: string,
-  ): HostResult<number, AddSourceBufferErrorCode>;
+  ): HostResult<AddSourceBufferValue, AddSourceBufferErrorCode>;
   /**
    * Report freshly parsed content metadata back to the host.
    */
@@ -65,7 +65,7 @@ export interface HostBindings {
   announceVariantUpdate(variantId: number | undefined): void;
   /**
    * Append one media segment to a SourceBuffer.
-   * The transmuxer address is borrowed from Rust for this synchronous call only. Never retain or free it.
+   * Prepared bytes are borrowed only for this call. Copy them before returning; no parser address crosses this boundary.
    *
    * Notes:
    * - The JS marshalling for this binding is intentionally still handwritten because the return payload is packed.
@@ -73,8 +73,7 @@ export interface HostBindings {
   appendBuffer(
     sourceBufferId: number,
     resourceId: number,
-    segmentHints: SegmentHints,
-    transmuxer: number,
+    prepared: Uint8Array | undefined,
   ): HostResult<AppendBufferValue, SegmentParsingErrorCode>;
   /**
    * Create and attach a MediaSource to the host media element.
@@ -121,6 +120,10 @@ export interface HostBindings {
    */
   getRandom(): number;
   /**
+   * Recognize a probe container without parsing media: 0 other/missing, 1 TS, 2 packed AAC.
+   */
+  getResourceTransmuxFormat(resourceId: number): number;
+  /**
    * Inspect a segment resource to extract codec and MIME metadata.
    *
    * Notes:
@@ -128,6 +131,7 @@ export interface HostBindings {
    */
   inspectSegment(
     resourceId: number,
+    prepared: Uint8Array | undefined,
   ): HostResult<InspectSegmentValue, SegmentParsingErrorCode>;
   /**
    * Ask the host whether a MIME type is supported.
@@ -320,30 +324,6 @@ export interface WaspWasmExports {
    * Free raw bytes previously allocated in wasm memory.
    */
   wasp_free(ptr: number, len: number): void;
-  /**
-   * Create a Rust transmuxer; the host must explicitly free its handle.
-   */
-  wasp_transmuxer_new(keepOriginal: number): number;
-  /**
-   * Free a Rust transmuxer and all retained state.
-   */
-  wasp_transmuxer_free(session: number): void;
-  /**
-   * Release the last transmux output after the host copies it.
-   */
-  wasp_transmuxer_release(session: number): void;
-  /**
-   * Transmux one complete segment. Return a session-owned 40-byte descriptor: output pointer/length, start/end f64, timescale/status u32, static error text pointer/length. Status is 0 for output, 1 for empty, otherwise Rust transmux error code plus 1.
-   */
-  wasp_transmuxer_run(
-    session: number,
-    input: number,
-    length: number,
-    reset: number,
-    hasSeed: number,
-    seed: number,
-    timescale: number,
-  ): number;
   /**
    * Update the Rust core logger level.
    */

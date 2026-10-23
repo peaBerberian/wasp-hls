@@ -3,15 +3,16 @@
 This directory contains the Node-based test suite for the transmuxer.
 
 Those tests focus on isolated transmuxing behaviors and can be run without a
-browser through `npm run test -- transmux`. Rust cases build release WASM first
+browser through `npm run test -- transmux`. Rust cases build a separate release WASM test artifact first
 and require FFmpeg and FFprobe.
 
 The `helpers` directory contains small dedicated entry points used by some of
 those tests.
 
-After `npm run build -- wasm --release`, run the opt-in microbenchmark with
+After `npm run test -- transmux --filter rust-transmux`, run the opt-in microbenchmark with
 `node tests/transmux/benchmark-rust.mjs segment.ts [segment.ts ...]`.
-It includes JS/WASM copies, output allocation and GOP-cache updates.
+It includes JS/WASM copies and output allocation. Standalone handles exist only
+in `tmp/transmux-test.wasm`; the production WASM ABI exposes none.
 
 Optional competitors:
 

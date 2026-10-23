@@ -17,6 +17,7 @@ pub(super) unsafe fn __js_func__add_source_buffer(
     _typ_ptr: *const u8,
     _typ_len: u32,
     _source_buffer_id_out: *mut u32,
+    _needs_transmux_out: *mut u32,
     _err_code_out: *mut u32,
     _err_desc_ptr_out: *mut u32,
     _err_desc_len_out: *mut u32,
@@ -51,18 +52,15 @@ pub(super) unsafe fn __js_func__announce_variant_update(_variant_id: u32) {
 }
 
 /// Append one media segment to a SourceBuffer.
-/// The transmuxer address is borrowed from Rust for this synchronous call only. Never retain or free it.
+/// Prepared bytes are borrowed only for this call. Copy them before returning; no parser address crosses this boundary.
 ///
 /// Notes:
 /// - The JS marshalling for this binding is intentionally still handwritten because the return payload is packed.
 pub(super) unsafe fn __js_func__append_buffer(
     _source_buffer_id: SourceBufferId,
     _segment_id: ResourceId,
-    _base_decode_time_start_hi: u32,
-    _base_decode_time_start_lo: u32,
-    _base_decode_time_start_timescale: u32,
-    _reset_transmuxer_state: u32,
-    _transmuxer: usize,
+    _prepared_ptr: *const u8,
+    _prepared_len: usize,
     _has_start_out: *mut u32,
     _start_value_hi_out: *mut u32,
     _start_value_lo_out: *mut u32,
@@ -153,12 +151,19 @@ pub(super) unsafe fn __js_func__get_resource_len(_id: ResourceId) -> i32 {
     non_wasm_binding_panic("__js_func__get_resource_len")
 }
 
+/// Recognize a probe container without parsing media: 0 other/missing, 1 TS, 2 packed AAC.
+pub(super) unsafe fn __js_func__get_resource_transmux_format(_resource_id: ResourceId) -> u32 {
+    non_wasm_binding_panic("__js_func__get_resource_transmux_format")
+}
+
 /// Inspect a segment resource to extract codec and MIME metadata.
 ///
 /// Notes:
 /// - The JS marshalling for this binding is intentionally still handwritten because the success payload is multi-field.
 pub(super) unsafe fn __js_func__inspect_segment(
     _segment_id: ResourceId,
+    _prepared_ptr: *const u8,
+    _prepared_len: usize,
     _media_type_out: *mut u32,
     _parsed_mime_type_ptr_out: *mut u32,
     _parsed_mime_type_len_out: *mut u32,

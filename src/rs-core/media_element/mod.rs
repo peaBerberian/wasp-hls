@@ -11,7 +11,7 @@ use crate::utils::logger::*;
 pub(crate) use source_buffers::{PushSegmentError, RemoveDataError};
 
 pub(crate) use self::segment_inventory::{BufferedChunk, SegmentQualityContext};
-pub(crate) use source_buffers::{MediaSequenceIdentity, PreparedPushData, SegmentHints};
+pub(crate) use source_buffers::{MediaSequenceIdentity, PreparedPushData};
 
 mod segment_inventory;
 mod source_buffers;

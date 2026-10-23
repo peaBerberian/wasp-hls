@@ -13,6 +13,7 @@ unsafe extern "C" {
         typ_ptr: *const u8,
         typ_len: u32,
         source_buffer_id_out: *mut u32,
+        needs_transmux_out: *mut u32,
         err_code_out: *mut u32,
         err_desc_ptr_out: *mut u32,
         err_desc_len_out: *mut u32,
@@ -32,18 +33,15 @@ unsafe extern "C" {
     /// Report the currently selected variant update.
     pub(super) fn __js_func__announce_variant_update(variant_id: u32);
     /// Append one media segment to a SourceBuffer.
-    /// The transmuxer address is borrowed from Rust for this synchronous call only. Never retain or free it.
+    /// Prepared bytes are borrowed only for this call. Copy them before returning; no parser address crosses this boundary.
     ///
     /// Notes:
     /// - The JS marshalling for this binding is intentionally still handwritten because the return payload is packed.
     pub(super) fn __js_func__append_buffer(
         source_buffer_id: SourceBufferId,
         segment_id: ResourceId,
-        base_decode_time_start_hi: u32,
-        base_decode_time_start_lo: u32,
-        base_decode_time_start_timescale: u32,
-        reset_transmuxer_state: u32,
-        transmuxer: usize,
+        prepared_ptr: *const u8,
+        prepared_len: usize,
         has_start_out: *mut u32,
         start_value_hi_out: *mut u32,
         start_value_lo_out: *mut u32,
@@ -101,12 +99,16 @@ unsafe extern "C" {
     /// Notes:
     /// - This shares the same host method as `__js_func__copy_resource_data`; only the low-level ABI differs.
     pub(super) fn __js_func__get_resource_len(id: ResourceId) -> i32;
+    /// Recognize a probe container without parsing media: 0 other/missing, 1 TS, 2 packed AAC.
+    pub(super) fn __js_func__get_resource_transmux_format(resource_id: ResourceId) -> u32;
     /// Inspect a segment resource to extract codec and MIME metadata.
     ///
     /// Notes:
     /// - The JS marshalling for this binding is intentionally still handwritten because the success payload is multi-field.
     pub(super) fn __js_func__inspect_segment(
         segment_id: ResourceId,
+        prepared_ptr: *const u8,
+        prepared_len: usize,
         media_type_out: *mut u32,
         parsed_mime_type_ptr_out: *mut u32,
         parsed_mime_type_len_out: *mut u32,

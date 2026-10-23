@@ -17,7 +17,7 @@ export async function loadTransmuxers(directory) {
   });
   const mod = await import(pathToFileURL(outfile).href);
   const module = new WebAssembly.Module(
-    await readFile("build/wasp_hls_bg.wasm"),
+    await readFile("tmp/transmux-test.wasm"),
   );
   const imports = {};
   for (const item of WebAssembly.Module.imports(module)) {

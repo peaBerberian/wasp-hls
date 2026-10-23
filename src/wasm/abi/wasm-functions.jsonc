@@ -26,7 +26,7 @@
           { "name": "mediaType", "type": "MediaType" },
           { "name": "typ", "type": "string" },
         ],
-        "returnType": "HostResult<number, AddSourceBufferErrorCode>",
+        "returnType": "HostResult<AddSourceBufferValue, AddSourceBufferErrorCode>",
       },
       "rust": {
         "args": [
@@ -34,6 +34,7 @@
           { "name": "typ_ptr", "type": "*const u8" },
           { "name": "typ_len", "type": "u32" },
           { "name": "source_buffer_id_out", "type": "*mut u32" },
+          { "name": "needs_transmux_out", "type": "*mut u32" },
           { "name": "err_code_out", "type": "*mut u32" },
           { "name": "err_desc_ptr_out", "type": "*mut u32" },
           { "name": "err_desc_len_out", "type": "*mut u32" },
@@ -113,7 +114,7 @@
       "wasmSymbol": "__js_func__append_buffer",
       "doc": [
         "Append one media segment to a SourceBuffer.",
-        "The transmuxer address is borrowed from Rust for this synchronous call only. Never retain or free it.",
+        "Prepared bytes are borrowed only for this call. Copy them before returning; no parser address crosses this boundary.",
         "",
         "Notes:",
         "- The JS marshalling for this binding is intentionally still handwritten because the return payload is packed.",
@@ -123,8 +124,7 @@
         "args": [
           { "name": "sourceBufferId", "type": "number" },
           { "name": "resourceId", "type": "number" },
-          { "name": "segmentHints", "type": "SegmentHints" },
-          { "name": "transmuxer", "type": "number" },
+          { "name": "prepared", "type": "Uint8Array | undefined" },
         ],
         "returnType": "HostResult<AppendBufferValue, SegmentParsingErrorCode>",
       },
@@ -132,11 +132,8 @@
         "args": [
           { "name": "source_buffer_id", "type": "SourceBufferId" },
           { "name": "segment_id", "type": "ResourceId" },
-          { "name": "base_decode_time_start_hi", "type": "u32" },
-          { "name": "base_decode_time_start_lo", "type": "u32" },
-          { "name": "base_decode_time_start_timescale", "type": "u32" },
-          { "name": "reset_transmuxer_state", "type": "u32" },
-          { "name": "transmuxer", "type": "usize" },
+          { "name": "prepared_ptr", "type": "*const u8" },
+          { "name": "prepared_len", "type": "usize" },
           { "name": "has_start_out", "type": "*mut u32" },
           { "name": "start_value_hi_out", "type": "*mut u32" },
           { "name": "start_value_lo_out", "type": "*mut u32" },
@@ -308,6 +305,21 @@
       },
     },
     {
+      "wasmSymbol": "__js_func__get_resource_transmux_format",
+      "doc": [
+        "Recognize a probe container without parsing media: 0 other/missing, 1 TS, 2 packed AAC.",
+      ],
+      "typescript": {
+        "methodName": "getResourceTransmuxFormat",
+        "args": [{ "name": "resourceId", "type": "number" }],
+        "returnType": "number",
+      },
+      "rust": {
+        "args": [{ "name": "resource_id", "type": "ResourceId" }],
+        "returnType": "u32",
+      },
+    },
+    {
       "wasmSymbol": "__js_func__inspect_segment",
       "doc": [
         "Inspect a segment resource to extract codec and MIME metadata.",
@@ -317,12 +329,17 @@
       ],
       "typescript": {
         "methodName": "inspectSegment",
-        "args": [{ "name": "resourceId", "type": "number" }],
+        "args": [
+          { "name": "resourceId", "type": "number" },
+          { "name": "prepared", "type": "Uint8Array | undefined" },
+        ],
         "returnType": "HostResult<InspectSegmentValue, SegmentParsingErrorCode>",
       },
       "rust": {
         "args": [
           { "name": "segment_id", "type": "ResourceId" },
+          { "name": "prepared_ptr", "type": "*const u8" },
+          { "name": "prepared_len", "type": "usize" },
           { "name": "media_type_out", "type": "*mut u32" },
           { "name": "parsed_mime_type_ptr_out", "type": "*mut u32" },
           { "name": "parsed_mime_type_len_out", "type": "*mut u32" },
@@ -884,85 +901,6 @@
           { "name": "len", "type": "number" },
         ],
         "returnType": "void",
-      },
-    },
-    {
-      "wasmSymbol": "wasp_transmuxer_new",
-      "doc": [
-        "Create a Rust transmuxer; the host must explicitly free its handle.",
-      ],
-      "wasm": {
-        "kind": "method",
-        "args": [{ "name": "keepOriginal", "type": "number" }],
-        "returnType": "number",
-      },
-    },
-    {
-      "wasmSymbol": "wasp_transmuxer_free",
-      "doc": ["Free a Rust transmuxer and all retained state."],
-      "wasm": {
-        "kind": "method",
-        "args": [
-          {
-            "name": "session",
-            "type": "number",
-          },
-        ],
-        "returnType": "void",
-      },
-    },
-    {
-      "wasmSymbol": "wasp_transmuxer_release",
-      "doc": ["Release the last transmux output after the host copies it."],
-      "wasm": {
-        "kind": "method",
-        "args": [
-          {
-            "name": "session",
-            "type": "number",
-          },
-        ],
-        "returnType": "void",
-      },
-    },
-    {
-      "wasmSymbol": "wasp_transmuxer_run",
-      "doc": [
-        "Transmux one complete segment. Return a session-owned 40-byte descriptor: output pointer/length, start/end f64, timescale/status u32, static error text pointer/length. Status is 0 for output, 1 for empty, otherwise Rust transmux error code plus 1.",
-      ],
-      "wasm": {
-        "kind": "method",
-        "args": [
-          {
-            "name": "session",
-            "type": "number",
-          },
-          {
-            "name": "input",
-            "type": "number",
-          },
-          {
-            "name": "length",
-            "type": "number",
-          },
-          {
-            "name": "reset",
-            "type": "number",
-          },
-          {
-            "name": "hasSeed",
-            "type": "number",
-          },
-          {
-            "name": "seed",
-            "type": "number",
-          },
-          {
-            "name": "timescale",
-            "type": "number",
-          },
-        ],
-        "returnType": "number",
       },
     },
     {

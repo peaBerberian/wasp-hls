@@ -106,8 +106,9 @@ it.each(
         },
         addSourceBuffer(_mediaType, contentType) {
           createdBuffers.push(contentType);
-          return success(1);
+          return success({ id: 1, needsTransmux: false });
         },
+        getResourceTransmuxFormat: () => 0,
         inspectSegment(resourceId) {
           inspected.push(resourceId);
           return success({

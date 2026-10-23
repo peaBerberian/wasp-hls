@@ -180,6 +180,8 @@ fn pat(data: &[u8]) -> Option<u16> {
     })
 }
 
+// TODO: Add codecs beyond the old player's H.264/ADTS-AAC scope only when
+// required. This includes HEVC, MPEG audio, AC-3/E-AC-3 and metadata delivery.
 fn pmt(data: &[u8]) -> Result<(u16, u16)> {
     if data.len() < 16 || data[0] != 2 || data[5] & 1 == 0 {
         return Err(Error::Transport);
@@ -307,6 +309,9 @@ impl Pes {
     }
 }
 
+// TODO: Accept a separate TS initialization section (EXT-X-MAP). Its PAT/PMT
+// mappings must survive media calls and be cleared when that initialization
+// changes or the parser is reset; media payload must never be retained with it.
 pub(super) fn demux(input: &[u8]) -> Result<Tracks> {
     let start = sync_offset(input)?;
     if !(input.len() - start).is_multiple_of(PACKET_SIZE) {

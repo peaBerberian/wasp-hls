@@ -45,7 +45,9 @@ export async function createDispatcher({
       },
       announceVariantUpdate: (id) => announcedVariants.push(id),
       announceVariantLockStatusChange: (id) => variantLockUpdates.push(id),
-      addSourceBuffer: () => ({ value: nextBuffer++ }),
+      addSourceBuffer: () => ({
+        value: { id: nextBuffer++, needsTransmux: false },
+      }),
       appendBuffer: () => ({
         value: {
           start: { hi: 0, lo: 0 },
@@ -54,6 +56,7 @@ export async function createDispatcher({
         },
       }),
       isTypeSupported: (_type, codec) => codec !== unsupportedCodec,
+      getResourceTransmuxFormat: () => 0,
       inspectSegment: () => ({
         value: {
           codec: unsupportedCodec ?? "avc1.42E01E",

@@ -16,7 +16,6 @@ pub(super) struct Config {
     pub height: u16,
     pub sar: (u16, u16),
     pub frame_duration: Option<u32>,
-    pub frame_only: bool,
 }
 
 /// Exp-Golomb codes describe counts as well as values. Limit both their bit
@@ -250,10 +249,11 @@ fn parse_sps(sps: Vec<u8>, pps: Vec<u8>) -> Result<Config> {
         height,
         sar,
         frame_duration,
-        frame_only: frame_only != 0,
     })
 }
 
+// TODO: Speed up the byte-by-byte start-code scan without losing start codes
+// split across TS payload pieces. Profile this before changing other hot paths.
 fn nals(input: &[u8], stream: &Elementary) -> Result<Vec<Range<usize>>> {
     let (mut offset, mut zeros) = (0, 0);
     let mut begin = None;
@@ -316,7 +316,7 @@ pub(super) fn parse(
     let mut sps = saved.map(|c| c.sps.clone()).unwrap_or_default();
     let mut pps = saved.map(|c| c.pps.clone()).unwrap_or_default();
     let mut samples: Vec<Sample> = Vec::new();
-    let mut frame: Option<Sample> = None;
+    let mut frame: Option<(Sample, usize)> = None;
     let mut has_slice = false;
     let mut seen_slice = false;
     // Samples index the original range table directly. Building a second table
@@ -338,44 +338,47 @@ pub(super) fn parse(
             }
         }
         let slice = kind == 1 || kind == 5;
-        // AUD is the usual HLS frame delimiter. first_mb_in_slice also covers
-        // streams which omit AUD. Multi-slice pictures keep their later slices
-        // in the same sample. With AUD present, let it define the picture:
-        // first_mb alone cannot distinguish complementary fields or slices
-        // sent in an unusual order. Without AUD we accept progressive AVC.
-        let first_slice = if slice && !has_aud {
-            let prefix = stream
-                .bytes
-                .small_copy(input, range.start + 1..range.end.min(range.start + 17));
-            Bits::new(&prefix).ue()? == 0
-        } else {
-            false
-        };
-        let boundary = has_slice && (kind == 9 || (6..=8).contains(&kind) || first_slice);
+        // TODO: Parse full picture identity if we need streams which pack
+        // several pictures into one PES without AUD.
+        // Follow the reference players when AUD is absent: a new PES starts
+        // a new picture. This also accepts field-coded AVC without claiming
+        // that first_mb_in_slice alone identifies a complete picture. A PES
+        // that packs several pictures without AUD remains ambiguous.
+        let new_pes = frame.as_ref().is_some_and(|current| {
+            stream
+                .timestamp(range.start)
+                .is_ok_and(|time| time.offset != current.1)
+        });
+        let boundary = has_slice && (kind == 9 || (!has_aud && new_pes));
         if boundary {
             if samples.len() >= MAX_SAMPLES {
                 return Err(Error::Limit);
             }
-            samples.push(frame.take().ok_or(Error::Codec)?);
+            samples.push(frame.take().ok_or(Error::Codec)?.0);
             has_slice = false;
         }
         if frame.is_none() {
             let time = stream.timestamp(range.start)?;
-            frame = Some(Sample {
-                pts: time.pts,
-                dts: time.dts,
-                duration: 0,
-                key: false,
-                payload: nal_index..nal_index,
-                size: 0,
-            });
+            frame = Some((
+                Sample {
+                    pts: time.pts,
+                    dts: time.dts,
+                    duration: 0,
+                    key: false,
+                    payload: nal_index..nal_index,
+                    size: 0,
+                },
+                time.offset,
+            ));
         }
-        let current = frame.as_mut().ok_or(Error::Codec)?;
         if slice && !has_slice {
             let time = stream.timestamp(range.start)?;
+            let (current, pes_anchor) = frame.as_mut().ok_or(Error::Codec)?;
             current.pts = time.pts;
             current.dts = time.dts;
+            *pes_anchor = time.offset;
         }
+        let current = &mut frame.as_mut().ok_or(Error::Codec)?.0;
         current.key |= kind == 5;
         current.size = current
             .size
@@ -389,7 +392,7 @@ pub(super) fn parse(
         if samples.len() >= MAX_SAMPLES {
             return Err(Error::Limit);
         }
-        samples.push(frame.ok_or(Error::Codec)?);
+        samples.push(frame.ok_or(Error::Codec)?.0);
     }
     if samples.is_empty() {
         return Ok(None);
@@ -398,9 +401,6 @@ pub(super) fn parse(
         return Err(Error::MissingConfig);
     }
     let config = parse_sps(sps, pps)?;
-    if !has_aud && !config.frame_only {
-        return Err(Error::UnsupportedCodec);
-    }
     for index in 0..samples.len().saturating_sub(1) {
         let delta = samples[index + 1].dts - samples[index].dts;
         samples[index].duration = u32::try_from(delta)

@@ -1,14 +1,34 @@
 import type {
   TransmuxedSegmentData,
   TransmuxSegmentOptions,
-} from "../../ts-transmux/src/Transmuxer.ts";
+} from "../../../src/ts-transmux/src/Transmuxer.ts";
 import {
   allocBytes,
   freeBytes,
   getUint8Memory,
   getWasmExports,
   readString,
-} from "./memory.js";
+} from "../../../src/wasm/js/memory.js";
+
+// This interface belongs to the test-only WASM artifact. Production builds
+// export no transmuxer handles, and playback never enters this wrapper.
+interface TestExports {
+  wasp_transmuxer_new(keepOriginal: number): number;
+  wasp_transmuxer_free(pointer: number): void;
+  wasp_transmuxer_release(pointer: number): void;
+  wasp_transmuxer_run(
+    session: number,
+    input: number,
+    length: number,
+    reset: number,
+    hasSeed: number,
+    seed: number,
+    timescale: number,
+  ): number;
+}
+function getTestExports() {
+  return getWasmExports() as ReturnType<typeof getWasmExports> & TestExports;
+}
 
 const MAX_INPUT_BYTES = 64 * 1024 * 1024;
 
@@ -22,7 +42,7 @@ export class RustTransmuxer {
   private _pointer: number;
 
   constructor(options: { keepOriginalTimestamps?: boolean } = {}) {
-    this._pointer = getWasmExports().wasp_transmuxer_new(
+    this._pointer = getTestExports().wasp_transmuxer_new(
       options.keepOriginalTimestamps === true ? 1 : 0,
     );
   }
@@ -42,16 +62,15 @@ export class RustTransmuxer {
 
   public dispose(): void {
     if (this._pointer !== 0) {
-      getWasmExports().wasp_transmuxer_free(this._pointer);
+      getTestExports().wasp_transmuxer_free(this._pointer);
       this._pointer = 0;
     }
   }
 }
 
 /**
- * Borrow a Rust-owned session for this synchronous call only. The caller owns
- * its lifetime. In playback it is a field of the Rust SourceBuffer; JS must
- * never save this address, free it, or use it after returning from appendBuffer.
+ * Run a test-owned session. This wrapper measures the same input/output copies
+ * as playback, while keeping test handles outside the production ABI.
  */
 export function transmuxWithSession(
   session: number,
@@ -73,7 +92,7 @@ export function transmuxWithSession(
   ) {
     throw new Error("Invalid decode-time seed");
   }
-  const wasm = getWasmExports();
+  const wasm = getTestExports();
   const inputLength = input.byteLength;
   const inputInWasm = input.buffer === wasm.memory.buffer;
   const inputOffset = input.byteOffset;

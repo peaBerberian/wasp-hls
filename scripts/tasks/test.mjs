@@ -6,7 +6,7 @@ import { readdir } from "fs/promises";
 import { join, relative } from "path";
 import { exec } from "../utils/exec.mjs";
 import { reportStep } from "./report.mjs";
-import { buildWasm } from "./build.mjs";
+import { buildTransmuxTestWasm } from "./build.mjs";
 
 const TESTS_DIRECTORY = "tests";
 const TRANSMUX_DIRECTORY = join(TESTS_DIRECTORY, "transmux");
@@ -73,7 +73,7 @@ export async function testTransmux(root, { filters, watch }) {
   }
 
   if (selectedTests.some((file) => file.endsWith("rust-transmux.test.mjs"))) {
-    await buildWasm(root, { release: true });
+    await buildTransmuxTestWasm(root);
   }
 
   reportStep(

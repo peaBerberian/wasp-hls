@@ -1,6 +1,5 @@
 import logger from "../ts-common/logger.ts";
 import { MediaType } from "../wasm/index.js";
-import { RustTransmuxer } from "../wasm/js/transmuxer.js";
 import { canTransmux } from "./utils.js";
 
 function normalizeLegacyAvc1Codec(mimeType: string): string {
@@ -61,8 +60,4 @@ export function getFmp4Type(mediaType: MediaType, codecP: string): string {
       break;
   }
   return normalizeLegacyAvc1Codec(`${mimeTypePrefix}mp4;codecs="${codec}"`);
-}
-
-export function createTransmuxer(): RustTransmuxer {
-  return new RustTransmuxer();
 }

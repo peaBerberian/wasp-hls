@@ -7,39 +7,16 @@ export interface ISafeU64 {
   lo: number;
 }
 
+export interface AddSourceBufferValue {
+  id: number;
+  /** Host decision, including native AAC support on this browser. */
+  needsTransmux: boolean;
+}
+
 export interface AppendBufferValue {
   start: ISafeU64 | undefined;
   end: ISafeU64 | undefined;
   timescale: number | undefined;
-}
-
-/** Supplementary segment information communicated when pushing one to a buffer. */
-export interface SegmentHints {
-  /**
-   * High 4 bytes for the hinted `baseMediaDecodeTime`.
-   *
-   * This might be used in specific scenario where the segment is not explicit
-   * enough about timestamp.
-   */
-  baseDecodeTimeStartHi: number;
-  /**
-   * Low 4 bytes for the hinted `baseMediaDecodeTime`.
-   *
-   * This might be used in specific scenario where the segment is not explicit
-   * enough about timestamp.
-   */
-  baseDecodeTimeStartLo: number;
-
-  /** Timescale used for the "baseDecodeTimeStart" (combination of hi+lo). */
-  baseDecodeTimeStartTimescale: number;
-  /**
-   * Some state may be maintained by the potential lower-level transmuxer we'll
-   * feed data too.
-   * That state makes sense as we're pushing contiguous segments but does not
-   * make sense to be maintained once either a track switch or a new init
-   * segment is pushed.
-   */
-  resetTransmuxerState: boolean;
 }
 
 export interface InspectSegmentValue {

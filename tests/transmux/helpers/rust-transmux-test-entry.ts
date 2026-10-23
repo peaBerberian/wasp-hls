@@ -1,4 +1,4 @@
-export { RustTransmuxer } from "../../../src/wasm/js/transmuxer.ts";
+export { RustTransmuxer } from "./rust-transmuxer.ts";
 export { setWasmExports } from "../../../src/wasm/js/memory.ts";
 export { default as TsTransmuxer } from "../../../src/ts-transmux/index.ts";
 export {

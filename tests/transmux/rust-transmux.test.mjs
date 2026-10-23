@@ -206,7 +206,7 @@ test("Rust and TS agree on continuity hints, reset, skipped segments and back-se
   }
 });
 
-test("video without AUD uses slice boundaries", async () => {
+test("video without AUD follows PES boundaries", async () => {
   const input = fixtures.get("high")[0].slice();
   let replaced = 0;
   for (let i = 2; i < input.length - 2; i++) {
@@ -229,6 +229,65 @@ test("video without AUD uses slice boundaries", async () => {
     const dest = join(directory, "no-aud.mp4");
     await writeFile(dest, output.data);
     assert.deepEqual(frames(dest), frames(join(directory, "high-0.ts")));
+  } finally {
+    muxer.dispose();
+  }
+});
+
+test("interlaced AVC without AUD follows the reference-player PES heuristic", async () => {
+  const source = join(directory, "interlaced.ts");
+  ffmpeg([
+    "-f",
+    "lavfi",
+    "-i",
+    "testsrc2=size=160x96:rate=24",
+    "-t",
+    "2",
+    "-c:v",
+    "libx264",
+    "-threads:v",
+    "1",
+    "-flags",
+    "+ilme+ildct",
+    "-x264-params",
+    "tff=1",
+    "-f",
+    "mpegts",
+    source,
+  ]);
+  const streams = JSON.parse(
+    execFileSync(
+      "ffprobe",
+      ["-v", "error", "-show_streams", "-of", "json", source],
+      { encoding: "utf8" },
+    ),
+  ).streams;
+  assert.ok(
+    ["tt", "tb", "bb", "bt"].includes(streams[0].field_order),
+    "fixture must contain interlaced AVC",
+  );
+  const input = new Uint8Array(await readFile(source));
+  let removed = 0;
+  for (let i = 2; i < input.length - 2; i++) {
+    if (
+      input[i - 2] === 0 &&
+      input[i - 1] === 0 &&
+      input[i] === 1 &&
+      input[i + 1] === 9
+    ) {
+      input[i + 1] = 12;
+      input[i + 2] = 0x80;
+      removed++;
+    }
+  }
+  assert.ok(removed >= 48);
+  const muxer = new mod.RustTransmuxer({ keepOriginalTimestamps: true });
+  try {
+    const output = muxer.transmuxSegment(input);
+    assert.ok(output);
+    const dest = join(directory, "interlaced.mp4");
+    await writeFile(dest, output.data);
+    assert.deepEqual(frames(dest), frames(source));
   } finally {
     muxer.dispose();
   }
@@ -511,7 +570,7 @@ test("mutated input returns errors or media, without trapping the WASM instance"
   }
 });
 
-test("GOP history bridges multiple segments which start with predictive pictures", async () => {
+test("continuous predictive segments decode without cached GOP payloads", async () => {
   ffmpeg([
     "-f",
     "lavfi",
@@ -545,18 +604,70 @@ test("GOP history bridges multiple segments which start with predictive pictures
   ]);
   const muxer = new mod.RustTransmuxer();
   try {
+    const outputs = [],
+      sources = [];
     for (let index = 0; index < 4; index++) {
       const input = new Uint8Array(
         await readFile(join(directory, `gop-${index}.ts`)),
       );
       const result = muxer.transmuxSegment(input);
       assert.ok(result);
-      // Each fragment must include the first IDR and the intervening history.
-      assert.equal(result.timingInfo.start, 0);
-      const dest = join(directory, `gop-${index}.mp4`);
-      await writeFile(dest, result.data);
-      assert.ok(frames(dest).length >= 24 * (index + 1) - 4);
+      // No preceding GOP is copied into the fragment. Decode the consecutive
+      // outputs together, just as MSE keeps reference pictures between appends.
+      if (index > 0) assert.ok(result.timingInfo.start > 0);
+      outputs.push(result.data);
+      sources.push(input);
+      if (index === 1) {
+        const fresh = new mod.RustTransmuxer();
+        try {
+          assert.throws(
+            () => fresh.transmuxSegment(input),
+            /missing decoder configuration/,
+          );
+        } finally {
+          fresh.dispose();
+        }
+      }
     }
+    const source = join(directory, "gop-source.ts"),
+      dest = join(directory, "gop-all.mp4");
+    await writeFile(source, Buffer.concat(sources));
+    await writeFile(dest, Buffer.concat(outputs));
+    assert.deepEqual(frames(dest), frames(source));
+  } finally {
+    muxer.dispose();
+  }
+});
+
+test("fresh starts discard leading predictive pictures without pulling IDR timestamps backwards", async () => {
+  const [first, second] = fixtures.get("high");
+  const leading = first.slice();
+  let changed = 0;
+  for (let i = 2; i + 1 < leading.length; i++) {
+    if (
+      leading[i - 2] === 0 &&
+      leading[i - 1] === 0 &&
+      leading[i] === 1 &&
+      (leading[i + 1] & 31) === 5
+    ) {
+      leading[i + 1] = (leading[i + 1] & 0xe0) | 1;
+      changed++;
+    }
+  }
+  assert.ok(changed > 0);
+  const muxer = new mod.RustTransmuxer({ keepOriginalTimestamps: true });
+  try {
+    const result = muxer.transmuxSegment(
+      new Uint8Array(Buffer.concat([leading, second])),
+    );
+    assert.ok(result);
+    const destination = join(directory, "fresh-leading.mp4");
+    await writeFile(destination, result.data);
+    const expected = packets(join(directory, "high-1.ts"), "v:0");
+    const actual = packets(destination, "v:0");
+    assert.equal(actual[0].dts, expected[0].dts);
+    assert.equal(actual[0].pts, expected[0].pts);
+    assert.deepEqual(frames(destination), frames(join(directory, "high-1.ts")));
   } finally {
     muxer.dispose();
   }

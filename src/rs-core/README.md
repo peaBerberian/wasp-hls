@@ -44,7 +44,8 @@ Each directory has its own README describing its responsibilities and limits.
 
 Here we decide what to request and what to do with the results. JavaScript
 performs the actual network requests, runs timers, calls browser media APIs and
-inspects segments and copies bytes for Rust transmuxing. Downloaded segments can stay in JavaScript
+inspects MP4 metadata and copies bytes requested by Rust. Rust owns transmuxing
+and both probe and playback parser lifetimes. Downloaded segments can stay in JavaScript
 memory, with Rust only keeping an identifier for them. This avoids copying data
 when Rust doesn't need to read it.
 

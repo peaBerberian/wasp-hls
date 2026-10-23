@@ -9,7 +9,7 @@ use super::{
     SourceBufferCreationErrorCode, TimerReason, TrackSelectionErrorCode,
 };
 use crate::{
-    media_element::{PushSegmentError, SegmentHints},
+    media_element::PushSegmentError,
     parser::{
         MediaPlaylistParsingError, MediaPlaylistUpdateError, MultivariantPlaylistParsingError,
     },
@@ -114,17 +114,31 @@ pub fn jsClearTimer(id: TimerId) {
 /// Returns `None` if that `ResourceId` is not linked to any resource right now.
 /// TODO also return ContentType of the requested data?
 pub fn jsGetResourceData(id: ResourceId) -> Option<Vec<u8>> {
+    jsGetResourceDataUpTo(id, usize::MAX).ok()
+}
+
+/// Limit a resource copy before allocating its destination in WASM. An input
+/// cap checked only by the parser would be too late to prevent heap growth.
+pub fn jsGetResourceDataUpTo(
+    id: ResourceId,
+    limit: usize,
+) -> Result<Vec<u8>, (SegmentParsingErrorCode, Option<String>)> {
     let len = unsafe { __js_func__get_resource_len(id) };
     if len < 0 {
-        return None;
+        return Err((SegmentParsingErrorCode::NoResource, None));
     }
     let len = len as usize;
+    if len > limit {
+        return Err((
+            SegmentParsingErrorCode::TransmuxerError,
+            Some("Segment exceeds the transmux input limit".to_owned()),
+        ));
+    }
     let mut data = vec![0_u8; len];
-    let copied = unsafe { __js_func__copy_resource_data(id, data.as_mut_ptr(), len as u32) };
-    if copied == 0 {
-        None
+    if unsafe { __js_func__copy_resource_data(id, data.as_mut_ptr(), len as u32) } == 0 {
+        Err((SegmentParsingErrorCode::NoResource, None))
     } else {
-        Some(data)
+        Ok(data)
     }
 }
 
@@ -262,8 +276,9 @@ pub fn jsSetMediaSourceDuration(
 pub fn jsAddSourceBuffer(
     media_type: MediaType,
     typ: &str,
-) -> Result<SourceBufferId, (AddSourceBufferErrorCode, Option<String>)> {
+) -> Result<(SourceBufferId, bool), (AddSourceBufferErrorCode, Option<String>)> {
     let mut source_buffer_id = 0;
+    let mut needs_transmux = 0;
     let mut out = JsErrorOut::default();
     let success = unsafe {
         __js_func__add_source_buffer(
@@ -271,13 +286,14 @@ pub fn jsAddSourceBuffer(
             typ.as_ptr(),
             typ.len() as u32,
             &mut source_buffer_id,
+            &mut needs_transmux,
             &mut out.code,
             &mut out.desc_ptr,
             &mut out.desc_len,
         )
     };
     if success != 0 {
-        Ok(source_buffer_id)
+        Ok((source_buffer_id, needs_transmux != 0))
     } else {
         Err(take_js_error_out(out, AddSourceBufferErrorCode::from_raw))
     }
@@ -311,6 +327,32 @@ pub fn jsIsTypeSupported(media_type: MediaType, typ: &str) -> Option<bool> {
 pub fn jsInspectSegment(
     segment_id: ResourceId,
 ) -> Result<InspectedSegmentMetadata, (SegmentParsingErrorCode, Option<String>)> {
+    // JS owns downloaded resources, so ask it only to recognize the container.
+    // Parsing and the temporary probe instance both stay in Rust. MP4 resources
+    // keep their old path and never need a full-size copy into WASM.
+    let format = unsafe { __js_func__get_resource_transmux_format(segment_id) };
+    let prepared = if format != 0 {
+        let input = jsGetResourceDataUpTo(segment_id, crate::transmux::MAX_INPUT_BYTES)?;
+        Some(
+            crate::transmux::Transmuxer::default()
+                .transmux(&input, crate::transmux::Options::default())
+                .map_err(|error| {
+                    (
+                        SegmentParsingErrorCode::TransmuxerError,
+                        Some(error.description().to_owned()),
+                    )
+                })?
+                .ok_or((
+                    SegmentParsingErrorCode::TransmuxerError,
+                    Some("No media in probe segment".to_owned()),
+                ))?,
+        )
+    } else {
+        None
+    };
+    let bytes = prepared
+        .as_ref()
+        .map(|output: &crate::transmux::Output| output.data.as_slice());
     let mut media_type = 0;
     let mut parsed_mime_type_ptr = 0;
     let mut parsed_mime_type_len = 0;
@@ -320,6 +362,8 @@ pub fn jsInspectSegment(
     let success = unsafe {
         __js_func__inspect_segment(
             segment_id,
+            bytes.map_or(std::ptr::null(), |bytes| bytes.as_ptr()),
+            bytes.map_or(0, |bytes| bytes.len()),
             &mut media_type,
             &mut parsed_mime_type_ptr,
             &mut parsed_mime_type_len,
@@ -333,11 +377,18 @@ pub fn jsInspectSegment(
     if success == 0 {
         return Err(take_js_error_out(out, SegmentParsingErrorCode::from_raw));
     }
-    Ok(InspectedSegmentMetadata {
+    let mut metadata = InspectedSegmentMetadata {
         media_type: MediaType::from_raw(media_type),
         mime_type: owned_string_from_abi(parsed_mime_type_ptr, parsed_mime_type_len),
         codec: owned_string_from_abi(codec_ptr, codec_len),
-    })
+    };
+    metadata.mime_type = match format {
+        1 if metadata.media_type == MediaType::Audio => "audio/mp2t".to_owned(),
+        1 => "video/mp2t".to_owned(),
+        2 => "audio/aac".to_owned(),
+        _ => metadata.mime_type,
+    };
+    Ok(metadata)
 }
 
 /// Append media data to the given SourceBuffer.
@@ -360,8 +411,7 @@ pub fn jsInspectSegment(
 pub fn jsAppendBuffer(
     source_buffer_id: SourceBufferId,
     segment_id: ResourceId,
-    segment_hints: &SegmentHints,
-    transmuxer: &mut crate::transmux::Session,
+    prepared: Option<&[u8]>,
 ) -> Result<Option<ParsedSegmentInfo>, (SegmentParsingErrorCode, Option<String>)> {
     let mut has_start = 0;
     let mut start_value_hi = 0;
@@ -378,11 +428,8 @@ pub fn jsAppendBuffer(
         __js_func__append_buffer(
             source_buffer_id,
             segment_id,
-            (segment_hints.base_decode_time_start() >> 32) as u32,
-            segment_hints.base_decode_time_start() as u32,
-            segment_hints.base_decode_time_start_timescale(),
-            segment_hints.reset_transmuxer_state() as u32,
-            transmuxer as *mut crate::transmux::Session as usize,
+            prepared.map_or(std::ptr::null(), |bytes| bytes.as_ptr()),
+            prepared.map_or(0, |bytes| bytes.len()),
             &mut has_start,
             &mut start_value_hi,
             &mut start_value_lo,
@@ -888,6 +935,14 @@ pub struct ParsedSegmentInfo {
 }
 
 impl ParsedSegmentInfo {
+    pub(crate) fn from_transmux(timing: crate::transmux::Timing) -> Self {
+        Self {
+            start: Some(timing.start),
+            end: Some(timing.end),
+            timescale: timing.timescale,
+        }
+    }
+
     /// Obtain precise start time with its original timescale
     pub(crate) fn start(&self) -> Option<u64> {
         self.start

@@ -1,27 +1,27 @@
+//! TODO: Add incremental input/output and validate LL-HLS parts as a separate
+//! contract; an arbitrary network chunk is not a complete media part.
+//!
 //! Whole-segment MPEG-TS / packed AAC to fragmented MP4 conversion.
 //!
 //! The transport and codec modules borrow payload ranges from one input buffer.
 //! `mp4` sizes its output before copying those ranges. The only persistent media
-//! state is decoder configuration and a small, explicitly bounded GOP cache.
+//! state is decoder configuration and timing. No encoded GOP is cached.
 //! This matters in WASM: freeing a Vec makes its space reusable, but does not
 //! shrink linear memory. Avoiding a temporary full-size copy lowers the memory
 //! high-water mark for the entire remaining lifetime of a player.
 
 mod aac;
 mod bytes;
+#[cfg(feature = "transmux-test-api")]
 mod ffi;
 mod h264;
 mod mp4;
 mod transport;
 
-pub(crate) use ffi::Session;
-
 use std::ops::Range;
 
 pub const MAX_INPUT_BYTES: usize = 64 * 1024 * 1024;
 const MAX_SAMPLES: usize = 131_072;
-const MAX_CACHED_GOP_BYTES: usize = 2 * 1024 * 1024;
-const MAX_CACHED_GOP_SAMPLES: usize = 4096;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
@@ -44,7 +44,7 @@ pub enum Error {
 type Result<T> = std::result::Result<T, Error>;
 
 impl Error {
-    fn description(self) -> &'static str {
+    pub(crate) fn description(self) -> &'static str {
         match self {
             Self::Truncated => "truncated segment",
             Self::Transport => "invalid transport stream",
@@ -90,15 +90,8 @@ struct Sample {
     duration: u32,
     key: bool,
     // Audio uses byte offsets; video uses indices into its NAL range list.
-    // Cached video samples use byte offsets into the owned length-prefixed GOP.
     payload: Range<usize>,
     size: u32,
-}
-
-struct CachedGop {
-    bytes: Vec<u8>,
-    samples: Vec<Sample>,
-    config: h264::Config,
 }
 
 #[derive(Clone, Copy)]
@@ -132,7 +125,8 @@ pub struct Transmuxer {
     rollover_reference: Option<i64>,
     video_config: Option<h264::Config>,
     last_video_duration: Option<u32>,
-    cache: Option<CachedGop>,
+    // Last successfully emitted video end, in the input 90 kHz clock.
+    video_end: Option<i64>,
     raw_timestamp: f64,
     sequence: u32,
     packed: Option<bool>,
@@ -241,48 +235,30 @@ impl Transmuxer {
             origin: first_dts,
             seed,
         });
-        let mut prefix = None;
         if let Some(video) = video.as_mut() {
-            if !video.samples[0].key {
-                // Reuse only a nearby compatible GOP. The cache owns at most
-                // 2 MiB and never keeps the input segment alive. This replaces
-                // the TS implementation's six potentially very large GOPs.
-                prefix = self.cache.as_ref().filter(|gop| {
-                    let last = gop.samples.last().expect("cached GOP has samples");
-                    let gap = video.samples[0].dts - last.dts - i64::from(last.duration);
-                    gop.config == video.config && gap == 0
-                });
-                if prefix.is_none() {
-                    // With no usable history, pull the first IDR back over
-                    // undecodable leading pictures. Preserve their timeline
-                    // duration while dropping their payload.
-                    if let Some(index) = video.samples.iter().position(|s| s.key) {
-                        let start = video.samples[0].clone();
-                        let delta = video.samples[index].dts - start.dts;
-                        video.samples.drain(..index);
-                        let first = &mut video.samples[0];
-                        first.duration = first
-                            .duration
-                            .checked_add(u32::try_from(delta).map_err(|_| Error::Limit)?)
-                            .ok_or(Error::Limit)?;
-                        first.dts = start.dts;
-                        first.pts = start.pts;
-                    } else {
-                        // MSE needs random access after a reset. Returning a
-                        // predictive-only fragment would look successful but
-                        // leave the decoder unable to display it.
-                        video.samples.clear();
-                    }
-                }
+            let continuous = self.video_config.as_ref() == Some(&video.config)
+                && self.video_end == Some(video.samples[0].dts);
+            if !continuous && !video.samples[0].key {
+                // A fresh decoder cannot use pictures which depend on missing
+                // references. Drop them until random access is possible. Keep
+                // the keyframe's real timestamps: moving it backwards would
+                // change A/V synchronization. During continuous playback the
+                // decoder already has its references, so no GOP copy is needed.
+                let first_key = video
+                    .samples
+                    .iter()
+                    .position(|sample| sample.key)
+                    .unwrap_or(video.samples.len());
+                video.samples.drain(..first_key);
             }
         }
         if video.as_ref().is_some_and(|video| video.samples.is_empty()) {
+            // Do not emit an audio-only initialization for a muxed input whose
+            // video is not decodable yet. Changing the initialized track set
+            // would prevent the later video fragment from being appended.
             return Ok(None);
         }
-        let video_dts = prefix
-            .and_then(|gop| gop.samples.first())
-            .map(|s| s.dts)
-            .or_else(|| video.as_ref().map(|video| video.samples[0].dts));
+        let video_dts = video.as_ref().map(|video| video.samples[0].dts);
         let video_base = video_dts
             .map(|dts| timeline.decode_time(dts, 90_000, self.keep_original_timestamps))
             .transpose()?;
@@ -318,10 +294,7 @@ impl Transmuxer {
                 .samples
                 .iter()
                 .map(|s| u64::from(s.duration))
-                .sum::<u64>()
-                + prefix.map_or(0, |gop| {
-                    gop.samples.iter().map(|s| u64::from(s.duration)).sum()
-                });
+                .sum::<u64>();
             Timing {
                 start,
                 end: start + duration,
@@ -343,17 +316,16 @@ impl Transmuxer {
             audio_base,
             video.as_ref(),
             video_base,
-            prefix,
             self.sequence,
         )?;
-        let cache = video
-            .as_ref()
-            .and_then(|video| cache_gop(input, &tracks.video, video, prefix));
         if let Some(video) = video {
-            self.last_video_duration = video.samples.last().map(|s| s.duration);
+            let last = video.samples.last().expect("nonempty video samples");
+            self.video_end = Some(last.dts + i64::from(last.duration));
+            self.last_video_duration = Some(last.duration);
             self.video_config = Some(video.config);
+        } else {
+            self.video_end = None;
         }
-        self.cache = cache;
         self.timeline = Some(timeline);
         self.rollover_reference = tracks
             .video
@@ -385,52 +357,6 @@ impl Transmuxer {
         self.packed = Some(packed);
         Ok(Some(Output { data, timing }))
     }
-}
-
-fn cache_gop(
-    input: &[u8],
-    stream: &transport::Elementary,
-    video: &h264::Video,
-    prefix: Option<&CachedGop>,
-) -> Option<CachedGop> {
-    let key_index = video.samples.iter().rposition(|sample| sample.key);
-    let prefix = if key_index.is_some() { None } else { prefix };
-    if key_index.is_none() && prefix.is_none() {
-        return None;
-    }
-    let index = key_index.unwrap_or(0);
-    let samples = &video.samples[index..];
-    let size: usize = samples
-        .iter()
-        .map(|sample| sample.size as usize)
-        .sum::<usize>()
-        + prefix.map_or(0, |gop| gop.bytes.len());
-    let count = samples.len() + prefix.map_or(0, |gop| gop.samples.len());
-    if size > MAX_CACHED_GOP_BYTES || count > MAX_CACHED_GOP_SAMPLES {
-        return None;
-    }
-    let mut bytes = Vec::with_capacity(size);
-    let mut owned = Vec::with_capacity(count);
-    if let Some(prefix) = prefix {
-        bytes.extend_from_slice(&prefix.bytes);
-        owned.extend_from_slice(&prefix.samples);
-    }
-    for sample in samples {
-        let start = bytes.len();
-        for nal in &video.nals[sample.payload.clone()] {
-            bytes.extend_from_slice(&(nal.len() as u32).to_be_bytes());
-            stream.bytes.copy(input, nal.clone(), &mut bytes);
-        }
-        owned.push(Sample {
-            payload: start..bytes.len(),
-            ..sample.clone()
-        });
-    }
-    Some(CachedGop {
-        bytes,
-        samples: owned,
-        config: video.config.clone(),
-    })
 }
 
 #[cfg(test)]

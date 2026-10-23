@@ -1,11 +1,8 @@
-//! Ownership at the handwritten JavaScript/WASM boundary.
+//! Standalone test/benchmark ABI, compiled only with `transmux-test-api`.
 //!
-//! A playback Session is a field of Rust's SourceBuffer and drops with it. Short
-//! probes and isolated tests can instead create an owned handle through `new`.
-//! JS owns the temporary input allocation. The Session owns its parser and,
-//! until JS copies the result, its output. No borrowed slice escapes `run`.
-//! `release` frees output; `free` is only for handles returned by `new`. Neither
-//! depends on JS garbage collection. Calls must not reenter the same session.
+//! Production playback and probes own ordinary Rust Transmuxer values. They
+//! never expose these handles. The separate test artifact permits isolated
+//! media tests and includes the same input/output copies in measurements.
 
 use super::{Options, Output, Transmuxer, MAX_INPUT_BYTES};
 

@@ -4,7 +4,7 @@
 //! exact payload size, then allocate the final buffer once. Unlike nested box
 //! builders, this never constructs a separate media-sized mdat buffer.
 
-use super::{aac, h264, transport, CachedGop, Error, Result, Sample, MAX_INPUT_BYTES};
+use super::{aac, h264, transport, Error, Result, Sample, MAX_INPUT_BYTES};
 
 #[derive(Default)]
 struct Boxes {
@@ -270,14 +270,7 @@ fn init(tracks: &[(u32, Config<'_>)]) -> Vec<u8> {
     out.bytes
 }
 
-fn moof(
-    id: u32,
-    base: u64,
-    samples: &[Sample],
-    prefix: &[Sample],
-    video: bool,
-    sequence: u32,
-) -> Result<Vec<u8>> {
+fn moof(id: u32, base: u64, samples: &[Sample], video: bool, sequence: u32) -> Result<Vec<u8>> {
     let mut out = Boxes::default();
     let mut data_offset = 0;
     let mut invalid_cts = false;
@@ -302,10 +295,10 @@ fn moof(
                     if video { 1 } else { 0 },
                     if video { 0x0f01 } else { 0x0301 },
                 );
-                out.u32((samples.len() + prefix.len()) as u32);
+                out.u32(samples.len() as u32);
                 data_offset = out.bytes.len();
                 out.u32(0);
-                for sample in prefix.iter().chain(samples) {
+                for sample in samples.iter() {
                     out.u32(sample.duration);
                     out.u32(sample.size);
                     if video {
@@ -344,7 +337,6 @@ pub(super) fn assemble(
     audio_base: Option<u64>,
     video: Option<&h264::Video>,
     video_base: Option<u64>,
-    prefix: Option<&CachedGop>,
     sequence: u32,
 ) -> Result<Vec<u8>> {
     let mut configs = Vec::with_capacity(2);
@@ -361,7 +353,6 @@ pub(super) fn assemble(
                 tracks.audio.id,
                 audio_base.unwrap_or(0),
                 &audio.samples,
-                &[],
                 false,
                 sequence,
             )
@@ -373,15 +364,13 @@ pub(super) fn assemble(
                 tracks.video.id,
                 video_base.unwrap_or(0),
                 &video.samples,
-                prefix.map_or(&[], |g| &g.samples),
                 true,
                 sequence,
             )
         })
         .transpose()?;
     let audio_size = audio.map_or(0, |audio| payload_size(&audio.samples));
-    let video_size =
-        video.map_or(0, |video| payload_size(&video.samples)) + prefix.map_or(0, |g| g.bytes.len());
+    let video_size = video.map_or(0, |video| payload_size(&video.samples));
     let length = init.len()
         + audio_header
             .as_ref()
@@ -410,9 +399,6 @@ pub(super) fn assemble(
     if let (Some(video), Some(header)) = (video, video_header) {
         out.extend_from_slice(&header);
         mdat(&mut out, video_size);
-        if let Some(prefix) = prefix {
-            out.extend_from_slice(&prefix.bytes);
-        }
         for sample in &video.samples {
             for nal in &video.nals[sample.payload.clone()] {
                 out.extend_from_slice(&(nal.len() as u32).to_be_bytes());

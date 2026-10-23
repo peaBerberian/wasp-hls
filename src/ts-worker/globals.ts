@@ -134,7 +134,6 @@ export interface SourceBufferInstanceInfo<HasMseInWorker extends boolean> {
     | undefined;
   mediaType: MediaType;
   sourceBuffer: HasMseInWorker extends true ? QueuedSourceBuffer : null;
-  needsTransmux: boolean;
 }
 
 export interface WorkerMediaSourceInstanceInfo {

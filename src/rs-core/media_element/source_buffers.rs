@@ -1,9 +1,9 @@
 use std::collections::VecDeque;
 
 use crate::bindings::{
-    jsAddSourceBuffer, jsAppendBuffer, jsFlush, jsRemoveBuffer, AddSourceBufferErrorCode,
-    MediaType, ParsedSegmentInfo, ResourceId, SegmentParsingErrorCode, SourceBufferId,
-    TimescaledTimestamp,
+    jsAddSourceBuffer, jsAppendBuffer, jsFlush, jsGetResourceDataUpTo, jsRemoveBuffer,
+    AddSourceBufferErrorCode, MediaType, ParsedSegmentInfo, ResourceId, SegmentParsingErrorCode,
+    SourceBufferId, TimescaledTimestamp,
 };
 use crate::dispatcher::JsMemoryBlob;
 use crate::parser::{MediaPlaylistPermanentId, SegmentTimeInfo};
@@ -59,9 +59,9 @@ pub(super) struct SourceBuffer {
     last_pushed_segment_info: Option<LastSegmentContinuityInfo>,
 
     /// State belongs to the buffer and is dropped with it, including on errors
-    /// and content changes. JavaScript borrows it only during a synchronous
-    /// append. It never owns a second handle or needs a matching teardown call.
-    transmuxer: crate::transmux::Session,
+    /// and content changes. JS sees only the media bytes prepared by this parser.
+    /// Native container support is decided by the host when creating the buffer.
+    transmuxer: Option<crate::transmux::Transmuxer>,
 }
 
 /// To better handle dts continuity shenanigans unique to mpeg-ts segment, we maintain a complex
@@ -98,8 +98,9 @@ impl SourceBuffer {
     pub(super) fn new(media_type: MediaType, typ: String) -> Result<Self, AddSourceBufferError> {
         log_info!("Creating new {} SourceBuffer", media_type);
         match jsAddSourceBuffer(media_type, &typ) {
-            Ok(x) => Ok(Self {
-                id: x,
+            Ok((id, needs_transmux)) => Ok(Self {
+                id,
+                transmuxer: needs_transmux.then(crate::transmux::Transmuxer::default),
                 typ,
                 queue: VecDeque::new(),
                 was_used: false,
@@ -108,7 +109,6 @@ impl SourceBuffer {
                 media_type,
                 reset_transmuxer_on_next_segment: false,
                 last_pushed_segment_info: None,
-                transmuxer: crate::transmux::Session::default(),
             }),
             Err(err) => Err(AddSourceBufferError::from_js_add_source_buffer_error(
                 err, &typ,
@@ -157,12 +157,15 @@ impl SourceBuffer {
             self.id,
             self.typ
         );
-        match jsAppendBuffer(
-            self.id,
-            segment_data.id(),
-            &SegmentHints::new(0, 1, true),
-            &mut self.transmuxer,
-        ) {
+        // TS EXT-X-MAP is deliberately unsupported, like the old player path.
+        // Do not send TS initialization tables to MSE as though they were MP4.
+        if self.transmuxer.is_some() {
+            return Err(PushSegmentError::TransmuxerError(
+                self.media_type,
+                "Separate TS initialization is unsupported".to_owned(),
+            ));
+        }
+        match jsAppendBuffer(self.id, segment_data.id(), None) {
             Err(err) => Err(PushSegmentError::from_js_append_buffer_error(
                 self.media_type,
                 err,
@@ -225,16 +228,15 @@ impl SourceBuffer {
         );
         self.queue
             .push_back(SourceBufferQueueElement::PushMedia { data, id });
-        let parsed =
-            match jsAppendBuffer(self.id, segment_data, &segment_hints, &mut self.transmuxer) {
-                Err(err) => {
-                    return Err(PushSegmentError::from_js_append_buffer_error(
-                        self.media_type,
-                        err,
-                    ));
-                }
-                Ok(parsed) => parsed,
-            };
+        let parsed = match self.append_resource(segment_data, &segment_hints) {
+            Err(err) => {
+                return Err(PushSegmentError::from_js_append_buffer_error(
+                    self.media_type,
+                    err,
+                ));
+            }
+            Ok(parsed) => parsed,
+        };
 
         // Use the parsed segment end as a good basis for the next decode time
         self.last_pushed_segment_info = Some(LastSegmentContinuityInfo {
@@ -246,6 +248,46 @@ impl SourceBuffer {
             media_sequence_identity,
         });
         Ok(AppendBufferResponse { parsed })
+    }
+
+    /// Prepare TS/AAC in Rust, then borrow only the completed media bytes to
+    /// JS. The host copies them once into storage safe for asynchronous MSE or
+    /// transfer. It never receives a parser/session address or owns its lifetime.
+    fn append_resource(
+        &mut self,
+        resource: ResourceId,
+        hints: &SegmentHints,
+    ) -> Result<Option<ParsedSegmentInfo>, (SegmentParsingErrorCode, Option<String>)> {
+        let Some(transmuxer) = self.transmuxer.as_mut() else {
+            return jsAppendBuffer(self.id, resource, None);
+        };
+        let input = jsGetResourceDataUpTo(resource, crate::transmux::MAX_INPUT_BYTES)?;
+        let output = transmuxer
+            .transmux(
+                &input,
+                crate::transmux::Options {
+                    reset: hints.reset_transmuxer_state(),
+                    seed: Some((
+                        hints.base_decode_time_start() as f64,
+                        hints.base_decode_time_start_timescale(),
+                    )),
+                },
+            )
+            .map_err(|error| {
+                (
+                    SegmentParsingErrorCode::TransmuxerError,
+                    Some(error.description().to_owned()),
+                )
+            })?
+            .ok_or((
+                SegmentParsingErrorCode::TransmuxerError,
+                Some("No media in segment".to_owned()),
+            ))?;
+        // No borrowed payload range survives transmuxing. Release the input
+        // before the host allocates the owned JS output buffer.
+        drop(input);
+        jsAppendBuffer(self.id, resource, Some(&output.data))?;
+        Ok(Some(ParsedSegmentInfo::from_transmux(output.timing)))
     }
 
     /// Remove media data from this `SourceBuffer`, based on a `start` and `end` time in seconds.
@@ -694,8 +736,27 @@ fn build_segment_hints(
 
 #[cfg(test)]
 mod tests {
-    use super::{should_reset_transmuxer, MediaSequenceIdentity};
-    use crate::parser::MediaPlaylistPermanentId;
+    use super::{build_segment_hints, should_reset_transmuxer, MediaSequenceIdentity};
+    use crate::bindings::TimescaledTimestamp;
+    use crate::parser::{MediaPlaylistPermanentId, SegmentTimeInfo};
+
+    #[test]
+    fn preparation_keeps_parsed_continuity_and_reseeds_on_reset() {
+        let segment = SegmentTimeInfo::new(8.0, 4.0);
+        let previous_end = Some(TimescaledTimestamp::new(6, 1));
+        let probe_hint = Some(TimescaledTimestamp::new(10, 1));
+        let continuous = build_segment_hints(&segment, previous_end, probe_hint, false);
+        assert_eq!(continuous.base_decode_time_start(), 6);
+        assert_eq!(continuous.base_decode_time_start_timescale(), 1);
+        assert!(!continuous.reset_transmuxer_state());
+        let reset = build_segment_hints(&segment, previous_end, probe_hint, true);
+        assert_eq!(reset.base_decode_time_start(), 10);
+        assert_eq!(reset.base_decode_time_start_timescale(), 1);
+        assert!(reset.reset_transmuxer_state());
+        let unprobed = build_segment_hints(&segment, previous_end, None, true);
+        assert_eq!(unprobed.base_decode_time_start(), 8 * 90_000);
+        assert_eq!(unprobed.base_decode_time_start_timescale(), 90_000);
+    }
 
     #[test]
     fn transmuxer_reset_is_forced_when_requested() {

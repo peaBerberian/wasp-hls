@@ -121,6 +121,7 @@ export function createWasmImports(bindings: HostBindings): WebAssembly.Imports {
         typPtr: number,
         typLen: number,
         sourceBufferIdOut: number,
+        needsTransmuxOut: number,
         errCodeOut: number,
         errDescPtrOut: number,
         errDescLenOut: number,
@@ -130,7 +131,11 @@ export function createWasmImports(bindings: HostBindings): WebAssembly.Imports {
           readString(typPtr, typLen),
         );
         if (result.errorCode === undefined) {
-          getUint32Memory()[sourceBufferIdOut >>> 2] = result.value ?? 0;
+          getUint32Memory()[sourceBufferIdOut >>> 2] = result.value?.id ?? 0;
+          getUint32Memory()[needsTransmuxOut >>> 2] = result.value
+            ?.needsTransmux
+            ? 1
+            : 0;
           return 1;
         }
         getUint32Memory()[errCodeOut >>> 2] = result.errorCode;
@@ -148,8 +153,13 @@ export function createWasmImports(bindings: HostBindings): WebAssembly.Imports {
         );
         return value === undefined ? -1 : value ? 1 : 0;
       },
+      __js_func__get_resource_transmux_format(resourceId: number): number {
+        return bindings.getResourceTransmuxFormat(resourceId);
+      },
       __js_func__inspect_segment(
         resourceId: number,
+        preparedPtr: number,
+        preparedLen: number,
         mediaTypeOut: number,
         parsedMimeTypePtrOut: number,
         parsedMimeTypeLenOut: number,
@@ -159,7 +169,12 @@ export function createWasmImports(bindings: HostBindings): WebAssembly.Imports {
         errDescPtrOut: number,
         errDescLenOut: number,
       ): number {
-        const result = bindings.inspectSegment(resourceId);
+        const result = bindings.inspectSegment(
+          resourceId,
+          preparedPtr === 0
+            ? undefined
+            : getUint8Memory().subarray(preparedPtr, preparedPtr + preparedLen),
+        );
         if (result.errorCode === undefined && result.value !== undefined) {
           getUint32Memory()[mediaTypeOut >>> 2] = result.value.mediaType;
           writeOptionalString(
@@ -179,11 +194,8 @@ export function createWasmImports(bindings: HostBindings): WebAssembly.Imports {
         // params
         sourceBufferId: number,
         resourceId: number,
-        baseDecodeTimeStartHi: number,
-        baseDecodeTimeStartLo: number,
-        baseDecodeTimeStartTimescale: number,
-        reset_transmuxer_state: number,
-        transmuxer: number,
+        preparedPtr: number,
+        preparedLen: number,
 
         // Return value
         hasStartOut: number,
@@ -202,13 +214,12 @@ export function createWasmImports(bindings: HostBindings): WebAssembly.Imports {
           bindings.appendBuffer(
             sourceBufferId,
             resourceId,
-            {
-              baseDecodeTimeStartHi,
-              baseDecodeTimeStartLo,
-              baseDecodeTimeStartTimescale,
-              resetTransmuxerState: reset_transmuxer_state !== 0,
-            },
-            transmuxer,
+            preparedPtr === 0
+              ? undefined
+              : getUint8Memory().subarray(
+                  preparedPtr,
+                  preparedPtr + preparedLen,
+                ),
           ),
 
           hasStartOut,

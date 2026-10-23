@@ -1,4 +1,4 @@
-// Opt-in kernel benchmark. Input copy, output copy and cache updates are timed.
+// Opt-in kernel benchmark. Input copy, output copy are timed.
 // Native library output layouts are retained; no artificial concatenation copy
 // is added to hls.js or Shaka. This does not measure browser playback or workers.
 import assert from "node:assert/strict";
@@ -150,7 +150,7 @@ try {
       sha256: hash(inputs[index]),
       ...contexts[index],
     })),
-    wasmSha256: hash(await readFile("build/wasp_hls_bg.wasm")),
+    wasmSha256: hash(await readFile("tmp/transmux-test.wasm")),
     competitors: competitors.metadata,
     validation,
     metrics,

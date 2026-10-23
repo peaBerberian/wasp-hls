@@ -34,7 +34,6 @@ import {
 } from "../wasm/index.js";
 import type {
   ContentCompatibilityErrorCode,
-  SegmentHints,
   HostBindings,
   InspectSegmentValue,
   ISafeU64,
@@ -48,7 +47,6 @@ import type {
   SourceBufferCreationErrorCode,
   TimerReason,
 } from "../wasm/index.js";
-import { transmuxWithSession } from "../wasm/js/transmuxer.js";
 import {
   cachedCodecsSupport,
   jsMemoryResources,
@@ -63,11 +61,7 @@ import {
   getIsobmfTimeInfo,
 } from "./isobmff-utils.js";
 import postMessageToMain from "./postMessage.js";
-import {
-  createTransmuxer,
-  getFmp4Type,
-  getTransmuxedType,
-} from "./transmux.js";
+import { getFmp4Type, getTransmuxedType } from "./transmux.js";
 import { formatErrMessage, shouldTransmux } from "./utils.js";
 
 const generateMediaSourceId = idGenerator();
@@ -846,15 +840,15 @@ export function addSourceBuffer(
   if (contentInfo.mediaSourceObj.type === "main") {
     const { sourceBuffers, nextSourceBufferId } = contentInfo.mediaSourceObj;
     try {
+      const needsTransmux = shouldTransmux(typ);
       let mimeType = typ;
-      if (shouldTransmux(typ)) {
+      if (needsTransmux) {
         mimeType = getTransmuxedType(typ, mediaType);
       }
       const sourceBufferId = nextSourceBufferId;
       sourceBuffers.push({
         lastInitTrackInfoByTrackId: undefined,
         id: sourceBufferId,
-        needsTransmux: mimeType !== typ,
         sourceBuffer: null,
         mediaType,
       });
@@ -867,7 +861,7 @@ export function addSourceBuffer(
           contentType: mimeType,
         },
       });
-      return AddSourceBufferResult.success(sourceBufferId);
+      return AddSourceBufferResult.success(sourceBufferId, needsTransmux);
     } catch (err) {
       const msg = formatErrMessage(
         err,
@@ -892,8 +886,9 @@ export function addSourceBuffer(
       );
     }
     try {
+      const needsTransmux = shouldTransmux(typ);
       let mimeType = typ;
-      if (shouldTransmux(typ)) {
+      if (needsTransmux) {
         mimeType = getTransmuxedType(typ, mediaType);
       }
       const sourceBuffer = mediaSource.addSourceBuffer(mimeType);
@@ -903,11 +898,10 @@ export function addSourceBuffer(
         lastInitTrackInfoByTrackId: undefined,
         id: sourceBufferId,
         sourceBuffer: queuedSourceBuffer,
-        needsTransmux: mimeType !== typ,
         mediaType,
       });
       contentInfo.mediaSourceObj.nextSourceBufferId++;
-      return AddSourceBufferResult.success(sourceBufferId);
+      return AddSourceBufferResult.success(sourceBufferId, needsTransmux);
     } catch (err) {
       const msg = formatErrMessage(
         err,
@@ -942,17 +936,16 @@ export function addSourceBuffer(
  * @param sourceBufferId - The identifier for the SourceBuffer on which the
  * segment should be pushed.
  * @param resourceId - The identifier of the segment to push.
- * @param segmentHints - Potential supplementary context on the segment to
- * push, such as its base decode time.
+ * @param prepared - Media bytes prepared by Rust, or undefined for a JS resource.
+ * This view is borrowed; the queue receives an owned copy before we return.
  * @returns {Object}
  */
 export function appendBuffer(
   sourceBufferId: SourceBufferId,
   resourceId: ResourceId,
-  segmentHints: SegmentHints,
-  transmuxer: number,
+  prepared: Uint8Array | undefined,
 ): AppendBufferResult {
-  let segment = jsMemoryResources.get(resourceId);
+  const segment = prepared ?? jsMemoryResources.get(resourceId);
   const mediaSourceObj = getMediaSourceObj();
   if (segment === undefined) {
     return AppendBufferResult.error(
@@ -988,64 +981,6 @@ export function appendBuffer(
     | undefined;
 
   const sourceBufferObj = mediaSourceObj.sourceBuffers[sourceBufferObjIdx];
-  if (sourceBufferObj.needsTransmux) {
-    try {
-      const dtsHint = combineSafeTimeValue(
-        segmentHints.baseDecodeTimeStartHi,
-        segmentHints.baseDecodeTimeStartLo,
-      );
-      const transmuxedData = transmuxWithSession(transmuxer, segment, {
-        reset: segmentHints.resetTransmuxerState,
-        baseMediaDecodeTimeSeed: {
-          value: dtsHint,
-          timescale: segmentHints.baseDecodeTimeStartTimescale,
-        },
-      });
-      if (transmuxedData !== null) {
-        segment = transmuxedData.data;
-        if (transmuxedData.timingInfo !== undefined) {
-          if (logger.hasLevel(LogLevel.Debug)) {
-            const startString = (
-              transmuxedData.timingInfo.start /
-              transmuxedData.timingInfo.timescale
-            ).toFixed(3);
-            const endString = (
-              transmuxedData.timingInfo.end /
-              transmuxedData.timingInfo.timescale
-            ).toFixed(3);
-            const hint = (
-              dtsHint / segmentHints.baseDecodeTimeStartTimescale
-            ).toFixed(3);
-            logger.debug(
-              `Worker: transmuxed segment with start=${startString} end=${endString} hinted=${hint}`,
-            );
-          }
-          segmentPreciseTiming = {
-            start: splitTimeValue(transmuxedData.timingInfo.start),
-            end: splitTimeValue(transmuxedData.timingInfo.end),
-            timescale: transmuxedData.timingInfo.timescale,
-          };
-        } else {
-          logger.warn("Worker: transmuxed segment with no timing info");
-        }
-      } else {
-        return AppendBufferResult.error(
-          SegmentParsingErrorCode.TransmuxerError,
-          "Segment preparation error: the transmuxer couldn't process the segment",
-        );
-      }
-    } catch (err) {
-      const msg = formatErrMessage(
-        err,
-        "Unknown error while transmuxing segment",
-      );
-      return AppendBufferResult.error(
-        SegmentParsingErrorCode.TransmuxerError,
-        msg,
-      );
-    }
-  }
-
   const initTrackInfoByTrackId = getInitTrackInfo(segment);
   if (initTrackInfoByTrackId !== undefined) {
     // TODO: In transmuxing step when possible?
@@ -1072,6 +1007,8 @@ export function appendBuffer(
       };
     }
   }
+  // One owned copy serves both worker MSE and transfer to the main thread.
+  // Rust may reuse its input view's memory immediately after this call returns.
   const transferableSegment = new Uint8Array(segment);
   try {
     if (sourceBufferObj.sourceBuffer !== null) {
@@ -1163,12 +1100,26 @@ export function appendBuffer(
  * @param resourceId - `ResourceId` of the segment you want more metadata from
  * @returns - Object describing the result of the operation.
  */
-export function inspectSegment(resourceId: ResourceId): {
+export function getResourceTransmuxFormat(resourceId: ResourceId): number {
+  const segment = jsMemoryResources.get(resourceId);
+  if (segment === undefined) {
+    return 0;
+  }
+  if (isLikelyAacProbeSegment(segment)) {
+    return 2;
+  }
+  return isLikelyMpeg2TsProbeSegment(segment) ? 1 : 0;
+}
+
+export function inspectSegment(
+  resourceId: ResourceId,
+  prepared: Uint8Array | undefined,
+): {
   value: InspectSegmentValue | undefined;
   errorCode: SegmentParsingErrorCode | undefined;
   description: string | undefined;
 } {
-  const segment = jsMemoryResources.get(resourceId);
+  const segment = prepared ?? jsMemoryResources.get(resourceId);
   if (segment === undefined) {
     return {
       value: undefined,
@@ -1207,36 +1158,6 @@ function inspectProbeSegment(
     };
   }
 
-  const transmuxer = createTransmuxer();
-  let transmuxedSegment;
-  try {
-    transmuxedSegment = transmuxer.transmuxSegment(segment);
-  } finally {
-    transmuxer.dispose();
-  }
-  if (transmuxedSegment === null) {
-    return undefined;
-  }
-  const transmuxedCodecs = getIsoBmffCodecs(transmuxedSegment.data);
-  if (transmuxedCodecs.length === 0) {
-    logger.error("Worker: transmuxed segment is null");
-    return undefined;
-  }
-  const mediaType = inferMediaTypeFromCodecs(transmuxedCodecs);
-  if (isLikelyAacProbeSegment(segment)) {
-    return {
-      mediaType,
-      mimeType: "audio/aac",
-      codec: transmuxedCodecs.join(","),
-    };
-  }
-  if (isLikelyMpeg2TsProbeSegment(segment)) {
-    return {
-      mediaType,
-      mimeType: mediaType === MediaType.Audio ? "audio/mp2t" : "video/mp2t",
-      codec: transmuxedCodecs.join(","),
-    };
-  }
   return undefined;
 }
 
@@ -1503,10 +1424,6 @@ function splitTimeValue(value: number): ISafeU64 {
   };
 }
 
-function combineSafeTimeValue(hi: number, lo: number): number {
-  return hi * 0x100000000 + lo;
-}
-
 /**
  * @param {number|undefined} minimumPosition
  * @param {number|undefined} maximumPosition
@@ -1746,6 +1663,7 @@ export function getWaspHostCapabilities(): HostBindings {
     isTypeSupported,
     inspectSegment,
     appendBuffer,
+    getResourceTransmuxFormat,
     removeBuffer,
     endOfStream,
     startObservingPlayback,

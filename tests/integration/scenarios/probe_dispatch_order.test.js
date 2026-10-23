@@ -43,6 +43,7 @@ async function createProbeHarness({
       getResourceData: (id) => resources.get(id),
       freeResource: (id) => resources.delete(id),
       isTypeSupported: () => true,
+      getResourceTransmuxFormat: () => 0,
       inspectSegment(id) {
         const audio = resourceUrls.get(id).includes("-audio");
         return {
@@ -56,9 +57,9 @@ async function createProbeHarness({
       addSourceBuffer(mediaType) {
         const id = nextBuffer++;
         buffers.set(id, { mediaType, pending: [], end: 2 });
-        return { value: id };
+        return { value: { id, needsTransmux: false } };
       },
-      appendBuffer(bufferId, resourceId, hints) {
+      appendBuffer(bufferId, resourceId, prepared) {
         const url = resourceUrls.get(resourceId);
         const buffer = buffers.get(bufferId);
         const fetches = requests
@@ -68,7 +69,7 @@ async function createProbeHarness({
           url,
           resourceId,
           bufferId,
-          hints: { ...hints },
+          prepared,
           fetches,
         };
         appends.push(append);
@@ -257,12 +258,11 @@ it.each([
         expect(media.map((append) => append.url.split("/").at(-1))).toEqual(
           [0, 1, 2].map((index) => `first-${type}-${index}.ts`),
         );
-        expect(media[1].hints).toMatchObject({
-          baseDecodeTimeStartLo: 6,
-          baseDecodeTimeStartTimescale: 1,
-          resetTransmuxerState: false,
-        });
-        expect(media[2].hints.resetTransmuxerState).toBe(true);
+        // This harness supplies MP4 resources. Decode-time hints and parser
+        // resets stay inside Rust now; its SourceBuffer unit tests cover them.
+        expect(media.every((append) => append.prepared === undefined)).toBe(
+          true,
+        );
       }
       expect(ctx.ended).toBe(0);
       ctx.completeAppends();

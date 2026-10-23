@@ -77,6 +77,49 @@ export async function buildWasm(root, { release, skipGenerate = false }) {
   );
 }
 
+/** Build standalone test handles without adding them to the shipped WASM ABI.
+ * @param {string} root
+ */
+export async function buildTransmuxTestWasm(root) {
+  reportStep("BUILD", "Building isolated transmux test WASM...");
+  // A separate target directory keeps the feature-enabled artifact from being
+  // mistaken for the production library by a later build or browser test.
+  await exec(
+    "cargo",
+    [
+      "+nightly",
+      "build",
+      "-Zbuild-std=std,panic_abort",
+      "--release",
+      "--target=wasm32-unknown-unknown",
+      "--features=transmux-test-api",
+      "--target-dir=target/transmux-tests",
+    ],
+    {
+      cwd: root,
+      env: {
+        ...process.env,
+        RUSTFLAGS: [process.env.RUSTFLAGS, "-Ctarget-cpu=mvp"]
+          .filter(Boolean)
+          .join(" "),
+      },
+    },
+  );
+  mkdirSync(join(root, "tmp"), { recursive: true });
+  copyFileSync(
+    join(
+      root,
+      "target/transmux-tests/wasm32-unknown-unknown/release/wasp_hls.wasm",
+    ),
+    join(root, "tmp/transmux-test.wasm"),
+  );
+  await exec(
+    NODE,
+    ["./scripts/check_wasm_features.mjs", "tmp/transmux-test.wasm"],
+    { cwd: root },
+  );
+}
+
 /**
  * @param {string} root
  * @param {{ release: boolean }} options

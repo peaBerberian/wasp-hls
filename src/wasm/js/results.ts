@@ -9,7 +9,12 @@ import type {
   SegmentParsingErrorCode,
   StartingPositionType,
 } from "./enums.js";
-import type { AppendBufferValue, HostResult, ISafeU64 } from "./types.js";
+import type {
+  AddSourceBufferValue,
+  AppendBufferValue,
+  HostResult,
+  ISafeU64,
+} from "./types.js";
 
 class SimpleResult<Value, ErrorCode extends number> implements HostResult<
   Value,
@@ -25,11 +30,18 @@ class SimpleResult<Value, ErrorCode extends number> implements HostResult<
 }
 
 export class AddSourceBufferResult extends SimpleResult<
-  number,
+  AddSourceBufferValue,
   AddSourceBufferErrorCode
 > {
-  public static success(value: number): AddSourceBufferResult {
-    return new AddSourceBufferResult(value, undefined, undefined);
+  public static success(
+    id: number,
+    needsTransmux: boolean,
+  ): AddSourceBufferResult {
+    return new AddSourceBufferResult(
+      { id, needsTransmux },
+      undefined,
+      undefined,
+    );
   }
 
   public static error(

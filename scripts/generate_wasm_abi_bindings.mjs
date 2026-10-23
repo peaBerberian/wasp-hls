@@ -307,10 +307,10 @@ function collectTsImports(importsList, exportsList) {
     "WebAssembly",
   ]);
   const helperTypes = new Set([
+    "AddSourceBufferValue",
     "AppendBufferValue",
     "HostResult",
     "InspectSegmentValue",
-    "SegmentHints",
   ]);
   const found = new Set();
   for (const entry of [...importsList, ...exportsList]) {
@@ -346,10 +346,10 @@ function collectTsImports(importsList, exportsList) {
  */
 function collectTsHelperImports(importsList) {
   const knownHelpers = [
+    "AddSourceBufferValue",
     "AppendBufferValue",
     "HostResult",
     "InspectSegmentValue",
-    "SegmentHints",
   ];
   const found = new Set();
   for (const entry of importsList) {

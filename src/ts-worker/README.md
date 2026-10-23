@@ -16,8 +16,8 @@ Its job is to:
   core can inspect or push a resource without copying all its bytes into
   WebAssembly memory.
 
-- Inspect segment metadata and timing, and prepare media data for buffering,
-  including transmuxing when needed.
+- Inspect MP4 metadata and timing, and copy media bytes prepared by Rust into
+  storage that can be queued for buffering.
 
 - Create and use media buffers in the worker when supported. Otherwise, send
   the operations to the main thread and communicate their results back to the
@@ -30,8 +30,8 @@ Its job is to:
 keeps the worker's player instance, current content, resources, pending requests
 and codec support results. There is one player instance per worker.
 
-`transmux.ts` handles probe transmuxer creation and media type conversion.
-Playback transmuxer state belongs to Rust's SourceBuffer.
+`transmux.ts` handles media type conversion. Transmuxing, probe instances and
+playback parser lifetimes belong to Rust.
 `isobmff-utils.ts` reads codec and timing information from MP4 data.
 `postMessage.ts` sends messages to the main thread, and `utils.ts` contains
 small helpers.

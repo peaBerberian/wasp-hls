@@ -7,6 +7,10 @@ edition = "2021"
 crate-type = ["cdylib"]
 path = "src/rs-core/lib.rs"
 
+[features]
+# Standalone handles exist only in the isolated test/benchmark artifact.
+transmux-test-api = []
+
 [dependencies]
 thiserror = "2.0.21"
 
