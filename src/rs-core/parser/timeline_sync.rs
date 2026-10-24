@@ -74,10 +74,17 @@ impl TimelineReference {
         }
     }
 
-    pub(super) fn infer_offset_for(&self, media_segments: &[MediaSegmentInfo]) -> Option<f64> {
+    /// Estimate where the playlist starts using discontinuities, then PDT, then sequence numbers.
+    /// The caller first tries to match segments from the previous version of the same playlist.
+    /// Matching sequence numbers across playlists is only a guess. Exact synchronization uses
+    /// timestamps from the media, or X-TIMESTAMP-MAP for WebVTT.
+    pub(super) fn estimate_playlist_offset(
+        &self,
+        media_segments: &[MediaSegmentInfo],
+    ) -> Option<f64> {
         self.align_by_discontinuity_sequence(media_segments)
             .or_else(|| self.align_by_program_date_time(media_segments))
-            .or_else(|| self.align_by_sequence_number(media_segments))
+            .or_else(|| self.estimate_by_sequence_number(media_segments))
     }
 
     pub(super) fn uses_program_date_time(&self) -> bool {
@@ -213,10 +220,11 @@ impl TimelineReference {
         Some(delta)
     }
 
-    // TODO: Revisit this cross-playlist fallback: HLS permits independent media sequence
-    // numbers and forbids using them to synchronize streams (RFC 8216 sections 6.3.2/6.3.4).
-    // Keep the existing compatibility heuristic for now; use reliable timing anchors instead.
-    fn align_by_sequence_number(&self, media_segments: &[MediaSegmentInfo]) -> Option<f64> {
+    // Try sequence numbers when discontinuities and PDT give no offset, like other popular players
+    // (seen on hls.js and shaka-player, 2026-10).
+    // Different playlists may use different sequence numbers. This is only a guess;
+    // media timestamps are still needed for exact synchronization.
+    fn estimate_by_sequence_number(&self, media_segments: &[MediaSegmentInfo]) -> Option<f64> {
         let new_first = media_segments.first()?;
         let ref_last_sequence = self.last_sequence?;
         let ref_last_end = self.last_end?;
@@ -224,7 +232,7 @@ impl TimelineReference {
         if let Some(ref_start) = self.start_for_sequence(new_first.sequence) {
             let offset = ref_start - new_first.start();
             log_debug!(
-                "Parser: aligning playlist based on media sequence {} (diff:{})",
+                "Parser: estimating playlist placement from media sequence {} (diff:{})",
                 new_first.sequence,
                 offset
             );
@@ -234,7 +242,7 @@ impl TimelineReference {
         if ref_last_sequence.wrapping_add(1) == new_first.sequence {
             let offset = ref_last_end - new_first.start();
             log_debug!(
-                "Parser: aligning playlist based on first/last media sequence {} (diff:{})",
+                "Parser: estimating playlist placement from first/last media sequence {} (diff:{})",
                 new_first.sequence,
                 offset
             );

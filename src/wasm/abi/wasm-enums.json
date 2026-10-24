@@ -483,7 +483,8 @@
       "default": "Audio",
       "members": {
         "Audio": 0,
-        "Video": 1
+        "Video": 1,
+        "Text": 2
       }
     },
     "PlaylistNature": {

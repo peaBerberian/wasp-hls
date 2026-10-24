@@ -3,7 +3,7 @@ use crate::{
     bindings::MediaType,
     dispatcher::playlist_refresh_manager::PlaylistRefreshManager,
     media_element::MediaElementReference,
-    parser::AudioTrack,
+    parser::{AudioTrack, SubtitleTrack},
     playlist_store::{PlaylistStore, ProbeSegmentMetadata},
     requester::Requester,
     segment_selector::NextSegmentSelectors,
@@ -71,9 +71,13 @@ pub struct Dispatcher {
     /// the regular buffering pipeline to be ready before being pushed.
     ready_probe_segments: ReadyProbeSegments,
 
-    /// Preferred criteria to resolve the initial audio track selection for the
-    /// next content being loaded.
+    /// Preferred criteria to resolve the initial audio track selection for the next content being
+    /// loaded.
     initial_audio_track_selection: Vec<InitialAudioTrackSelection>,
+
+    /// Preferred criteria to resolve the initial subtitles track selection for the next content
+    /// being loaded.
+    initial_subtitle_track_selection: Vec<Option<InitialSubtitleTrackSelection>>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -119,6 +123,44 @@ impl InitialAudioTrackSelection {
                     .iter()
                     .any(|track_characteristic| track_characteristic == characteristic)
             })
+    }
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct InitialSubtitleTrackSelection {
+    pub language: Option<String>,
+    pub assoc_language: Option<String>,
+    pub name: Option<String>,
+    pub characteristics: Vec<String>,
+    pub forced: Option<bool>,
+}
+
+impl InitialSubtitleTrackSelection {
+    fn is_empty(&self) -> bool {
+        self.language.is_none()
+            && self.assoc_language.is_none()
+            && self.name.is_none()
+            && self.characteristics.is_empty()
+            && self.forced.is_none()
+    }
+
+    fn matches(&self, track: &SubtitleTrack) -> bool {
+        self.language
+            .as_deref()
+            .is_none_or(|language| track.language() == Some(language))
+            && self
+                .assoc_language
+                .as_deref()
+                .is_none_or(|language| track.assoc_language() == Some(language))
+            && self
+                .name
+                .as_deref()
+                .is_none_or(|name| track.name() == Some(name))
+            && self.forced.is_none_or(|forced| track.is_forced() == forced)
+            && self
+                .characteristics
+                .iter()
+                .all(|characteristic| track.characteristics().contains(characteristic))
     }
 }
 
@@ -184,6 +226,7 @@ struct ReadyProbeSegment {
 struct ReadyProbeSegments {
     audio: Option<ReadyProbeSegment>,
     video: Option<ReadyProbeSegment>,
+    text: Option<ReadyProbeSegment>,
 }
 
 impl ReadyProbeSegments {
@@ -191,6 +234,7 @@ impl ReadyProbeSegments {
         match media_type {
             MediaType::Audio => self.audio.as_ref(),
             MediaType::Video => self.video.as_ref(),
+            MediaType::Text => self.text.as_ref(),
         }
     }
 
@@ -198,6 +242,7 @@ impl ReadyProbeSegments {
         match probe.media_type {
             MediaType::Audio => self.audio = Some(probe),
             MediaType::Video => self.video = Some(probe),
+            MediaType::Text => self.text = Some(probe),
         }
     }
 
@@ -205,6 +250,7 @@ impl ReadyProbeSegments {
         match media_type {
             MediaType::Audio => self.audio.take(),
             MediaType::Video => self.video.take(),
+            MediaType::Text => self.text.take(),
         }
     }
 
@@ -212,12 +258,14 @@ impl ReadyProbeSegments {
         match media_type {
             MediaType::Audio => self.audio = None,
             MediaType::Video => self.video = None,
+            MediaType::Text => self.text = None,
         }
     }
 
     fn clear(&mut self) {
         self.audio = None;
         self.video = None;
+        self.text = None;
     }
 }
 

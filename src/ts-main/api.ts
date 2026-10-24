@@ -7,7 +7,9 @@ import monotonicNow from "../ts-common/monotonicNow.ts";
 import noop from "../ts-common/noop.ts";
 import type {
   AudioTrackInfo,
+  SubtitleTrackInfo,
   InitialAudioTrackPreference,
+  InitialSubtitleTrackPreference,
   VariantInfo,
   WaspHlsPlayerConfig,
   WorkerMessage,
@@ -156,6 +158,8 @@ interface WaspHlsPlayerEvents {
    * Sent when the list of available audio tracks changed.
    */
   audioTrackListUpdate: AudioTrackInfo[];
+  subtitleTrackListUpdate: SubtitleTrackInfo[];
+  subtitleTrackUpdate: SubtitleTrackInfo | null;
 }
 
 /** Payload sent with a `contentInfoUpdate` event. */
@@ -414,6 +418,8 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
       sourceBuffers: [],
       variants: [],
       audioTracks: [],
+      subtitleTracks: [],
+      currentSubtitleTrack: undefined,
       currentAudioTrack: undefined,
       currVariant: undefined,
       lockedVariant: null,
@@ -472,6 +478,7 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
         url,
         startingPosition,
         initialAudioTrack: opts?.initialAudioTrack,
+        initialSubtitleTrack: opts?.initialSubtitleTrack,
       },
     });
   }
@@ -910,6 +917,72 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
     return this.__contentMetadata__?.variants ?? [];
   }
 
+  /** Returns the active subtitle track, null when disabled, or undefined when unknown. */
+  public getCurrentSubtitleTrack(): SubtitleTrackInfo | null | undefined {
+    const metadata = this.__contentMetadata__;
+    if (metadata?.currentSubtitleTrack === null) {
+      return null;
+    }
+    return metadata?.subtitleTracks.find(
+      (t) => t.id === metadata.currentSubtitleTrack?.id,
+    );
+  }
+
+  /** Returns subtitle tracks announced by the multivariant playlist. */
+  public getSubtitleTrackList(): SubtitleTrackInfo[] {
+    return this.__contentMetadata__?.subtitleTracks ?? [];
+  }
+
+  /** Selects a subtitle track by ID. */
+  public setSubtitleTrack(trackId: number): void {
+    if (this.__worker__ === null) {
+      throw new Error("The Player is not initialized or is disposed.");
+    }
+    const metadata = this.__contentMetadata__;
+    if (metadata === null) {
+      throw new Error("No content loaded");
+    }
+    if (typeof trackId !== "number") {
+      throw new TypeError(
+        "Expected a subtitle track ID. Use resetSubtitleTrack() for automatic selection.",
+      );
+    }
+    postMessageToWorker(this.__worker__, {
+      type: MainMessageType.SetSubtitleTrack,
+      value: { contentId: metadata.contentId, trackId },
+    });
+  }
+
+  /** Restores automatic subtitle track selection for the current content. */
+  public resetSubtitleTrack(): void {
+    if (this.__worker__ === null) {
+      throw new Error("The Player is not initialized or is disposed.");
+    }
+    const metadata = this.__contentMetadata__;
+    if (metadata === null) {
+      throw new Error("No content loaded");
+    }
+    postMessageToWorker(this.__worker__, {
+      type: MainMessageType.SetSubtitleTrack,
+      value: { contentId: metadata.contentId, trackId: null },
+    });
+  }
+
+  /** Disables subtitles for the current content. */
+  public disableSubtitleTrack(): void {
+    if (this.__worker__ === null) {
+      throw new Error("The Player is not initialized or is disposed.");
+    }
+    const metadata = this.__contentMetadata__;
+    if (metadata === null) {
+      throw new Error("No content loaded");
+    }
+    postMessageToWorker(this.__worker__, {
+      type: MainMessageType.DisableSubtitleTrack,
+      value: { contentId: metadata.contentId },
+    });
+  }
+
   /**
    * Returns a list of all available on audio tracks.
    * Returns an empty array if unknown or if no content is loaded.
@@ -1258,6 +1331,13 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
               break;
             }
             this.trigger("audioTrackListUpdate", contentMetadata.audioTracks);
+            if (contentMetadata !== this.__contentMetadata__) {
+              break;
+            }
+            this.trigger(
+              "subtitleTrackListUpdate",
+              contentMetadata.subtitleTracks,
+            );
           }
           break;
         case WorkerMessageType.TrackUpdate:
@@ -1265,7 +1345,12 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
             this.__contentMetadata__ !== null &&
             onTrackUpdateMessage(data, this.__contentMetadata__)
           ) {
-            if (data.value.mediaType === MediaType.Audio) {
+            if (data.value.mediaType === MediaType.Text) {
+              this.trigger(
+                "subtitleTrackUpdate",
+                this.getCurrentSubtitleTrack() ?? null,
+              );
+            } else if (data.value.mediaType === MediaType.Audio) {
               const { currentAudioTrack, audioTracks } =
                 this.__contentMetadata__;
               const announcedAudioTrack =
@@ -1474,6 +1559,8 @@ export interface LoadOptions {
    * before the player starts requesting media playlists and segments.
    */
   initialAudioTrack?: InitialAudioTrackPreference | undefined;
+  /** Preferred characteristics for the initially selected subtitle track. */
+  initialSubtitleTrack?: InitialSubtitleTrackPreference | undefined;
 }
 
 /**

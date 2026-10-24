@@ -490,6 +490,7 @@ impl LogLevel {
 pub enum MediaType {
     Audio = 0,
     Video = 1,
+    Text = 2,
 }
 
 impl MediaType {
@@ -497,6 +498,7 @@ impl MediaType {
         match value {
             0 => Self::Audio,
             1 => Self::Video,
+            2 => Self::Text,
             _ => Self::Audio,
         }
     }

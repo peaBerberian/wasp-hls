@@ -70,6 +70,9 @@ pub(crate) struct MediaElementReference {
     /// Empty if no video buffer is present.
     video_inventory: SegmentInventory,
 
+    /// Inventory reserved for retained text segments.
+    text_inventory: SegmentInventory,
+
     /// When rebuffering, this is the minimum ammount of time to have ahead
     /// before playing the content
     min_buffer_time: f64,
@@ -93,6 +96,7 @@ impl MediaElementReference {
             wanted_speed: 1.,
             audio_inventory: SegmentInventory::new(MediaType::Audio),
             video_inventory: SegmentInventory::new(MediaType::Video),
+            text_inventory: SegmentInventory::new(MediaType::Text),
             min_buffer_time: 5.,
         }
     }
@@ -114,6 +118,7 @@ impl MediaElementReference {
         self.min_buffer_time = 5.;
         self.audio_inventory.reset();
         self.video_inventory.reset();
+        self.text_inventory.reset();
     }
 
     /// Returns `true` if we're currently rebuffering due to not enough media data
@@ -200,6 +205,8 @@ impl MediaElementReference {
         let buffered = match media_type {
             MediaType::Audio => observation.audio_buffered(),
             MediaType::Video => observation.video_buffered(),
+            // XXX TODO: Read text ranges from observation.text_buffered().
+            MediaType::Text => None,
         }?;
         Some(
             buffered
@@ -222,6 +229,8 @@ impl MediaElementReference {
         let buffered = match media_type {
             MediaType::Audio => observation.audio_buffered(),
             MediaType::Video => observation.video_buffered(),
+            // XXX TODO: Read text ranges from observation.text_buffered().
+            MediaType::Text => None,
         };
         buffered.map(|ranges| ranges.buffer_gap(position).unwrap_or(0.))
     }
@@ -292,6 +301,11 @@ impl MediaElementReference {
         }
         let sb_codec = format!("{};codecs=\"{}\"", mime_type, codec);
         match media_type {
+            // XXX TODO: Create text storage through a shared buffer interface.
+            MediaType::Text => Err(SourceBufferCreationError::CantPlayType {
+                mime_type: sb_codec,
+                message: "Text is not stored in an MSE SourceBuffer".to_string(),
+            }),
             MediaType::Audio => {
                 if self.audio_buffer.is_some() {
                     Err(SourceBufferCreationError::AlreadyCreatedWithSameType { media_type })
@@ -377,10 +391,9 @@ impl MediaElementReference {
             playlist_start: metadata_start,
             playlist_end: metadata_end,
         };
-        let id = match md.media_type {
-            MediaType::Audio => self.audio_inventory.insert_segment(inventory_metadata),
-            MediaType::Video => self.video_inventory.insert_segment(inventory_metadata),
-        };
+        let id = self
+            .inventory_mut_for(md.media_type)
+            .insert_segment(inventory_metadata);
         PreparedPushData {
             id,
             segment_data: md.data,
@@ -414,18 +427,11 @@ impl MediaElementReference {
                 let metadata_start = metadata.time_info.start();
                 let seg_id = metadata.id;
                 let response = sb.push_media_segment(metadata)?;
-                match media_type {
-                    MediaType::Audio => self.audio_inventory.update_precise_timing(
-                        seg_id,
-                        response.precise_start(),
-                        response.precise_end(),
-                    ),
-                    MediaType::Video => self.video_inventory.update_precise_timing(
-                        seg_id,
-                        response.precise_start(),
-                        response.precise_end(),
-                    ),
-                }
+                self.inventory_mut_for(media_type).update_precise_timing(
+                    seg_id,
+                    response.precise_start(),
+                    response.precise_end(),
+                );
                 if let Some(media_start) = response.media_start() {
                     let media_offset = media_start - metadata_start;
                     log_info!("Setting media offset: {}", media_start - metadata_start,);
@@ -438,6 +444,14 @@ impl MediaElementReference {
         }
     }
 
+    fn inventory_mut_for(&mut self, media_type: MediaType) -> &mut SegmentInventory {
+        match media_type {
+            MediaType::Audio => &mut self.audio_inventory,
+            MediaType::Video => &mut self.video_inventory,
+            MediaType::Text => &mut self.text_inventory,
+        }
+    }
+
     fn infer_probable_base_dts(
         &self,
         media_type: MediaType,
@@ -445,6 +459,8 @@ impl MediaElementReference {
         discontinuity_sequence: u32,
     ) -> Option<TimescaledTimestamp> {
         match media_type {
+            // XXX TODO: ?
+            MediaType::Text => None,
             MediaType::Audio => self.audio_inventory.infer_probable_base_dts(
                 time_info.start(),
                 time_info.end(),
@@ -513,11 +529,13 @@ impl MediaElementReference {
         match media_type {
             MediaType::Audio => self.audio_inventory.inventory(),
             MediaType::Video => self.video_inventory.inventory(),
+            MediaType::Text => self.text_inventory.inventory(),
         }
     }
 
     /// Method to call once a `MediaObservation` has been received.
     pub(crate) fn on_observation(&mut self, observation: MediaObservation) {
+        // XXX TODO: Reconcile text inventory with observation.text_buffered() too.
         if let Some(media_offset) = self.media_offset {
             if let Some(buffered) = observation.video_buffered() {
                 self.video_inventory.synchronize(buffered, media_offset);
@@ -681,6 +699,8 @@ impl MediaElementReference {
         match media_type {
             MediaType::Audio => self.audio_buffer.is_some(),
             MediaType::Video => self.video_buffer.is_some(),
+            // XXX TODO: Report whether the text buffer has been created.
+            MediaType::Text => false,
         }
     }
 
@@ -702,6 +722,8 @@ impl MediaElementReference {
 
     /// Set whether this buffer should signal the end once its pending operations finish.
     pub(crate) fn set_end_when_done(&mut self, media_type: MediaType, complete: bool) {
+        // XXX TODO: Track text buffer completion through the shared buffer interface.
+        // Only audio/video completion should determine MSE end-of-stream.
         if let Some(buffer) = self.buffer_mut_for(media_type) {
             buffer.set_end_when_done(complete);
         }
@@ -715,6 +737,8 @@ impl MediaElementReference {
         match media_type {
             MediaType::Audio => self.audio_buffer.as_ref(),
             MediaType::Video => self.video_buffer.as_ref(),
+            // XXX TODO: Access text storage through a shared buffer interface.
+            MediaType::Text => None,
         }
     }
 
@@ -729,6 +753,8 @@ impl MediaElementReference {
         match media_type {
             MediaType::Audio => self.audio_buffer.as_mut(),
             MediaType::Video => self.video_buffer.as_mut(),
+            // XXX TODO: Access text storage through a shared buffer interface.
+            MediaType::Text => None,
         }
     }
 

@@ -643,6 +643,11 @@ impl MediaPlaylist {
                 Some("ts") => Some("video/mp2t"),
                 _ => None,
             },
+            MediaType::Text => match self.extension() {
+                Some("vtt" | "webvtt") => Some("text/vtt"),
+                Some("mp4" | "m4s" | "m4i" | "m4f" | "cmft") => Some("application/mp4"),
+                _ => None,
+            },
         }
     }
 
@@ -709,6 +714,8 @@ fn infer_live_timeline_offset(
     timeline_reference: Option<&TimelineReference>,
     media_segments: &[MediaSegmentInfo],
 ) -> Option<(f64, bool)> {
+    // Preserve continuity within the same playlist before estimating placement from
+    // another rendition. This path is shared by audio, video and subtitle playlists.
     if let Some(prev_playlist) = prev_playlist {
         for new_seg in media_segments {
             if let Some(prev_seg) = prev_playlist.segment_list.media.iter().find(|prev_seg| {
@@ -742,7 +749,7 @@ fn infer_live_timeline_offset(
 
     let reference_playlist = timeline_reference?;
     reference_playlist
-        .infer_offset_for(media_segments)
+        .estimate_playlist_offset(media_segments)
         .map(|offset| (offset, reference_playlist.uses_program_date_time()))
 }
 
@@ -1187,6 +1194,97 @@ audio-112.ts
             current.segment_list().media()[1].start()
         );
         assert_eq!(segments[2].end(), current.segment_list().media()[2].end());
+    }
+
+    #[test]
+    fn audio_and_subtitle_placement_uses_shared_discontinuities_before_sequence_estimates() {
+        let current = parse_media_playlist(
+            "#EXTM3U\n#EXT-X-TARGETDURATION:4\n#EXT-X-MEDIA-SEQUENCE:100\n#EXT-X-DISCONTINUITY-SEQUENCE:10\n#EXTINF:4,\nv100.ts\n#EXTINF:4,\nv101.ts\n#EXT-X-DISCONTINUITY\n#EXTINF:4,\nv102.ts\n#EXTINF:4,\nv103.ts\n",
+        ).unwrap();
+        let reference = TimelineReference::from_segment_list(
+            current.segment_list().media(),
+            current.uses_program_date_time(),
+        );
+        for extension in ["m4a", "vtt"] {
+            for sequence in [100, 900] {
+                // Different boundaries: the common discontinuity is at local time 5,
+                // versus time 8 in the video playlist. Matching sequence numbers are incidental.
+                let playlist = format!("#EXTM3U\n#EXT-X-TARGETDURATION:7\n#EXT-X-MEDIA-SEQUENCE:{sequence}\n#EXT-X-DISCONTINUITY-SEQUENCE:10\n#EXTINF:5,\npart-{sequence}.{extension}\n#EXT-X-DISCONTINUITY\n#EXTINF:7,\npart-{}.{extension}\n", sequence + 1);
+                let url = Url::new(format!("https://example.com/{extension}.m3u8"));
+                let selected = MediaPlaylist::create(
+                    playlist.as_bytes(),
+                    url.clone(),
+                    None,
+                    Some(&reference),
+                    &MediaPlaylistContext::default(),
+                )
+                .unwrap();
+                let segments = selected.segment_list().media();
+                assert_eq!(segments[0].start(), 3.);
+                assert_eq!(segments[1].start(), 8.);
+
+                // Reload uses the selected playlist's own overlapping segment first,
+                // even when the video's matching sequence would suggest a different start.
+                let reload = format!("#EXTM3U\n#EXT-X-TARGETDURATION:7\n#EXT-X-MEDIA-SEQUENCE:{}\n#EXT-X-DISCONTINUITY-SEQUENCE:11\n#EXTINF:7,\npart-{}.{extension}\n#EXTINF:6,\npart-{}.{extension}\n", sequence + 1, sequence + 1, sequence + 2);
+                let refreshed = MediaPlaylist::create(
+                    reload.as_bytes(),
+                    url,
+                    Some(&selected),
+                    Some(&reference),
+                    &MediaPlaylistContext::default(),
+                )
+                .unwrap();
+                assert_eq!(refreshed.segment_list().media()[0].start(), 8.);
+                assert_eq!(refreshed.segment_list().media()[1].start(), 15.);
+            }
+        }
+    }
+
+    #[test]
+    fn audio_and_subtitle_pdt_placement_is_independent_of_segment_boundaries_and_sequences() {
+        let current = parse_media_playlist(
+            "#EXTM3U\n#EXT-X-TARGETDURATION:4\n#EXT-X-MEDIA-SEQUENCE:100\n#EXT-X-PROGRAM-DATE-TIME:2024-01-01T00:00:00Z\n#EXTINF:4,\nv100.ts\n#EXTINF:4,\nv101.ts\n#EXTINF:4,\nv102.ts\n",
+        ).unwrap();
+        let reference = TimelineReference::from_segment_list(
+            current.segment_list().media(),
+            current.uses_program_date_time(),
+        );
+        let video_start = current.segment_list().media()[0].start();
+        for extension in ["m4a", "vtt"] {
+            for sequence in [100, 900] {
+                let playlist = format!("#EXTM3U\n#EXT-X-TARGETDURATION:7\n#EXT-X-MEDIA-SEQUENCE:{sequence}\n#EXT-X-PROGRAM-DATE-TIME:2024-01-01T00:00:02Z\n#EXTINF:7,\npart-{sequence}.{extension}\n#EXTINF:3,\npart-{}.{extension}\n", sequence + 1);
+                let url = Url::new(format!("https://example.com/{extension}.m3u8"));
+                let selected = MediaPlaylist::create(
+                    playlist.as_bytes(),
+                    url.clone(),
+                    None,
+                    Some(&reference),
+                    &MediaPlaylistContext::default(),
+                )
+                .unwrap();
+                assert_eq!(selected.segment_list().media()[0].start(), video_start + 2.);
+                assert_eq!(selected.segment_list().media()[1].start(), video_start + 9.);
+
+                let reload = format!("#EXTM3U\n#EXT-X-TARGETDURATION:7\n#EXT-X-MEDIA-SEQUENCE:{}\n#EXTINF:3,\npart-{}.{extension}\n#EXTINF:4,\npart-{}.{extension}\n", sequence + 1, sequence + 1, sequence + 2);
+                let refreshed = MediaPlaylist::create(
+                    reload.as_bytes(),
+                    url,
+                    Some(&selected),
+                    Some(&reference),
+                    &MediaPlaylistContext::default(),
+                )
+                .unwrap();
+                assert!(refreshed.uses_program_date_time());
+                assert_eq!(
+                    refreshed.segment_list().media()[0].start(),
+                    video_start + 9.
+                );
+                assert_eq!(
+                    refreshed.segment_list().media()[1].start(),
+                    video_start + 12.
+                );
+            }
+        }
     }
 
     #[test]

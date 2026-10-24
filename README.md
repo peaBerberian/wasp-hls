@@ -24,16 +24,17 @@ I develop Wasp-hls as an independent personal project, drawing on my
 professional experience as lead developer of the [RxPlayer](https://github.com/canalplus/rx-player).
 Developed in the open since 2022, Wasp-hls is unaffiliated with RxPlayer or Canal+.
 
-Note that this is still heavily in development. Plans are:
+## Status
 
-- **Short-term goal**: Answer most web needs expected from an HLS media engine.
+This project is now handling most usual needs from an HLS media engine.
+The main features still missing: Content Decryption, LL-HLS, interstitials,
+Content Steering, and some [other more niche use-cases](#whats-done).
 
-  The library is almost there, with subtitle support the main missing feature.
-  Content decryption is not planned for now.
+Its **current focus** is to be able to handle:
 
-- **Long-term goals**: Optimal low-latency HLS handling. In-Rust transmuxing.
-
-  Extend beyond web: separate back-end systems for web (MSE API, HTML5), native
+- Optimal low-latency HLS
+- In-Rust transmuxing.
+- Extend beyond web: separate back-end systems for web (MSE API, HTML5), native
   (through e.g. `gstreamer`) and mobile usage, allowing common core logic for
   virtually all OTT platforms.
 
@@ -269,9 +270,9 @@ Media demuxing:
       _Priority: low_
 - [ ] Media Segment Format: Packed Audio EAC-3
       _Priority: low_
-- [ ] Media Segment Format: WebVTT (subtitles not handled for now)
+- [x] Media Segment Format: WebVTT
       _Priority: low_
-- [ ] Media Segment Format: IMSC Subtitles (subtitles not handled for now)
+- [x] Media Segment Format: IMSC Subtitles
       _Priority: low_
 
 MSE API and buffer handling:
@@ -350,8 +351,7 @@ most of them are not needed for playback):
   - [x] URI: Used to fetch the initialization segment if one is present
   - [x] BYTERANGE: To perform a range request for the initialization segment
 - EXT-X-MEDIA:
-  - [x] TYPE: Both AUDIO and VIDEO are handled. SUBTITLES and CLOSED-CAPTIONS
-        are just ignored for now.
+  - [x] TYPE: AUDIO, VIDEO and SUBTITLES. CLOSED-CAPTIONS is ignored for now.
   - [x] URI
   - [x] GROUP-ID
   - [x] DEFAULT
@@ -363,8 +363,7 @@ most of them are not needed for playback):
   - [x] CHARACTERISTICS: Exposed in track selection APIs
   - [x] BIT-DEPTH
   - [x] SAMPLE-RATE
-  - [ ] FORCED: As the SUBTITLES TYPE is not handled yet, we don't have to use
-        this one
+  - [x] FORCED: Identifies forced subtitle renditions.
   - [ ] INSTREAM-ID: As the CLOSED-CAPTIONS TYPE is not handled yet, we don't
         have to use this one.
   - [ ] STABLE-RENDITION-ID: Not really needed for now (only for content steering?)
@@ -387,7 +386,7 @@ most of them are not needed for playback):
   - [ ] SUPPLEMENTAL-CODECS: In our web use case, I'm not sure if this is only
         useful for track selection API or if filtering also needs to be done based
         on this.
-  - [ ] SUBTITLES: No subtitles support for now
+  - [x] SUBTITLES: Links variants to subtitle rendition groups.
   - [ ] CLOSED-CAPTIONS: that one is just ignored for now
   - [ ] PATHWAY-ID: Content Steering not handled yet
   - [ ] HDCP-LEVEL: DRM are not handled for now

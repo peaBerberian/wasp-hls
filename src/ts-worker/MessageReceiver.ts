@@ -121,6 +121,7 @@ export default function MessageReceiver() {
           data.value.url,
           startingPosition,
           data.value.initialAudioTrack,
+          data.value.initialSubtitleTrack,
         );
         break;
       }
@@ -335,6 +336,33 @@ export default function MessageReceiver() {
           return;
         }
         updateDispatcherConfig(dispatcher, data.value);
+        break;
+      }
+
+      case MainMessageType.DisableSubtitleTrack: {
+        const dispatcher = playerInstance.getDispatcher();
+        if (dispatcher === null) {
+          return postUnitializedWorkerError(data.value.contentId);
+        }
+        if (
+          playerInstance.getContentInfo()?.contentId !== data.value.contentId
+        ) {
+          return;
+        }
+        dispatcher.disable_subtitle_track();
+        break;
+      }
+
+      case MainMessageType.SetSubtitleTrack: {
+        const dispatcher = playerInstance.getDispatcher();
+        if (dispatcher === null) {
+          return postUnitializedWorkerError(data.value.contentId);
+        }
+        const contentInfo = playerInstance.getContentInfo();
+        if (contentInfo?.contentId !== data.value.contentId) {
+          return;
+        }
+        dispatcher.set_subtitle_track(data.value.trackId);
         break;
       }
 

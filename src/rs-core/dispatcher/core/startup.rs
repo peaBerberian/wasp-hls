@@ -109,6 +109,11 @@ fn ensure_ready_playlists(dispatcher: &mut Dispatcher, wanted_position: f64) -> 
             if audio_track_changed {
                 dispatcher.announce_current_audio_track();
             }
+            // XXX TODO: Why not done the same way as audio here?
+            if changed_media_types.contains(&MediaType::Text) {
+                dispatcher.announce_current_subtitle_track();
+                dispatcher.reset_subtitle_playlist();
+            }
             for media_type in changed_media_types {
                 dispatcher.ready_probe_segments.clear_media_type(media_type);
                 dispatcher.follow_selected_media_playlist(media_type);
@@ -159,7 +164,7 @@ fn advance_awaiting_playlist_info_state(dispatcher: &mut Dispatcher) {
         utils::get_initial_position(playlist_store, starting_position)
     };
 
-    for media_type in [MediaType::Video, MediaType::Audio] {
+    for media_type in [MediaType::Video, MediaType::Audio, MediaType::Text] {
         dispatcher.follow_selected_media_playlist(media_type);
     }
 
@@ -213,7 +218,19 @@ fn advance_awaiting_playlist_info_state(dispatcher: &mut Dispatcher) {
             )
         };
 
-        jsAnnounceFetchedContent(playlist_kind, variants_info, audio_tracks_info);
+        let Some(store) = dispatcher.playlist_store.as_ref() else {
+            return;
+        };
+
+        // XXX TODO: Why completely different from audio here?
+        let subtitle_tracks_info =
+            crate::bindings::formatters::format_subtitle_tracks_for_js(store.subtitle_tracks());
+        jsAnnounceFetchedContent(
+            playlist_kind,
+            variants_info,
+            audio_tracks_info,
+            subtitle_tracks_info,
+        );
         dispatcher.announce_current_variant();
         jsAnnounceTrackUpdate(MediaType::Audio, curr_audio_track);
 
@@ -221,6 +238,8 @@ fn advance_awaiting_playlist_info_state(dispatcher: &mut Dispatcher) {
             starting_position,
             lifecycle_announced: true,
         };
+        // XXX TODO: badly placed?
+        dispatcher.announce_current_subtitle_track();
     }
 
     if !ensure_ready_playlists(dispatcher, wanted_position) {
@@ -278,6 +297,14 @@ fn advance_awaiting_media_source_state(dispatcher: &mut Dispatcher) {
         dispatcher.stop_current_content();
         return;
     }
+    // XXX TODO: Do we really want to send a fatal error when no subs? When could that actually
+    // happen?
+    if let Some(Err(e)) = init_source_buffer(dispatcher, MediaType::Text) {
+        let (code, msg) = format_source_buffer_creation_err_for_js(e);
+        jsSendSourceBufferCreationError(true, code, MediaType::Text, &msg);
+        dispatcher.stop_current_content();
+        return;
+    }
     dispatcher
         .segment_selectors
         .restart_from_position(wanted_start);
@@ -301,6 +328,7 @@ fn advance_awaiting_media_source_state(dispatcher: &mut Dispatcher) {
     // Generalize behavior?
     let media_type = dispatcher.playlist_store.as_ref().and_then(|store| {
         match (
+            // XXX TODO: Check for if text would be needed here
             store.has_loaded_media_playlist(MediaType::Video),
             store.has_loaded_media_playlist(MediaType::Audio),
         ) {

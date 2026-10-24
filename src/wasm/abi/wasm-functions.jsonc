@@ -50,6 +50,7 @@
           { "name": "playlistType", "type": "PlaylistType" },
           { "name": "variantInfo", "type": "Uint32Array" },
           { "name": "audioTracksInfo", "type": "Uint32Array" },
+          { "name": "subtitleTracksInfo", "type": "Uint32Array" },
         ],
         "returnType": "void",
       },
@@ -60,13 +61,15 @@
           { "name": "variant_info_len", "type": "u32" },
           { "name": "audio_tracks_info_ptr", "type": "*const u32" },
           { "name": "audio_tracks_info_len", "type": "u32" },
+          { "name": "subtitle_tracks_info_ptr", "type": "*const u32" },
+          { "name": "subtitle_tracks_info_len", "type": "u32" },
         ],
         "returnType": "void",
       },
     },
     {
       "wasmSymbol": "__js_func__announce_track_update",
-      "doc": ["Report an audio or video track selection update to the host."],
+      "doc": ["Report a track selection update to the host."],
       "typescript": {
         "methodName": "announceTrackUpdate",
         "args": [
@@ -924,6 +927,8 @@
           { "name": "position", "type": "number" },
           { "name": "initialAudioPtr", "type": "number" },
           { "name": "initialAudioLen", "type": "number" },
+          { "name": "initialSubtitlePtr", "type": "number" },
+          { "name": "initialSubtitleLen", "type": "number" },
         ],
         "returnType": "void",
       },
@@ -997,6 +1002,29 @@
       "wasm": {
         "kind": "method",
         "args": [{ "name": "ptr", "type": "number" }],
+        "returnType": "void",
+      },
+    },
+    {
+      "wasmSymbol": "wasp_dispatcher_disable_subtitle_track",
+      "doc": ["Disable subtitles for the current content."],
+      "wasm": {
+        "kind": "method",
+        "args": [{ "name": "ptr", "type": "number" }],
+        "returnType": "void",
+      },
+    },
+    {
+      "wasmSymbol": "wasp_dispatcher_set_subtitle_track",
+      "doc": [
+        "Select a subtitle track, or restore automatic selection with the sentinel value.",
+      ],
+      "wasm": {
+        "kind": "method",
+        "args": [
+          { "name": "ptr", "type": "number" },
+          { "name": "trackId", "type": "number" },
+        ],
         "returnType": "void",
       },
     },

@@ -122,6 +122,8 @@ function mediaTypeAsArticle(mediaType: MediaType | undefined): string {
   switch (mediaType) {
     case MediaType.Audio:
       return "An audio";
+    case MediaType.Text:
+      return "a subtitle";
     case MediaType.Video:
       return "A video";
     default:

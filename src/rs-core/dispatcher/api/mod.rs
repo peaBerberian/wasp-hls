@@ -3,7 +3,7 @@ use crate::{
     bindings::{jsSendOtherError, OtherErrorCode},
     dispatcher::{
         segment_request_contexts::SegmentRequestContexts, InitialAudioTrackSelection,
-        PlaylistRefreshManager,
+        InitialSubtitleTrackSelection, PlaylistRefreshManager,
     },
     media_element::MediaElementReference,
     requester::{PlaylistFileType, Requester},
@@ -39,6 +39,7 @@ impl Dispatcher {
             playlist_refresh_manager: PlaylistRefreshManager::new(),
             ready_probe_segments: Default::default(),
             initial_audio_track_selection: Vec::new(),
+            initial_subtitle_track_selection: Vec::new(),
         }
     }
 
@@ -48,12 +49,21 @@ impl Dispatcher {
         content_url: String,
         starting_pos: Option<StartingPosition>,
         initial_audio_track_selection: Vec<InitialAudioTrackSelection>,
+        initial_subtitle_track_selection: Vec<Option<InitialSubtitleTrackSelection>>,
     ) {
         log_info!("load_content called");
         self.stop();
         self.initial_audio_track_selection = initial_audio_track_selection
             .into_iter()
             .filter(|selection| !selection.is_empty())
+            .collect();
+        self.initial_subtitle_track_selection = initial_subtitle_track_selection
+            .into_iter()
+            .filter(|selection| {
+                selection
+                    .as_ref()
+                    .is_none_or(|selection| !selection.is_empty())
+            })
             .collect();
         self.ready_state = PlayerReadyState::AwaitingPlaylistInfo {
             starting_position: starting_pos,
@@ -80,7 +90,7 @@ impl Dispatcher {
     pub fn minimum_position(&self) -> Option<f64> {
         self.playlist_store
             .as_ref()
-            .and_then(|c| c.current_estimated_minimum_position())
+            .and_then(super::utils::estimated_playback_minimum_position)
     }
 
     /// Returns the maximum position, in playlist time in seconds, at which media segments can be
@@ -90,7 +100,7 @@ impl Dispatcher {
     pub fn maximum_position(&self) -> Option<f64> {
         self.playlist_store
             .as_ref()
-            .and_then(|c| c.current_estimated_maximum_position())
+            .and_then(super::utils::estimated_playback_maximum_position)
     }
 
     /// Set the wanted playback rate, at which we will play when not rebuffering.
@@ -129,6 +139,15 @@ impl Dispatcher {
     /// Remove an HLS variant previously put in place through `lock_variant`.
     pub fn unlock_variant(&mut self) {
         self.unlock_variant_core()
+    }
+
+    /// Selects a subtitle track; None restores automatic selection.
+    pub fn set_subtitle_track(&mut self, track_id: Option<u32>) {
+        self.set_subtitle_track_core(track_id);
+    }
+
+    pub fn disable_subtitle_track(&mut self) {
+        self.disable_subtitle_track_core();
     }
 
     /// Set an audio track whose `id` is given in argument.
@@ -296,6 +315,73 @@ fn deserialize_initial_audio_track_selection(
     selections
 }
 
+fn deserialize_initial_subtitle_track_selection(
+    initial_subtitle_ptr: *const u8,
+    initial_subtitle_len: u32,
+) -> Vec<Option<InitialSubtitleTrackSelection>> {
+    let Some(bytes) = opt_u8_slice_from_abi(initial_subtitle_ptr, initial_subtitle_len) else {
+        return Vec::new();
+    };
+    let mut offset = 0;
+    let Some(selection_count) = read_u32_le(bytes, &mut offset) else {
+        return Vec::new();
+    };
+
+    let mut selections = Vec::with_capacity(selection_count as usize);
+    for _ in 0..selection_count {
+        let Some(kind) = bytes.get(offset) else {
+            return Vec::new();
+        };
+        offset += 1;
+        match kind {
+            0 => {
+                selections.push(None);
+                continue;
+            }
+            1 => {}
+            _ => return Vec::new(),
+        }
+        let Some(language) = read_optional_string(bytes, &mut offset) else {
+            return Vec::new();
+        };
+        let Some(assoc_language) = read_optional_string(bytes, &mut offset) else {
+            return Vec::new();
+        };
+        let Some(name) = read_optional_string(bytes, &mut offset) else {
+            return Vec::new();
+        };
+        let Some(characteristics_count) = read_u32_le(bytes, &mut offset) else {
+            return Vec::new();
+        };
+        let mut characteristics = Vec::with_capacity(characteristics_count as usize);
+        for _ in 0..characteristics_count {
+            let Some(characteristic) = read_string(bytes, &mut offset) else {
+                return Vec::new();
+            };
+            characteristics.push(characteristic);
+        }
+        let Some(flag) = bytes.get(offset) else {
+            return Vec::new();
+        };
+        offset += 1;
+        let forced = match flag {
+            0 => None,
+            1 => Some(false),
+            2 => Some(true),
+            _ => return Vec::new(),
+        };
+
+        selections.push(Some(InitialSubtitleTrackSelection {
+            language,
+            assoc_language,
+            name,
+            characteristics,
+            forced,
+        }));
+    }
+    selections
+}
+
 fn dispatcher_mut<'a>(ptr: u32) -> &'a mut Dispatcher {
     unsafe { &mut *(ptr as *mut Dispatcher) }
 }
@@ -333,6 +419,8 @@ pub extern "C" fn wasp_dispatcher_load_content(
     start_position: f64,
     initial_audio_ptr: *const u8,
     initial_audio_len: u32,
+    initial_subtitle_ptr: *const u8,
+    initial_subtitle_len: u32,
 ) {
     let content_url = string_from_abi(content_url_ptr, content_url_len);
     let starting_pos = if has_starting_pos != 0 {
@@ -345,7 +433,14 @@ pub extern "C" fn wasp_dispatcher_load_content(
     };
     let initial_audio_track_selection =
         deserialize_initial_audio_track_selection(initial_audio_ptr, initial_audio_len);
-    dispatcher_mut(ptr).load_content(content_url, starting_pos, initial_audio_track_selection);
+    let initial_subtitle_track_selection =
+        deserialize_initial_subtitle_track_selection(initial_subtitle_ptr, initial_subtitle_len);
+    dispatcher_mut(ptr).load_content(
+        content_url,
+        starting_pos,
+        initial_audio_track_selection,
+        initial_subtitle_track_selection,
+    );
 }
 
 #[unsafe(no_mangle)]
@@ -381,6 +476,20 @@ pub extern "C" fn wasp_dispatcher_lock_variant(ptr: u32, variant_id: u32) {
 #[unsafe(no_mangle)]
 pub extern "C" fn wasp_dispatcher_unlock_variant(ptr: u32) {
     dispatcher_mut(ptr).unlock_variant();
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn wasp_dispatcher_disable_subtitle_track(ptr: u32) {
+    dispatcher_mut(ptr).disable_subtitle_track();
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn wasp_dispatcher_set_subtitle_track(ptr: u32, track_id: u32) {
+    dispatcher_mut(ptr).set_subtitle_track(if track_id == u32::MAX {
+        None
+    } else {
+        Some(track_id)
+    });
 }
 
 #[unsafe(no_mangle)]

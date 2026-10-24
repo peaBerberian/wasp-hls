@@ -63,6 +63,8 @@ export function requestStopForContent(
   metadata.mediaSourceId = null;
   metadata.currentAudioTrack = undefined;
   metadata.audioTracks = [];
+  metadata.currentSubtitleTrack = undefined;
+  metadata.subtitleTracks = [];
   metadata.currVariant = undefined;
   metadata.variants = [];
   metadata.lockedVariant = null;
