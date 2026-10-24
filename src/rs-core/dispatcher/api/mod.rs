@@ -90,7 +90,7 @@ impl Dispatcher {
     pub fn minimum_position(&self) -> Option<f64> {
         self.playlist_store
             .as_ref()
-            .and_then(|c| c.current_estimated_minimum_position())
+            .and_then(super::utils::estimated_playback_minimum_position)
     }
 
     /// Returns the maximum position, in playlist time in seconds, at which media segments can be
@@ -100,7 +100,7 @@ impl Dispatcher {
     pub fn maximum_position(&self) -> Option<f64> {
         self.playlist_store
             .as_ref()
-            .and_then(|c| c.current_estimated_maximum_position())
+            .and_then(super::utils::estimated_playback_maximum_position)
     }
 
     /// Set the wanted playback rate, at which we will play when not rebuffering.

@@ -16,3 +16,32 @@
 //! TODO(subtitles): batch the browser ABI transfer, release downloaded bytes once
 //! parsed and bound pending/installed cue retention. The native backend should
 //! consume the same model without browser or WASM dependencies.
+
+/// Formats recognized by the Rust text backend.
+/// TODO: Keep this whitelist aligned with the implemented parsers and supported profiles.
+/// XXX TODO: High risk of false negatives?
+pub(crate) fn supports_codec(codecs: &str) -> bool {
+    !codecs.trim().is_empty()
+        && codecs
+            .split(',')
+            .all(|codec| matches!(codec.trim().split('.').next(), Some("wvtt" | "stpp")))
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn codec_whitelist_handles_profiles_and_rejects_unknown_formats() {
+        for codec in [
+            "wvtt",
+            "stpp",
+            "stpp.ttml.im1t",
+            "stpp.ttml.im1i",
+            "wvtt, stpp",
+        ] {
+            assert!(super::supports_codec(codec), "{codec}");
+        }
+        for codec in ["", " ", "wvtt,", "wvtt,unknown", "avc1.42E01E", "unknown"] {
+            assert!(!super::supports_codec(codec), "{codec}");
+        }
+    }
+}
