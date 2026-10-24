@@ -1,0 +1,30 @@
+Document {
+    nodes: [
+        Node {
+            parent: None,
+            kind: Paragraph,
+            start: 3.0,
+            end: 4.0,
+            text: None,
+        },
+        Node {
+            parent: Some(
+                0,
+            ),
+            kind: Span,
+            start: 3.0,
+            end: 4.0,
+            text: Some(
+                "kept",
+            ),
+        },
+    ],
+    diagnostics: [
+        Diagnostic {
+            line: Some(
+                3,
+            ),
+            message: "invalid cue timings",
+        },
+    ],
+}

@@ -1,0 +1,10 @@
+WEBVTT
+
+STYLE
+::cue { color: blue !important; color: red; font-weight: bold; font-weight: invalid; }
+::cue(.red) { color: lime; }
+::cue(v[voice="Alice"]) { font-style: italic; }
+::cue(.unsupported .selector) { future: discarded; }
+
+00:01.000 --> 00:03.000
+<v Alice><c.red>Hello</c> world</v>

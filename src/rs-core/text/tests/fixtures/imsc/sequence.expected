@@ -1,0 +1,41 @@
+Document {
+    nodes: [
+        Node {
+            parent: None,
+            kind: Paragraph,
+            start: 10.0,
+            end: 12.0,
+            text: None,
+        },
+        Node {
+            parent: Some(
+                0,
+            ),
+            kind: Span,
+            start: 10.0,
+            end: 12.0,
+            text: Some(
+                "A",
+            ),
+        },
+        Node {
+            parent: None,
+            kind: Paragraph,
+            start: 13.0,
+            end: 16.0,
+            text: None,
+        },
+        Node {
+            parent: Some(
+                2,
+            ),
+            kind: Span,
+            start: 13.0,
+            end: 16.0,
+            text: Some(
+                "B",
+            ),
+        },
+    ],
+    diagnostics: [],
+}

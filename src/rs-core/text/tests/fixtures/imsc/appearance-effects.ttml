@@ -1,0 +1,4 @@
+<tt xmlns="http://www.w3.org/ns/ttml" xmlns:tts="http://www.w3.org/ns/ttml#styling" tts:extent="640px 360px">
+  <head><styling><style xml:id="base" tts:color="white" tts:fontWeight="bold"/></styling><layout><region xml:id="bottom" tts:origin="10% 60%" tts:extent="80% 30%" tts:displayAlign="after" tts:fontSize="24px" tts:opacity="0.8"/></layout></head>
+  <body><p region="bottom" style="base" begin="1s" end="4s" tts:textDecoration="underline"><span tts:textDecoration="noUnderline" tts:textOutline="black 1px">Plain</span> <span tts:opacity="0.5" tts:fontStyle="italic">emphasis</span></p></body>
+</tt>
