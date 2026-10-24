@@ -37,6 +37,39 @@ async function expectPlayback(ctx, url) {
 }
 
 describe("Playlist compatibility", () => {
+  it.each(["", "\ufeff"])(
+    "rejects a text-only main playlist after probing WebVTT (BOM: %j)",
+    { timeout: TEST_TIMEOUT_MS },
+    async (bom) => {
+      const url = await ensureVodScenarioReady("fmp4-alt-audio");
+      const segmentUrl = new URL("text-only.vtt", url).href;
+      const ctx = await createPlayerHarness({
+        fetchRules: [
+          playlistRule(
+            url,
+            `#EXTM3U\n#EXT-X-TARGETDURATION:4\n#EXTINF:4,\n${segmentUrl}\n#EXT-X-ENDLIST\n`,
+          ),
+          playlistRule(
+            segmentUrl,
+            `${bom}WEBVTT\n\n00:00:00.000 --> 00:00:04.000\nHello\n`,
+          ),
+        ],
+      });
+      try {
+        const failed = waitForPlayerEvent(ctx.player, "error");
+        ctx.player.load(url);
+        const error = await failed;
+        expect(error.name).toBe("WaspContentCompatibilityError");
+        expect(error.message).toContain(
+          "Text-only main content is not supported",
+        );
+        expect(ctx.player.getPlayerState()).toBe("Error");
+      } finally {
+        ctx.dispose();
+      }
+    },
+  );
+
   it.each(["same-selector", "ordered", "fallback"])(
     "skips unused audio groups in initial preferences (%s)",
     { timeout: TEST_TIMEOUT_MS },

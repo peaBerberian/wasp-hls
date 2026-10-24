@@ -164,6 +164,8 @@ export interface ContentInfo {
   } | null;
 }
 
+// TODO: Move codec-support result caching to Rust for all backends, replacing this cache.
+// Pass asynchronous main-thread results explicitly to Rust instead of only asking it to retry.
 export const cachedCodecsSupport: Map<string, boolean> = new Map();
 export const playerInstance = new PlayerInstance();
 export const jsMemoryResources = new GenericStore<Uint8Array>();
