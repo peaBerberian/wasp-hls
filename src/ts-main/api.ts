@@ -277,7 +277,7 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
     this.__contentMetadata__ = null;
     this.__logLevelChangeListener__ = null;
     this.__destroyAbortController__ = new AbortController();
-    this.__config__ = { ...DEFAULT_CONFIG, ...(config ?? {}) };
+    this.__config__ = { ...DEFAULT_CONFIG, ...config };
 
     const onPause = () => {
       if (this.getPlayerState() === PlayerState.Loaded) {
@@ -1340,6 +1340,8 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
             );
           }
           break;
+        // TODO: Should related track, variant and lock updates arrive in one message,
+        // so all API state can be updated before the first event is emitted?
         case WorkerMessageType.TrackUpdate:
           if (
             this.__contentMetadata__ !== null &&

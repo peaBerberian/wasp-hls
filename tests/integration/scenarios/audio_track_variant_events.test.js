@@ -112,7 +112,7 @@ describe("Variant and audio-track event ordering", function () {
   );
 
   it.each(["fmp4-player-api", "fmp4-multivariant-no-codecs", "fmp4-alt-audio"])(
-    "announces lists, variant, then audio track at startup (%s)",
+    "announces lists, audio, subtitles, then variant at startup (%s)",
     { timeout: TEST_TIMEOUT_MS },
     async (scenario) => {
       const ctx = await createPlayerHarness({ fetchRules: [] });
@@ -121,13 +121,24 @@ describe("Variant and audio-track event ordering", function () {
         for (const name of [
           "variantListUpdate",
           "audioTrackListUpdate",
-          "variantUpdate",
+          "subtitleTrackListUpdate",
           "audioTrackUpdate",
+          "subtitleTrackUpdate",
+          "variantUpdate",
         ]) {
           ctx.player.addEventListener(name, () => events.push(name));
         }
         ctx.player.addEventListener("audioTrackUpdate", () => {
+          expect(ctx.player.getCurrentVariant()).toBeUndefined();
+          expect(ctx.player.getCurrentSubtitleTrack()).toBeUndefined();
+        });
+        ctx.player.addEventListener("subtitleTrackUpdate", () => {
+          expect(ctx.player.getCurrentVariant()).toBeUndefined();
+          expect(ctx.player.getCurrentSubtitleTrack()).toBeNull();
+        });
+        ctx.player.addEventListener("variantUpdate", () => {
           expect(ctx.player.getCurrentVariant()).toBeDefined();
+          expect(ctx.player.getCurrentSubtitleTrack()).toBeNull();
         });
         ctx.player.load(getVodScenarioUrl(scenario));
         await waitForLoadedState(
@@ -138,8 +149,10 @@ describe("Variant and audio-track event ordering", function () {
         expect(events).toEqual([
           "variantListUpdate",
           "audioTrackListUpdate",
-          "variantUpdate",
+          "subtitleTrackListUpdate",
           "audioTrackUpdate",
+          "subtitleTrackUpdate",
+          "variantUpdate",
         ]);
       } finally {
         ctx.dispose();

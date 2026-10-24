@@ -383,8 +383,8 @@ impl PlaylistStore {
         &mut self,
         media_info: ExternalMediaInfo,
         media_type: MediaType,
-    ) -> SelectionChanges {
-        let mut changes = SelectionChanges::default();
+    ) -> ExternalMediaInfoUpdate {
+        let mut changes = ExternalMediaInfoUpdate::default();
         let changed = match &mut self.playlist {
             TopLevelPlaylist::DirectMedia(playlist) => {
                 let changed = playlist.external_media_info() != Some(&media_info);
@@ -408,8 +408,6 @@ impl PlaylistStore {
                 if self.current_audio_id != audio_id {
                     self.current_audio_id = audio_id;
                     changes.changed_playlists.push(MediaType::Audio);
-                    changes.audio_track_change =
-                        TrackChange::Changed(audio_id.map(|_| DIRECT_MEDIA_AUDIO_TRACK_ID));
                 }
                 if self.current_video_id != video_id {
                     self.current_video_id = video_id;
@@ -547,24 +545,30 @@ impl PlaylistStore {
         if self.is_variant_locked && current_variant_id == variant_id {
             return LockVariantResponse::AlreadyLocked;
         }
-        let was_locked = self.is_variant_locked;
-        let mut changes = self.set_variant(variant_id);
+        let VariantUpdate {
+            changed_playlists,
+            tracks,
+            variant_changed,
+            locked_variant_change: _, // The successful lock is reported by VariantLocked.
+        } = self.set_variant(variant_id);
         self.is_variant_locked = true;
-        if !was_locked || changes.variant_changed {
-            changes.variant_lock_change = VariantLockChange::Locked(variant_id);
+        LockVariantResponse::VariantLocked {
+            changed_media_types: changed_playlists,
+            tracks,
+            variant_changed,
         }
-        LockVariantResponse::VariantLocked(changes)
     }
 
     /// Disable a variant lock, previously created through the `lock_variant` method, to
     /// let adaptive streaming choose the right one instead.
-    pub(crate) fn unlock_variant(&mut self) -> SelectionChanges {
-        let mut changes = SelectionChanges::default();
+    /// Return true if a lock was removed.
+    pub(crate) fn unlock_variant(&mut self) -> bool {
         if self.is_variant_locked {
             self.is_variant_locked = false;
-            changes.variant_lock_change = VariantLockChange::Unlocked;
+            true
+        } else {
+            false
         }
-        changes
     }
 
     /// Returns `true` if a variant is currently locked, preventing adaptive streaming
@@ -830,7 +834,7 @@ impl PlaylistStore {
     pub(crate) fn set_subtitle_track(
         &mut self,
         track_id: Option<u32>,
-    ) -> Result<SelectionChanges, TrackSelectionError> {
+    ) -> Result<SubtitleTrackUpdate, TrackSelectionError> {
         if track_id.is_some_and(|id| !self.subtitle_tracks().iter().any(|track| track.id() == id)) {
             return Err(TrackSelectionError::UnknownTrack);
         }
@@ -856,24 +860,19 @@ impl PlaylistStore {
                 return Err(TrackSelectionError::NoCompatibleVariant);
             }
         }
-        let mut changes = SelectionChanges::default();
-        if self.fixed_subtitle_track != track_id {
-            self.fixed_subtitle_track = track_id;
-            changes.fixed_subtitle_track_changed = true;
-        }
-        if self.subtitles_disabled {
-            self.subtitles_disabled = false;
-            changes.subtitles_disabled_changed = true;
-        }
+        let mut changes = SubtitleTrackUpdate::default();
+        self.fixed_subtitle_track = track_id;
+        self.subtitles_disabled = false;
         match self.resolve_subtitle_selection() {
             Ok(playlist_id) => {
-                self.update_text_playlist_id(playlist_id, &mut changes);
+                (changes.playlist_changed, changes.track_change) =
+                    self.update_text_playlist_id(playlist_id);
             }
             Err(IncompatibleTrack) => {
                 // Keep the selected playlist until the compatible variant is applied.
                 if self.is_variant_locked {
                     self.is_variant_locked = false;
-                    changes.variant_lock_change = VariantLockChange::Unlocked;
+                    changes.variant_lock_removed = true;
                 }
                 changes.needs_variant_selection = true;
             }
@@ -881,30 +880,32 @@ impl PlaylistStore {
         Ok(changes)
     }
 
-    pub(crate) fn disable_subtitle_track(&mut self) -> SelectionChanges {
-        let mut changes = SelectionChanges::default();
-        if !self.subtitles_disabled {
-            self.subtitles_disabled = true;
-            changes.subtitles_disabled_changed = true;
+    pub(crate) fn disable_subtitle_track(&mut self) -> SubtitleDisableUpdate {
+        self.subtitles_disabled = true;
+        let (playlist_changed, track_change) = self.update_text_playlist_id(None);
+        SubtitleDisableUpdate {
+            playlist_changed,
+            track_change,
         }
-        self.update_text_playlist_id(None, &mut changes);
-        changes
     }
 
+    /// Update the subtitle playlist and report whether its playlist ID and track ID changed.
     fn update_text_playlist_id(
         &mut self,
         playlist_id: Option<MediaPlaylistPermanentId>,
-        changes: &mut SelectionChanges,
-    ) {
-        if self.current_text_id != playlist_id {
-            let previous_track = self.current_subtitle_track_id();
-            self.current_text_id = playlist_id;
-            changes.changed_playlists.push(MediaType::Text);
-            let track = self.current_subtitle_track_id();
-            if previous_track != track {
-                changes.subtitle_track_change = TrackChange::Changed(track);
-            }
+    ) -> (bool, TrackChange) {
+        if self.current_text_id == playlist_id {
+            return (false, TrackChange::Unchanged);
         }
+        let previous_track = self.current_subtitle_track_id();
+        self.current_text_id = playlist_id;
+        let track = self.current_subtitle_track_id();
+        let track_change = if previous_track != track {
+            TrackChange::Changed(track)
+        } else {
+            TrackChange::Unchanged
+        };
+        (true, track_change)
     }
 
     /// Resolve the current subtitle choice without changing the selected playlist.
@@ -990,7 +991,7 @@ impl PlaylistStore {
     pub(crate) fn set_audio_track(
         &mut self,
         track_id: Option<u32>,
-    ) -> Result<SelectionChanges, TrackSelectionError> {
+    ) -> Result<AudioTrackUpdate, TrackSelectionError> {
         if let Some(id) = track_id {
             let exists = match &self.playlist {
                 TopLevelPlaylist::Multivariant(playlist) => {
@@ -1005,19 +1006,23 @@ impl PlaylistStore {
                 return Err(TrackSelectionError::UnknownTrack);
             }
         }
-        let mut changes = SelectionChanges::default();
+        let mut changes = AudioTrackUpdate::default();
         let previous_track = self.effective_audio_track_id();
         self.set_audio_track_inner(track_id, &mut changes)?;
         let track = self.effective_audio_track_id();
         if previous_track != track {
             // XXX TODO: Why wasn't it already the case if `self.effective_audio_track_id` changed?
-            changes.audio_track_change = TrackChange::Changed(track);
+            changes.tracks.audio = TrackChange::Changed(track);
         }
         if !changes.needs_variant_selection {
-            match self.resolve_subtitle_selection() {
-                Ok(playlist_id) => self.update_text_playlist_id(playlist_id, &mut changes),
-                Err(IncompatibleTrack) => self.update_text_playlist_id(None, &mut changes),
+            let (playlist_changed, track_change) = match self.resolve_subtitle_selection() {
+                Ok(playlist_id) => self.update_text_playlist_id(playlist_id),
+                Err(IncompatibleTrack) => self.update_text_playlist_id(None),
+            };
+            if playlist_changed {
+                changes.subtitle_playlist_changed = true;
             }
+            changes.tracks.subtitles = track_change;
         }
         Ok(changes)
     }
@@ -1025,7 +1030,7 @@ impl PlaylistStore {
     fn set_audio_track_inner(
         &mut self,
         track_id: Option<u32>,
-        changes: &mut SelectionChanges,
+        changes: &mut AudioTrackUpdate,
     ) -> Result<(), TrackSelectionError> {
         if let (TopLevelPlaylist::Multivariant(playlist), Some(track_id)) =
             (&self.playlist, track_id)
@@ -1047,10 +1052,7 @@ impl PlaylistStore {
             }
         }
 
-        if self.fixed_audio_track != track_id {
-            self.fixed_audio_track = track_id;
-            changes.fixed_audio_track_changed = true;
-        }
+        self.fixed_audio_track = track_id;
 
         if let Some(variant) = self.current_variant() {
             let resolved_track = match self.audio_track_id_for_variant(variant) {
@@ -1058,7 +1060,7 @@ impl PlaylistStore {
                 Err(IncompatibleTrack) => {
                     if self.is_variant_locked {
                         self.is_variant_locked = false;
-                        changes.variant_lock_change = VariantLockChange::Unlocked;
+                        changes.variant_lock_removed = true;
                     }
                     self.clear_variant_supports();
                     changes.needs_variant_selection = true;
@@ -1076,7 +1078,7 @@ impl PlaylistStore {
 
             if new_audio_id != self.current_audio_id {
                 self.current_audio_id = new_audio_id;
-                changes.changed_playlists.push(MediaType::Audio);
+                changes.audio_playlist_changed = true;
                 self.clear_variant_supports();
             }
         }
@@ -1085,13 +1087,17 @@ impl PlaylistStore {
 
     /// Apply a specific variant selection and return the media types whose selected playlist
     /// changed as a consequence.
-    pub(crate) fn set_variant(&mut self, variant_id: u32) -> SelectionChanges {
-        let mut changes = SelectionChanges::default();
+    pub(crate) fn set_variant(&mut self, variant_id: u32) -> VariantUpdate {
+        let mut changes = VariantUpdate::default();
         self.set_curr_variant_and_media_id(variant_id, &mut changes);
-        match self.resolve_subtitle_selection() {
-            Ok(playlist_id) => self.update_text_playlist_id(playlist_id, &mut changes),
-            Err(IncompatibleTrack) => self.update_text_playlist_id(None, &mut changes),
+        let (playlist_changed, track_change) = match self.resolve_subtitle_selection() {
+            Ok(playlist_id) => self.update_text_playlist_id(playlist_id),
+            Err(IncompatibleTrack) => self.update_text_playlist_id(None),
+        };
+        if playlist_changed {
+            changes.changed_playlists.push(MediaType::Text);
         }
+        changes.tracks.subtitles = track_change;
         changes
     }
 
@@ -1174,7 +1180,7 @@ impl PlaylistStore {
 
     /// Internally update the current variant chosen as well as its corresponding other media.
     /// XXX TODO: inline method?
-    fn set_curr_variant_and_media_id(&mut self, variant_id: u32, changes: &mut SelectionChanges) {
+    fn set_curr_variant_and_media_id(&mut self, variant_id: u32, changes: &mut VariantUpdate) {
         let playlist = match &self.playlist {
             TopLevelPlaylist::Multivariant(playlist) => playlist,
             TopLevelPlaylist::DirectMedia(_) => return,
@@ -1188,7 +1194,7 @@ impl PlaylistStore {
             changes.variant_changed = true;
             if self.is_variant_locked {
                 // XXX TODO: Do that mean a `set_variant` is stronger than a lock? Is that intended?
-                changes.variant_lock_change = VariantLockChange::Locked(variant_id);
+                changes.locked_variant_change = Some(variant_id);
             }
         }
         let (current_audio_id, current_video_id) = Self::normalize_current_media_ids(
@@ -1208,7 +1214,7 @@ impl PlaylistStore {
         }
         let track = self.effective_audio_track_id();
         if previous_track != track {
-            changes.audio_track_change = TrackChange::Changed(track);
+            changes.tracks.audio = TrackChange::Changed(track);
         }
         self.selected_media_support_resolved = false;
     }
@@ -1507,30 +1513,156 @@ pub(crate) enum TrackSelectionError {
     NoCompatibleVariant,
 }
 
-/// Effects performed by a selection operation.
+/// Selected audio and subtitle track changes.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) struct TrackChanges {
+    audio: TrackChange,
+    subtitles: TrackChange,
+}
+
+/// Changes made by set_audio_track().
 #[derive(Debug, Default, PartialEq, Eq)]
-pub(crate) struct SelectionChanges {
-    /// Media types whose selected playlist ID changed during this operation.
-    pub(crate) changed_playlists: Vec<MediaType>,
-    /// If `true`, the current variant ID changed.
-    pub(crate) variant_changed: bool,
-    /// Audio track change caused by this operation.
-    pub(crate) audio_track_change: TrackChange,
-    /// Subtitle track change caused by this operation.
-    pub(crate) subtitle_track_change: TrackChange,
-    /// Variant lock change caused by this operation.
-    pub(crate) variant_lock_change: VariantLockChange,
-    /// If `true`, the user switched from automatic selection to a specific audio track,
-    /// requested a different audio track, or returned to automatic selection.
-    pub(crate) fixed_audio_track_changed: bool,
-    /// If `true`, the user requested a different subtitle track,
-    /// or returned to automatic subtitle selection.
-    pub(crate) fixed_subtitle_track_changed: bool,
-    /// If `true`, subtitles were enabled or disabled.
-    pub(crate) subtitles_disabled_changed: bool,
-    /// If `true`, the track request was saved, but the current variant and selected
-    /// playlist IDs stayed the same. The requested track needs another variant to enable it.
-    pub(crate) needs_variant_selection: bool,
+pub(crate) struct AudioTrackUpdate {
+    /// The selected audio playlist ID changed.
+    audio_playlist_changed: bool,
+    /// The selected subtitle playlist ID changed.
+    subtitle_playlist_changed: bool,
+    /// Audio/text track change caused by this operation.
+    tracks: TrackChanges,
+    /// An existing variant lock was removed.
+    variant_lock_removed: bool,
+    /// The request was saved, but needs another variant before its playlist can be selected.
+    needs_variant_selection: bool,
+}
+
+/// Changes made by set_subtitle_track().
+#[derive(Debug, Default, PartialEq, Eq)]
+pub(crate) struct SubtitleTrackUpdate {
+    /// The selected subtitle playlist ID changed.
+    playlist_changed: bool,
+    /// Audio/text track change caused by this operation.
+    track_change: TrackChange,
+    /// An existing variant lock was removed.
+    variant_lock_removed: bool,
+    /// The request was saved, but needs another variant before its playlist can be selected.
+    needs_variant_selection: bool,
+}
+
+/// Changes made by disable_subtitle_track().
+#[derive(Debug, Default, PartialEq, Eq)]
+pub(crate) struct SubtitleDisableUpdate {
+    /// The selected subtitle playlist ID changed.
+    playlist_changed: bool,
+    /// Audio/text track change caused by this operation.
+    track_change: TrackChange,
+}
+
+/// Changes made by set_variant().
+#[derive(Debug, Default, PartialEq, Eq)]
+pub(crate) struct VariantUpdate {
+    /// Media types whose selected playlist ID changed.
+    changed_playlists: Vec<MediaType>,
+    /// Audio/text track change caused by this operation.
+    tracks: TrackChanges,
+    /// The current variant ID changed.
+    variant_changed: bool,
+    /// The new locked variant ID, if an existing lock changed.
+    locked_variant_change: Option<u32>,
+}
+
+/// Selection changes made when probe information identifies a direct playlist's media type.
+#[derive(Debug, Default, PartialEq, Eq)]
+pub(crate) struct ExternalMediaInfoUpdate {
+    /// Media types whose selected playlist ID changed.
+    changed_playlists: Vec<MediaType>,
+}
+
+impl TrackChanges {
+    pub(crate) fn new(audio: TrackChange, subtitles: TrackChange) -> Self {
+        Self { audio, subtitles }
+    }
+
+    pub(crate) fn audio(&self) -> TrackChange {
+        self.audio
+    }
+
+    pub(crate) fn subtitles(&self) -> TrackChange {
+        self.subtitles
+    }
+}
+
+impl AudioTrackUpdate {
+    pub(crate) fn audio_playlist_changed(&self) -> bool {
+        self.audio_playlist_changed
+    }
+
+    pub(crate) fn subtitle_playlist_changed(&self) -> bool {
+        self.subtitle_playlist_changed
+    }
+
+    pub(crate) fn tracks(&self) -> TrackChanges {
+        self.tracks
+    }
+
+    pub(crate) fn variant_lock_removed(&self) -> bool {
+        self.variant_lock_removed
+    }
+
+    pub(crate) fn needs_variant_selection(&self) -> bool {
+        self.needs_variant_selection
+    }
+}
+
+impl SubtitleTrackUpdate {
+    pub(crate) fn playlist_changed(&self) -> bool {
+        self.playlist_changed
+    }
+
+    pub(crate) fn track_change(&self) -> TrackChange {
+        self.track_change
+    }
+
+    pub(crate) fn variant_lock_removed(&self) -> bool {
+        self.variant_lock_removed
+    }
+
+    pub(crate) fn needs_variant_selection(&self) -> bool {
+        self.needs_variant_selection
+    }
+}
+
+impl SubtitleDisableUpdate {
+    pub(crate) fn playlist_changed(&self) -> bool {
+        self.playlist_changed
+    }
+
+    pub(crate) fn track_change(&self) -> TrackChange {
+        self.track_change
+    }
+}
+
+impl VariantUpdate {
+    pub(crate) fn tracks(&self) -> TrackChanges {
+        self.tracks
+    }
+
+    pub(crate) fn variant_changed(&self) -> bool {
+        self.variant_changed
+    }
+
+    pub(crate) fn locked_variant_change(&self) -> Option<u32> {
+        self.locked_variant_change
+    }
+
+    pub(crate) fn into_changed_playlists(self) -> Vec<MediaType> {
+        self.changed_playlists
+    }
+}
+
+impl ExternalMediaInfoUpdate {
+    pub(crate) fn into_changed_playlists(self) -> Vec<MediaType> {
+        self.changed_playlists
+    }
 }
 
 /// A logical track ID change, independent of changes to its backing playlist.
@@ -1543,18 +1675,6 @@ pub(crate) enum TrackChange {
     Changed(Option<u32>),
 }
 
-/// The lock change actually performed by an operation.
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-pub(crate) enum VariantLockChange {
-    /// The lock stayed unchanged, including when it was already unlocked.
-    #[default]
-    Unchanged,
-    /// The new locked variant ID. Also used when replacing one locked variant with another.
-    Locked(u32),
-    /// An existing variant lock was removed.
-    Unlocked,
-}
-
 /// Return value for the `lock_variant` API.
 pub(crate) enum LockVariantResponse {
     /// Error status for when no variant with the given id was found.
@@ -1562,7 +1682,12 @@ pub(crate) enum LockVariantResponse {
     /// The exact same lock was already there.
     AlreadyLocked,
     /// The variant has been locked alongside changes performed by this request.
-    VariantLocked(SelectionChanges),
+    VariantLocked {
+        // XXX TODO: Isn't it more changed_media_playlists?
+        changed_media_types: Vec<MediaType>,
+        tracks: TrackChanges,
+        variant_changed: bool,
+    },
 }
 
 use thiserror::Error;
@@ -1588,7 +1713,7 @@ pub(crate) enum PlaylistStoreError {
 mod tests {
     use super::{
         LockVariantResponse, MultivariantStartupStatus, PlaylistStore, PlaylistStoreError,
-        StartupStatus, TrackChange, TrackSelectionError, VariantLockChange,
+        StartupStatus, TrackChange, TrackSelectionError,
     };
     use crate::{
         adaptive::{AdaptiveQualitySelector, PlaybackConditions},
@@ -1877,7 +2002,7 @@ fr-video.m3u8
             .collect();
         assert!(matches!(
             store.lock_variant(variants[0]),
-            LockVariantResponse::VariantLocked(_)
+            LockVariantResponse::VariantLocked { .. }
         ));
         let sdh = store
             .subtitle_tracks()
@@ -2620,7 +2745,7 @@ high.m3u8
 
         assert!(matches!(
             store.lock_variant(high_id),
-            LockVariantResponse::VariantLocked(_)
+            LockVariantResponse::VariantLocked { .. }
         ));
         assert!(matches!(
             store.lock_variant(high_id),
@@ -2652,7 +2777,7 @@ high.m3u8
         store.set_variant(variants[1]);
         assert!(matches!(
             store.lock_variant(variants[1]),
-            LockVariantResponse::VariantLocked(_)
+            LockVariantResponse::VariantLocked { .. }
         ));
         for rejected in [u32::MAX, variants[0]] {
             assert!(matches!(
@@ -2679,33 +2804,30 @@ high.m3u8
             .id();
         let pending = store.set_subtitle_track(Some(sdh)).unwrap();
         assert!(pending.needs_variant_selection);
-        assert!(pending.fixed_subtitle_track_changed);
-        assert_eq!(pending.variant_lock_change, VariantLockChange::Unlocked);
-        assert!(pending.changed_playlists.is_empty());
+        assert_eq!(store.fixed_subtitle_track, Some(sdh));
+        assert!(!store.subtitles_disabled);
+        assert!(pending.variant_lock_removed);
+        assert!(!pending.playlist_changed);
         assert_eq!(store.current_text_id, selected); // The variant switch applies the new playlist.
         let applied = store.set_variant(variants[1]);
         assert!(applied.variant_changed);
         assert!(applied.changed_playlists.contains(&MediaType::Text));
-        assert_eq!(
-            applied.subtitle_track_change,
-            TrackChange::Changed(Some(sdh))
-        );
+        assert_eq!(applied.tracks.subtitles, TrackChange::Changed(Some(sdh)));
         assert_eq!(
             store.set_subtitle_track(Some(sdh)).unwrap(),
-            super::SelectionChanges::default()
+            super::SubtitleTrackUpdate::default()
         );
         let disabled = store.disable_subtitle_track();
-        assert!(disabled.subtitles_disabled_changed);
-        assert!(!disabled.fixed_subtitle_track_changed);
-        assert_eq!(disabled.changed_playlists, vec![MediaType::Text]);
-        assert_eq!(disabled.subtitle_track_change, TrackChange::Changed(None));
+        assert!(store.subtitles_disabled);
+        assert!(disabled.playlist_changed);
+        assert_eq!(disabled.track_change, TrackChange::Changed(None));
         assert_eq!(
             store.disable_subtitle_track(),
-            super::SelectionChanges::default()
+            super::SubtitleDisableUpdate::default()
         );
-        let enabled = store.set_subtitle_track(Some(sdh)).unwrap();
-        assert!(enabled.subtitles_disabled_changed);
-        assert!(!enabled.fixed_subtitle_track_changed);
+        store.set_subtitle_track(Some(sdh)).unwrap();
+        assert!(!store.subtitles_disabled);
+        assert_eq!(store.fixed_subtitle_track, Some(sdh));
     }
 
     #[test]
@@ -2715,9 +2837,8 @@ high.m3u8
         let changes = store.set_variant(other);
         assert!(changes.variant_changed);
         assert!(changes.changed_playlists.contains(&MediaType::Text));
-        assert_eq!(changes.subtitle_track_change, TrackChange::Unchanged);
-        assert_eq!(changes.audio_track_change, TrackChange::Unchanged);
-        assert!(!changes.fixed_subtitle_track_changed && !changes.subtitles_disabled_changed);
+        assert_eq!(changes.tracks.subtitles, TrackChange::Unchanged);
+        assert_eq!(changes.tracks.audio, TrackChange::Unchanged);
     }
 
     #[test]
@@ -2735,14 +2856,12 @@ high.m3u8
         let changes = store.set_external_media_info(info.clone(), MediaType::Audio);
         assert_eq!(changes.changed_playlists, vec![MediaType::Audio]);
         assert_eq!(
-            changes.audio_track_change,
-            TrackChange::Changed(Some(
-                crate::bindings::formatters::DIRECT_MEDIA_AUDIO_TRACK_ID
-            ))
+            store.effective_audio_track_id(),
+            Some(crate::bindings::formatters::DIRECT_MEDIA_AUDIO_TRACK_ID)
         );
         assert_eq!(
             store.set_external_media_info(info, MediaType::Audio),
-            super::SelectionChanges::default()
+            super::ExternalMediaInfoUpdate::default()
         );
         assert_eq!(
             store
@@ -2750,17 +2869,15 @@ high.m3u8
                     crate::bindings::formatters::DIRECT_MEDIA_AUDIO_TRACK_ID
                 ))
                 .unwrap()
-                .audio_track_change,
+                .tracks
+                .audio,
             TrackChange::Unchanged
         );
         let mut store = subtitle_store(true);
         let variant = store.current_variant_id().unwrap();
         store.lock_variant(variant);
-        assert_eq!(
-            store.unlock_variant().variant_lock_change,
-            VariantLockChange::Unlocked
-        );
-        assert_eq!(store.unlock_variant(), super::SelectionChanges::default());
+        assert!(store.unlock_variant());
+        assert!(!store.unlock_variant());
     }
 
     #[test]
@@ -2782,14 +2899,12 @@ video.m3u8
             .unwrap()
             .id();
         let changes = store.set_audio_track(Some(french)).unwrap();
-        assert_eq!(changes.changed_playlists, vec![MediaType::Text]);
-        assert!(changes.fixed_audio_track_changed);
+        assert!(!changes.audio_playlist_changed);
+        assert!(changes.subtitle_playlist_changed);
+        assert_eq!(store.fixed_audio_track, Some(french));
+        assert_eq!(changes.tracks.audio, TrackChange::Changed(Some(french)));
         assert_eq!(
-            changes.audio_track_change,
-            TrackChange::Changed(Some(french))
-        );
-        assert_eq!(
-            changes.subtitle_track_change,
+            changes.tracks.subtitles,
             TrackChange::Changed(Some(subtitle_id(&store, "Forced French")))
         );
         assert!(!changes.needs_variant_selection);
@@ -2821,20 +2936,27 @@ high.m3u8
             .id();
         store.set_variant(low_id);
 
-        let LockVariantResponse::VariantLocked(changes) = store.lock_variant(high_id) else {
+        let LockVariantResponse::VariantLocked {
+            changed_media_types: _,
+            tracks,
+            variant_changed: _,
+        } = store.lock_variant(high_id)
+        else {
             panic!("expected the high variant to be locked");
         };
-        assert_eq!(
-            changes.audio_track_change,
-            TrackChange::Changed(Some(french_id))
-        );
+        assert_eq!(tracks.audio, TrackChange::Changed(Some(french_id)));
 
         store.unlock_variant();
         store.set_audio_track(Some(french_id)).unwrap();
-        let LockVariantResponse::VariantLocked(changes) = store.lock_variant(high_id) else {
+        let LockVariantResponse::VariantLocked {
+            changed_media_types: _,
+            tracks,
+            variant_changed: _,
+        } = store.lock_variant(high_id)
+        else {
             panic!("expected the high variant to be locked");
         };
-        assert_eq!(changes.audio_track_change, TrackChange::Unchanged);
+        assert_eq!(tracks.audio, TrackChange::Unchanged);
     }
 
     #[test]
@@ -2857,10 +2979,15 @@ muxed.m3u8
         store.set_variant(separate_id);
         assert!(store.current_audio_track_id().is_some());
 
-        let LockVariantResponse::VariantLocked(changes) = store.lock_variant(muxed_id) else {
+        let LockVariantResponse::VariantLocked {
+            changed_media_types: _,
+            tracks,
+            variant_changed: _,
+        } = store.lock_variant(muxed_id)
+        else {
             panic!("expected the muxed variant to be locked");
         };
-        assert_eq!(changes.audio_track_change, TrackChange::Changed(None));
+        assert_eq!(tracks.audio, TrackChange::Changed(None));
     }
 
     #[test]
@@ -2879,7 +3006,7 @@ video.m3u8
         assert!(store.current_variant_id().is_none());
         assert!(matches!(
             store.set_audio_track(Some(english)),
-            Ok(ref changes) if !changes.needs_variant_selection && !changes.changed_playlists.contains(&MediaType::Audio)
+            Ok(ref changes) if !changes.needs_variant_selection && !changes.audio_playlist_changed
         ));
         assert!(matches!(
             store.set_audio_track(Some(u32::MAX - 1)),
@@ -2889,7 +3016,7 @@ video.m3u8
         assert!(store.current_variant_id().is_none());
         assert!(matches!(
             store.set_audio_track(None),
-            Ok(ref changes) if !changes.needs_variant_selection && !changes.changed_playlists.contains(&MediaType::Audio)
+            Ok(ref changes) if !changes.needs_variant_selection && !changes.audio_playlist_changed
         ));
         assert_eq!(store.fixed_audio_track_id(), None);
     }
@@ -2926,7 +3053,7 @@ high.m3u8
         let current_variant_id = store.current_variant_id().unwrap();
         assert!(matches!(
             store.lock_variant(current_variant_id),
-            LockVariantResponse::VariantLocked(_)
+            LockVariantResponse::VariantLocked { .. }
         ));
         let variant_ids: Vec<_> = store.available_variants().map(|v| v.id()).collect();
         for variant_id in variant_ids {
@@ -2990,13 +3117,13 @@ fr-video.m3u8
             store.set_variant_support(current, true);
             assert!(matches!(
                 store.lock_variant(current),
-                LockVariantResponse::VariantLocked(_)
+                LockVariantResponse::VariantLocked { .. }
             ));
             let previous_audio = store.current_audio_id;
             let previous_video = store.current_video_id;
             assert!(matches!(
                 store.set_audio_track(Some(requested)),
-                Ok(ref changes) if changes.needs_variant_selection && changes.variant_lock_change == VariantLockChange::Unlocked
+                Ok(ref changes) if changes.needs_variant_selection && changes.variant_lock_removed
             ));
             assert_eq!(store.current_variant_id(), Some(current));
             assert_eq!(store.current_audio_id, previous_audio);
@@ -3038,7 +3165,7 @@ video.m3u8
             .id();
         assert!(matches!(
             store.set_audio_track(Some(french)),
-            Ok(ref changes) if changes.changed_playlists.contains(&MediaType::Audio)
+            Ok(ref changes) if changes.audio_playlist_changed
         ));
         assert_eq!(store.current_audio_id, None);
         assert_eq!(store.current_variant_id(), Some(variant));
@@ -3058,7 +3185,7 @@ video.m3u8
         store.set_variant(variants[2]); // This variant has no subtitle group.
         assert!(matches!(
             store.lock_variant(variants[2]),
-            LockVariantResponse::VariantLocked(_)
+            LockVariantResponse::VariantLocked { .. }
         ));
 
         // Automatic selection can legitimately produce no subtitle playlist.
@@ -3149,7 +3276,7 @@ fr-high.m3u8
         let current_audio_id = *store.current_media_playlist_id(MediaType::Audio).unwrap();
         assert!(matches!(
             store.lock_variant(current_id),
-            LockVariantResponse::VariantLocked(_)
+            LockVariantResponse::VariantLocked { .. }
         ));
         let french_id = store
             .audio_tracks()
@@ -3170,7 +3297,7 @@ fr-high.m3u8
 
         assert!(matches!(
             store.set_audio_track(Some(french_id)),
-            Ok(ref changes) if changes.needs_variant_selection && changes.variant_lock_change == VariantLockChange::Unlocked
+            Ok(ref changes) if changes.needs_variant_selection && changes.variant_lock_removed
         ));
         assert_eq!(store.current_variant_id(), Some(current_id));
         assert_eq!(
@@ -3218,7 +3345,7 @@ fr-high.m3u8
         let unsupported_id = store.current_variant_id().unwrap();
         assert!(matches!(
             store.lock_variant(unsupported_id),
-            LockVariantResponse::VariantLocked(_)
+            LockVariantResponse::VariantLocked { .. }
         ));
         let ids: Vec<u32> = store
             .available_variants()
@@ -3450,7 +3577,7 @@ seg.ts
 
         assert!(matches!(
             store.set_audio_track(Some(french_track_id)),
-            Ok(ref changes) if changes.changed_playlists.contains(&MediaType::Audio)
+            Ok(ref changes) if changes.audio_playlist_changed
         ));
         let french_playlist_id = *store.current_media_playlist_id(MediaType::Audio).unwrap();
         assert_ne!(french_playlist_id, english_playlist_id);
@@ -3467,7 +3594,7 @@ seg.ts
 
         assert!(matches!(
             store.set_audio_track(Some(english_track_id)),
-            Ok(ref changes) if changes.changed_playlists.contains(&MediaType::Audio)
+            Ok(ref changes) if changes.audio_playlist_changed
         ));
         assert_eq!(
             *store.current_media_playlist_id(MediaType::Audio).unwrap(),
@@ -3531,7 +3658,7 @@ seg.ts
 
         assert!(matches!(
             store.set_audio_track(Some(french_track_id)),
-            Ok(ref changes) if changes.changed_playlists.contains(&MediaType::Audio)
+            Ok(ref changes) if changes.audio_playlist_changed
         ));
         let french_playlist_id = *store.current_media_playlist_id(MediaType::Audio).unwrap();
         assert_ne!(french_playlist_id, english_playlist_id);
@@ -3548,7 +3675,7 @@ seg.ts
 
         assert!(matches!(
             store.set_audio_track(Some(english_track_id)),
-            Ok(ref changes) if changes.changed_playlists.contains(&MediaType::Audio)
+            Ok(ref changes) if changes.audio_playlist_changed
         ));
         assert_eq!(
             *store.current_media_playlist_id(MediaType::Audio).unwrap(),

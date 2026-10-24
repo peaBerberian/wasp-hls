@@ -289,7 +289,7 @@ describe("Playlist compatibility", () => {
         const invalidSelection = waitForPlayerEvent(
           ctx.player,
           "warning",
-          () => true,
+          (warning) => warning.name === "WaspTrackSelectionError",
         );
         expect(() => ctx.player.setSubtitleTrack(0x7ffffffe)).not.toThrow();
         const warning = await invalidSelection;

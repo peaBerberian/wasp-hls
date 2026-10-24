@@ -8,12 +8,12 @@ use crate::{
             format_direct_media_variants_info_for_js, format_source_buffer_creation_err_for_js,
             format_variants_info_for_js, DIRECT_MEDIA_AUDIO_TRACK_ID,
         },
-        jsAnnounceFetchedContent, jsAnnounceTrackUpdate, jsSendOtherError,
+        jsAnnounceFetchedContent, jsAnnounceVariantLockStatusChange, jsSendOtherError,
         jsSendSegmentParsingError, jsSendSourceBufferCreationError, jsStartObservingPlayback,
         MediaSourceReadyState, MediaType, OtherErrorCode, PlaylistType,
     },
     media_element::SourceBufferCreationError,
-    playlist_store::{ProbeSegmentContext, StartupStatus},
+    playlist_store::{ProbeSegmentContext, StartupStatus, TrackChange, TrackChanges},
     requester::RequestLaneTag,
 };
 use crate::{parser::ByteRange, utils::url::Url};
@@ -81,13 +81,13 @@ fn ensure_ready_playlists(dispatcher: &mut Dispatcher, wanted_position: f64) -> 
         StartupStatus::VariantSelectionNeeded => {
             // Support recovery must be allowed to replace an unsupported locked variant.
             // Otherwise the lock makes selection return that same variant recursively.
-            if playlist_store.is_variant_locked() {
-                let changes = playlist_store.unlock_variant();
-                dispatcher.announce_variant_lock_change(changes.variant_lock_change);
-            }
+            let variant_lock_removed = playlist_store.unlock_variant();
             let Some(selection) = dispatcher.compute_optimal_variant() else {
                 // NOTE: Should normally never happen, we should have ensured this was not possible
                 // before
+                if variant_lock_removed {
+                    jsAnnounceVariantLockStatusChange(None);
+                }
                 jsSendOtherError(
                     true,
                     OtherErrorCode::Unknown,
@@ -101,12 +101,16 @@ fn ensure_ready_playlists(dispatcher: &mut Dispatcher, wanted_position: f64) -> 
             };
             let variant_id = selection.safe_variant_id;
             let changes = playlist_store.set_variant(variant_id);
-            // XXX TODO: We may also want to call other change anouncement API here?
-            // I know currently it would serve no role but dispatcher does not know that...
-            // Or else the return type chosen in PlaylistStore is completely wrong
+            let tracks = changes.tracks();
+            let locked_variant_change = changes.locked_variant_change();
+            let changed_media_types = changes.into_changed_playlists();
+            dispatcher.announce_track_changes(&[tracks]);
             dispatcher.announce_current_variant();
-            dispatcher.announce_track_changes(&changes);
-            let changed_media_types = changes.changed_playlists;
+            if let Some(id) = locked_variant_change {
+                jsAnnounceVariantLockStatusChange(Some(id));
+            } else if variant_lock_removed {
+                jsAnnounceVariantLockStatusChange(None);
+            }
             if changed_media_types.contains(&MediaType::Text) {
                 dispatcher.reset_subtitle_playlist();
             }
@@ -218,21 +222,23 @@ fn advance_awaiting_playlist_info_state(dispatcher: &mut Dispatcher) {
         // XXX TODO: Why completely different from audio here?
         let subtitle_tracks_info =
             crate::bindings::formatters::format_subtitle_tracks_for_js(store.subtitle_tracks());
+        let curr_subtitle_track = store.current_subtitle_track_id();
         jsAnnounceFetchedContent(
             playlist_kind,
             variants_info,
             audio_tracks_info,
             subtitle_tracks_info,
         );
+        dispatcher.announce_track_changes(&[TrackChanges::new(
+            TrackChange::Changed(curr_audio_track),
+            TrackChange::Changed(curr_subtitle_track),
+        )]);
         dispatcher.announce_current_variant();
-        jsAnnounceTrackUpdate(MediaType::Audio, curr_audio_track);
 
         dispatcher.ready_state = PlayerReadyState::AwaitingPlaylistInfo {
             starting_position,
             lifecycle_announced: true,
         };
-        // XXX TODO: badly placed?
-        dispatcher.announce_current_subtitle_track();
     }
 
     if !ensure_ready_playlists(dispatcher, wanted_position) {
