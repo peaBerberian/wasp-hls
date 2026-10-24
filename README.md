@@ -258,6 +258,8 @@ Media demuxing:
 - [x] Media Segment Format: MPEG-2 Transport Streams
 - [x] Media Segment Format: Fragmented MPEG-4
 - [x] Media Segment Format: Packed Audio AAC with ADTS framing
+- [x] Media Segment Format: WebVTT
+- [x] Media Segment Format: IMSC Subtitles
 - [x] Transmux MPEG-2 Transport Streams to fmp4 on platforms not supporting the
       former like mostChrome or Firefox (through JS for now, Rust implementation
       pending).
@@ -269,10 +271,6 @@ Media demuxing:
 - [ ] Media Segment Format: Packed Audio AC-3
       _Priority: low_
 - [ ] Media Segment Format: Packed Audio EAC-3
-      _Priority: low_
-- [x] Media Segment Format: WebVTT
-      _Priority: low_
-- [x] Media Segment Format: IMSC Subtitles
       _Priority: low_
 
 MSE API and buffer handling:
@@ -298,16 +296,17 @@ MSE API and buffer handling:
 Tracks:
 
 - [x] Provide API to set an audio track (and track preferences)
+- [x] Provide API to set a subtitles track (and track preferences)
+- [x] Support "forced" subtitles, following audio track selection by default
 - [ ] Provide API to set a video track
       _Priority: low_
-- [ ] Allow text track selection and support at least one text track format
-      (TTML IMSC1 or webVTT) - through a JS library first?
+- [ ] Support in-stream closed captions
       _Priority: low_
 
 Multi-platform work:
 
 - [x] Web target (JS lib), relying on WebAssembly, MSE and HTML5 media.
-- [ ] Native target (Rust library), probably relying on a `gstreamer` back-end.
+- [ ] Native target (Rust crate), probably relying on a `gstreamer` back-end.
       _Priority: average_
 - [ ] Android target (AAR), probably relying on `MediaCodec` API through `NDK`.
       _Priority: low_
@@ -320,8 +319,12 @@ Supplementary nice-to-have features:
       _Priority: low_
 - [ ] Content Steering handling.
       _Priority: low_
+- [ ] Interstitials.
+      _Priority: low_
+- [ ] CMCD.
+      _Priority: low_
 - [ ] Support content decryption.
-      _Priority: very low_
+      _Priority: low_
 
 Playlist tags specifically considered (unchecked ones are mainly just ignored,
 most of them are not needed for playback):
