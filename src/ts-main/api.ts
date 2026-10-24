@@ -1353,15 +1353,7 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
                 this.getCurrentSubtitleTrack() ?? null,
               );
             } else if (data.value.mediaType === MediaType.Audio) {
-              const { currentAudioTrack, audioTracks } =
-                this.__contentMetadata__;
-              const announcedAudioTrack =
-                currentAudioTrack === undefined
-                  ? undefined
-                  : audioTracks.find(
-                      (track) => track.id === currentAudioTrack.id,
-                    );
-              this.trigger("audioTrackUpdate", announcedAudioTrack);
+              this.trigger("audioTrackUpdate", this.getCurrentAudioTrack());
             }
           }
           break;

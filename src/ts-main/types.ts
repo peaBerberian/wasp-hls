@@ -153,13 +153,14 @@ export interface ContentMetadata {
   currentSubtitleTrack: { id: number } | null | undefined;
 
   /**
-   * Information on the currently loaded audio track.
-   * `undefined` if unknown or if it has no audio track.
+   * Current audio track ID.
+   * `undefined` before the first announcement; `null` when no track is selected.
    */
   currentAudioTrack:
     | {
         id: number;
       }
+    | null
     | undefined;
 
   /**
