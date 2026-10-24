@@ -1206,6 +1206,16 @@ export function inspectSegment(resourceId: ResourceId): {
 function inspectProbeSegment(
   segment: Uint8Array,
 ): InspectSegmentValue | undefined {
+  // A UTF-8 WebVTT file may begin with a byte order mark (BOM).
+  const innerTextStart =
+    segment[0] === 0xef && segment[1] === 0xbb && segment[2] === 0xbf ? 3 : 0;
+  const header = cachedTextDecoder.decode(
+    segment.subarray(innerTextStart, innerTextStart + 7),
+  );
+  if (/^WEBVTT(?:[\t \r\n]|$)/.test(header)) {
+    return { mediaType: MediaType.Text, mimeType: "text/vtt", codec: "wvtt" };
+  }
+  // MP4 WebVTT and IMSC/TTML are identified from their initialization sample entries.
   const codecs = getIsoBmffCodecs(segment);
   if (codecs.length > 0) {
     const mediaType = inferMediaTypeFromCodecs(codecs);

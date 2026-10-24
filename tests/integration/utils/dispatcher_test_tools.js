@@ -21,6 +21,7 @@ export async function createDispatcher({
   const variantLockUpdates = [];
   const rebufferingEvents = [];
   const errors = [];
+  const supportChecks = [];
   const resources = new Map();
   let nextResource = 1;
   let nextBuffer = 1;
@@ -53,7 +54,10 @@ export async function createDispatcher({
           timescale: 1,
         },
       }),
-      isTypeSupported: (_type, codec) => codec !== unsupportedCodec,
+      isTypeSupported: (type, codec) => {
+        supportChecks.push({ type, codec });
+        return codec !== unsupportedCodec;
+      },
       inspectSegment: () => ({
         value: {
           codec: unsupportedCodec ?? "avc1.42E01E",
@@ -145,5 +149,6 @@ export async function createDispatcher({
     variantLockUpdates,
     rebufferingEvents,
     errors,
+    supportChecks,
   };
 }

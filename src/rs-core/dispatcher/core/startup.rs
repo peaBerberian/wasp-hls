@@ -183,22 +183,19 @@ fn advance_awaiting_playlist_info_state(dispatcher: &mut Dispatcher) {
             //
             // Because one of the rules of those bindings is to copy all pointed data
             // synchronously on call, we should not encounter any issue.
-            let (variants_info, audio_tracks_info) = if playlist_store.playlist_kind()
-                == PlaylistType::MediaPlaylist
-            {
-                let has_audio_track = playlist_store.has_distinct_media_type(MediaType::Audio);
-                (
-                    unsafe { format_direct_media_variants_info_for_js() },
-                    format_direct_media_audio_tracks_for_js(has_audio_track),
-                )
-            } else {
-                (
-                    unsafe {
-                        format_variants_info_for_js(playlist_store.available_variants().as_slice())
-                    },
-                    format_audio_tracks_for_js(playlist_store.audio_tracks()),
-                )
-            };
+            let (variants_info, audio_tracks_info) =
+                if playlist_store.playlist_kind() == PlaylistType::MediaPlaylist {
+                    let has_audio_track = playlist_store.has_distinct_media_type(MediaType::Audio);
+                    (
+                        unsafe { format_direct_media_variants_info_for_js() },
+                        format_direct_media_audio_tracks_for_js(has_audio_track),
+                    )
+                } else {
+                    (
+                        unsafe { format_variants_info_for_js(playlist_store.available_variants()) },
+                        format_audio_tracks_for_js(playlist_store.audio_tracks()),
+                    )
+                };
             let fixed_audio_track = playlist_store.fixed_audio_track_id();
             let curr_audio_track = if let Some(fixed) = fixed_audio_track {
                 Some(fixed)

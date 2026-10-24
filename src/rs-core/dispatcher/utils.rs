@@ -25,6 +25,24 @@ pub(super) fn has_playlist_store_media_type(
     }
 }
 
+/// Estimated playback start: the latest beginning among selected, loaded audio/video playlists.
+pub(super) fn estimated_playback_minimum_position(playlist_store: &PlaylistStore) -> Option<f64> {
+    playlist_store
+        .current_media_playlists()
+        .filter(|(media_type, _)| matches!(media_type, MediaType::Audio | MediaType::Video))
+        .filter_map(|(_, playlist)| playlist.beginning())
+        .reduce(f64::max)
+}
+
+/// Estimated playback end: the earliest ending among selected, loaded audio/video playlists.
+pub(super) fn estimated_playback_maximum_position(playlist_store: &PlaylistStore) -> Option<f64> {
+    playlist_store
+        .current_media_playlists()
+        .filter(|(media_type, _)| matches!(media_type, MediaType::Audio | MediaType::Video))
+        .filter_map(|(_, playlist)| playlist.ending())
+        .reduce(f64::min)
+}
+
 /// Returns the expected position at which we want to start playback, in seconds, according to
 /// both configuration and playlist metadata.
 pub(super) fn get_initial_position(
@@ -35,13 +53,10 @@ pub(super) fn get_initial_position(
         match starting_pos.start_type {
             StartingPositionType::Absolute => starting_pos.position,
             StartingPositionType::FromBeginning => {
-                playlist_store
-                    .current_estimated_minimum_position()
-                    .unwrap_or(0.)
+                estimated_playback_minimum_position(playlist_store).unwrap_or(0.)
                     + starting_pos.position
             }
-            StartingPositionType::FromEnd => playlist_store
-                .current_estimated_maximum_position()
+            StartingPositionType::FromEnd => estimated_playback_maximum_position(playlist_store)
                 .map(|max| max - starting_pos.position)
                 .unwrap_or(playlist_store.expected_start_time()),
         }
@@ -121,10 +136,12 @@ pub(super) fn handle_playlist_store_error(err: PlaylistStoreError) {
             None,
             &err.to_string(),
         ),
-        PlaylistStoreError::UnsupportedStartupStream => jsSendContentCompatibilityError(
-            true,
-            ContentCompatibilityErrorCode::NoSupportedVariant,
-            &err.to_string(),
-        ),
+        PlaylistStoreError::UnsupportedStartupStream | PlaylistStoreError::TextOnlyMainContent => {
+            jsSendContentCompatibilityError(
+                true,
+                ContentCompatibilityErrorCode::NoSupportedVariant,
+                &err.to_string(),
+            )
+        }
     }
 }

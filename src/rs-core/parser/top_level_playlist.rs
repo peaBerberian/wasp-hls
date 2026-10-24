@@ -5,7 +5,10 @@ use super::{
         MediaPlaylistUrlLocation, MultivariantPlaylist, MultivariantPlaylistParsingError,
     },
 };
-use crate::utils::{logger::*, url::Url};
+use crate::{
+    bindings::MediaType,
+    utils::{logger::*, url::Url},
+};
 use std::{fmt, io};
 
 pub(crate) enum TopLevelPlaylist {
@@ -24,10 +27,10 @@ pub(crate) struct DirectMediaPlaylist {
     playlist: MediaPlaylist,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct ExternalMediaInfo {
     pub(crate) mime_type: String,
-    pub(crate) media_type: crate::bindings::MediaType,
+    pub(crate) media_type: MediaType,
     pub(crate) codec: String,
 }
 
