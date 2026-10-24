@@ -8,10 +8,13 @@ pub(crate) const DIRECT_MEDIA_VARIANT_ID: u32 = 0;
 pub(crate) const DIRECT_MEDIA_AUDIO_TRACK_ID: u32 = 0;
 static DIRECT_MEDIA_TRACK_NAME: &str = "main";
 
-pub(crate) unsafe fn format_variants_info_for_js(variants: &[&VariantStream]) -> Vec<u32> {
-    let mut ret: Vec<u32> = vec![];
-    ret.push(variants.len() as u32);
-    variants.iter().for_each(|v| {
+pub(crate) unsafe fn format_variants_info_for_js<'a>(
+    variants: impl Iterator<Item = &'a VariantStream>,
+) -> Vec<u32> {
+    let mut ret: Vec<u32> = vec![0]; // Fill the variant count after consuming the iterator.
+    let mut variant_count = 0;
+    for v in variants {
+        variant_count += 1;
         ret.push(v.id());
         let resolution = v.resolution().unwrap_or(&NULL_RESOLUTION);
         ret.push(resolution.height());
@@ -25,7 +28,8 @@ pub(crate) unsafe fn format_variants_info_for_js(variants: &[&VariantStream]) ->
         };
         ret.push(video_range.len() as u32);
         ret.push(video_range.as_ptr() as u32);
-    });
+    }
+    ret[0] = variant_count;
     ret
 }
 
