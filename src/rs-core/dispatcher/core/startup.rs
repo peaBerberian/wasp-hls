@@ -8,9 +8,9 @@ use crate::{
             format_direct_media_variants_info_for_js, format_source_buffer_creation_err_for_js,
             format_variants_info_for_js, DIRECT_MEDIA_AUDIO_TRACK_ID,
         },
-        jsAnnounceFetchedContent, jsAnnounceTrackUpdate, jsAnnounceVariantLockStatusChange,
-        jsSendOtherError, jsSendSegmentParsingError, jsSendSourceBufferCreationError,
-        jsStartObservingPlayback, MediaSourceReadyState, MediaType, OtherErrorCode, PlaylistType,
+        jsAnnounceFetchedContent, jsAnnounceTrackUpdate, jsSendOtherError,
+        jsSendSegmentParsingError, jsSendSourceBufferCreationError, jsStartObservingPlayback,
+        MediaSourceReadyState, MediaType, OtherErrorCode, PlaylistType,
     },
     media_element::SourceBufferCreationError,
     playlist_store::{ProbeSegmentContext, StartupStatus},
@@ -82,8 +82,8 @@ fn ensure_ready_playlists(dispatcher: &mut Dispatcher, wanted_position: f64) -> 
             // Support recovery must be allowed to replace an unsupported locked variant.
             // Otherwise the lock makes selection return that same variant recursively.
             if playlist_store.is_variant_locked() {
-                playlist_store.unlock_variant();
-                jsAnnounceVariantLockStatusChange(None);
+                let changes = playlist_store.unlock_variant();
+                dispatcher.announce_variant_lock_change(changes.variant_lock_change);
             }
             let Some(selection) = dispatcher.compute_optimal_variant() else {
                 // NOTE: Should normally never happen, we should have ensured this was not possible
@@ -100,18 +100,14 @@ fn ensure_ready_playlists(dispatcher: &mut Dispatcher, wanted_position: f64) -> 
                 return false;
             };
             let variant_id = selection.safe_variant_id;
-            // Probe the safe variant before normal segment selection can run.
-            let previous_audio_track = playlist_store.current_audio_track_id();
-            let changed_media_types = playlist_store.set_variant(variant_id);
-            let audio_track_changed =
-                previous_audio_track != playlist_store.current_audio_track_id();
+            let changes = playlist_store.set_variant(variant_id);
+            // XXX TODO: We may also want to call other change anouncement API here?
+            // I know currently it would serve no role but dispatcher does not know that...
+            // Or else the return type chosen in PlaylistStore is completely wrong
             dispatcher.announce_current_variant();
-            if audio_track_changed {
-                dispatcher.announce_current_audio_track();
-            }
-            // XXX TODO: Why not done the same way as audio here?
+            dispatcher.announce_track_changes(&changes);
+            let changed_media_types = changes.changed_playlists;
             if changed_media_types.contains(&MediaType::Text) {
-                dispatcher.announce_current_subtitle_track();
                 dispatcher.reset_subtitle_playlist();
             }
             for media_type in changed_media_types {

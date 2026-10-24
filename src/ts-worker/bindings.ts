@@ -1207,12 +1207,21 @@ function inspectProbeSegment(
   segment: Uint8Array,
 ): InspectSegmentValue | undefined {
   // A UTF-8 WebVTT file may begin with a byte order mark (BOM).
-  const innerTextStart =
+  const headerStart =
     segment[0] === 0xef && segment[1] === 0xbb && segment[2] === 0xbf ? 3 : 0;
-  const header = cachedTextDecoder.decode(
-    segment.subarray(innerTextStart, innerTextStart + 7),
-  );
-  if (/^WEBVTT(?:[\t \r\n]|$)/.test(header)) {
+  if (
+    segment[headerStart] === 0x57 && // W
+    segment[headerStart + 1] === 0x45 && // E
+    segment[headerStart + 2] === 0x42 && // B
+    segment[headerStart + 3] === 0x56 && // V
+    segment[headerStart + 4] === 0x54 && // T
+    segment[headerStart + 5] === 0x54 && // T
+    (segment[headerStart + 6] === undefined ||
+      segment[headerStart + 6] === 0x09 || // Tab
+      segment[headerStart + 6] === 0x20 || // Space
+      segment[headerStart + 6] === 0x0d || // CR
+      segment[headerStart + 6] === 0x0a) // LF
+  ) {
     return { mediaType: MediaType.Text, mimeType: "text/vtt", codec: "wvtt" };
   }
   // MP4 WebVTT and IMSC/TTML are identified from their initialization sample entries.

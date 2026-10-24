@@ -19,8 +19,9 @@ use crate::{
     media_element::{SegmentPushMetadata, SegmentQualityContext},
     parser::{ExternalMediaInfo, PlaylistRefreshInfo, SegmentIdentity},
     playlist_store::{
-        AudioTrackChange, IncompatibleTrack, LockVariantResponse, MediaPlaylistPermanentId,
-        PlaylistStore, ProbeSegmentMetadata, SetAudioTrackResponse, SubtitleTrackSelectionError,
+        IncompatibleTrack, LockVariantResponse, MediaPlaylistPermanentId, PlaylistStore,
+        ProbeSegmentMetadata, SelectionChanges, TrackChange, TrackSelectionError,
+        VariantLockChange,
     },
     requester::{
         FinishedRequestType, PlaylistFileType, PlaylistRequestInfo, RetryResult, SegmentRequestInfo,
@@ -78,19 +79,17 @@ impl Dispatcher {
                         &format!("Wanted locked variant \"{variant_id}\" not found"),
                     );
                 }
-                LockVariantResponse::VariantLocked {
-                    changed_media_types,
-                    audio_track_change,
-                } => {
-                    if let AudioTrackChange::Changed(track_id) = audio_track_change {
-                        jsAnnounceTrackUpdate(MediaType::Audio, track_id);
+                LockVariantResponse::VariantLocked(changes) => {
+                    // XXX TODO: needs_variant_selection does not seem handled
+                    // here.
+                    // I know currently it would serve no role but dispatcher does not know that...
+                    // Or else the return type chosen in PlaylistStore is completely wrong
+                    self.announce_track_changes(&changes);
+                    if changes.variant_changed {
+                        self.announce_current_variant();
                     }
-
-                    if changed_media_types.contains(&MediaType::Text) {
-                        self.announce_current_subtitle_track();
-                    }
-                    self.announce_current_variant();
-                    jsAnnounceVariantLockStatusChange(Some(variant_id));
+                    self.announce_variant_lock_change(changes.variant_lock_change);
+                    let changed_media_types = changes.changed_playlists;
                     if changed_media_types.contains(&MediaType::Text) {
                         self.reset_subtitle_playlist();
                     }
@@ -132,11 +131,11 @@ impl Dispatcher {
     /// Remove an HLS variant previously put in place through `lock_variant_core`.
     pub(super) fn unlock_variant_core(&mut self) {
         if let Some(pl_store) = self.playlist_store.as_mut() {
-            let was_locked = pl_store.is_variant_locked();
-            pl_store.unlock_variant();
-            if was_locked {
-                jsAnnounceVariantLockStatusChange(None);
-            }
+            let changes = pl_store.unlock_variant();
+            // XXX TODO: We may also want to call other change anouncement API here?
+            // I know currently it would serve no role but dispatcher does not know that...
+            // Or else the return type chosen in PlaylistStore is completely wrong
+            self.announce_variant_lock_change(changes.variant_lock_change);
             self.check_requested_segments_still_needed();
             self.check_segments_to_request();
         }
@@ -169,89 +168,94 @@ impl Dispatcher {
     }
 
     /// Set an audio track whose `id` is given in argument.
+    /// XXX TODO: That method changes is impossible to review manually.
+    /// Ensure **NOTHING** changed in terms of behavior here
     pub(super) fn set_audio_track_core(&mut self, track_id: Option<u32>) {
         let Some(pl_store) = self.playlist_store.as_mut() else {
             return;
         };
-
-        // Through audio track changes ww may also change the subtitle tracks (e.g. due to variant
-        // constraints). Just keep in mind what the initial track was.
-        let previous_text_id = pl_store.current_media_playlist_id(MediaType::Text).copied();
-        match pl_store.set_audio_track(track_id) {
-            SetAudioTrackResponse::UnknownTrack => {
+        let changes = match pl_store.set_audio_track(track_id) {
+            Ok(changes) => changes,
+            Err(reason) => {
                 if let Some(track_id) = track_id {
-                    jsSendTrackSelectionError(
-                        TrackSelectionErrorCode::UnknownTrack,
-                        MediaType::Audio,
-                        track_id,
-                        "Unable to select the audio track: unknown track ID",
-                    );
+                    let (code, message) = match reason {
+                        TrackSelectionError::UnknownTrack => (
+                            TrackSelectionErrorCode::UnknownTrack,
+                            "Unable to select the audio track: unknown track ID",
+                        ),
+                        TrackSelectionError::NoCompatibleVariant => (
+                            TrackSelectionErrorCode::NoCompatibleVariant,
+                            "Unable to select the audio track: no compatible variant",
+                        ),
+                    };
+                    jsSendTrackSelectionError(code, MediaType::Audio, track_id, message);
                 }
+                return;
             }
-            SetAudioTrackResponse::NoCompatibleVariant => {
-                if let Some(track_id) = track_id {
-                    jsSendTrackSelectionError(
-                        TrackSelectionErrorCode::NoCompatibleVariant,
-                        MediaType::Audio,
-                        track_id,
-                        "Unable to select the audio track: no compatible variant",
-                    );
-                }
+        };
+        if changes.needs_variant_selection || changes.changed_playlists.contains(&MediaType::Audio)
+        {
+            // Preserve the existing choice of a final variant before requesting playlists.
+            let variant_changes = self
+                .compute_optimal_variant()
+                .and_then(|selection| {
+                    self.playlist_store
+                        .as_mut()
+                        .map(|store| store.set_variant(selection.safe_variant_id))
+                })
+                .unwrap_or_default();
+            self.announce_final_track_changes(&changes, &variant_changes);
+            self.announce_current_variant();
+            self.announce_variant_lock_change(changes.variant_lock_change);
+            let mut changed_media_types = variant_changes.changed_playlists;
+            // An explicit audio switch still flushes the old audio buffer.
+            if !changed_media_types.contains(&MediaType::Audio) {
+                changed_media_types.push(MediaType::Audio);
             }
+            let text_changed = changes.changed_playlists.contains(&MediaType::Text)
+                || changed_media_types.contains(&MediaType::Text);
+            if text_changed {
+                self.reset_subtitle_playlist();
+            }
+            self.reset_on_selected_media_playlists(&changed_media_types);
+        } else {
+            self.announce_track_changes(&changes);
+            if changes.changed_playlists.contains(&MediaType::Text) {
+                self.reset_subtitle_playlist();
+            }
+            self.check_requested_segments_still_needed();
+            self.check_segments_to_request();
+        }
+    }
 
-            update @ (SetAudioTrackResponse::VariantSelectionNeeded { .. }
-            | SetAudioTrackResponse::AudioMediaUpdate) => {
-                let variant_lock_removed = matches!(
-                    update,
-                    SetAudioTrackResponse::VariantSelectionNeeded {
-                        variant_lock_removed: true,
-                    }
-                );
-                // Choose the final compatible variant before requesting the new track's playlist.
-                // The old track's buffer should not justify an additive-only choice here.
-                let mut changed_media_types = self
-                    .compute_optimal_variant()
-                    .and_then(|selection| {
-                        let playlist_store = self.playlist_store.as_mut()?;
-                        Some(playlist_store.set_variant(selection.safe_variant_id))
-                    })
-                    .unwrap_or_default();
-                // The audio playlist may already have changed in set_audio_track. It must also
-                // be flushed when the final variant uses the same playlist as the previous one.
-                if !changed_media_types.contains(&MediaType::Audio) {
-                    changed_media_types.push(MediaType::Audio);
-                }
+    fn announce_variant_lock_change(&self, change: VariantLockChange) {
+        match change {
+            VariantLockChange::Unchanged => {}
+            VariantLockChange::Locked(id) => jsAnnounceVariantLockStatusChange(Some(id)),
+            VariantLockChange::Unlocked => jsAnnounceVariantLockStatusChange(None),
+        }
+    }
 
-                // XXX TODO: Shouldn't the playlist store tell us that?
-                let subtitle_changed = self.playlist_store.as_ref().and_then(|pl_store| {
-                    pl_store.current_media_playlist_id(MediaType::Text).copied()
-                }) != previous_text_id;
-                self.announce_current_audio_track();
-                if subtitle_changed {
-                    self.announce_current_subtitle_track();
-                }
-                self.announce_current_variant();
-                if variant_lock_removed {
-                    jsAnnounceVariantLockStatusChange(None);
-                }
-                if subtitle_changed {
-                    self.reset_subtitle_playlist();
-                }
-                self.reset_on_selected_media_playlists(&changed_media_types);
-            }
+    fn announce_track_changes(&self, changes: &SelectionChanges) {
+        if changes.audio_track_change != TrackChange::Unchanged {
+            self.announce_current_audio_track();
+        }
+        if changes.subtitle_track_change != TrackChange::Unchanged {
+            self.announce_current_subtitle_track();
+        }
+    }
 
-            SetAudioTrackResponse::NoPlaylistChange => {
-                // XXX TODO: Shouldn't the playlist store tell us that?
-                if self.playlist_store.as_ref().and_then(|pl_store| {
-                    pl_store.current_media_playlist_id(MediaType::Text).copied()
-                }) != previous_text_id
-                {
-                    self.announce_current_subtitle_track();
-                    self.reset_subtitle_playlist();
-                }
-                self.check_requested_segments_still_needed();
-                self.check_segments_to_request();
-            }
+    // XXX TODO: Impossible to understand, compared to announce_track_changes
+    fn announce_final_track_changes(&self, choice: &SelectionChanges, variant: &SelectionChanges) {
+        if choice.audio_track_change != TrackChange::Unchanged
+            || variant.audio_track_change != TrackChange::Unchanged
+        {
+            self.announce_current_audio_track();
+        }
+        if choice.subtitle_track_change != TrackChange::Unchanged
+            || variant.subtitle_track_change != TrackChange::Unchanged
+        {
+            self.announce_current_subtitle_track();
         }
     }
 
@@ -597,26 +601,12 @@ impl Dispatcher {
             return;
         }
 
-        let previous_subtitle_track = self
-            .playlist_store
-            .as_ref()
-            .and_then(|pl_store| pl_store.current_subtitle_track_id());
         let recommendation = self.compute_optimal_variant();
         let was_already_locked = self.requester.lock_segment_requests();
         for media_type in [MediaType::Video, MediaType::Audio, MediaType::Text] {
             self.schedule_next_segment_for_type(media_type, recommendation);
         }
 
-        // XXX TODO: Why may it change there? Wouldn't a more focused detection than
-        // this random one be easier to follow?
-        if self
-            .playlist_store
-            .as_ref()
-            .and_then(|pl_store| pl_store.current_subtitle_track_id())
-            != previous_subtitle_track
-        {
-            self.announce_current_subtitle_track();
-        }
         // Selection can change while waiting for codecs, without scheduling a segment.
         // The API already filters unchanged variant announcements.
         self.announce_current_variant();
@@ -629,20 +619,15 @@ impl Dispatcher {
         let Some(pl_store) = self.playlist_store.as_mut() else {
             return;
         };
-        let previous_text_id = pl_store.current_media_playlist_id(MediaType::Text).copied();
-        let was_locked = pl_store.is_variant_locked();
-
-        // XXX TODO: The difference in response / behavior with `set_audio_track` in
-        // pl_store is not straightforward to me...
-        let needs_variant = match pl_store.set_subtitle_track(track_id) {
-            Ok(needs_variant) => needs_variant,
+        let changes = match pl_store.set_subtitle_track(track_id) {
+            Ok(changes) => changes,
             Err(reason) => {
                 let (code, message) = match reason {
-                    SubtitleTrackSelectionError::UnknownTrack => (
+                    TrackSelectionError::UnknownTrack => (
                         TrackSelectionErrorCode::UnknownTrack,
                         "Unable to select the subtitle track: unknown track ID",
                     ),
-                    SubtitleTrackSelectionError::NoCompatibleVariant => (
+                    TrackSelectionError::NoCompatibleVariant => (
                         TrackSelectionErrorCode::NoCompatibleVariant,
                         "Unable to select the subtitle track: no compatible variant",
                     ),
@@ -653,32 +638,26 @@ impl Dispatcher {
                 return;
             }
         };
-        let mut changed = Vec::new();
-        if needs_variant {
+        let mut variant_changes = SelectionChanges::default();
+        if changes.needs_variant_selection {
             if let Some(selection) = self.compute_optimal_variant() {
                 let Some(pl_store) = self.playlist_store.as_mut() else {
                     return;
                 };
-                changed = pl_store.set_variant(selection.safe_variant_id);
-                self.announce_current_audio_track();
+                variant_changes = pl_store.set_variant(selection.safe_variant_id);
             }
         }
-        self.announce_current_subtitle_track();
-        if needs_variant {
+        self.announce_final_track_changes(&changes, &variant_changes);
+        if changes.needs_variant_selection {
             self.announce_current_variant();
-            if was_locked {
-                jsAnnounceVariantLockStatusChange(None);
-            }
+            self.announce_variant_lock_change(changes.variant_lock_change);
         }
-        if self
-            .playlist_store
-            .as_ref()
-            .and_then(|pl_store| pl_store.current_media_playlist_id(MediaType::Text).copied())
-            != previous_text_id
+        if changes.changed_playlists.contains(&MediaType::Text)
+            || variant_changes.changed_playlists.contains(&MediaType::Text)
         {
             self.reset_subtitle_playlist();
         }
-        self.reset_on_selected_media_playlists(&changed);
+        self.reset_on_selected_media_playlists(&variant_changes.changed_playlists);
         self.check_requested_segments_still_needed();
         self.check_segments_to_request();
     }
@@ -687,14 +666,12 @@ impl Dispatcher {
         let Some(pl_store) = self.playlist_store.as_mut() else {
             return;
         };
-        let previous_text_id = pl_store.current_media_playlist_id(MediaType::Text).copied();
-        pl_store.disable_subtitle_track();
-
-        // XXX TODO: Shouldn't the playlist store tell us that?
-        let changed =
-            previous_text_id != pl_store.current_media_playlist_id(MediaType::Text).copied();
-        self.announce_current_subtitle_track();
-        if changed {
+        let changes = pl_store.disable_subtitle_track();
+        // XXX TODO: We may also want to call other change anouncement API here?
+        // I know currently it would serve no role but dispatcher does not know that...
+        // Or else the return type chosen in PlaylistStore is completely wrong
+        self.announce_track_changes(&changes);
+        if changes.changed_playlists.contains(&MediaType::Text) {
             self.reset_subtitle_playlist();
         }
         self.check_segments_to_request();
@@ -836,9 +813,7 @@ impl Dispatcher {
             media_type: inspection.media_type,
             codec: inspection.codec,
         };
-        let previous_playlists = [MediaType::Audio, MediaType::Video, MediaType::Text]
-            .map(|media_type| pl_store.current_media_playlist_id(media_type).copied());
-        pl_store.set_external_media_info(media_info, considered_media_type);
+        let changes = pl_store.set_external_media_info(media_info, considered_media_type);
 
         // That might have led to more timing-related information
         jsUpdateContentInfo(
@@ -849,15 +824,8 @@ impl Dispatcher {
             pl_store.uses_program_date_time(),
         );
         sync_media_source_duration(pl_store);
-        let updated_playlists = [MediaType::Audio, MediaType::Video, MediaType::Text]
-            .map(|media_type| pl_store.current_media_playlist_id(media_type).copied());
-        for (index, media_type) in [MediaType::Audio, MediaType::Video, MediaType::Text]
-            .into_iter()
-            .enumerate()
-        {
-            if previous_playlists[index] != updated_playlists[index] {
-                self.follow_selected_media_playlist(media_type);
-            }
+        for media_type in changes.changed_playlists {
+            self.follow_selected_media_playlist(media_type);
         }
 
         // Probe segment may have provided information helping us to determine how much to
@@ -1009,13 +977,8 @@ impl Dispatcher {
 
             // In all matching, keep the first actually possible one
             for id in matching_ids {
-                match pl_store.set_audio_track(Some(id)) {
-                    SetAudioTrackResponse::UnknownTrack
-                    | SetAudioTrackResponse::NoCompatibleVariant => continue,
-
-                    SetAudioTrackResponse::NoPlaylistChange
-                    | SetAudioTrackResponse::AudioMediaUpdate
-                    | SetAudioTrackResponse::VariantSelectionNeeded { .. } => return,
+                if pl_store.set_audio_track(Some(id)).is_ok() {
+                    return;
                 }
             }
         }
@@ -1411,7 +1374,12 @@ impl Dispatcher {
             && Some(variant_id) != pl_store.current_variant_id()
         {
             // TODO: Verify transitions between separate and muxed audio in both directions.
-            let changed_media_types = pl_store.set_variant(variant_id);
+            let changes = pl_store.set_variant(variant_id);
+            // XXX TODO: We may also want to call other change anouncement API here?
+            // I know currently it would serve no role but dispatcher does not know that...
+            // Or else the return type chosen in PlaylistStore is completely wrong
+            self.announce_track_changes(&changes);
+            let changed_media_types = changes.changed_playlists;
             if changed_media_types.contains(&MediaType::Text) {
                 self.reset_subtitle_playlist();
             }
@@ -1926,7 +1894,7 @@ video.m3u8
             Url::new("https://example.com/master.m3u8".to_string()),
         )
         .unwrap();
-        let variant_id = pl_store.available_variants().nth(0).unwrap().id();
+        let variant_id = pl_store.available_variants().next().unwrap().id();
         pl_store.set_variant(variant_id);
         pl_store
     }
@@ -1940,7 +1908,7 @@ video.m3u8
             .find(|track| track.language() == Some("en"))
             .unwrap()
             .id();
-        pl_store.set_audio_track(Some(audio_id));
+        pl_store.set_audio_track(Some(audio_id)).unwrap();
         let mut dispatcher = Dispatcher::new(100000.);
         dispatcher.initial_subtitle_track_selection = vec![
             Some(crate::dispatcher::InitialSubtitleTrackSelection {
@@ -1962,7 +1930,7 @@ video.m3u8
             .id();
         assert_eq!(
             pl_store.set_subtitle_track(Some(french)),
-            Err(crate::playlist_store::SubtitleTrackSelectionError::NoCompatibleVariant)
+            Err(crate::playlist_store::TrackSelectionError::NoCompatibleVariant)
         );
         dispatcher.apply_initial_subtitle_track_selection(&mut pl_store);
         let english_subtitle = pl_store
@@ -2039,7 +2007,7 @@ video.m3u8
                 "#EXTM3U\n#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID=\"low\",NAME=\"English\",DEFAULT=YES,URI=\"low-audio.m3u8\"\n#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID=\"high\",NAME=\"English\",DEFAULT=YES,URI=\"high-audio.m3u8\"\n#EXT-X-STREAM-INF:BANDWIDTH=1000000,CODECS=\"avc1.42E01E,mp4a.40.2\",AUDIO=\"low\"\nlow-video.m3u8\n#EXT-X-STREAM-INF:BANDWIDTH=2000000,CODECS=\"avc1.42E01E,mp4a.40.2\",AUDIO=\"{high_group}\"\nhigh-video.m3u8\n"
             );
             let mut pl_store = selected_playlist(manifest.as_bytes());
-            let low = pl_store.available_variants().nth(0).unwrap().id();
+            let low = pl_store.available_variants().next().unwrap().id();
             let high = pl_store.available_variants().nth(1).unwrap().id();
             let recommendation = Some(crate::adaptive::AdaptiveVariantSelection {
                 best_variant_id: high,
@@ -2069,8 +2037,11 @@ video.m3u8
                 .unwrap();
             let changed = pl_store.set_variant(high);
             assert_eq!(pl_store.current_variant_id(), Some(high));
-            assert!(changed.contains(&MediaType::Video));
-            assert_eq!(changed.contains(&MediaType::Audio), !shared_audio);
+            assert!(changed.changed_playlists.contains(&MediaType::Video));
+            assert_eq!(
+                changed.changed_playlists.contains(&MediaType::Audio),
+                !shared_audio
+            );
             assert_eq!(
                 pl_store.current_media_playlist_id(MediaType::Audio) == Some(&old_audio),
                 shared_audio
@@ -2091,7 +2062,7 @@ video.m3u8
                 manifest.to_owned()
             };
             let mut pl_store = selected_playlist(manifest.as_bytes());
-            let low = pl_store.available_variants().nth(0).unwrap().id();
+            let low = pl_store.available_variants().next().unwrap().id();
             let high = pl_store.available_variants().nth(1).unwrap().id();
             for media_type in [MediaType::Video, MediaType::Audio, MediaType::Text] {
                 for variant_id in [low, high] {
@@ -2600,7 +2571,7 @@ video.m3u8
         assert_ne!(recommendation.best_variant_id, current);
         assert!(matches!(
             pl_store.lock_variant(current),
-            crate::playlist_store::LockVariantResponse::VariantLocked { .. }
+            crate::playlist_store::LockVariantResponse::VariantLocked(_)
         ));
         // A previously computed recommendation must not bypass a newer lock.
         dispatcher.schedule_next_segment_for_type(MediaType::Video, Some(recommendation));
@@ -3028,7 +2999,7 @@ fr-video.m3u8
             .find(|track| track.language() == Some("fr"))
             .unwrap()
             .id();
-        store.set_audio_track(Some(french));
+        store.set_audio_track(Some(french)).unwrap();
         store.set_variant(variants[1]);
         let recommendation = crate::adaptive::AdaptiveVariantSelection {
             best_variant_id: variants[0],
