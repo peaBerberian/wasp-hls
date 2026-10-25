@@ -2,6 +2,7 @@ import { expect, it } from "vitest";
 import { createDispatcher } from "../utils/dispatcher_test_tools.js";
 import { TEST_TIMEOUT_MS } from "../../utils/timeouts.js";
 import {
+  ContentCompatibilityErrorCode,
   MediaSourceReadyState,
   MediaType,
 } from "../../../build/es6/wasm/js/index.js";
@@ -114,6 +115,89 @@ it("keeps probe rejections when another variant is inspected", async () => {
     ctx.dispatcher.free();
   }
 });
+
+it(
+  "passes both muxed direct-media codecs to the support check and one SourceBuffer",
+  { timeout: TEST_TIMEOUT_MS },
+  async () => {
+    const codecs = "avc1.42E01E,mp4a.40.2";
+    const ctx = await createDispatcher({ probedCodecs: codecs });
+    try {
+      ctx.dispatcher.load_content("https://example.com/direct.m3u8");
+      ctx.finish(
+        "direct.m3u8",
+        '#EXTM3U\n#EXT-X-TARGETDURATION:4\n#EXT-X-MAP:URI="init.mp4"\n#EXTINF:4,\nsegment.m4s\n#EXT-X-ENDLIST\n',
+      );
+      ctx.finish("init.mp4");
+      ctx.dispatcher.on_media_source_state_change(MediaSourceReadyState.Open);
+
+      expect(ctx.supportChecks).toContainEqual({
+        type: MediaType.Video,
+        codec: codecs,
+      });
+      expect(ctx.sourceBuffers).toEqual([
+        {
+          mediaType: MediaType.Video,
+          mimeType: `video/mp4;codecs="${codecs}"`,
+        },
+      ]);
+      expect(ctx.errors).toEqual([]);
+    } finally {
+      ctx.dispatcher.stop();
+      ctx.dispatcher.free();
+    }
+  },
+);
+
+it.each([
+  {
+    rejectedType: "audio",
+    codecs: "avc1.42E01E,ec-3",
+    unsupportedCodec: "ec-3",
+  },
+  {
+    rejectedType: "video",
+    codecs: "hev1.1.6.L153.B0,mp4a.40.2",
+    unsupportedCodec: "hev1.1.6.L153.B0",
+  },
+])(
+  "rejects muxed direct media when only its $rejectedType codec is unsupported",
+  { timeout: TEST_TIMEOUT_MS },
+  async ({ codecs, unsupportedCodec }) => {
+    const ctx = await createDispatcher({
+      probedCodecs: codecs,
+      unsupportedCodec,
+    });
+    try {
+      ctx.dispatcher.load_content("https://example.com/direct.m3u8");
+      ctx.finish(
+        "direct.m3u8",
+        '#EXTM3U\n#EXT-X-TARGETDURATION:4\n#EXT-X-MAP:URI="init.mp4"\n#EXTINF:4,\nsegment.m4s\n#EXT-X-ENDLIST\n',
+      );
+      ctx.finish("init.mp4");
+      ctx.dispatcher.on_media_source_state_change(MediaSourceReadyState.Open);
+
+      expect(ctx.supportChecks).toContainEqual({
+        type: MediaType.Video,
+        codec: codecs,
+      });
+      expect(ctx.sourceBuffers).toEqual([]);
+      expect(ctx.errors).toEqual([
+        {
+          name: "sendContentCompatibilityError",
+          args: [
+            true,
+            ContentCompatibilityErrorCode.NoSupportedVariant,
+            "No supported startup stream was found for the current content",
+          ],
+        },
+      ]);
+    } finally {
+      ctx.dispatcher.stop();
+      ctx.dispatcher.free();
+    }
+  },
+);
 
 it("continues startup after falling back to a cached VOD playlist", async () => {
   const ctx = await createDispatcher({ unsupportedCodec: "hev1.1.6.L153.B0" });
