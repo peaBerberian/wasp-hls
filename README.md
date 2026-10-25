@@ -289,6 +289,8 @@ MSE API and buffer handling:
 - [x] Discontinuity handling: Automatically skip "holes" in the buffer where
       it is known that no segment will be pushed to fill them.
 - [x] Handle `QuotaExceededError` after pushing segments when low on memory.
+- [ ] `ManagedMediaSource` handling
+      _Priority: high_
 - [ ] Freezing handling: Detect when the browser is not making progress in the
       content despite having media data to play and try to unstuck it.
       _Priority: average_
@@ -375,7 +377,8 @@ most of them are not needed for playback):
         bandwidth
   - [x] CODECS: Used for checking support (and filtering out if that's not the
         case, and for initializing buffers with the right info).
-  - [x] AUDIO
+  - [x] AUDIO: Links variants to audio rendition groups
+  - [x] SUBTITLES: Links variants to subtitle rendition groups.
   - [x] VIDEO: As no video track selection API exist yet, only the most
         prioritized video media playlist is considered
   - [x] RESOLUTION: Used to describe variant in variant selection API
@@ -383,22 +386,21 @@ most of them are not needed for playback):
   - [x] SCORE: Considered both to select a variant and to determine if a quality
         is better when applying fast quality switching.
   - [x] VIDEO-RANGE
-  - [ ] REQ-VIDEO-LAYOUT
+  - [ ] REQ-VIDEO-LAYOUT: Used for spatial video. Generally not handled by
+        mainstream HLS players.
   - [ ] STABLE-VARIANT-ID: Not really needed for now (only for content steering?)
   - [ ] AVERAGE-BANDWIDTH: Not used yet. I don't know if it's useful yet for us.
-  - [ ] SUPPLEMENTAL-CODECS: In our web use case, I'm not sure if this is only
-        useful for track selection API or if filtering also needs to be done based
-        on this.
-  - [x] SUBTITLES: Links variants to subtitle rendition groups.
+  - [ ] SUPPLEMENTAL-CODECS: Might be useful in the future for retro-compatible
+        codec work.
   - [ ] CLOSED-CAPTIONS: that one is just ignored for now
   - [ ] PATHWAY-ID: Content Steering not handled yet
   - [ ] HDCP-LEVEL: DRM are not handled for now
   - [ ] ALLOWED-CPC: DRM are not handled for now
 - [ ] EXT-X-VERSION: Not specifically considered for now, most differences
       handled until now had compatible behaviors from version to version
-- [ ] EXT-X-INDEPENDENT-SEGMENTS: Might needs to be considered once we're
+- [ ] EXT-X-INDEPENDENT-SEGMENTS: Might need to be considered once we're
       doing some manual cleaning?
-- [ ] EXT-X-I-FRAMES-ONLY: To handle one day, perhaps (very low priority)
+- [ ] EXT-X-I-FRAMES-ONLY: To handle one day, perhaps (low priority)
 - [ ] EXT-X-PART: low-latency related
 - [ ] EXT-X-PART-INF: low-latency related
 - [ ] EXT-X-SERVER-CONTROL: low-latency related?
