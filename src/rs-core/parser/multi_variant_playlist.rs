@@ -332,16 +332,16 @@ impl MultivariantPlaylist {
     }
 
     /// Returns variants linked to a playlist-backed rendition of the chosen subtitle track.
-    pub(crate) fn variants_for_subtitle(&self, track_id: u32) -> Vec<&VariantStream> {
+    pub(crate) fn variants_for_subtitle(
+        &self,
+        track_id: u32,
+    ) -> impl Iterator<Item = &VariantStream> {
         let group_ids = self.subtitle_tracks.groups_for_track_id(track_id);
-        self.variants
-            .iter()
-            .filter(|variant| {
-                variant
-                    .subtitle_group()
-                    .is_some_and(|group| group_ids.contains(&group))
-            })
-            .collect()
+        self.variants.iter().filter(move |variant| {
+            variant
+                .subtitle_group()
+                .is_some_and(|group| group_ids.contains(&group))
+        })
     }
 
     /// Returns mutable reference to information on all known variants linked to this
@@ -1191,7 +1191,7 @@ video2.m3u8
                 .find(|track| track.name() == Some(name))
                 .unwrap()
                 .id();
-            let variants = parsed.variants_for_subtitle(track_id);
+            let variants: Vec<_> = parsed.variants_for_subtitle(track_id).collect();
             assert_eq!(
                 variants
                     .iter()
@@ -1211,7 +1211,7 @@ video2.m3u8
             }
         }
         assert_eq!(parsed.subtitle_tracks().len(), 2);
-        assert!(parsed.variants_for_subtitle(u32::MAX).is_empty());
+        assert!(parsed.variants_for_subtitle(u32::MAX).next().is_none());
     }
 
     #[test]

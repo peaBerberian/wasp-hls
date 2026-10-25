@@ -833,18 +833,14 @@ impl PlaylistStore {
                 .fixed_audio_track
                 .or_else(|| self.current_audio_track_id());
             let audio_variants = audio_id.map(|id| playlist.variants_for_audio(id));
-            if !playlist
-                .variants_for_subtitle(track_id)
-                .iter()
-                .any(|variant| {
-                    self.variant_support(variant) != Some(false)
-                        && audio_variants.as_ref().is_none_or(|variants| {
-                            variants
-                                .iter()
-                                .any(|candidate| candidate.id() == variant.id())
-                        })
-                })
-            {
+            if !playlist.variants_for_subtitle(track_id).any(|variant| {
+                self.variant_support(variant) != Some(false)
+                    && audio_variants.as_ref().is_none_or(|variants| {
+                        variants
+                            .iter()
+                            .any(|candidate| candidate.id() == variant.id())
+                    })
+            }) {
                 return Err(TrackSelectionError::NoCompatibleVariant);
             }
         }
@@ -970,6 +966,50 @@ impl PlaylistStore {
         }
     }
 
+    // Return `true` if the audio track id is found anywhere in the current top level playlist.
+    // Return `false` otherwise.
+    fn audio_track_id_exists(&self, track_id: u32) -> bool {
+        match &self.playlist {
+            TopLevelPlaylist::Multivariant(playlist) => playlist
+                .audio_tracks()
+                .iter()
+                .any(|track| track.id() == track_id),
+            TopLevelPlaylist::DirectMedia(_) => {
+                track_id == DIRECT_MEDIA_AUDIO_TRACK_ID
+                    && self.has_distinct_media_type(MediaType::Audio)
+            }
+        }
+    }
+
+    /// Return `true` if the current content has at least one variant linked to the given audio
+    /// track id and the potentially fixed subtitle track id.
+    /// /!\ Compatible here does not mean "supported", the codec might not be actually supported.
+    fn audio_track_id_has_compatible_variants(&self, track_id: u32) -> bool {
+        let subtitle_track = self
+            .fixed_subtitle_track
+            .filter(|_| !self.subtitles_disabled);
+
+        match &self.playlist {
+            TopLevelPlaylist::Multivariant(playlist) => {
+                // Collect once because each audio variant searches these results.
+                let subtitle_variants =
+                    subtitle_track.map(|id| playlist.variants_for_subtitle(id).collect::<Vec<_>>());
+                playlist.variants_for_audio(track_id).iter().any(|variant| {
+                    subtitle_variants.as_ref().is_none_or(|variants| {
+                        variants
+                            .iter()
+                            .any(|candidate| candidate.id() == variant.id())
+                    })
+                })
+            }
+            TopLevelPlaylist::DirectMedia(_) => {
+                // This playlist must provide the audio track.
+                // Direct media has no separate subtitle tracks.
+                self.audio_track_id_exists(track_id) && subtitle_track.is_none()
+            }
+        }
+    }
+
     /// Explicitely select an `AudioTrack` based on its `id` property or disable the explicit
     /// selection of one (by giving `None` as argument).
     ///
@@ -981,25 +1021,64 @@ impl PlaylistStore {
         track_id: Option<u32>,
     ) -> Result<AudioTrackUpdate, TrackSelectionError> {
         if let Some(id) = track_id {
-            let exists = match &self.playlist {
-                TopLevelPlaylist::Multivariant(playlist) => {
-                    playlist.audio_tracks().iter().any(|track| track.id() == id)
-                }
-                TopLevelPlaylist::DirectMedia(_) => {
-                    id == DIRECT_MEDIA_AUDIO_TRACK_ID
-                        && self.has_distinct_media_type(MediaType::Audio)
-                }
-            };
-            if !exists {
+            if !self.audio_track_id_exists(id) {
                 return Err(TrackSelectionError::UnknownTrack);
             }
+            if !self.audio_track_id_has_compatible_variants(id) {
+                return Err(TrackSelectionError::NoCompatibleVariant);
+            }
         }
+
+        // Direct audio playlists have no AudioTrack object, so the API uses a fixed ID.
+        let direct_audio_track = if matches!(&self.playlist, TopLevelPlaylist::DirectMedia(_))
+            && self.current_audio_id.is_some()
+        {
+            Some(DIRECT_MEDIA_AUDIO_TRACK_ID)
+        } else {
+            None
+        };
+        let previous_track = self
+            .fixed_audio_track
+            .or(direct_audio_track)
+            .or_else(|| self.current_audio_track_id());
         let mut changes = AudioTrackUpdate::default();
-        let previous_track = self.effective_audio_track_id();
-        self.set_audio_track_inner(track_id, &mut changes)?;
-        let track = self.effective_audio_track_id();
+        self.fixed_audio_track = track_id;
+
+        if let Some(variant) = self.current_variant() {
+            match self.audio_track_id_for_variant(variant) {
+                Ok(resolved_track) => {
+                    let raw_new_audio_id = match &self.playlist {
+                        TopLevelPlaylist::Multivariant(playlist) => {
+                            playlist.audio_media_playlist_id_for(variant, resolved_track)
+                        }
+                        TopLevelPlaylist::DirectMedia(_) => None,
+                    };
+                    let (new_audio_id, _) =
+                        Self::normalize_current_media_ids(raw_new_audio_id, self.current_video_id);
+
+                    if new_audio_id != self.current_audio_id {
+                        self.current_audio_id = new_audio_id;
+                        changes.audio_playlist_changed = true;
+                    }
+                }
+                Err(IncompatibleTrack) => {
+                    // Save the audio choice, but keep the old playlists until the caller
+                    // applies a variant that can provide it.
+                    if self.is_variant_locked {
+                        self.is_variant_locked = false;
+                        changes.variant_lock_removed = true;
+                    }
+                    changes.needs_variant_selection = true;
+                }
+            }
+        }
+
+        // Report the explicit choice even if its playlist needs another variant.
+        // With no explicit choice, report the track of the chosen audio playlist.
+        let track = track_id
+            .or(direct_audio_track)
+            .or_else(|| self.current_audio_track_id());
         if previous_track != track {
-            // XXX TODO: Why wasn't it already the case if `self.effective_audio_track_id` changed?
             changes.tracks.audio = TrackChange::Changed(track);
         }
         if !changes.needs_variant_selection {
@@ -1007,66 +1086,10 @@ impl PlaylistStore {
                 Ok(playlist_id) => self.update_text_playlist_id(playlist_id),
                 Err(IncompatibleTrack) => self.update_text_playlist_id(None),
             };
-            if playlist_changed {
-                changes.subtitle_playlist_changed = true;
-            }
+            changes.subtitle_playlist_changed = playlist_changed;
             changes.tracks.subtitles = track_change;
         }
         Ok(changes)
-    }
-
-    fn set_audio_track_inner(
-        &mut self,
-        track_id: Option<u32>,
-        changes: &mut AudioTrackUpdate,
-    ) -> Result<(), TrackSelectionError> {
-        if let (TopLevelPlaylist::Multivariant(playlist), Some(track_id)) =
-            (&self.playlist, track_id)
-        {
-            let subtitle_variants = self
-                .fixed_subtitle_track
-                .filter(|_| !self.subtitles_disabled)
-                .map(|id| playlist.variants_for_subtitle(id));
-            if !playlist.variants_for_audio(track_id).iter().any(|variant| {
-                subtitle_variants.as_ref().is_none_or(|variants| {
-                    variants
-                        .iter()
-                        .any(|candidate| candidate.id() == variant.id())
-                })
-            }) {
-                return Err(TrackSelectionError::NoCompatibleVariant);
-            }
-        }
-
-        self.fixed_audio_track = track_id;
-
-        if let Some(variant) = self.current_variant() {
-            let resolved_track = match self.audio_track_id_for_variant(variant) {
-                Ok(track_id) => track_id,
-                Err(IncompatibleTrack) => {
-                    if self.is_variant_locked {
-                        self.is_variant_locked = false;
-                        changes.variant_lock_removed = true;
-                    }
-                    changes.needs_variant_selection = true;
-                    return Ok(());
-                }
-            };
-            let raw_new_audio_id = match &self.playlist {
-                TopLevelPlaylist::Multivariant(playlist) => {
-                    playlist.audio_media_playlist_id_for(variant, resolved_track)
-                }
-                TopLevelPlaylist::DirectMedia(_) => None,
-            };
-            let (new_audio_id, _) =
-                Self::normalize_current_media_ids(raw_new_audio_id, self.current_video_id);
-
-            if new_audio_id != self.current_audio_id {
-                self.current_audio_id = new_audio_id;
-                changes.audio_playlist_changed = true;
-            }
-        }
-        Ok(())
     }
 
     /// Apply a specific variant selection and return the media types whose selected playlist
@@ -1082,7 +1105,39 @@ impl PlaylistStore {
     /// Apply a selection after checking the lock, or when explicitly replacing it.
     fn apply_variant(&mut self, variant_id: u32) -> VariantUpdate {
         let mut changes = VariantUpdate::default();
-        self.set_curr_variant_and_media_id(variant_id, &mut changes);
+        if let TopLevelPlaylist::Multivariant(playlist) = &self.playlist {
+            if let Some(variant) = playlist.variant(variant_id) {
+                let previous_track = self.current_audio_track_id();
+                if self.current_variant_id != Some(variant_id) {
+                    self.current_variant_id = Some(variant_id);
+                    changes.variant_changed = true;
+                }
+                let (audio_id, video_id) = Self::normalize_current_media_ids(
+                    match self.audio_track_id_for_variant(variant) {
+                        Ok(track_id) => playlist.audio_media_playlist_id_for(variant, track_id),
+                        Err(IncompatibleTrack) => None,
+                    },
+                    playlist.video_media_playlist_id_for(variant),
+                );
+                if self.current_audio_id != audio_id {
+                    self.current_audio_id = audio_id;
+                    changes.changed_playlists.push(MediaType::Audio);
+                }
+                if self.current_video_id != video_id {
+                    self.current_video_id = video_id;
+                    changes.changed_playlists.push(MediaType::Video);
+                }
+
+                // An explicit audio choice was already reported by set_audio_track().
+                // Otherwise, this variant can change which track is reported.
+                if self.fixed_audio_track.is_none() {
+                    let track = self.current_audio_track_id();
+                    if previous_track != track {
+                        changes.tracks.audio = TrackChange::Changed(track);
+                    }
+                }
+            }
+        }
         let (playlist_changed, track_change) = match self.resolve_subtitle_selection() {
             Ok(playlist_id) => self.update_text_playlist_id(playlist_id),
             Err(IncompatibleTrack) => self.update_text_playlist_id(None),
@@ -1168,42 +1223,6 @@ impl PlaylistStore {
                     time_info: media_segment.time_info().clone(),
                 },
             })
-        }
-    }
-
-    /// Internally update the current variant chosen as well as its corresponding other media.
-    /// XXX TODO: inline method?
-    fn set_curr_variant_and_media_id(&mut self, variant_id: u32, changes: &mut VariantUpdate) {
-        let playlist = match &self.playlist {
-            TopLevelPlaylist::Multivariant(playlist) => playlist,
-            TopLevelPlaylist::DirectMedia(_) => return,
-        };
-        let Some(variant) = playlist.variant(variant_id) else {
-            return;
-        };
-        let previous_track = self.effective_audio_track_id();
-        if self.current_variant_id != Some(variant_id) {
-            self.current_variant_id = Some(variant_id);
-            changes.variant_changed = true;
-        }
-        let (current_audio_id, current_video_id) = Self::normalize_current_media_ids(
-            match self.audio_track_id_for_variant(variant) {
-                Ok(track_id) => playlist.audio_media_playlist_id_for(variant, track_id),
-                Err(IncompatibleTrack) => None,
-            },
-            playlist.video_media_playlist_id_for(variant),
-        );
-        if self.current_audio_id != current_audio_id {
-            self.current_audio_id = current_audio_id;
-            changes.changed_playlists.push(MediaType::Audio);
-        }
-        if self.current_video_id != current_video_id {
-            self.current_video_id = current_video_id;
-            changes.changed_playlists.push(MediaType::Video);
-        }
-        let track = self.effective_audio_track_id();
-        if previous_track != track {
-            changes.tracks.audio = TrackChange::Changed(track);
         }
     }
 
@@ -1399,21 +1418,6 @@ impl PlaylistStore {
             }
         }
         Ok(MultivariantStartupStatus::Ready)
-    }
-
-    /// Return the audio track ID used by the player API.
-    /// If an audio Media Playlist was loaded directly, return DIRECT_MEDIA_AUDIO_TRACK_ID.
-    /// XXX TODO: Not clear to me as why this would be different thant current_audio_track_id
-    fn effective_audio_track_id(&self) -> Option<u32> {
-        self.fixed_audio_track.or_else(|| {
-            if matches!(&self.playlist, TopLevelPlaylist::DirectMedia(_))
-                && self.current_audio_id.is_some()
-            {
-                Some(DIRECT_MEDIA_AUDIO_TRACK_ID)
-            } else {
-                self.current_audio_track_id()
-            }
-        })
     }
 
     /// Returns a reference to the MediaPlaylist currently loaded for the given `MediaType`.
@@ -3075,10 +3079,6 @@ high.m3u8
         let changes = store.set_external_media_info(info.clone(), MediaType::Audio);
         assert_eq!(changes.changed_playlists, vec![MediaType::Audio]);
         assert_eq!(
-            store.effective_audio_track_id(),
-            Some(crate::bindings::formatters::DIRECT_MEDIA_AUDIO_TRACK_ID)
-        );
-        assert_eq!(
             store.set_external_media_info(info, MediaType::Audio),
             super::ExternalMediaInfoUpdate::default()
         );
@@ -3090,6 +3090,10 @@ high.m3u8
                 .unwrap()
                 .tracks
                 .audio,
+            TrackChange::Unchanged
+        );
+        assert_eq!(
+            store.set_audio_track(None).unwrap().tracks.audio,
             TrackChange::Unchanged
         );
         let mut store = subtitle_store(true);
@@ -3502,10 +3506,11 @@ fr-high.m3u8
             .unwrap()
             .id();
 
-        assert!(matches!(
-            store.set_audio_track(Some(french_id)),
-            Ok(ref changes) if changes.needs_variant_selection && changes.variant_lock_removed
-        ));
+        let changes = store.set_audio_track(Some(french_id)).unwrap();
+        assert!(changes.needs_variant_selection);
+        assert!(changes.variant_lock_removed);
+        // The choice is reported now, even though the playlist still belongs to English.
+        assert_eq!(changes.tracks.audio, TrackChange::Changed(Some(french_id)));
         assert_eq!(store.current_variant_id(), Some(current_id));
         assert_eq!(
             store.current_media_playlist_id(MediaType::Audio),
@@ -3533,7 +3538,9 @@ fr-high.m3u8
                 },
             )
             .unwrap();
-        store.set_variant(selection.best_variant_id).unwrap();
+        let changes = store.set_variant(selection.best_variant_id).unwrap();
+        // Applying the French playlist must not report the same audio choice again.
+        assert_eq!(changes.tracks.audio, TrackChange::Unchanged);
         assert_eq!(store.current_variant().unwrap().bandwidth(), 2000);
         assert_eq!(store.current_audio_track_id(), Some(french_id));
         assert_ne!(
