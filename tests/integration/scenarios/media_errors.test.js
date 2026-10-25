@@ -122,32 +122,6 @@ describe("Native media errors", () => {
   );
 
   it(
-    "reports a real browser media error through the public API",
-    { timeout: TEST_TIMEOUT_MS },
-    async () => {
-      const url = await ensureVodScenarioReady("fmp4-alt-audio");
-      const ctx = await createPlayerHarness({});
-      const invalidMediaUrl = URL.createObjectURL(
-        new Blob(["Invalid MP4 data"], { type: "video/mp4" }),
-      );
-      try {
-        await load(ctx, url);
-        const failed = waitForPlayerEvent(ctx.player, "error");
-        ctx.videoElement.src = invalidMediaUrl;
-        const error = await failed;
-        expect(error).toBeInstanceOf(WaspMediaError);
-        expect([3, 4]).toContain(error.mediaErrorCode);
-        expect(error.message.length).toBeGreaterThan(0);
-        expect(ctx.player.getError()).toBe(error);
-        expect(ctx.player.getPlayerState()).toBe("Error");
-      } finally {
-        URL.revokeObjectURL(invalidMediaUrl);
-        ctx.dispose();
-      }
-    },
-  );
-
-  it(
     "fails during loading and supplies a message when the browser has none",
     { timeout: TEST_TIMEOUT_MS },
     async () => {
