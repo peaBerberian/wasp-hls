@@ -2,7 +2,8 @@
 
 ## Description
 
-Returns the information on the currently loaded audio track.
+Returns information on the selected audio track, as announced through the
+`audioTrackUpdate` [event](../Player_Events.md#event-audiotrackupdate).
 Returns `undefined` if unknown, if no content is loaded or if the content
 has no audio track.
 
