@@ -1,7 +1,6 @@
 import sleep from "./sleep.js";
+import { PLAYER_EVENT_TIMEOUT_MS, PLAYER_LOAD_TIMEOUT_MS } from "./timeouts.js";
 import { waitForLoadedStateAfterLoad } from "./waitForPlayerState.js";
-
-const PLAYER_LOAD_TIMEOUT_MS = 90_000;
 
 export function getPlayerStateSnapshot(player, videoElement, lastPlayerError) {
   return {
@@ -66,7 +65,7 @@ export function waitForPlayerEvent(
   player,
   eventName,
   predicate = () => true,
-  timeoutMs = 20_000,
+  timeoutMs = PLAYER_EVENT_TIMEOUT_MS,
 ) {
   return new Promise((resolve, reject) => {
     const timeoutId = setTimeout(() => {

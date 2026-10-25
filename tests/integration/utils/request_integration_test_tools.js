@@ -10,8 +10,7 @@ import {
 import sleep from "../../utils/sleep.js";
 import { getVodScenarioUrl } from "../../utils/vod_scenarios.js";
 
-// Loading alone may take 90 seconds; leave room for the subsequent event waits.
-export const TEST_TIMEOUT_MS = 240_000;
+export { TEST_TIMEOUT_MS } from "../../utils/timeouts.js";
 const CONFIG_PROPAGATION_DELAY_MS = 100;
 const BACKOFF_TOLERANCE_MS = 200;
 const BACKOFF_JITTER_FACTOR = 0.3;
