@@ -83,11 +83,11 @@ impl Dispatcher {
                     tracks,
                     variant_changed,
                 } => {
+                    jsAnnounceVariantLockStatusChange(Some(variant_id));
                     if variant_changed {
                         self.announce_current_variant();
                     }
                     self.announce_track_changes(&[tracks]);
-                    jsAnnounceVariantLockStatusChange(Some(variant_id));
                     if changed_media_types.contains(&MediaType::Text) {
                         self.reset_subtitle_playlist();
                     }
@@ -211,13 +211,13 @@ impl Dispatcher {
                         changed_media_types.push(MediaType::Audio);
                     }
 
-                    self.announce_current_variant();
-                    self.announce_track_changes(&[changes.tracks(), variant_tracks]);
                     if let Some(id) = locked_variant_change {
                         jsAnnounceVariantLockStatusChange(Some(id));
                     } else if changes.variant_lock_removed() {
                         jsAnnounceVariantLockStatusChange(None);
                     }
+                    self.announce_current_variant();
+                    self.announce_track_changes(&[changes.tracks(), variant_tracks]);
                     if changes.subtitle_playlist_changed()
                         || changed_media_types.contains(&MediaType::Text)
                     {
@@ -225,10 +225,10 @@ impl Dispatcher {
                     }
                     self.reset_on_selected_media_playlists(&changed_media_types);
                 } else {
-                    self.announce_track_changes(&[changes.tracks()]);
                     if changes.variant_lock_removed() {
                         jsAnnounceVariantLockStatusChange(None);
                     }
+                    self.announce_track_changes(&[changes.tracks()]);
                     if changes.subtitle_playlist_changed() {
                         self.reset_subtitle_playlist();
                     }
@@ -651,6 +651,11 @@ impl Dispatcher {
         let variant_changed = variant_update.variant_changed();
         let locked_variant_change = variant_update.locked_variant_change();
         let changed_playlists = variant_update.into_changed_playlists();
+        if let Some(id) = locked_variant_change {
+            jsAnnounceVariantLockStatusChange(Some(id));
+        } else if changes.variant_lock_removed() {
+            jsAnnounceVariantLockStatusChange(None);
+        }
         if changes.needs_variant_selection() || variant_changed {
             self.announce_current_variant();
         }
@@ -658,11 +663,6 @@ impl Dispatcher {
             TrackChanges::new(TrackChange::Unchanged, changes.track_change()),
             tracks,
         ]);
-        if let Some(id) = locked_variant_change {
-            jsAnnounceVariantLockStatusChange(Some(id));
-        } else if changes.variant_lock_removed() {
-            jsAnnounceVariantLockStatusChange(None);
-        }
         if changes.playlist_changed() || changed_playlists.contains(&MediaType::Text) {
             self.reset_subtitle_playlist();
         }
@@ -1371,14 +1371,14 @@ impl Dispatcher {
             let tracks = changes.tracks();
             let locked_variant_change = changes.locked_variant_change();
             let changed_media_types = changes.into_changed_playlists();
-            // Announce the variant before any tracks or lock affected by this selection.
+            // Announce the selection mode and variant before the affected tracks.
+            if let Some(id) = locked_variant_change {
+                jsAnnounceVariantLockStatusChange(Some(id));
+            }
             if tracks != TrackChanges::default() || locked_variant_change.is_some() {
                 self.announce_current_variant();
             }
             self.announce_track_changes(&[tracks]);
-            if let Some(id) = locked_variant_change {
-                jsAnnounceVariantLockStatusChange(Some(id));
-            }
             if changed_media_types.contains(&MediaType::Text) {
                 self.reset_subtitle_playlist();
             }
