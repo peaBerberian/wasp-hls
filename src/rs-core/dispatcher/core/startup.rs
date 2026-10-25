@@ -103,7 +103,7 @@ fn ensure_ready_playlists(dispatcher: &mut Dispatcher, wanted_position: f64) -> 
             let changes = playlist_store.set_variant(variant_id);
             let tracks = changes.tracks();
             let locked_variant_change = changes.locked_variant_change();
-            let changed_media_types = changes.into_changed_playlists();
+            let changed_playlists = changes.into_changed_playlists();
             if let Some(id) = locked_variant_change {
                 jsAnnounceVariantLockStatusChange(Some(id));
             } else if variant_lock_removed {
@@ -111,10 +111,10 @@ fn ensure_ready_playlists(dispatcher: &mut Dispatcher, wanted_position: f64) -> 
             }
             dispatcher.announce_current_variant();
             dispatcher.announce_track_changes(&[tracks]);
-            if changed_media_types.contains(&MediaType::Text) {
+            if changed_playlists.contains(&MediaType::Text) {
                 dispatcher.reset_subtitle_playlist();
             }
-            for media_type in changed_media_types {
+            for media_type in changed_playlists {
                 dispatcher.ready_probe_segments.clear_media_type(media_type);
                 dispatcher.follow_selected_media_playlist(media_type);
             }

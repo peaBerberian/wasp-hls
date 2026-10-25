@@ -79,7 +79,7 @@ impl Dispatcher {
                     );
                 }
                 LockVariantResponse::VariantLocked {
-                    changed_media_types,
+                    changed_playlists,
                     tracks,
                     variant_changed,
                 } => {
@@ -88,12 +88,12 @@ impl Dispatcher {
                         self.announce_current_variant();
                     }
                     self.announce_track_changes(&[tracks]);
-                    if changed_media_types.contains(&MediaType::Text) {
+                    if changed_playlists.contains(&MediaType::Text) {
                         self.reset_subtitle_playlist();
                     }
 
                     // Stop and clean all resources linked to media types whose playlist changed.
-                    for media_type in changed_media_types.iter().copied() {
+                    for media_type in changed_playlists.iter().copied() {
                         log_info!("Core: {} MediaPlaylist changed on variant lock", media_type);
                         self.ready_probe_segments.clear_media_type(media_type);
                         self.abort_segment_requests_with_type(media_type);
@@ -109,7 +109,7 @@ impl Dispatcher {
                     // an unnecessary rebuffer and refetch.
                     for media_type in [MediaType::Audio, MediaType::Video, MediaType::Text] {
                         if self.media_element_ref.has_buffer(media_type)
-                            && !changed_media_types.contains(&media_type)
+                            && !changed_playlists.contains(&media_type)
                         {
                             self.abort_segment_requests_with_type(media_type);
                             self.flush_media_buffer(media_type);
@@ -204,11 +204,11 @@ impl Dispatcher {
                         .unwrap_or_default();
                     let variant_tracks = variant_update.tracks();
                     let locked_variant_change = variant_update.locked_variant_change();
-                    let mut changed_media_types = variant_update.into_changed_playlists();
+                    let mut changed_playlists = variant_update.into_changed_playlists();
                     // The audio playlist may already have changed in set_audio_track. It must also
                     // be flushed when the final variant uses the same playlist as the previous one.
-                    if !changed_media_types.contains(&MediaType::Audio) {
-                        changed_media_types.push(MediaType::Audio);
+                    if !changed_playlists.contains(&MediaType::Audio) {
+                        changed_playlists.push(MediaType::Audio);
                     }
 
                     if let Some(id) = locked_variant_change {
@@ -219,11 +219,11 @@ impl Dispatcher {
                     self.announce_current_variant();
                     self.announce_track_changes(&[changes.tracks(), variant_tracks]);
                     if changes.subtitle_playlist_changed()
-                        || changed_media_types.contains(&MediaType::Text)
+                        || changed_playlists.contains(&MediaType::Text)
                     {
                         self.reset_subtitle_playlist();
                     }
-                    self.reset_on_selected_media_playlists(&changed_media_types);
+                    self.reset_on_selected_media_playlists(&changed_playlists);
                 } else {
                     if changes.variant_lock_removed() {
                         jsAnnounceVariantLockStatusChange(None);
@@ -1370,7 +1370,7 @@ impl Dispatcher {
             let changes = pl_store.set_variant(variant_id);
             let tracks = changes.tracks();
             let locked_variant_change = changes.locked_variant_change();
-            let changed_media_types = changes.into_changed_playlists();
+            let changed_playlists = changes.into_changed_playlists();
             // Announce the selection mode and variant before the affected tracks.
             if let Some(id) = locked_variant_change {
                 jsAnnounceVariantLockStatusChange(Some(id));
@@ -1379,10 +1379,10 @@ impl Dispatcher {
                 self.announce_current_variant();
             }
             self.announce_track_changes(&[tracks]);
-            if changed_media_types.contains(&MediaType::Text) {
+            if changed_playlists.contains(&MediaType::Text) {
                 self.reset_subtitle_playlist();
             }
-            for changed_type in changed_media_types {
+            for changed_type in changed_playlists {
                 self.ready_probe_segments.clear_media_type(changed_type);
                 if recommendation.is_some_and(|selection| {
                     self.should_interrupt_download(changed_type, selection)
