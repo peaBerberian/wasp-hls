@@ -2511,6 +2511,7 @@ video.m3u8
                     Url::new("https://example.com/media.m3u8".into()),
                 )
                 .unwrap();
+            pl_store.assume_variant_supported_for_test(variant_id);
         }
         dispatcher.requester.lock_segment_requests();
 

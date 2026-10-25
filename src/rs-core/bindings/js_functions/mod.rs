@@ -283,9 +283,12 @@ pub fn jsAddSourceBuffer(
     }
 }
 
-pub fn jsIsTypeSupported(media_type: MediaType, typ: &str) -> Option<bool> {
-    match unsafe { __js_func__is_type_supported(media_type as u32, typ.as_ptr(), typ.len() as u32) }
-    {
+/// Ask whether the host supports codecs for the given media type.
+// TODO: Pass the source MIME type too, instead of having the host infer an MP4 type.
+pub fn jsIsTypeSupported(media_type: MediaType, codecs: &str) -> Option<bool> {
+    match unsafe {
+        __js_func__is_type_supported(media_type as u32, codecs.as_ptr(), codecs.len() as u32)
+    } {
         -1 => None,
         0 => Some(false),
         _ => Some(true),

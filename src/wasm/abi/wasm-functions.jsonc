@@ -337,20 +337,22 @@
     },
     {
       "wasmSymbol": "__js_func__is_type_supported",
-      "doc": ["Ask the host whether a MIME type is supported."],
+      "doc": [
+        "Ask the host whether codecs are supported for the given media type.",
+      ],
       "typescript": {
         "methodName": "isTypeSupported",
         "args": [
           { "name": "mediaType", "type": "MediaType" },
-          { "name": "typ", "type": "string" },
+          { "name": "codecs", "type": "string" },
         ],
         "returnType": "boolean | undefined",
       },
       "rust": {
         "args": [
           { "name": "media_type", "type": "u32" },
-          { "name": "typ_ptr", "type": "*const u8" },
-          { "name": "typ_len", "type": "u32" },
+          { "name": "codecs_ptr", "type": "*const u8" },
+          { "name": "codecs_len", "type": "u32" },
         ],
         "returnType": "i32",
       },

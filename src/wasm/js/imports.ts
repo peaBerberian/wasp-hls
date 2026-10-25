@@ -139,12 +139,12 @@ export function createWasmImports(bindings: HostBindings): WebAssembly.Imports {
       },
       __js_func__is_type_supported(
         mediaType: number,
-        typPtr: number,
-        typLen: number,
+        codecsPtr: number,
+        codecsLen: number,
       ): number {
         const value = bindings.isTypeSupported(
           mediaType as MediaType,
-          readString(typPtr, typLen),
+          readString(codecsPtr, codecsLen),
         );
         return value === undefined ? -1 : value ? 1 : 0;
       },

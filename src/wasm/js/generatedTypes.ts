@@ -129,9 +129,9 @@ export interface HostBindings {
     resourceId: number,
   ): HostResult<InspectSegmentValue, SegmentParsingErrorCode>;
   /**
-   * Ask the host whether a MIME type is supported.
+   * Ask the host whether codecs are supported for the given media type.
    */
-  isTypeSupported(mediaType: MediaType, typ: string): boolean | undefined;
+  isTypeSupported(mediaType: MediaType, codecs: string): boolean | undefined;
   /**
    * Send a log line to the host environment.
    */

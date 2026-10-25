@@ -129,8 +129,8 @@ fn ensure_ready_playlists(dispatcher: &mut Dispatcher, wanted_position: f64) -> 
                 dispatcher.ready_probe_segments.clear_media_type(media_type);
                 dispatcher.follow_selected_media_playlist(media_type);
             }
-            dispatcher.check_segments_to_request();
-            false
+            // Check the replacement now, even if its playlists were already loaded.
+            ensure_ready_playlists(dispatcher, wanted_position)
         }
         StartupStatus::NeedsProbes(probe_metadata) => {
             let error_media_type = if probe_metadata.len() == 1 {

@@ -171,11 +171,11 @@ pub(super) unsafe fn __js_func__inspect_segment(
     non_wasm_binding_panic("__js_func__inspect_segment")
 }
 
-/// Ask the host whether a MIME type is supported.
+/// Ask the host whether codecs are supported for the given media type.
 pub(super) unsafe fn __js_func__is_type_supported(
     _media_type: u32,
-    _typ_ptr: *const u8,
-    _typ_len: u32,
+    _codecs_ptr: *const u8,
+    _codecs_len: u32,
 ) -> i32 {
     non_wasm_binding_panic("__js_func__is_type_supported")
 }
