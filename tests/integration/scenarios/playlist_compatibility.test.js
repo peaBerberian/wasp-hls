@@ -14,11 +14,25 @@ async function readPlaylist(url) {
   return response.text();
 }
 
-function playlistRule(url, body) {
+function playlistRule(url, body, { waitForRelease = false } = {}) {
   return {
     match: { urlEndsWith: new URL(url).pathname },
-    actions: [{ type: "response", status: 200, body }],
+    actions: [{ type: "response", status: 200, body, waitForRelease }],
   };
+}
+
+function subtitleRules(url, paths, options) {
+  const segmentUrl = new URL("subtitles.vtt", url).href;
+  const playlist = `#EXTM3U\n#EXT-X-TARGETDURATION:12\n#EXTINF:12,\n${segmentUrl}\n#EXT-X-ENDLIST\n`;
+  return [
+    ...paths.map((path) =>
+      playlistRule(new URL(path, url).href, playlist, options),
+    ),
+    playlistRule(
+      segmentUrl,
+      "WEBVTT\n\n00:00:00.000 --> 00:00:12.000\nTest subtitles\n",
+    ),
+  ];
 }
 
 async function expectPlayback(ctx, url) {
@@ -160,7 +174,14 @@ describe("Playlist compatibility", () => {
                         ? { forced: true }
                         : selection;
       const ctx = await createPlayerHarness({
-        fetchRules: [playlistRule(url, body)],
+        fetchRules: [
+          playlistRule(url, body),
+          ...subtitleRules(url, [
+            "en-subs.m3u8",
+            "forced-fr.m3u8",
+            "fr-subs.m3u8",
+          ]),
+        ],
       });
       try {
         const updates = [];
@@ -220,7 +241,10 @@ describe("Playlist compatibility", () => {
           '#EXT-X-STREAM-INF:SUBTITLES="subs",',
         );
       const ctx = await createPlayerHarness({
-        fetchRules: [playlistRule(url, body)],
+        fetchRules: [
+          playlistRule(url, body),
+          ...subtitleRules(url, ["subs.m3u8"]),
+        ],
       });
       try {
         const audioUpdates = [];
@@ -232,6 +256,12 @@ describe("Playlist compatibility", () => {
           subtitleUpdates.push(tracks),
         );
         await expectPlayback(ctx, url);
+        const subtitlePlaylist = await ctx.workerHandle.telemetry.waitFor(
+          (event) =>
+            event.type === "fetch-resolve" &&
+            event.url === new URL("subs.m3u8", url).href,
+        );
+        expect(subtitlePlaylist.status).toBe(200);
         const expectedName = nameKind === "missing" ? undefined : "";
         const audioTracks = ctx.player.getAudioTrackList();
         expect(audioTracks).toHaveLength(2);
@@ -259,19 +289,40 @@ describe("Playlist compatibility", () => {
       const url = await ensureVodScenarioReady("fmp4-multivariant-no-codecs");
       const master = await readPlaylist(url);
       const tag =
-        '#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID="subs",NAME="Français",LANGUAGE="fr",DEFAULT=YES,AUTOSELECT=YES,FORCED=YES,CHARACTERISTICS="public.accessibility.transcribes-spoken-dialog",URI="missing-subs.m3u8"';
+        '#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID="subs",NAME="Français",LANGUAGE="fr",DEFAULT=YES,AUTOSELECT=YES,FORCED=YES,CHARACTERISTICS="public.accessibility.transcribes-spoken-dialog",URI="pending-subs.m3u8"';
       const body = master
         .replace("#EXTM3U\n", `#EXTM3U\n${tag}\n`)
         .replace("#EXT-X-STREAM-INF:", '#EXT-X-STREAM-INF:SUBTITLES="subs",');
       const ctx = await createPlayerHarness({
-        fetchRules: [playlistRule(url, body)],
+        fetchRules: [
+          playlistRule(url, body),
+          ...subtitleRules(url, ["pending-subs.m3u8"], {
+            waitForRelease: true,
+          }),
+        ],
       });
       try {
         const announced = [];
         ctx.player.addEventListener("subtitleTrackListUpdate", (tracks) =>
           announced.push(tracks),
         );
-        await expectPlayback(ctx, url);
+        const [, subtitleRequest] = await Promise.all([
+          expectPlayback(ctx, url),
+          ctx.workerHandle.telemetry.waitFor(
+            (event) =>
+              event.type === "fetch-start" &&
+              event.url === new URL("pending-subs.m3u8", url).href,
+          ),
+        ]);
+        expect(
+          ctx.workerHandle.telemetry
+            .getEvents()
+            .some(
+              (event) =>
+                event.type === "fetch-resolve" &&
+                event.requestId === subtitleRequest.requestId,
+            ),
+        ).toBe(false);
         const tracks = ctx.player.getSubtitleTrackList();
         expect(tracks).toHaveLength(1);
         expect(tracks[0]).toMatchObject({
@@ -386,7 +437,10 @@ describe("Playlist compatibility", () => {
             ),
         );
       const ctx = await createPlayerHarness({
-        fetchRules: [playlistRule(url, body)],
+        fetchRules: [
+          playlistRule(url, body),
+          ...subtitleRules(url, ["a.m3u8", "b.m3u8"]),
+        ],
       });
       try {
         await expectPlayback(ctx, url);
