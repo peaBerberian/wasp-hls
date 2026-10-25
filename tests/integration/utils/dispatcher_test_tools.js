@@ -13,6 +13,7 @@ import initializeWasm, {
 export async function createDispatcher({
   segmentDuration = 4,
   unsupportedCodec,
+  probedCodecs = unsupportedCodec ?? "avc1.42E01E",
 } = {}) {
   const requests = [];
   const aborted = [];
@@ -23,6 +24,7 @@ export async function createDispatcher({
   const rebufferingEvents = [];
   const errors = [];
   const supportChecks = [];
+  const sourceBuffers = [];
   const resources = new Map();
   let nextResource = 1;
   let nextBuffer = 1;
@@ -53,7 +55,10 @@ export async function createDispatcher({
         variantLockUpdates.push(id);
         selectionEvents.push({ type: "lock", id });
       },
-      addSourceBuffer: () => ({ value: nextBuffer++ }),
+      addSourceBuffer(mediaType, mimeType) {
+        sourceBuffers.push({ mediaType, mimeType });
+        return { value: nextBuffer++ };
+      },
       appendBuffer: () => ({
         value: {
           start: { hi: 0, lo: 0 },
@@ -63,11 +68,13 @@ export async function createDispatcher({
       }),
       isTypeSupported: (type, codec) => {
         supportChecks.push({ type, codec });
-        return codec !== unsupportedCodec;
+        return !codec
+          .split(",")
+          .some((entry) => entry.trim() === unsupportedCodec);
       },
       inspectSegment: () => ({
         value: {
-          codec: unsupportedCodec ?? "avc1.42E01E",
+          codec: probedCodecs,
           mimeType: "video/mp4",
           mediaType: MediaType.Video,
         },
@@ -158,5 +165,6 @@ export async function createDispatcher({
     rebufferingEvents,
     errors,
     supportChecks,
+    sourceBuffers,
   };
 }
