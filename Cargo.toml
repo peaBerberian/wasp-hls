@@ -8,6 +8,7 @@ crate-type = ["cdylib"]
 path = "src/rs-core/lib.rs"
 
 [dependencies]
+quick-xml = "0.37.5"
 thiserror = "2.0.21"
 
 [lints.clippy]

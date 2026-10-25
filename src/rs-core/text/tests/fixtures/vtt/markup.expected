@@ -1,0 +1,78 @@
+Document {
+    nodes: [
+        Node {
+            parent: None,
+            kind: Paragraph,
+            start: 0.0,
+            end: 5.0,
+            text: None,
+        },
+        Node {
+            parent: Some(
+                0,
+            ),
+            kind: Span,
+            start: 0.0,
+            end: 5.0,
+            text: Some(
+                "A & B",
+            ),
+        },
+        Node {
+            parent: Some(
+                0,
+            ),
+            kind: Span,
+            start: 0.0,
+            end: 5.0,
+            text: Some(
+                " ",
+            ),
+        },
+        Node {
+            parent: Some(
+                0,
+            ),
+            kind: Span,
+            start: 0.0,
+            end: 5.0,
+            text: Some(
+                "é",
+            ),
+        },
+        Node {
+            parent: Some(
+                0,
+            ),
+            kind: Span,
+            start: 0.0,
+            end: 5.0,
+            text: Some(
+                "\n",
+            ),
+        },
+        Node {
+            parent: Some(
+                0,
+            ),
+            kind: Span,
+            start: 0.0,
+            end: 5.0,
+            text: Some(
+                "字",
+            ),
+        },
+        Node {
+            parent: Some(
+                0,
+            ),
+            kind: Span,
+            start: 0.0,
+            end: 5.0,
+            text: Some(
+                "oui",
+            ),
+        },
+    ],
+    diagnostics: [],
+}

@@ -1,0 +1,72 @@
+use super::*;
+struct Frame<'a> {
+    tag: &'a str,
+    parent: usize,
+    hidden: bool,
+}
+pub(super) fn parse(
+    source: &str,
+    parent: usize,
+    out: &mut Document,
+    limits: Limits,
+    budget: &mut Budget,
+) -> Result<(), Error> {
+    let (start, end) = (out.nodes[parent].start, out.nodes[parent].end);
+    let mut stack = vec![Frame {
+        tag: "",
+        parent,
+        hidden: false,
+    }];
+    let mut tail = source;
+    while !tail.is_empty() {
+        if let Some(after) = tail.strip_prefix('<') {
+            let (token, rest) = after.split_once('>').unwrap_or((after, ""));
+            tail = rest;
+            if let Some(close) = token.strip_prefix('/') {
+                if stack.len() > 1 && stack.last().unwrap().tag == close {
+                    stack.pop();
+                } else if close == "ruby" && stack.last().unwrap().tag == "rt" {
+                    stack.pop();
+                    if stack.last().unwrap().tag == "ruby" {
+                        stack.pop();
+                    }
+                }
+                continue;
+            }
+            let split = token
+                .find(|c: char| c.is_ascii_whitespace())
+                .unwrap_or(token.len());
+            let mut classes = token[..split].split('.');
+            let tag = classes.next().unwrap_or("");
+            if !matches!(tag, "b" | "i" | "u" | "c" | "v" | "lang" | "ruby" | "rt") {
+                continue;
+            }
+            if tag == "rt" && stack.last().unwrap().tag != "ruby" {
+                continue;
+            }
+            if stack.len() >= limits.depth {
+                return Err(Error::Limit("markup depth"));
+            }
+            let previous = stack.last().unwrap();
+            let mut frame = Frame {
+                tag,
+                parent: previous.parent,
+                hidden: previous.hidden,
+            };
+            frame.hidden |= tag == "rt";
+            stack.push(frame);
+        } else {
+            let end_text = tail.find('<').unwrap_or(tail.len());
+            let frame = stack.last().unwrap();
+            if !frame.hidden {
+                budget.bytes(end_text.saturating_mul(4))?;
+                let mut n = Node::new(Some(frame.parent), Kind::Span, start, end);
+                n.text = Some(entities::decode(&tail[..end_text]));
+                out.push(n, budget)?;
+            }
+            tail = &tail[end_text..];
+        }
+    }
+    // TODO: Use timestamps inside a cue to highlight words as time passes.
+    Ok(())
+}

@@ -1,0 +1,103 @@
+Document {
+    nodes: [
+        Node {
+            parent: None,
+            kind: Paragraph,
+            start: 0.0,
+            end: 2.0,
+            text: None,
+        },
+        Node {
+            parent: Some(
+                0,
+            ),
+            kind: Span,
+            start: 0.0,
+            end: 2.0,
+            text: Some(
+                "Hello ",
+            ),
+        },
+        Node {
+            parent: Some(
+                0,
+            ),
+            kind: Span,
+            start: 0.0,
+            end: 2.0,
+            text: None,
+        },
+        Node {
+            parent: Some(
+                2,
+            ),
+            kind: Span,
+            start: 0.0,
+            end: 2.0,
+            text: Some(
+                "world",
+            ),
+        },
+        Node {
+            parent: Some(
+                0,
+            ),
+            kind: Span,
+            start: 0.0,
+            end: 2.0,
+            text: Some(
+                "!",
+            ),
+        },
+        Node {
+            parent: None,
+            kind: Paragraph,
+            start: 2.0,
+            end: 4.0,
+            text: None,
+        },
+        Node {
+            parent: Some(
+                5,
+            ),
+            kind: Span,
+            start: 2.0,
+            end: 4.0,
+            text: Some(
+                " A  ",
+            ),
+        },
+        Node {
+            parent: Some(
+                5,
+            ),
+            kind: Span,
+            start: 2.0,
+            end: 4.0,
+            text: None,
+        },
+        Node {
+            parent: Some(
+                7,
+            ),
+            kind: Span,
+            start: 2.0,
+            end: 4.0,
+            text: Some(
+                "B C ",
+            ),
+        },
+        Node {
+            parent: Some(
+                5,
+            ),
+            kind: Span,
+            start: 2.0,
+            end: 4.0,
+            text: Some(
+                " D ",
+            ),
+        },
+    ],
+    diagnostics: [],
+}
