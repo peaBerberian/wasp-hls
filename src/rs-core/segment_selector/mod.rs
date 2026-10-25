@@ -26,6 +26,8 @@ pub(crate) struct NextSegmentSelectors {
     audio: NextSegmentSelector,
     /// Segment-selection logic for the video media type
     video: NextSegmentSelector,
+    /// Segment-selection logic for the text media type
+    text: NextSegmentSelector,
 }
 
 impl NextSegmentSelectors {
@@ -47,6 +49,7 @@ impl NextSegmentSelectors {
         Self {
             audio: NextSegmentSelector::new(base_pos, buffer_goal),
             video: NextSegmentSelector::new(base_pos, buffer_goal),
+            text: NextSegmentSelector::new(base_pos, buffer_goal),
         }
     }
 
@@ -60,6 +63,7 @@ impl NextSegmentSelectors {
         let pos = f64::max(0., pos);
         self.audio.reset(pos);
         self.video.reset(pos);
+        self.text.reset(pos);
     }
 
     /// Updates the "base position" - used by the `NextSegmentSelectors` and its inner
@@ -79,6 +83,7 @@ impl NextSegmentSelectors {
     pub(crate) fn advance_position(&mut self, pos: f64) {
         self.audio.advance_position(pos);
         self.video.advance_position(pos);
+        self.text.advance_position(pos);
     }
 
     /// Force the `NextSegmentSelectors` and its inner `NextSegmentSelector`s to re-consider
@@ -102,6 +107,7 @@ impl NextSegmentSelectors {
         let pos = f64::max(0., pos);
         self.audio.restart_from_position(pos);
         self.video.restart_from_position(pos);
+        self.text.restart_from_position(pos);
     }
 
     /// Update the "buffer_goal" which is the amount of media data, in seconds of media, ahead of
@@ -113,6 +119,7 @@ impl NextSegmentSelectors {
     pub(crate) fn update_buffer_goal(&mut self, buffer_goal: f64) {
         self.audio.buffer_goal = buffer_goal;
         self.video.buffer_goal = buffer_goal;
+        self.text.buffer_goal = buffer_goal;
     }
 
     /// Get the unique `NextSegmentSelector` for the type of media communicated as a mutable
@@ -127,6 +134,7 @@ impl NextSegmentSelectors {
         match media_type {
             MediaType::Audio => &mut self.audio,
             MediaType::Video => &mut self.video,
+            MediaType::Text => &mut self.text,
         }
     }
 }

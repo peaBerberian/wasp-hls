@@ -987,6 +987,7 @@ export function onTopLevelPlaylistParsedMessage(
   contentMetadata.topLevelPlaylistType = msg.value.playlistType;
   contentMetadata.variants = msg.value.variants;
   contentMetadata.audioTracks = msg.value.audioTracks;
+  contentMetadata.subtitleTracks = msg.value.subtitleTracks;
   if (contentMetadata.lockedVariant !== null) {
     contentMetadata.lockedVariant = null;
   }
@@ -999,7 +1000,7 @@ export function onTopLevelPlaylistParsedMessage(
  * @param {Object|null} contentMetadata - Metadata of the content currently
  * playing. `null` if no content is currently playing.
  * This object may be mutated.
- * @returns {boolean} - `true` if the message concerned the current content.
+ * @returns {boolean} - `true` for the first announcement or a changed track ID.
  */
 export function onTrackUpdateMessage(
   msg: TrackUpdateWorkerMessage,
@@ -1009,15 +1010,27 @@ export function onTrackUpdateMessage(
     logger.info("API: Ignoring warning due to wrong `contentId`");
     return false;
   }
+  if (msg.value.mediaType === MediaType.Text) {
+    const trackId = msg.value.subtitleTrack?.current;
+    const previousTrack = contentMetadata.currentSubtitleTrack;
+    if (previousTrack !== undefined && previousTrack?.id === trackId) {
+      return false;
+    }
+    contentMetadata.currentSubtitleTrack =
+      trackId === undefined ? null : { id: trackId };
+    return true;
+  }
   if (msg.value.mediaType !== MediaType.Audio) {
     logger.warn("API: track update for a type not handled for now");
     return false;
   }
-  contentMetadata.currentAudioTrack = msg.value.audioTrack
-    ? {
-        id: msg.value.audioTrack.current,
-      }
-    : undefined;
+  const trackId = msg.value.audioTrack?.current;
+  const previousTrack = contentMetadata.currentAudioTrack;
+  if (previousTrack !== undefined && previousTrack?.id === trackId) {
+    return false;
+  }
+  contentMetadata.currentAudioTrack =
+    trackId === undefined ? null : { id: trackId };
   return true;
 }
 

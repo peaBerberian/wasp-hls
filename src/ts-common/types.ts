@@ -41,7 +41,9 @@ export type MainMessage =
   | UpdateLoggerLevelMainMessage
   | LockVariantMainMessage
   | UpdateConfigMainMessage
-  | SetAudioTrackMainMessage;
+  | SetAudioTrackMainMessage
+  | SetSubtitleTrackMainMessage
+  | DisableSubtitleTrackMainMessage;
 
 /**
  * Discriminants (value of the `type` property) for messages sent by the main
@@ -68,6 +70,8 @@ export const enum MainMessageType {
   UpdateConfig = "upd-conf",
   LockVariant = "lock-var",
   SetAudioTrack = "set-audio",
+  SetSubtitleTrack = "set-subtitle",
+  DisableSubtitleTrack = "disable-subtitle",
   CodecsSupportUpdate = "codecs-support-upd",
 }
 
@@ -455,6 +459,7 @@ export interface TopLevelPlaylistParsedWorkerMessage {
     playlistType: PlaylistType;
     variants: VariantInfo[];
     audioTracks: AudioTrackInfo[];
+    subtitleTracks: SubtitleTrackInfo[];
   };
 }
 
@@ -468,6 +473,7 @@ export interface TrackUpdateWorkerMessage {
      */
     contentId: string;
     mediaType: MediaType;
+    subtitleTrack?: { current: number } | undefined;
     audioTrack?:
       | {
           current: number;
@@ -496,6 +502,27 @@ export interface VariantInfo {
   frameRate: number | undefined;
   bandwidth: number | undefined;
   videoRange?: string | undefined;
+}
+
+/** An HLS subtitle track grouping equivalent renditions. IDs are content-scoped. */
+export interface SubtitleTrackInfo {
+  id: number;
+  name?: string | undefined;
+  language?: string | undefined;
+  assocLanguage?: string | undefined;
+  forced: boolean;
+  characteristics: string[];
+}
+
+export interface DisableSubtitleTrackMainMessage {
+  type: MainMessageType.DisableSubtitleTrack;
+  value: { contentId: string };
+}
+
+/** null restores automatic selection, as with audio tracks. */
+export interface SetSubtitleTrackMainMessage {
+  type: MainMessageType.SetSubtitleTrack;
+  value: { contentId: string; trackId: number | null };
 }
 
 export interface AudioTrackInfo {
@@ -527,8 +554,24 @@ export interface InitialAudioTrackSelection {
  * Preferred startup audio-track selection criteria, expressed either as a
  * single selector or as an ordered list of selectors.
  */
+// XXX TODO: Can't this be an array in general at this point? This is only an API concern
 export type InitialAudioTrackPreference =
   InitialAudioTrackSelection | InitialAudioTrackSelection[];
+
+/** Preferred characteristics for the initially selected subtitle track. */
+export interface InitialSubtitleTrackSelection {
+  language?: string | undefined;
+  assocLanguage?: string | undefined;
+  name?: string | undefined;
+  characteristics?: string[] | undefined;
+  forced?: boolean | undefined;
+}
+
+// XXX TODO: Can't this be an array in general at this point? This is only an API concern
+export type InitialSubtitleTrackPreference =
+  | InitialSubtitleTrackSelection
+  | null
+  | Array<InitialSubtitleTrackSelection | null>;
 
 /**
  * Message sent when the Worker has succesfully stopped a content.
@@ -998,6 +1041,7 @@ export interface LoadContentMainMessage {
       | undefined;
     /** Preferred characteristics for the initially selected audio track. */
     initialAudioTrack?: InitialAudioTrackPreference | undefined;
+    initialSubtitleTrack?: InitialSubtitleTrackPreference | undefined;
   };
 }
 

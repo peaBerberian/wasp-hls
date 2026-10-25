@@ -8,10 +8,13 @@ pub(crate) const DIRECT_MEDIA_VARIANT_ID: u32 = 0;
 pub(crate) const DIRECT_MEDIA_AUDIO_TRACK_ID: u32 = 0;
 static DIRECT_MEDIA_TRACK_NAME: &str = "main";
 
-pub(crate) unsafe fn format_variants_info_for_js(variants: &[&VariantStream]) -> Vec<u32> {
-    let mut ret: Vec<u32> = vec![];
-    ret.push(variants.len() as u32);
-    variants.iter().for_each(|v| {
+pub(crate) unsafe fn format_variants_info_for_js<'a>(
+    variants: impl Iterator<Item = &'a VariantStream>,
+) -> Vec<u32> {
+    let mut ret: Vec<u32> = vec![0]; // Fill the variant count after consuming the iterator.
+    let mut variant_count = 0;
+    for v in variants {
+        variant_count += 1;
         ret.push(v.id());
         let resolution = v.resolution().unwrap_or(&NULL_RESOLUTION);
         ret.push(resolution.height());
@@ -25,7 +28,8 @@ pub(crate) unsafe fn format_variants_info_for_js(variants: &[&VariantStream]) ->
         };
         ret.push(video_range.len() as u32);
         ret.push(video_range.as_ptr() as u32);
-    });
+    }
+    ret[0] = variant_count;
     ret
 }
 
@@ -157,4 +161,30 @@ pub(crate) fn format_direct_media_audio_tracks_for_js(has_audio_track: bool) -> 
         ret.push(0);
     }
     ret
+}
+
+/// Packed rendition metadata borrows strings from the playlist. The host must copy
+/// every field synchronously before this call returns.
+pub(crate) fn format_subtitle_tracks_for_js(tracks: &[crate::parser::SubtitleTrack]) -> Vec<u32> {
+    let mut out = vec![tracks.len() as u32];
+    for track in tracks {
+        out.push(track.id());
+        for value in [
+            track.language().unwrap_or(""),
+            track.assoc_language().unwrap_or(""),
+        ] {
+            out.extend([value.len() as u32, value.as_ptr() as u32]);
+        }
+        let name = track.name();
+        out.extend([
+            name.map_or(0, |value| value.len() as u32),
+            name.map_or(0, |value| value.as_ptr() as u32),
+        ]);
+        out.push(track.is_forced() as u32);
+        out.push(track.characteristics().len() as u32);
+        for value in track.characteristics() {
+            out.extend([value.len() as u32, value.as_ptr() as u32]);
+        }
+    }
+    out
 }

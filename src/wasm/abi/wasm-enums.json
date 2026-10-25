@@ -2,6 +2,7 @@
   "enums": {
     "PlaylistType": {
       "default": "MultivariantPlaylist",
+      "rustDerives": ["PartialEq"],
       "members": {
         "MultivariantPlaylist": 0,
         "MediaPlaylist": 1
@@ -9,6 +10,7 @@
     },
     "OtherErrorCode": {
       "default": "Unknown",
+      "rustDerives": [],
       "members": {
         "UnfoundLockedVariant": 0,
         "MediaSourceAttachmentError": 1,
@@ -17,12 +19,14 @@
     },
     "ContentCompatibilityErrorCode": {
       "default": "NoSupportedVariant",
+      "rustDerives": [],
       "members": {
         "NoSupportedVariant": 0
       }
     },
     "SourceBufferCreationErrorCode": {
       "default": "Unknown",
+      "rustDerives": [],
       "members": {
         "AlreadyCreatedWithSameType": 0,
         "CantPlayType": 1,
@@ -35,6 +39,7 @@
     },
     "RequestErrorReason": {
       "default": "Other",
+      "rustDerives": ["Clone", "Copy", "Debug", "PartialEq"],
       "members": {
         "Timeout": 0,
         "Status": 1,
@@ -44,6 +49,7 @@
     },
     "RemoveMediaSourceErrorCode": {
       "default": "UnknownError",
+      "rustDerives": [],
       "doc": [
         "Errors that can arise when attempting to remove a MediaSource previously attached",
         "to a media element."
@@ -66,6 +72,7 @@
     },
     "MediaSourceDurationUpdateErrorCode": {
       "default": "UnknownError",
+      "rustDerives": [],
       "doc": [
         "Errors that can arise when attempting to update the duration of a MediaSource.",
         "TODO defined errors when the MediaSource is closed and so on?"
@@ -85,6 +92,7 @@
     },
     "AttachMediaSourceErrorCode": {
       "default": "UnknownError",
+      "rustDerives": [],
       "doc": [
         "Errors (or success) that can arise when attempting to \"attach\" a MediaSource to a media",
         "element."
@@ -107,6 +115,7 @@
     },
     "RemoveBufferErrorCode": {
       "default": "UnknownError",
+      "rustDerives": [],
       "doc": [
         "Errors that can arise when calling the `jsRemoveBuffer` JavaScript function."
       ],
@@ -126,6 +135,7 @@
     },
     "EndOfStreamErrorCode": {
       "default": "UnknownError",
+      "rustDerives": [],
       "doc": [
         "Errors that can arise when calling the `jsEndOfStream` JavaScript function."
       ],
@@ -145,6 +155,7 @@
     },
     "MultivariantPlaylistParsingErrorCode": {
       "default": "Unknown",
+      "rustDerives": [],
       "doc": ["Error that might arise when parsing the Multivariant Playlist."],
       "members": {
         "MultivariantPlaylistWithoutVariant": {
@@ -225,6 +236,7 @@
     },
     "MediaPlaylistParsingErrorCode": {
       "default": "Unknown",
+      "rustDerives": [],
       "doc": ["Error that might arise when parsing the Media Playlist."],
       "members": {
         "UnparsableExtInf": {
@@ -284,6 +296,7 @@
     },
     "AddSourceBufferErrorCode": {
       "default": "UnknownError",
+      "rustDerives": [],
       "doc": [
         "Error that might arise when adding a SourceBuffer through a MediaSource instance."
       ],
@@ -326,6 +339,7 @@
     },
     "SegmentParsingErrorCode": {
       "default": "UnknownError",
+      "rustDerives": [],
       "doc": [
         "Errors that can arise when calling the `jsAppendBuffer` JavaScript function."
       ],
@@ -358,6 +372,7 @@
     },
     "PushedSegmentErrorCode": {
       "default": "UnknownError",
+      "rustDerives": ["PartialEq"],
       "doc": [
         "Errors that can arise after a SourceBuffer's `appendBuffer` call."
       ],
@@ -378,6 +393,7 @@
     },
     "PlaybackObservationReason": {
       "default": "Error",
+      "rustDerives": [],
       "doc": ["Reason that triggered a `PlaybackObservation`"],
       "members": {
         "Init": {
@@ -430,6 +446,7 @@
     },
     "TimerReason": {
       "default": "MediaPlaylistRefresh",
+      "rustDerives": [],
       "doc": [
         "\"Reason\" associated to a timer started by the WaspHlsPlayer.",
         "",
@@ -453,6 +470,7 @@
     },
     "LogLevel": {
       "default": "Error",
+      "rustDerives": [],
       "doc": ["Levels with which a log can be emitted."],
       "members": {
         "Error": {
@@ -481,13 +499,16 @@
     },
     "MediaType": {
       "default": "Audio",
+      "rustDerives": ["Clone", "Copy", "Debug", "PartialEq", "Eq", "Hash"],
       "members": {
         "Audio": 0,
-        "Video": 1
+        "Video": 1,
+        "Text": 2
       }
     },
     "PlaylistNature": {
       "default": "Unknown",
+      "rustDerives": ["Clone", "Copy", "Debug", "PartialEq"],
       "members": {
         "Event": 0,
         "VoD": 1,
@@ -497,6 +518,7 @@
     },
     "MediaSourceReadyState": {
       "default": "Closed",
+      "rustDerives": ["Clone", "Copy", "Debug", "PartialEq"],
       "doc": [
         "Identify the JavaScript `readyState` of a created `MediaSource` instance."
       ],
@@ -523,6 +545,7 @@
     },
     "StartingPositionType": {
       "default": "Absolute",
+      "rustDerives": ["Clone", "Copy", "Debug"],
       "members": {
         "Absolute": 0,
         "FromBeginning": 1,
@@ -531,6 +554,7 @@
     },
     "PlaybackTickReason": {
       "default": "Init",
+      "rustDerives": ["Clone", "Copy", "Debug"],
       "doc": [
         "Identify the event that lead to the `MediaObservation` being sent."
       ],
@@ -640,6 +664,7 @@
     },
     "TrackSelectionErrorCode": {
       "default": "UnknownTrack",
+      "rustDerives": [],
       "members": {
         "UnknownTrack": 0,
         "NoCompatibleVariant": 1

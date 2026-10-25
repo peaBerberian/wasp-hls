@@ -8,12 +8,12 @@ use crate::{
             format_direct_media_variants_info_for_js, format_source_buffer_creation_err_for_js,
             format_variants_info_for_js, DIRECT_MEDIA_AUDIO_TRACK_ID,
         },
-        jsAnnounceFetchedContent, jsAnnounceTrackUpdate, jsAnnounceVariantLockStatusChange,
-        jsSendOtherError, jsSendSegmentParsingError, jsSendSourceBufferCreationError,
-        jsStartObservingPlayback, MediaSourceReadyState, MediaType, OtherErrorCode, PlaylistType,
+        jsAnnounceFetchedContent, jsAnnounceVariantLockStatusChange, jsSendOtherError,
+        jsSendSegmentParsingError, jsSendSourceBufferCreationError, jsStartObservingPlayback,
+        MediaSourceReadyState, MediaType, OtherErrorCode, PlaylistType,
     },
     media_element::SourceBufferCreationError,
-    playlist_store::{ProbeSegmentContext, StartupStatus},
+    playlist_store::{ProbeSegmentContext, StartupStatus, TrackChange, TrackChanges},
     requester::RequestLaneTag,
 };
 use crate::{parser::ByteRange, utils::url::Url};
@@ -81,13 +81,13 @@ fn ensure_ready_playlists(dispatcher: &mut Dispatcher, wanted_position: f64) -> 
         StartupStatus::VariantSelectionNeeded => {
             // Support recovery must be allowed to replace an unsupported locked variant.
             // Otherwise the lock makes selection return that same variant recursively.
-            if playlist_store.is_variant_locked() {
-                playlist_store.unlock_variant();
-                jsAnnounceVariantLockStatusChange(None);
-            }
+            let variant_lock_removed = playlist_store.unlock_variant();
             let Some(selection) = dispatcher.compute_optimal_variant() else {
                 // NOTE: Should normally never happen, we should have ensured this was not possible
                 // before
+                if variant_lock_removed {
+                    jsAnnounceVariantLockStatusChange(None);
+                }
                 jsSendOtherError(
                     true,
                     OtherErrorCode::Unknown,
@@ -100,21 +100,37 @@ fn ensure_ready_playlists(dispatcher: &mut Dispatcher, wanted_position: f64) -> 
                 return false;
             };
             let variant_id = selection.safe_variant_id;
-            // Probe the safe variant before normal segment selection can run.
-            let previous_audio_track = playlist_store.current_audio_track_id();
-            let changed_media_types = playlist_store.set_variant(variant_id);
-            let audio_track_changed =
-                previous_audio_track != playlist_store.current_audio_track_id();
-            dispatcher.announce_current_variant();
-            if audio_track_changed {
-                dispatcher.announce_current_audio_track();
+            let changes = match playlist_store.set_variant(variant_id) {
+                Ok(changes) => changes,
+                Err(err) => {
+                    if variant_lock_removed {
+                        jsAnnounceVariantLockStatusChange(None);
+                    }
+                    jsSendOtherError(
+                        true,
+                        OtherErrorCode::Unknown,
+                        &format!("Could not select variant during startup: {err}"),
+                    );
+                    dispatcher.stop_current_content();
+                    return false;
+                }
+            };
+            let tracks = changes.tracks();
+            let changed_playlists = changes.into_changed_playlists();
+            if variant_lock_removed {
+                jsAnnounceVariantLockStatusChange(None);
             }
-            for media_type in changed_media_types {
+            dispatcher.announce_current_variant();
+            dispatcher.announce_track_changes(&[tracks]);
+            if changed_playlists.contains(&MediaType::Text) {
+                dispatcher.reset_subtitle_playlist();
+            }
+            for media_type in changed_playlists {
                 dispatcher.ready_probe_segments.clear_media_type(media_type);
                 dispatcher.follow_selected_media_playlist(media_type);
             }
-            dispatcher.check_segments_to_request();
-            false
+            // Check the replacement now, even if its playlists were already loaded.
+            ensure_ready_playlists(dispatcher, wanted_position)
         }
         StartupStatus::NeedsProbes(probe_metadata) => {
             let error_media_type = if probe_metadata.len() == 1 {
@@ -159,7 +175,7 @@ fn advance_awaiting_playlist_info_state(dispatcher: &mut Dispatcher) {
         utils::get_initial_position(playlist_store, starting_position)
     };
 
-    for media_type in [MediaType::Video, MediaType::Audio] {
+    for media_type in [MediaType::Video, MediaType::Audio, MediaType::Text] {
         dispatcher.follow_selected_media_playlist(media_type);
     }
 
@@ -178,22 +194,19 @@ fn advance_awaiting_playlist_info_state(dispatcher: &mut Dispatcher) {
             //
             // Because one of the rules of those bindings is to copy all pointed data
             // synchronously on call, we should not encounter any issue.
-            let (variants_info, audio_tracks_info) = if playlist_store.playlist_kind()
-                == PlaylistType::MediaPlaylist
-            {
-                let has_audio_track = playlist_store.has_distinct_media_type(MediaType::Audio);
-                (
-                    unsafe { format_direct_media_variants_info_for_js() },
-                    format_direct_media_audio_tracks_for_js(has_audio_track),
-                )
-            } else {
-                (
-                    unsafe {
-                        format_variants_info_for_js(playlist_store.available_variants().as_slice())
-                    },
-                    format_audio_tracks_for_js(playlist_store.audio_tracks()),
-                )
-            };
+            let (variants_info, audio_tracks_info) =
+                if playlist_store.playlist_kind() == PlaylistType::MediaPlaylist {
+                    let has_audio_track = playlist_store.has_distinct_media_type(MediaType::Audio);
+                    (
+                        unsafe { format_direct_media_variants_info_for_js() },
+                        format_direct_media_audio_tracks_for_js(has_audio_track),
+                    )
+                } else {
+                    (
+                        unsafe { format_variants_info_for_js(playlist_store.available_variants()) },
+                        format_audio_tracks_for_js(playlist_store.audio_tracks()),
+                    )
+                };
             let fixed_audio_track = playlist_store.fixed_audio_track_id();
             let curr_audio_track = if let Some(fixed) = fixed_audio_track {
                 Some(fixed)
@@ -213,9 +226,25 @@ fn advance_awaiting_playlist_info_state(dispatcher: &mut Dispatcher) {
             )
         };
 
-        jsAnnounceFetchedContent(playlist_kind, variants_info, audio_tracks_info);
+        let Some(store) = dispatcher.playlist_store.as_ref() else {
+            return;
+        };
+
+        // XXX TODO: Why completely different from audio here?
+        let subtitle_tracks_info =
+            crate::bindings::formatters::format_subtitle_tracks_for_js(store.subtitle_tracks());
+        let curr_subtitle_track = store.current_subtitle_track_id();
+        jsAnnounceFetchedContent(
+            playlist_kind,
+            variants_info,
+            audio_tracks_info,
+            subtitle_tracks_info,
+        );
         dispatcher.announce_current_variant();
-        jsAnnounceTrackUpdate(MediaType::Audio, curr_audio_track);
+        dispatcher.announce_track_changes(&[TrackChanges::new(
+            TrackChange::Changed(curr_audio_track),
+            TrackChange::Changed(curr_subtitle_track),
+        )]);
 
         dispatcher.ready_state = PlayerReadyState::AwaitingPlaylistInfo {
             starting_position,
@@ -278,6 +307,14 @@ fn advance_awaiting_media_source_state(dispatcher: &mut Dispatcher) {
         dispatcher.stop_current_content();
         return;
     }
+    // XXX TODO: Do we really want to send a fatal error when no subs? When could that actually
+    // happen?
+    if let Some(Err(e)) = init_source_buffer(dispatcher, MediaType::Text) {
+        let (code, msg) = format_source_buffer_creation_err_for_js(e);
+        jsSendSourceBufferCreationError(true, code, MediaType::Text, &msg);
+        dispatcher.stop_current_content();
+        return;
+    }
     dispatcher
         .segment_selectors
         .restart_from_position(wanted_start);
@@ -301,6 +338,7 @@ fn advance_awaiting_media_source_state(dispatcher: &mut Dispatcher) {
     // Generalize behavior?
     let media_type = dispatcher.playlist_store.as_ref().and_then(|store| {
         match (
+            // XXX TODO: Check for if text would be needed here
             store.has_loaded_media_playlist(MediaType::Video),
             store.has_loaded_media_playlist(MediaType::Audio),
         ) {

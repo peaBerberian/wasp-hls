@@ -2,9 +2,25 @@
 
 ## Unreleased
 
+### Features
+
+- Handle IMSC1 and WebVTT subtitles
+- Add `getSubtitleTrackList()`, `getCurrentSubtitleTrack()`, `setSubtitleTrack()`, `resetSubtitleTrack()` and `disableSubtitleTrack()` methods
+- Add `subtitleTrackUpdate` and `subtitleTrackListUpdate` events
+- Add `initialSubtitleTrack` `load` option
+- Add `WaspMediaError` error type and corresponding types
+
 ### Bug fixes
 
-- Set a default track ID when transmuxing raw aac
+- `lockVariant()`: preserve the current lock when the requested variant is invalid or incompatible.
+- `audioTrackUpdate`: suppress duplicate announcements of the same track.
+- `setAudioTrack()`: announce track changes even when the media playlist stays the same.
+- transmuxing: Set a default track ID when transmuxing raw aac
+- Fix stale audio/video codec support results after segment probing.
+
+### Other
+
+- Send related selection events mostly in the same order: lock status, variant, audio track, subtitle track.
 
 ## v0.6.0 (2026-10-20)
 

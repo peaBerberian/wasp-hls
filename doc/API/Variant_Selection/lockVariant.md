@@ -12,6 +12,8 @@ objects are through the [`getVariantList` method](./getVariantList.md) and the
 
 Once locked, it is possible to `unlock` the variant for the currently-loaded
 content by calling the [`unlockVariant`](./unlockVariant.md) method.
+Calling `lockVariant` again replaces the lock. Incompatible track changes or
+an unsupported variant can also remove it and resume automatic selection.
 
 `lockVariant` can only be called when the `WaspHlsPlayer` instance is [in the
 `"Loaded"` state](../Basic_Methods/getPlayerState.md) and thus when a content is

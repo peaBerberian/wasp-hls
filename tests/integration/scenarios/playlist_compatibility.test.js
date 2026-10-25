@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
   waitForLoadedState,
+  waitForPlayback,
   waitForPlayerEvent,
 } from "../../utils/player_test_tools.js";
 import { ensureVodScenarioReady } from "../../utils/vod_scenarios.js";
+import { TEST_TIMEOUT_MS } from "../../utils/timeouts.js";
 import { createPlayerHarness } from "../utils/request_integration_test_tools.js";
-
-const TEST_TIMEOUT_MS = 120_000;
 
 async function readPlaylist(url) {
   const response = await fetch(url);
@@ -14,11 +14,25 @@ async function readPlaylist(url) {
   return response.text();
 }
 
-function playlistRule(url, body) {
+function playlistRule(url, body, { waitForRelease = false } = {}) {
   return {
     match: { urlEndsWith: new URL(url).pathname },
-    actions: [{ type: "response", status: 200, body }],
+    actions: [{ type: "response", status: 200, body, waitForRelease }],
   };
+}
+
+function subtitleRules(url, paths, options) {
+  const segmentUrl = new URL("subtitles.vtt", url).href;
+  const playlist = `#EXTM3U\n#EXT-X-TARGETDURATION:12\n#EXTINF:12,\n${segmentUrl}\n#EXT-X-ENDLIST\n`;
+  return [
+    ...paths.map((path) =>
+      playlistRule(new URL(path, url).href, playlist, options),
+    ),
+    playlistRule(
+      segmentUrl,
+      "WEBVTT\n\n00:00:00.000 --> 00:00:12.000\nTest subtitles\n",
+    ),
+  ];
 }
 
 async function expectPlayback(ctx, url) {
@@ -26,17 +40,46 @@ async function expectPlayback(ctx, url) {
   await waitForLoadedState(ctx.player, ctx.videoElement, () =>
     ctx.getLastPlayerError(),
   );
-  const timeUpdate = waitForPlayerEvent(
-    ctx.videoElement,
-    "timeupdate",
-    () => ctx.videoElement.currentTime > 0.5,
+  await waitForPlayback(ctx.player, ctx.videoElement, () =>
+    ctx.getLastPlayerError(),
   );
-  ctx.player.resume();
-  await timeUpdate;
   expect(ctx.player.getError()).toBeNull();
 }
 
 describe("Playlist compatibility", () => {
+  it.each(["", "\ufeff"])(
+    "rejects a text-only main playlist after probing WebVTT (BOM: %j)",
+    { timeout: TEST_TIMEOUT_MS },
+    async (bom) => {
+      const url = await ensureVodScenarioReady("fmp4-alt-audio");
+      const segmentUrl = new URL("text-only.vtt", url).href;
+      const ctx = await createPlayerHarness({
+        fetchRules: [
+          playlistRule(
+            url,
+            `#EXTM3U\n#EXT-X-TARGETDURATION:4\n#EXTINF:4,\n${segmentUrl}\n#EXT-X-ENDLIST\n`,
+          ),
+          playlistRule(
+            segmentUrl,
+            `${bom}WEBVTT\n\n00:00:00.000 --> 00:00:04.000\nHello\n`,
+          ),
+        ],
+      });
+      try {
+        const failed = waitForPlayerEvent(ctx.player, "error");
+        ctx.player.load(url);
+        const error = await failed;
+        expect(error.name).toBe("WaspContentCompatibilityError");
+        expect(error.message).toContain(
+          "Text-only main content is not supported",
+        );
+        expect(ctx.player.getPlayerState()).toBe("Error");
+      } finally {
+        ctx.dispose();
+      }
+    },
+  );
+
   it.each(["same-selector", "ordered", "fallback"])(
     "skips unused audio groups in initial preferences (%s)",
     { timeout: TEST_TIMEOUT_MS },
@@ -80,23 +123,145 @@ describe("Playlist compatibility", () => {
     },
   );
 
+  it.each([
+    "single",
+    "ordered",
+    "unmatched",
+    "forced",
+    "off",
+    "fallback-off",
+    "off-first",
+    "match-before-off",
+    "empty",
+  ])(
+    "applies %s initial subtitle preferences before the first track update",
+    { timeout: TEST_TIMEOUT_MS },
+    async (preferenceKind) => {
+      const url = await ensureVodScenarioReady("fmp4-alt-audio");
+      const master = await readPlaylist(url);
+      const tags = [
+        '#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID="subs",NAME="English",LANGUAGE="en",DEFAULT=YES,URI="en-subs.m3u8"',
+        '#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID="subs",NAME="Forced French",LANGUAGE="fr",FORCED=YES,AUTOSELECT=YES,URI="forced-fr.m3u8"',
+        '#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID="subs",NAME="French",LANGUAGE="fr",CHARACTERISTICS="public.accessibility.transcribes-spoken-dialog",URI="fr-subs.m3u8"',
+      ].join("\n");
+      const body = master
+        .replace("#EXTM3U\n", `#EXTM3U\n${tags}\n`)
+        .replaceAll(
+          "#EXT-X-STREAM-INF:",
+          '#EXT-X-STREAM-INF:SUBTITLES="subs",',
+        );
+      const selection = {
+        language: "fr",
+        forced: false,
+        characteristics: ["public.accessibility.transcribes-spoken-dialog"],
+      };
+      const initialSubtitleTrack =
+        preferenceKind === "off"
+          ? null
+          : preferenceKind === "fallback-off"
+            ? [{ language: "de" }, null, selection]
+            : preferenceKind === "off-first"
+              ? [null, selection]
+              : preferenceKind === "match-before-off"
+                ? [selection, null]
+                : preferenceKind === "empty"
+                  ? []
+                  : preferenceKind === "ordered"
+                    ? [{ language: "de" }, selection]
+                    : preferenceKind === "unmatched"
+                      ? { language: "de" }
+                      : preferenceKind === "forced"
+                        ? { forced: true }
+                        : selection;
+      const ctx = await createPlayerHarness({
+        fetchRules: [
+          playlistRule(url, body),
+          ...subtitleRules(url, [
+            "en-subs.m3u8",
+            "forced-fr.m3u8",
+            "fr-subs.m3u8",
+          ]),
+        ],
+      });
+      try {
+        const updates = [];
+        ctx.player.addEventListener("subtitleTrackUpdate", (track) =>
+          updates.push(track),
+        );
+        ctx.player.load(url, {
+          initialAudioTrack: { language: "fr" },
+          initialSubtitleTrack,
+        });
+        await waitForLoadedState(ctx.player, ctx.videoElement, () =>
+          ctx.getLastPlayerError(),
+        );
+        const expectedName = ["off", "fallback-off", "off-first"].includes(
+          preferenceKind,
+        )
+          ? undefined
+          : ["unmatched", "empty"].includes(preferenceKind)
+            ? "English"
+            : preferenceKind === "forced"
+              ? "Forced French"
+              : "French";
+        expect(ctx.player.getCurrentAudioTrack()?.language).toBe("fr");
+        expect(ctx.player.getCurrentSubtitleTrack()?.name).toBe(expectedName);
+        expect(updates[0]?.name).toBe(expectedName);
+        if (expectedName === undefined) {
+          expect(ctx.player.getCurrentSubtitleTrack()).toBeNull();
+          expect(updates[0]).toBeNull();
+        }
+        expect(ctx.player.getError()).toBeNull();
+
+        // A new load without preferences uses automatic selection again.
+        ctx.player.load(url);
+        await waitForLoadedState(ctx.player, ctx.videoElement, () =>
+          ctx.getLastPlayerError(),
+        );
+        expect(ctx.player.getCurrentSubtitleTrack()?.name).toBe("English");
+      } finally {
+        ctx.dispose();
+      }
+    },
+  );
+
   it.each(["missing", "empty"])(
-    "preserves %s audio names through the public API",
+    "preserves %s audio and subtitle names through the public API",
     { timeout: TEST_TIMEOUT_MS },
     async (nameKind) => {
       const url = await ensureVodScenarioReady("fmp4-alt-audio");
       const master = await readPlaylist(url);
       const nameAttribute = nameKind === "missing" ? "" : ',NAME=""';
-      const body = master.replace(/,NAME="[^"]*"/g, nameAttribute);
+      const subtitleTag = `#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID="subs"${nameAttribute},LANGUAGE="fr",DEFAULT=YES,URI="subs.m3u8"`;
+      const body = master
+        .replace(/,NAME="[^"]*"/g, nameAttribute)
+        .replace("#EXTM3U\n", `#EXTM3U\n${subtitleTag}\n`)
+        .replaceAll(
+          "#EXT-X-STREAM-INF:",
+          '#EXT-X-STREAM-INF:SUBTITLES="subs",',
+        );
       const ctx = await createPlayerHarness({
-        fetchRules: [playlistRule(url, body)],
+        fetchRules: [
+          playlistRule(url, body),
+          ...subtitleRules(url, ["subs.m3u8"]),
+        ],
       });
       try {
         const audioUpdates = [];
+        const subtitleUpdates = [];
         ctx.player.addEventListener("audioTrackListUpdate", (tracks) =>
           audioUpdates.push(tracks),
         );
+        ctx.player.addEventListener("subtitleTrackListUpdate", (tracks) =>
+          subtitleUpdates.push(tracks),
+        );
         await expectPlayback(ctx, url);
+        const subtitlePlaylist = await ctx.workerHandle.telemetry.waitFor(
+          (event) =>
+            event.type === "fetch-resolve" &&
+            event.url === new URL("subs.m3u8", url).href,
+        );
+        expect(subtitlePlaylist.status).toBe(200);
         const expectedName = nameKind === "missing" ? undefined : "";
         const audioTracks = ctx.player.getAudioTrackList();
         expect(audioTracks).toHaveLength(2);
@@ -104,8 +269,198 @@ describe("Playlist compatibility", () => {
           expect(track.name).toBe(expectedName);
           expect(track.characteristics).toEqual([]);
         }
+        const subtitleTracks = ctx.player.getSubtitleTrackList();
+        expect(subtitleTracks).toHaveLength(1);
+        expect(subtitleTracks[0].name).toBe(expectedName);
         expect(ctx.player.getCurrentAudioTrack()?.name).toBe(expectedName);
+        expect(ctx.player.getCurrentSubtitleTrack()?.name).toBe(expectedName);
         expect(audioUpdates.at(-1)).toEqual(audioTracks);
+        expect(subtitleUpdates.at(-1)).toEqual(subtitleTracks);
+      } finally {
+        ctx.dispose();
+      }
+    },
+  );
+
+  it(
+    "exposes subtitle metadata without making subtitle requests gate playback",
+    { timeout: TEST_TIMEOUT_MS },
+    async () => {
+      const url = await ensureVodScenarioReady("fmp4-multivariant-no-codecs");
+      const master = await readPlaylist(url);
+      const tag =
+        '#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID="subs",NAME="Français",LANGUAGE="fr",DEFAULT=YES,AUTOSELECT=YES,FORCED=YES,CHARACTERISTICS="public.accessibility.transcribes-spoken-dialog",URI="pending-subs.m3u8"';
+      const body = master
+        .replace("#EXTM3U\n", `#EXTM3U\n${tag}\n`)
+        .replace("#EXT-X-STREAM-INF:", '#EXT-X-STREAM-INF:SUBTITLES="subs",');
+      const ctx = await createPlayerHarness({
+        fetchRules: [
+          playlistRule(url, body),
+          ...subtitleRules(url, ["pending-subs.m3u8"], {
+            waitForRelease: true,
+          }),
+        ],
+      });
+      try {
+        const announced = [];
+        ctx.player.addEventListener("subtitleTrackListUpdate", (tracks) =>
+          announced.push(tracks),
+        );
+        const [, subtitleRequest] = await Promise.all([
+          expectPlayback(ctx, url),
+          ctx.workerHandle.telemetry.waitFor(
+            (event) =>
+              event.type === "fetch-start" &&
+              event.url === new URL("pending-subs.m3u8", url).href,
+          ),
+        ]);
+        expect(
+          ctx.workerHandle.telemetry
+            .getEvents()
+            .some(
+              (event) =>
+                event.type === "fetch-resolve" &&
+                event.requestId === subtitleRequest.requestId,
+            ),
+        ).toBe(false);
+        const tracks = ctx.player.getSubtitleTrackList();
+        expect(tracks).toHaveLength(1);
+        expect(tracks[0]).toMatchObject({
+          name: "Français",
+          language: "fr",
+          forced: true,
+          characteristics: ["public.accessibility.transcribes-spoken-dialog"],
+        });
+        expect(announced.at(-1)).toEqual(tracks);
+        expect(ctx.player.getCurrentSubtitleTrack()?.id).toBe(tracks[0].id);
+        const invalidSelection = waitForPlayerEvent(
+          ctx.player,
+          "warning",
+          (warning) => warning.name === "WaspTrackSelectionError",
+        );
+        expect(() => ctx.player.setSubtitleTrack(0x7ffffffe)).not.toThrow();
+        const warning = await invalidSelection;
+        expect(warning.name).toBe("WaspTrackSelectionError");
+        expect(warning.code).toBe("UnknownTrack");
+        expect(warning.trackId).toBe(0x7ffffffe);
+        for (const args of [[null], [undefined], []]) {
+          expect(() =>
+            Reflect.apply(ctx.player.setSubtitleTrack, ctx.player, args),
+          ).toThrow(TypeError);
+        }
+        expect(ctx.player.getCurrentSubtitleTrack()?.id).toBe(tracks[0].id);
+        ctx.player.setSubtitleTrack(tracks[0].id);
+        const disabled = waitForPlayerEvent(
+          ctx.player,
+          "subtitleTrackUpdate",
+          (track) => track === null,
+        );
+        ctx.player.disableSubtitleTrack();
+        await disabled;
+        expect(ctx.player.getCurrentSubtitleTrack()).toBeNull();
+        const automatic = waitForPlayerEvent(
+          ctx.player,
+          "subtitleTrackUpdate",
+          (track) => track?.id === tracks[0].id,
+        );
+        ctx.player.resetSubtitleTrack();
+        await automatic;
+        expect(ctx.player.getCurrentSubtitleTrack()?.id).toBe(tracks[0].id);
+        ctx.player.stop();
+        expect(ctx.player.getSubtitleTrackList()).toEqual([]);
+      } finally {
+        ctx.dispose();
+      }
+    },
+  );
+
+  it(
+    "warns when a subtitle track has no matching variant",
+    { timeout: TEST_TIMEOUT_MS },
+    async () => {
+      const url = await ensureVodScenarioReady("fmp4-multivariant-no-codecs");
+      const master = await readPlaylist(url);
+      const body = master.replace(
+        "#EXTM3U\n",
+        '#EXTM3U\n#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID="unused",NAME="French",LANGUAGE="fr",URI="unused.m3u8"\n',
+      );
+      const ctx = await createPlayerHarness({
+        fetchRules: [playlistRule(url, body)],
+      });
+      try {
+        await expectPlayback(ctx, url);
+        const previousTrack = ctx.player.getCurrentSubtitleTrack();
+        const previousVariant = ctx.player.getCurrentVariant();
+        const track = ctx.player.getSubtitleTrackList()[0];
+        expect(track).toBeDefined();
+        const warningPromise = waitForPlayerEvent(ctx.player, "warning");
+        ctx.player.setSubtitleTrack(track.id);
+        const warning = await warningPromise;
+        expect(warning.name).toBe("WaspTrackSelectionError");
+        expect(warning.code).toBe("NoCompatibleVariant");
+        expect(warning.trackId).toBe(track.id);
+        expect(ctx.player.getCurrentSubtitleTrack()).toEqual(previousTrack);
+        expect(ctx.player.getCurrentVariant()).toEqual(previousVariant);
+        expect(ctx.player.getError()).toBeNull();
+      } finally {
+        ctx.dispose();
+      }
+    },
+  );
+
+  it(
+    "selects a subtitle track from another variant group",
+    { timeout: TEST_TIMEOUT_MS },
+    async () => {
+      const url = await ensureVodScenarioReady("fmp4-multivariant-no-codecs");
+      const master = await readPlaylist(url);
+      const variant = master.match(/#EXT-X-STREAM-INF:[^\n]+\n[^\n]+/);
+      if (variant === null) {
+        throw new Error("Missing test variant");
+      }
+      const tags = [
+        '#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID="a",NAME="English",LANGUAGE="en",DEFAULT=YES,URI="a.m3u8"',
+        '#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID="b",NAME="French",LANGUAGE="fr",DEFAULT=YES,URI="b.m3u8"',
+      ].join("\n");
+      const body = master
+        .replace("#EXTM3U\n", `#EXTM3U\n${tags}\n`)
+        .replace(
+          variant[0],
+          variant[0].replace(
+            "#EXT-X-STREAM-INF:",
+            '#EXT-X-STREAM-INF:SUBTITLES="a",',
+          ) +
+            "\n" +
+            variant[0].replace(
+              "#EXT-X-STREAM-INF:",
+              '#EXT-X-STREAM-INF:SUBTITLES="b",',
+            ),
+        );
+      const ctx = await createPlayerHarness({
+        fetchRules: [
+          playlistRule(url, body),
+          ...subtitleRules(url, ["a.m3u8", "b.m3u8"]),
+        ],
+      });
+      try {
+        await expectPlayback(ctx, url);
+        const current = ctx.player.getCurrentSubtitleTrack();
+        expect(current).toBeTruthy();
+        const other = ctx.player
+          .getSubtitleTrackList()
+          .find((track) => track.id !== current?.id);
+        if (other === undefined) {
+          throw new Error("Missing alternative subtitle track");
+        }
+        const selected = waitForPlayerEvent(
+          ctx.player,
+          "subtitleTrackUpdate",
+          (track) => track?.id === other.id,
+        );
+        ctx.player.setSubtitleTrack(other.id);
+        await selected;
+        expect(ctx.player.getCurrentSubtitleTrack()?.id).toBe(other.id);
+        expect(ctx.player.getError()).toBeNull();
       } finally {
         ctx.dispose();
       }

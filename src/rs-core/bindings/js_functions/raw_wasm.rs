@@ -24,8 +24,10 @@ unsafe extern "C" {
         variant_info_len: u32,
         audio_tracks_info_ptr: *const u32,
         audio_tracks_info_len: u32,
+        subtitle_tracks_info_ptr: *const u32,
+        subtitle_tracks_info_len: u32,
     );
-    /// Report an audio or video track selection update to the host.
+    /// Report a track selection update to the host.
     pub(super) fn __js_func__announce_track_update(media_type: u32, track_id: u32);
     /// Report that variant lock state changed.
     pub(super) fn __js_func__announce_variant_lock_status_change(variant_id: u32);
@@ -114,11 +116,11 @@ unsafe extern "C" {
         err_desc_ptr_out: *mut u32,
         err_desc_len_out: *mut u32,
     ) -> u32;
-    /// Ask the host whether a MIME type is supported.
+    /// Ask the host whether codecs are supported for the given media type.
     pub(super) fn __js_func__is_type_supported(
         media_type: u32,
-        typ_ptr: *const u8,
-        typ_len: u32,
+        codecs_ptr: *const u8,
+        codecs_len: u32,
     ) -> i32;
     /// Send a log line to the host environment.
     pub(super) fn __js_func__log(log_level: u32, ptr: *const u8, len: u32);

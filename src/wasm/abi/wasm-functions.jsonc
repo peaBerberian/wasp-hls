@@ -50,6 +50,7 @@
           { "name": "playlistType", "type": "PlaylistType" },
           { "name": "variantInfo", "type": "Uint32Array" },
           { "name": "audioTracksInfo", "type": "Uint32Array" },
+          { "name": "subtitleTracksInfo", "type": "Uint32Array" },
         ],
         "returnType": "void",
       },
@@ -60,13 +61,15 @@
           { "name": "variant_info_len", "type": "u32" },
           { "name": "audio_tracks_info_ptr", "type": "*const u32" },
           { "name": "audio_tracks_info_len", "type": "u32" },
+          { "name": "subtitle_tracks_info_ptr", "type": "*const u32" },
+          { "name": "subtitle_tracks_info_len", "type": "u32" },
         ],
         "returnType": "void",
       },
     },
     {
       "wasmSymbol": "__js_func__announce_track_update",
-      "doc": ["Report an audio or video track selection update to the host."],
+      "doc": ["Report a track selection update to the host."],
       "typescript": {
         "methodName": "announceTrackUpdate",
         "args": [
@@ -334,20 +337,22 @@
     },
     {
       "wasmSymbol": "__js_func__is_type_supported",
-      "doc": ["Ask the host whether a MIME type is supported."],
+      "doc": [
+        "Ask the host whether codecs are supported for the given media type.",
+      ],
       "typescript": {
         "methodName": "isTypeSupported",
         "args": [
           { "name": "mediaType", "type": "MediaType" },
-          { "name": "typ", "type": "string" },
+          { "name": "codecs", "type": "string" },
         ],
         "returnType": "boolean | undefined",
       },
       "rust": {
         "args": [
           { "name": "media_type", "type": "u32" },
-          { "name": "typ_ptr", "type": "*const u8" },
-          { "name": "typ_len", "type": "u32" },
+          { "name": "codecs_ptr", "type": "*const u8" },
+          { "name": "codecs_len", "type": "u32" },
         ],
         "returnType": "i32",
       },
@@ -924,6 +929,8 @@
           { "name": "position", "type": "number" },
           { "name": "initialAudioPtr", "type": "number" },
           { "name": "initialAudioLen", "type": "number" },
+          { "name": "initialSubtitlePtr", "type": "number" },
+          { "name": "initialSubtitleLen", "type": "number" },
         ],
         "returnType": "void",
       },
@@ -997,6 +1004,29 @@
       "wasm": {
         "kind": "method",
         "args": [{ "name": "ptr", "type": "number" }],
+        "returnType": "void",
+      },
+    },
+    {
+      "wasmSymbol": "wasp_dispatcher_disable_subtitle_track",
+      "doc": ["Disable subtitles for the current content."],
+      "wasm": {
+        "kind": "method",
+        "args": [{ "name": "ptr", "type": "number" }],
+        "returnType": "void",
+      },
+    },
+    {
+      "wasmSymbol": "wasp_dispatcher_set_subtitle_track",
+      "doc": [
+        "Select a subtitle track, or restore automatic selection with the sentinel value.",
+      ],
+      "wasm": {
+        "kind": "method",
+        "args": [
+          { "name": "ptr", "type": "number" },
+          { "name": "trackId", "type": "number" },
+        ],
         "returnType": "void",
       },
     },

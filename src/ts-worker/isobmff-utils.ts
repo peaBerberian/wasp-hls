@@ -318,7 +318,9 @@ function getCodecFromSampleEntry(
     case 0x61632d34: /* ac-4 */
     case 0x4f707573: /* Opus */
     case 0x664c6143: /* fLaC */
-    case 0x616c6163 /* alac */:
+    case 0x616c6163: /* alac */
+    case 0x77767474: /* wvtt */
+    case 0x73747070 /* stpp */:
       return fourCC(boxName);
     default:
       return undefined;

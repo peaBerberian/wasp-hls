@@ -7,7 +7,9 @@ import monotonicNow from "../ts-common/monotonicNow.ts";
 import noop from "../ts-common/noop.ts";
 import type {
   AudioTrackInfo,
+  SubtitleTrackInfo,
   InitialAudioTrackPreference,
+  InitialSubtitleTrackPreference,
   VariantInfo,
   WaspHlsPlayerConfig,
   WorkerMessage,
@@ -25,7 +27,7 @@ import {
 } from "../wasm/index.js";
 import DEFAULT_CONFIG from "./default_config.ts";
 import type { WaspError } from "./errors/index.ts";
-import { WaspInitializationError } from "./errors/index.ts";
+import { WaspInitializationError, WaspMediaError } from "./errors/index.ts";
 import postMessageToWorker from "./postMessageToWorker.ts";
 import type { ContentMetadata } from "./types.ts";
 import { PlayerState } from "./types.ts";
@@ -136,26 +138,35 @@ interface WaspHlsPlayerEvents {
    * the chosen variant. Requests already in progress may finish using the
    * previous variant, and buffered media from previous variants may continue
    * playing. `getCurrentVariant()` returns the same choice.
+   * Use this event to follow automatic and manual quality choices.
    */
   variantUpdate: VariantInfo | undefined;
   /**
    * Sent when a variant becomes locked (in which case the payload corresponds
    * to the information on the locked variant) or unlocked (in which case the
    * payload is set to `null`).
+   * Use this event to update the automatic or manual quality selection mode.
    */
   variantLockUpdate: VariantInfo | null;
   /**
    * Sent when the list of available HLS variants changed.
+   * Use this event to fill a quality selector's options.
    */
   variantListUpdate: VariantInfo[];
   /**
-   * Sent when the current audio track loaded by the `WaspHlsPlayer` changed.
+   * Sent when the selected audio track changes, e.g. its language or role.
+   * Switching between renditions of the same track does not trigger this event.
    */
   audioTrackUpdate: AudioTrackInfo | undefined;
   /**
    * Sent when the list of available audio tracks changed.
+   * Use this event to fill an audio selector's options.
    */
   audioTrackListUpdate: AudioTrackInfo[];
+  /** Sent when the available subtitle choices change. Use it to fill a subtitle selector. */
+  subtitleTrackListUpdate: SubtitleTrackInfo[];
+  /** Sent when the selected subtitle choice changes, or subtitles are disabled (null). */
+  subtitleTrackUpdate: SubtitleTrackInfo | null;
 }
 
 /** Payload sent with a `contentInfoUpdate` event. */
@@ -273,7 +284,7 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
     this.__contentMetadata__ = null;
     this.__logLevelChangeListener__ = null;
     this.__destroyAbortController__ = new AbortController();
-    this.__config__ = { ...DEFAULT_CONFIG, ...(config ?? {}) };
+    this.__config__ = { ...DEFAULT_CONFIG, ...config };
 
     const onPause = () => {
       if (this.getPlayerState() === PlayerState.Loaded) {
@@ -293,14 +304,39 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
         this.trigger("playing", null);
       }
     };
+    const onMediaError = () => {
+      const contentMetadata = this.__contentMetadata__;
+      const mediaError = this.videoElement.error;
+      if (
+        contentMetadata === null ||
+        contentMetadata.mediaSourceId === null ||
+        contentMetadata.error !== null ||
+        mediaError === null
+      ) {
+        return;
+      }
+      // Capture the browser's error before detaching the source clears it.
+      const error = new WaspMediaError(mediaError);
+      requestStopForContent(
+        contentMetadata,
+        this.videoElement,
+        this.__worker__,
+      );
+      contentMetadata.error = error;
+      this._triggerFatalError(contentMetadata, error);
+    };
     this.videoElement.addEventListener("pause", onPause);
     this.videoElement.addEventListener("play", onPlay);
     this.videoElement.addEventListener("ended", onEnded);
+    this.videoElement.addEventListener("error", onMediaError);
+    this.videoElement.addEventListener("abort", onMediaError);
 
     this.__destroyAbortController__.signal.addEventListener("abort", () => {
       this.videoElement.removeEventListener("pause", onPause);
       this.videoElement.removeEventListener("play", onPlay);
       this.videoElement.removeEventListener("ended", onEnded);
+      this.videoElement.removeEventListener("error", onMediaError);
+      this.videoElement.removeEventListener("abort", onMediaError);
     });
   }
 
@@ -414,6 +450,8 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
       sourceBuffers: [],
       variants: [],
       audioTracks: [],
+      subtitleTracks: [],
+      currentSubtitleTrack: undefined,
       currentAudioTrack: undefined,
       currVariant: undefined,
       lockedVariant: null,
@@ -472,6 +510,7 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
         url,
         startingPosition,
         initialAudioTrack: opts?.initialAudioTrack,
+        initialSubtitleTrack: opts?.initialSubtitleTrack,
       },
     });
   }
@@ -910,6 +949,72 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
     return this.__contentMetadata__?.variants ?? [];
   }
 
+  /** Returns the active subtitle track, null when disabled, or undefined when unknown. */
+  public getCurrentSubtitleTrack(): SubtitleTrackInfo | null | undefined {
+    const metadata = this.__contentMetadata__;
+    if (metadata?.currentSubtitleTrack === null) {
+      return null;
+    }
+    return metadata?.subtitleTracks.find(
+      (t) => t.id === metadata.currentSubtitleTrack?.id,
+    );
+  }
+
+  /** Returns subtitle tracks announced by the multivariant playlist. */
+  public getSubtitleTrackList(): SubtitleTrackInfo[] {
+    return this.__contentMetadata__?.subtitleTracks ?? [];
+  }
+
+  /** Selects a subtitle track by ID. */
+  public setSubtitleTrack(trackId: number): void {
+    if (this.__worker__ === null) {
+      throw new Error("The Player is not initialized or is disposed.");
+    }
+    const metadata = this.__contentMetadata__;
+    if (metadata === null) {
+      throw new Error("No content loaded");
+    }
+    if (typeof trackId !== "number") {
+      throw new TypeError(
+        "Expected a subtitle track ID. Use resetSubtitleTrack() for automatic selection.",
+      );
+    }
+    postMessageToWorker(this.__worker__, {
+      type: MainMessageType.SetSubtitleTrack,
+      value: { contentId: metadata.contentId, trackId },
+    });
+  }
+
+  /** Restores automatic subtitle track selection for the current content. */
+  public resetSubtitleTrack(): void {
+    if (this.__worker__ === null) {
+      throw new Error("The Player is not initialized or is disposed.");
+    }
+    const metadata = this.__contentMetadata__;
+    if (metadata === null) {
+      throw new Error("No content loaded");
+    }
+    postMessageToWorker(this.__worker__, {
+      type: MainMessageType.SetSubtitleTrack,
+      value: { contentId: metadata.contentId, trackId: null },
+    });
+  }
+
+  /** Disables subtitles for the current content. */
+  public disableSubtitleTrack(): void {
+    if (this.__worker__ === null) {
+      throw new Error("The Player is not initialized or is disposed.");
+    }
+    const metadata = this.__contentMetadata__;
+    if (metadata === null) {
+      throw new Error("No content loaded");
+    }
+    postMessageToWorker(this.__worker__, {
+      type: MainMessageType.DisableSubtitleTrack,
+      value: { contentId: metadata.contentId },
+    });
+  }
+
   /**
    * Returns a list of all available on audio tracks.
    * Returns an empty array if unknown or if no content is loaded.
@@ -921,7 +1026,8 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
   }
 
   /**
-   * Returns the information on the currently loaded audio track.
+   * Returns information on the selected audio track, as announced through
+   * `audioTrackUpdate`.
    * Returns `undefined` if unknown, if no content is loaded or if the content
    * has no audio track.
    *
@@ -986,7 +1092,8 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
    *
    * The `WaspHlsPlayer` will then only load media data linked to this variant
    * until either a new content is loaded, a track change has necessitated the
-   * selection of another variant, or if `unlockVariant` was called.
+   * selection of another variant, the variant proves unsupported, or
+   * `unlockVariant` was called. Calling `lockVariant` again replaces the lock.
    *
    * You will receive `variantLockUpdate` events both when the lock is
    * effectively put in place (unless it was already put in place for that same
@@ -1258,23 +1365,29 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
               break;
             }
             this.trigger("audioTrackListUpdate", contentMetadata.audioTracks);
+            if (contentMetadata !== this.__contentMetadata__) {
+              break;
+            }
+            this.trigger(
+              "subtitleTrackListUpdate",
+              contentMetadata.subtitleTracks,
+            );
           }
           break;
+        // TODO: Should related track, variant and lock updates arrive in one message,
+        // so all API state can be updated before the first event is emitted?
         case WorkerMessageType.TrackUpdate:
           if (
             this.__contentMetadata__ !== null &&
             onTrackUpdateMessage(data, this.__contentMetadata__)
           ) {
-            if (data.value.mediaType === MediaType.Audio) {
-              const { currentAudioTrack, audioTracks } =
-                this.__contentMetadata__;
-              const announcedAudioTrack =
-                currentAudioTrack === undefined
-                  ? undefined
-                  : audioTracks.find(
-                      (track) => track.id === currentAudioTrack.id,
-                    );
-              this.trigger("audioTrackUpdate", announcedAudioTrack);
+            if (data.value.mediaType === MediaType.Text) {
+              this.trigger(
+                "subtitleTrackUpdate",
+                this.getCurrentSubtitleTrack() ?? null,
+              );
+            } else if (data.value.mediaType === MediaType.Audio) {
+              this.trigger("audioTrackUpdate", this.getCurrentAudioTrack());
             }
           }
           break;
@@ -1297,14 +1410,8 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
 
         case WorkerMessageType.Error: {
           const error = onErrorMessage(data, this.__contentMetadata__);
-          if (error !== null) {
-            const contentMetadata = this.__contentMetadata__;
-            logger.error("API: sending fatal error", error);
-            this.trigger("error", error);
-            if (contentMetadata !== this.__contentMetadata__) {
-              break;
-            }
-            this.trigger("playerStateChange", PlayerState.Error);
+          if (error !== null && this.__contentMetadata__ !== null) {
+            this._triggerFatalError(this.__contentMetadata__, error);
           }
           break;
         }
@@ -1414,6 +1521,20 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
     }
   }
 
+  private _triggerFatalError(
+    contentMetadata: ContentMetadata,
+    error: WaspError,
+  ): void {
+    logger.error("API: sending fatal error", error);
+    this.trigger("error", error);
+    if (
+      contentMetadata === this.__contentMetadata__ &&
+      contentMetadata.error === error
+    ) {
+      this.trigger("playerStateChange", PlayerState.Error);
+    }
+  }
+
   private _scheduleLoadedStateTransition(): void {
     const videoElement = this.videoElement;
     const contentMetadata = this.__contentMetadata__;
@@ -1474,6 +1595,8 @@ export interface LoadOptions {
    * before the player starts requesting media playlists and segments.
    */
   initialAudioTrack?: InitialAudioTrackPreference | undefined;
+  /** Preferred characteristics for the initially selected subtitle track. */
+  initialSubtitleTrack?: InitialSubtitleTrackPreference | undefined;
 }
 
 /**

@@ -7,6 +7,7 @@ import QueuedSourceBuffer, {
 import timeRangesToFloat64Array from "../ts-common/timeRangesToFloat64Array.ts";
 import type {
   AudioTrackInfo,
+  SubtitleTrackInfo,
   SourceBufferId,
   VariantInfo,
 } from "../ts-common/types.js";
@@ -830,6 +831,13 @@ export function addSourceBuffer(
   mediaType: MediaType,
   typ: string,
 ): AddSourceBufferResult {
+  // XXX TODO: Create text storage through a shared buffer interface.
+  if (mediaType === MediaType.Text) {
+    return AddSourceBufferResult.error(
+      AddSourceBufferErrorCode.TypeNotSupportedError,
+      "Text is not stored in an MSE SourceBuffer",
+    );
+  }
   const contentInfo = playerInstance.getContentInfo();
   if (contentInfo === null) {
     return AddSourceBufferResult.error(
@@ -1198,12 +1206,35 @@ export function inspectSegment(resourceId: ResourceId): {
 function inspectProbeSegment(
   segment: Uint8Array,
 ): InspectSegmentValue | undefined {
+  // A UTF-8 WebVTT file may begin with a byte order mark (BOM).
+  const headerStart =
+    segment[0] === 0xef && segment[1] === 0xbb && segment[2] === 0xbf ? 3 : 0;
+  if (
+    segment[headerStart] === 0x57 && // W
+    segment[headerStart + 1] === 0x45 && // E
+    segment[headerStart + 2] === 0x42 && // B
+    segment[headerStart + 3] === 0x56 && // V
+    segment[headerStart + 4] === 0x54 && // T
+    segment[headerStart + 5] === 0x54 && // T
+    (segment[headerStart + 6] === undefined ||
+      segment[headerStart + 6] === 0x09 || // Tab
+      segment[headerStart + 6] === 0x20 || // Space
+      segment[headerStart + 6] === 0x0d || // CR
+      segment[headerStart + 6] === 0x0a) // LF
+  ) {
+    return { mediaType: MediaType.Text, mimeType: "text/vtt", codec: "wvtt" };
+  }
+  // MP4 WebVTT and IMSC/TTML are identified from their initialization sample entries.
   const codecs = getIsoBmffCodecs(segment);
   if (codecs.length > 0) {
     const mediaType = inferMediaTypeFromCodecs(codecs);
     return {
       mediaType,
-      mimeType: mediaType === MediaType.Audio ? "audio/mp4" : "video/mp4",
+      mimeType: {
+        [MediaType.Audio]: "audio/mp4",
+        [MediaType.Video]: "video/mp4",
+        [MediaType.Text]: "application/mp4",
+      }[mediaType],
       codec: codecs.join(","),
     };
   }
@@ -1236,9 +1267,13 @@ function inspectProbeSegment(
 }
 
 function inferMediaTypeFromCodecs(codecs: string[]): MediaType {
-  return codecs.some((codec) => !isAudioCodec(codec))
-    ? MediaType.Video
-    : MediaType.Audio;
+  if (codecs.every(isAudioCodec)) {
+    return MediaType.Audio;
+  }
+  if (codecs.every((codec) => /^(stpp|wvtt)\b/i.test(codec))) {
+    return MediaType.Text;
+  }
+  return MediaType.Video;
 }
 
 function isAudioCodec(codec: string): boolean {
@@ -1535,6 +1570,7 @@ export function announceFetchedContent(
   playlistType: PlaylistType,
   variantInfo: Uint32Array,
   audioTracksInfo: Uint32Array,
+  subtitleTracksInfo: Uint32Array,
 ): void {
   const contentInfo = playerInstance.getContentInfo();
   const memory = playerInstance.getCurrentWasmMemory();
@@ -1588,13 +1624,14 @@ export function announceFetchedContent(
       playlistType,
       variants: variantInfoObj,
       audioTracks: decodeAudioTracks(audioTracksInfo, memory),
+      subtitleTracks: decodeSubtitleTracks(subtitleTracksInfo, memory),
     },
   });
 }
 
 export function announceTrackUpdate(
   mediaType: MediaType,
-  currentAudioTrack: number | undefined,
+  trackId: number | undefined,
 ): void {
   const contentInfo = playerInstance.getContentInfo();
   const memory = playerInstance.getCurrentWasmMemory();
@@ -1606,10 +1643,14 @@ export function announceTrackUpdate(
     value: {
       mediaType,
       contentId: contentInfo.contentId,
+      subtitleTrack:
+        mediaType === MediaType.Text && trackId !== undefined
+          ? { current: trackId }
+          : undefined,
       audioTrack:
-        currentAudioTrack !== undefined
+        mediaType === MediaType.Audio && trackId !== undefined
           ? {
-              current: currentAudioTrack,
+              current: trackId,
             }
           : undefined,
     },
@@ -1867,6 +1908,45 @@ function decodeAudioTracks(
         sampleRates: sampleRates.length === 0 ? undefined : sampleRates,
       });
     }
+  }
+  return tracks;
+}
+
+/** Copies borrowed WASM rendition strings before returning to Rust. */
+function decodeSubtitleTracks(
+  data: Uint32Array,
+  memory: WebAssembly.Memory,
+): SubtitleTrackInfo[] {
+  let cursor = 1;
+  const readString = (): string => {
+    const length = data[cursor++];
+    const pointer = data[cursor++];
+    return cachedTextDecoder.decode(
+      new Uint8Array(memory.buffer, pointer, length),
+    );
+  };
+  const tracks: SubtitleTrackInfo[] = [];
+  for (let index = 0; index < data[0]; index++) {
+    const id = data[cursor++];
+    const language = readString() || undefined;
+    const assocLanguage = readString() || undefined;
+    const hasName = data[cursor + 1] !== 0;
+    const rawName = readString();
+    const name = hasName ? rawName : undefined;
+    const forced = data[cursor++] !== 0;
+    const count = data[cursor++];
+    const characteristics: string[] = [];
+    for (let i = 0; i < count; i++) {
+      characteristics.push(readString());
+    }
+    tracks.push({
+      id,
+      name,
+      language,
+      assocLanguage,
+      forced,
+      characteristics,
+    });
   }
   return tracks;
 }

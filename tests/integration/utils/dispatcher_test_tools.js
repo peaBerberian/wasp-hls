@@ -13,14 +13,20 @@ import initializeWasm, {
 export async function createDispatcher({
   segmentDuration = 4,
   unsupportedCodec,
+  probedCodecs = unsupportedCodec ?? "avc1.42E01E",
 } = {}) {
   const requests = [];
   const aborted = [];
   const variants = [];
+  const audioTrackIds = [];
+  const subtitleTrackIds = [];
   const announcedVariants = [];
   const variantLockUpdates = [];
+  const selectionEvents = [];
   const rebufferingEvents = [];
   const errors = [];
+  const supportChecks = [];
+  const sourceBuffers = [];
   const resources = new Map();
   let nextResource = 1;
   let nextBuffer = 1;
@@ -37,15 +43,45 @@ export async function createDispatcher({
       },
       getResourceData: (id) => resources.get(id),
       freeResource: (id) => resources.delete(id),
-      announceFetchedContent(_type, info) {
+      announceFetchedContent(_type, info, audioInfo, subtitleInfo) {
         // Seven fields per variant, following the count.
         for (let i = 0; i < info[0]; i++) {
           variants.push(info[1 + i * 7]);
         }
+        let offset = 1;
+        for (let i = 0; i < audioInfo[0]; i++) {
+          audioTrackIds.push(audioInfo[offset]);
+          offset += 8; // ID, language, associated language, name, channels.
+          offset += 1 + audioInfo[offset] * 2; // Characteristics.
+          offset += 2; // Bit depth and sample rate.
+          offset += 1 + audioInfo[offset]; // Bit depths.
+          offset += 1 + audioInfo[offset]; // Sample rates.
+        }
+        offset = 1;
+        for (let i = 0; i < subtitleInfo[0]; i++) {
+          subtitleTrackIds.push(subtitleInfo[offset]);
+          offset += 8; // ID, language, associated language, name, forced.
+          offset += 1 + subtitleInfo[offset] * 2; // Characteristics.
+        }
       },
-      announceVariantUpdate: (id) => announcedVariants.push(id),
-      announceVariantLockStatusChange: (id) => variantLockUpdates.push(id),
-      addSourceBuffer: () => ({ value: nextBuffer++ }),
+      announceVariantUpdate(id) {
+        announcedVariants.push(id);
+        selectionEvents.push({ type: "variant", id });
+      },
+      announceVariantLockStatusChange(id) {
+        variantLockUpdates.push(id);
+        selectionEvents.push({ type: "lock", id });
+      },
+      announceTrackUpdate(mediaType, id) {
+        selectionEvents.push({
+          type: mediaType === MediaType.Audio ? "audio" : "subtitles",
+          id,
+        });
+      },
+      addSourceBuffer(mediaType, mimeType) {
+        sourceBuffers.push({ mediaType, mimeType });
+        return { value: nextBuffer++ };
+      },
       appendBuffer: () => ({
         value: {
           start: { hi: 0, lo: 0 },
@@ -53,10 +89,15 @@ export async function createDispatcher({
           timescale: 1,
         },
       }),
-      isTypeSupported: (_type, codec) => codec !== unsupportedCodec,
+      isTypeSupported: (type, codec) => {
+        supportChecks.push({ type, codec });
+        return !codec
+          .split(",")
+          .some((entry) => entry.trim() === unsupportedCodec);
+      },
       inspectSegment: () => ({
         value: {
-          codec: unsupportedCodec ?? "avc1.42E01E",
+          codec: probedCodecs,
           mimeType: "video/mp4",
           mediaType: MediaType.Video,
         },
@@ -141,9 +182,14 @@ export async function createDispatcher({
     requests,
     aborted,
     variants,
+    audioTrackIds,
+    subtitleTrackIds,
     announcedVariants,
     variantLockUpdates,
+    selectionEvents,
     rebufferingEvents,
     errors,
+    supportChecks,
+    sourceBuffers,
   };
 }

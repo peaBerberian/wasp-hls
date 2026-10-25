@@ -50,9 +50,10 @@ export interface HostBindings {
     playlistType: PlaylistType,
     variantInfo: Uint32Array,
     audioTracksInfo: Uint32Array,
+    subtitleTracksInfo: Uint32Array,
   ): void;
   /**
-   * Report an audio or video track selection update to the host.
+   * Report a track selection update to the host.
    */
   announceTrackUpdate(mediaType: MediaType, trackId: number | undefined): void;
   /**
@@ -128,9 +129,9 @@ export interface HostBindings {
     resourceId: number,
   ): HostResult<InspectSegmentValue, SegmentParsingErrorCode>;
   /**
-   * Ask the host whether a MIME type is supported.
+   * Ask the host whether codecs are supported for the given media type.
    */
-  isTypeSupported(mediaType: MediaType, typ: string): boolean | undefined;
+  isTypeSupported(mediaType: MediaType, codecs: string): boolean | undefined;
   /**
    * Send a log line to the host environment.
    */
@@ -342,6 +343,8 @@ export interface WaspWasmExports {
     position: number,
     initialAudioPtr: number,
     initialAudioLen: number,
+    initialSubtitlePtr: number,
+    initialSubtitleLen: number,
   ): void;
   /**
    * Return the minimum known content position.
@@ -371,6 +374,14 @@ export interface WaspWasmExports {
    * Clear any variant lock on a dispatcher.
    */
   wasp_dispatcher_unlock_variant(ptr: number): void;
+  /**
+   * Disable subtitles for the current content.
+   */
+  wasp_dispatcher_disable_subtitle_track(ptr: number): void;
+  /**
+   * Select a subtitle track, or restore automatic selection with the sentinel value.
+   */
+  wasp_dispatcher_set_subtitle_track(ptr: number, trackId: number): void;
   /**
    * Select the audio track used by a dispatcher.
    */

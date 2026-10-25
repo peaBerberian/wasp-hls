@@ -79,4 +79,44 @@ describe("Explicit variant unlocking", function () {
       }
     },
   );
+
+  it(
+    "preserves an existing lock after rejecting an unknown variant",
+    { timeout: TEST_TIMEOUT_MS },
+    async () => {
+      const ctx = await createPlayerHarness({ fetchRules: [] });
+      try {
+        ctx.player.load(getVodScenarioUrl("fmp4-multivariant-no-codecs"));
+        await waitForLoadedState(
+          ctx.player,
+          ctx.videoElement,
+          ctx.getLastPlayerError,
+        );
+        const variant = ctx.player.getCurrentVariant();
+        const lockUpdates = eventListener(ctx.player, "variantLockUpdate");
+        const locked = waitForPlayerEvent(ctx.player, "variantLockUpdate");
+        ctx.player.lockVariant(variant.id);
+        await locked;
+        const warning = waitForPlayerEvent(ctx.player, "warning");
+        ctx.player.lockVariant(0xfffffffe);
+        expect((await warning).code).toBe("UnfoundLockedVariant");
+        expect(ctx.player.getLockedVariant()).toEqual(variant);
+        expect(lockUpdates.getCurrentCount()).toBe(1);
+
+        // The acknowledgment proves that the worker kept its lock, not just the public metadata.
+        const unlocked = waitForPlayerEvent(
+          ctx.player,
+          "variantLockUpdate",
+          (value) => value === null,
+        );
+        ctx.player.unlockVariant();
+        await unlocked;
+        expect(lockUpdates.getCurrentCount()).toBe(2);
+        expect(ctx.player.getLockedVariant()).toBeNull();
+        expect(ctx.getLastPlayerError()).toBeNull();
+      } finally {
+        ctx.dispose();
+      }
+    },
+  );
 });

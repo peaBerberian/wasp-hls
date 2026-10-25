@@ -2,7 +2,7 @@
 // Do not edit it manually.
 
 #[repr(u32)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(PartialEq)]
 pub enum PlaylistType {
     MultivariantPlaylist = 0,
     MediaPlaylist = 1,
@@ -19,7 +19,6 @@ impl PlaylistType {
 }
 
 #[repr(u32)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum OtherErrorCode {
     UnfoundLockedVariant = 0,
     MediaSourceAttachmentError = 1,
@@ -38,7 +37,6 @@ impl OtherErrorCode {
 }
 
 #[repr(u32)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ContentCompatibilityErrorCode {
     NoSupportedVariant = 0,
 }
@@ -53,7 +51,6 @@ impl ContentCompatibilityErrorCode {
 }
 
 #[repr(u32)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SourceBufferCreationErrorCode {
     AlreadyCreatedWithSameType = 0,
     CantPlayType = 1,
@@ -80,7 +77,7 @@ impl SourceBufferCreationErrorCode {
 }
 
 #[repr(u32)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum RequestErrorReason {
     Timeout = 0,
     Status = 1,
@@ -103,7 +100,6 @@ impl RequestErrorReason {
 /// Errors that can arise when attempting to remove a MediaSource previously attached
 /// to a media element.
 #[repr(u32)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum RemoveMediaSourceErrorCode {
     /// Could not remove MediaSource from the media element because this `WaspHlsPlayer`
     /// had no MediaSource attached to its media element.
@@ -125,7 +121,6 @@ impl RemoveMediaSourceErrorCode {
 /// Errors that can arise when attempting to update the duration of a MediaSource.
 /// TODO defined errors when the MediaSource is closed and so on?
 #[repr(u32)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MediaSourceDurationUpdateErrorCode {
     /// The `WaspHlsPlayer` had no MediaSource attached to its media element.
     NoMediaSourceAttached = 0,
@@ -146,7 +141,6 @@ impl MediaSourceDurationUpdateErrorCode {
 /// Errors (or success) that can arise when attempting to "attach" a MediaSource to a media
 /// element.
 #[repr(u32)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum AttachMediaSourceErrorCode {
     /// Could not attach MediaSource to the media element because of an unknown error.
     UnknownError = 0,
@@ -167,7 +161,6 @@ impl AttachMediaSourceErrorCode {
 
 /// Errors that can arise when calling the `jsRemoveBuffer` JavaScript function.
 #[repr(u32)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum RemoveBufferErrorCode {
     /// The operation failed because the SourceBuffer instance linked to the given
     /// `SourceBufferId` was not found.
@@ -188,7 +181,6 @@ impl RemoveBufferErrorCode {
 
 /// Errors that can arise when calling the `jsEndOfStream` JavaScript function.
 #[repr(u32)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum EndOfStreamErrorCode {
     /// The `WaspHlsPlayer` linked had no MediaSource attached to its media
     /// element.
@@ -209,7 +201,6 @@ impl EndOfStreamErrorCode {
 
 /// Error that might arise when parsing the Multivariant Playlist.
 #[repr(u32)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MultivariantPlaylistParsingErrorCode {
     /// The Multivariant Playlist has no variant.
     ///
@@ -267,7 +258,6 @@ impl MultivariantPlaylistParsingErrorCode {
 
 /// Error that might arise when parsing the Media Playlist.
 #[repr(u32)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MediaPlaylistParsingErrorCode {
     /// An `#EXTINF` tag announced in the Media Playlist was not in the right
     /// format.
@@ -313,7 +303,6 @@ impl MediaPlaylistParsingErrorCode {
 
 /// Error that might arise when adding a SourceBuffer through a MediaSource instance.
 #[repr(u32)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum AddSourceBufferErrorCode {
     /// The `WaspHlsPlayer` linked to it had no MediaSource attached to its media
     /// element.
@@ -349,7 +338,6 @@ impl AddSourceBufferErrorCode {
 
 /// Errors that can arise when calling the `jsAppendBuffer` JavaScript function.
 #[repr(u32)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SegmentParsingErrorCode {
     /// The operation failed because the resource to append was not found.
     ///
@@ -379,7 +367,7 @@ impl SegmentParsingErrorCode {
 
 /// Errors that can arise after a SourceBuffer's `appendBuffer` call.
 #[repr(u32)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(PartialEq)]
 pub enum PushedSegmentErrorCode {
     /// We could not push the segment because the `SourceBuffer`'s buffer seems full.
     BufferFull = 0,
@@ -399,7 +387,6 @@ impl PushedSegmentErrorCode {
 
 /// Reason that triggered a `PlaybackObservation`
 #[repr(u32)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PlaybackObservationReason {
     /// First observation given initially, not linked to any particular event.
     Init = 0,
@@ -440,7 +427,6 @@ impl PlaybackObservationReason {
 ///
 /// This can then help to identify what the timer was for once resolved.
 #[repr(u32)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TimerReason {
     /// The timer is linked to the MediaPlaylistRefresh's mechanism, meaning
     /// that the wanted MediaPlaylist may have to be reloaded.
@@ -461,7 +447,6 @@ impl TimerReason {
 
 /// Levels with which a log can be emitted.
 #[repr(u32)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum LogLevel {
     /// Log level reserved for very important errors and highly unexpected events.
     Error = 1,
@@ -486,10 +471,11 @@ impl LogLevel {
 }
 
 #[repr(u32)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum MediaType {
     Audio = 0,
     Video = 1,
+    Text = 2,
 }
 
 impl MediaType {
@@ -497,13 +483,14 @@ impl MediaType {
         match value {
             0 => Self::Audio,
             1 => Self::Video,
+            2 => Self::Text,
             _ => Self::Audio,
         }
     }
 }
 
 #[repr(u32)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum PlaylistNature {
     Event = 0,
     VoD = 1,
@@ -525,7 +512,7 @@ impl PlaylistNature {
 
 /// Identify the JavaScript `readyState` of a created `MediaSource` instance.
 #[repr(u32)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum MediaSourceReadyState {
     /// Corresponds to the "closed" JavaScript MediaSource's `readyState`
     Closed = 0,
@@ -547,7 +534,7 @@ impl MediaSourceReadyState {
 }
 
 #[repr(u32)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug)]
 pub enum StartingPositionType {
     Absolute = 0,
     FromBeginning = 1,
@@ -567,7 +554,7 @@ impl StartingPositionType {
 
 /// Identify the event that lead to the `MediaObservation` being sent.
 #[repr(u32)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug)]
 pub enum PlaybackTickReason {
     /// This is the initial observation emitted, right after it was started.
     Init = 0,
@@ -632,7 +619,6 @@ impl PlaybackTickReason {
 }
 
 #[repr(u32)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TrackSelectionErrorCode {
     UnknownTrack = 0,
     NoCompatibleVariant = 1,

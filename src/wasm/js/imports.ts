@@ -139,12 +139,12 @@ export function createWasmImports(bindings: HostBindings): WebAssembly.Imports {
       },
       __js_func__is_type_supported(
         mediaType: number,
-        typPtr: number,
-        typLen: number,
+        codecsPtr: number,
+        codecsLen: number,
       ): number {
         const value = bindings.isTypeSupported(
           mediaType as MediaType,
-          readString(typPtr, typLen),
+          readString(codecsPtr, codecsLen),
         );
         return value === undefined ? -1 : value ? 1 : 0;
       },
@@ -293,12 +293,15 @@ export function createWasmImports(bindings: HostBindings): WebAssembly.Imports {
         variantInfoLen: number,
         audioTracksInfoPtr: number,
         audioTracksInfoLen: number,
+        subtitleTracksInfoPtr: number,
+        subtitleTracksInfoLen: number,
       ): void {
         const buffer = getWasmExports().memory.buffer;
         bindings.announceFetchedContent(
           playlistType as PlaylistType,
           new Uint32Array(buffer, variantInfoPtr, variantInfoLen),
           new Uint32Array(buffer, audioTracksInfoPtr, audioTracksInfoLen),
+          new Uint32Array(buffer, subtitleTracksInfoPtr, subtitleTracksInfoLen),
         );
       },
       __js_func__announce_variant_update(variantId: number): void {

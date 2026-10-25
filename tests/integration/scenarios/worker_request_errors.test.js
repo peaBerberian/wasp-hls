@@ -46,7 +46,10 @@ describe("Worker request injection - errors", function () {
       async () => {
         await expectFatalRequestError({
           scenarioId: "fmp4-multivariant-no-codecs",
-          playerConfig: MULTIVARIANT_CONFIG,
+          playerConfig: {
+            ...MULTIVARIANT_CONFIG,
+            multiVariantPlaylistRequestTimeout: 50,
+          },
           fetchRules: [createTopLevelFetchRule([{ type: "timeout" }])],
           ruleId: "master-playlist",
           expectedErrorName: "WaspMultivariantPlaylistRequestError",
@@ -111,7 +114,10 @@ describe("Worker request injection - errors", function () {
           expectedErrorCode: "MediaPlaylistRequestTimeout",
           expectedAttempts: 2,
           expectedWarnings: 1,
-          configUpdate: MEDIA_PLAYLIST_CONFIG,
+          configUpdate: {
+            ...MEDIA_PLAYLIST_CONFIG,
+            mediaPlaylistRequestTimeout: 50,
+          },
         });
       },
     );
@@ -170,7 +176,10 @@ describe("Worker request injection - errors", function () {
           expectedErrorCode: "SegmentRequestTimeout",
           expectedAttempts: 2,
           expectedWarnings: 1,
-          configUpdate: SEGMENT_CONFIG,
+          configUpdate: {
+            ...SEGMENT_CONFIG,
+            segmentRequestTimeout: 50,
+          },
         });
       },
     );

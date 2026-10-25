@@ -1,7 +1,6 @@
 import sleep from "./sleep.js";
+import { PLAYER_EVENT_TIMEOUT_MS, PLAYER_LOAD_TIMEOUT_MS } from "./timeouts.js";
 import { waitForLoadedStateAfterLoad } from "./waitForPlayerState.js";
-
-const PLAYER_LOAD_TIMEOUT_MS = 90_000;
 
 export function getPlayerStateSnapshot(player, videoElement, lastPlayerError) {
   return {
@@ -19,7 +18,89 @@ export function getPlayerStateSnapshot(player, videoElement, lastPlayerError) {
     networkState: videoElement.networkState,
     paused: videoElement.paused,
     ended: videoElement.ended,
+    seeking: videoElement.seeking,
+    playbackRate: videoElement.playbackRate,
+    buffered: Array.from({ length: videoElement.buffered.length }, (_, i) => [
+      videoElement.buffered.start(i),
+      videoElement.buffered.end(i),
+    ]),
+    mediaError:
+      videoElement.error === null
+        ? null
+        : {
+            code: videoElement.error.code,
+            message: videoElement.error.message,
+          },
   };
+}
+
+// Resume a loaded player and wait for playback to advance.
+export function waitForPlayback(
+  player,
+  videoElement,
+  lastPlayerErrorRef,
+  timeoutMs = PLAYER_EVENT_TIMEOUT_MS,
+) {
+  const startTime = videoElement.currentTime;
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const timeoutId = setTimeout(
+      () => fail("Timed out waiting for playback to advance"),
+      timeoutMs,
+    );
+
+    function cleanup() {
+      settled = true;
+      clearTimeout(timeoutId);
+      player.removeEventListener("error", onPlayerError);
+      videoElement.removeEventListener("timeupdate", onTimeUpdate);
+    }
+
+    function fail(message, cause) {
+      if (settled) {
+        return;
+      }
+      cleanup();
+      reject(
+        new Error(
+          `${message}: ` +
+            JSON.stringify(
+              getPlayerStateSnapshot(
+                player,
+                videoElement,
+                lastPlayerErrorRef(),
+              ),
+            ),
+          { cause },
+        ),
+      );
+    }
+
+    function onPlayerError(error) {
+      fail(
+        `Player failed during playback: ${error.name}: ${error.message}`,
+        error,
+      );
+    }
+
+    function onTimeUpdate() {
+      if (!settled && videoElement.currentTime > startTime + 0.5) {
+        cleanup();
+        resolve();
+      }
+    }
+
+    player.addEventListener("error", onPlayerError);
+    videoElement.addEventListener("timeupdate", onTimeUpdate);
+    const error = player.getError();
+    if (error !== null) {
+      onPlayerError(error);
+      return;
+    }
+    Promise.resolve()
+      .then(() => player.resume())
+      .catch((error) => fail(`Could not resume playback: ${error}`, error));
+  });
 }
 
 export async function waitForLoadedState(
@@ -66,7 +147,7 @@ export function waitForPlayerEvent(
   player,
   eventName,
   predicate = () => true,
-  timeoutMs = 20_000,
+  timeoutMs = PLAYER_EVENT_TIMEOUT_MS,
 ) {
   return new Promise((resolve, reject) => {
     const timeoutId = setTimeout(() => {

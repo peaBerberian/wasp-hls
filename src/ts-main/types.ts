@@ -1,5 +1,9 @@
 import type QueuedSourceBuffer from "../ts-common/QueuedSourceBuffer.ts";
-import type { AudioTrackInfo, VariantInfo } from "../ts-common/types.ts";
+import type {
+  AudioTrackInfo,
+  SubtitleTrackInfo,
+  VariantInfo,
+} from "../ts-common/types.ts";
 import type { PlaylistNature, PlaylistType } from "../wasm/index.js";
 import type { WaspError } from "./errors/index.ts";
 import type PlaybackObserver from "./observePlayback.ts";
@@ -145,15 +149,18 @@ export interface ContentMetadata {
    * Empty array if unknown.
    */
   audioTracks: AudioTrackInfo[];
+  subtitleTracks: SubtitleTrackInfo[];
+  currentSubtitleTrack: { id: number } | null | undefined;
 
   /**
-   * Information on the currently loaded audio track.
-   * `undefined` if unknown or if it has no audio track.
+   * Current audio track ID.
+   * `undefined` before the first announcement; `null` when no track is selected.
    */
   currentAudioTrack:
     | {
         id: number;
       }
+    | null
     | undefined;
 
   /**
@@ -205,4 +212,4 @@ export const enum PlayerState {
   Error = "Error",
 }
 
-export type { AudioTrackInfo, VariantInfo };
+export type { AudioTrackInfo, SubtitleTrackInfo, VariantInfo };

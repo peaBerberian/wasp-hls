@@ -15,6 +15,7 @@ player.load(url);
 player.load(url, {
   startingPosition: initialWantedPosition,
   initialAudioTrack: [{ language: "de" }, { language: "fr" }],
+  initialSubtitleTrack: { language: "fr", forced: false },
 });
 ```
 
@@ -35,3 +36,6 @@ player.load(url, {
        track. See [the documentation page on loading a
        content](../Loading_a_content.md#initialaudiotrack) for more
        information.
+     - `initialSubtitleTrack` (`object`|`null`|`Array.<object | null>`|`undefined`):
+       indicate preferred characteristics for the initially selected subtitle
+       track. See [loading a content](../Loading_a_content.md#initialsubtitletrack).

@@ -24,16 +24,17 @@ I develop Wasp-hls as an independent personal project, drawing on my
 professional experience as lead developer of the [RxPlayer](https://github.com/canalplus/rx-player).
 Developed in the open since 2022, Wasp-hls is unaffiliated with RxPlayer or Canal+.
 
-Note that this is still heavily in development. Plans are:
+## Status
 
-- **Short-term goal**: Answer most web needs expected from an HLS media engine.
+This project is now handling most usual needs from an HLS media engine.
+The main features still missing: Content Decryption, LL-HLS, interstitials,
+Content Steering, and some [other more niche use-cases](#whats-done).
 
-  The library is almost there, with subtitle support the main missing feature.
-  Content decryption is not planned for now.
+Its **current focus** is to be able to handle:
 
-- **Long-term goals**: Optimal low-latency HLS handling. In-Rust transmuxing.
-
-  Extend beyond web: separate back-end systems for web (MSE API, HTML5), native
+- Optimal low-latency HLS
+- In-Rust transmuxing.
+- Extend beyond web: separate back-end systems for web (MSE API, HTML5), native
   (through e.g. `gstreamer`) and mobile usage, allowing common core logic for
   virtually all OTT platforms.
 
@@ -257,6 +258,8 @@ Media demuxing:
 - [x] Media Segment Format: MPEG-2 Transport Streams
 - [x] Media Segment Format: Fragmented MPEG-4
 - [x] Media Segment Format: Packed Audio AAC with ADTS framing
+- [x] Media Segment Format: WebVTT
+- [x] Media Segment Format: IMSC Subtitles
 - [x] Transmux MPEG-2 Transport Streams to fmp4 on platforms not supporting the
       former like mostChrome or Firefox (through JS for now, Rust implementation
       pending).
@@ -268,10 +271,6 @@ Media demuxing:
 - [ ] Media Segment Format: Packed Audio AC-3
       _Priority: low_
 - [ ] Media Segment Format: Packed Audio EAC-3
-      _Priority: low_
-- [ ] Media Segment Format: WebVTT (subtitles not handled for now)
-      _Priority: low_
-- [ ] Media Segment Format: IMSC Subtitles (subtitles not handled for now)
       _Priority: low_
 
 MSE API and buffer handling:
@@ -290,6 +289,8 @@ MSE API and buffer handling:
 - [x] Discontinuity handling: Automatically skip "holes" in the buffer where
       it is known that no segment will be pushed to fill them.
 - [x] Handle `QuotaExceededError` after pushing segments when low on memory.
+- [ ] `ManagedMediaSource` handling
+      _Priority: high_
 - [ ] Freezing handling: Detect when the browser is not making progress in the
       content despite having media data to play and try to unstuck it.
       _Priority: average_
@@ -297,16 +298,17 @@ MSE API and buffer handling:
 Tracks:
 
 - [x] Provide API to set an audio track (and track preferences)
+- [x] Provide API to set a subtitles track (and track preferences)
+- [x] Support "forced" subtitles, following audio track selection by default
 - [ ] Provide API to set a video track
       _Priority: low_
-- [ ] Allow text track selection and support at least one text track format
-      (TTML IMSC1 or webVTT) - through a JS library first?
+- [ ] Support in-stream closed captions
       _Priority: low_
 
 Multi-platform work:
 
 - [x] Web target (JS lib), relying on WebAssembly, MSE and HTML5 media.
-- [ ] Native target (Rust library), probably relying on a `gstreamer` back-end.
+- [ ] Native target (Rust crate), probably relying on a `gstreamer` back-end.
       _Priority: average_
 - [ ] Android target (AAR), probably relying on `MediaCodec` API through `NDK`.
       _Priority: low_
@@ -319,8 +321,12 @@ Supplementary nice-to-have features:
       _Priority: low_
 - [ ] Content Steering handling.
       _Priority: low_
+- [ ] Interstitials.
+      _Priority: low_
+- [ ] CMCD.
+      _Priority: low_
 - [ ] Support content decryption.
-      _Priority: very low_
+      _Priority: low_
 
 Playlist tags specifically considered (unchecked ones are mainly just ignored,
 most of them are not needed for playback):
@@ -350,8 +356,7 @@ most of them are not needed for playback):
   - [x] URI: Used to fetch the initialization segment if one is present
   - [x] BYTERANGE: To perform a range request for the initialization segment
 - EXT-X-MEDIA:
-  - [x] TYPE: Both AUDIO and VIDEO are handled. SUBTITLES and CLOSED-CAPTIONS
-        are just ignored for now.
+  - [x] TYPE: AUDIO, VIDEO and SUBTITLES. CLOSED-CAPTIONS is ignored for now.
   - [x] URI
   - [x] GROUP-ID
   - [x] DEFAULT
@@ -363,8 +368,7 @@ most of them are not needed for playback):
   - [x] CHARACTERISTICS: Exposed in track selection APIs
   - [x] BIT-DEPTH
   - [x] SAMPLE-RATE
-  - [ ] FORCED: As the SUBTITLES TYPE is not handled yet, we don't have to use
-        this one
+  - [x] FORCED: Identifies forced subtitle renditions.
   - [ ] INSTREAM-ID: As the CLOSED-CAPTIONS TYPE is not handled yet, we don't
         have to use this one.
   - [ ] STABLE-RENDITION-ID: Not really needed for now (only for content steering?)
@@ -373,7 +377,8 @@ most of them are not needed for playback):
         bandwidth
   - [x] CODECS: Used for checking support (and filtering out if that's not the
         case, and for initializing buffers with the right info).
-  - [x] AUDIO
+  - [x] AUDIO: Links variants to audio rendition groups
+  - [x] SUBTITLES: Links variants to subtitle rendition groups.
   - [x] VIDEO: As no video track selection API exist yet, only the most
         prioritized video media playlist is considered
   - [x] RESOLUTION: Used to describe variant in variant selection API
@@ -381,22 +386,21 @@ most of them are not needed for playback):
   - [x] SCORE: Considered both to select a variant and to determine if a quality
         is better when applying fast quality switching.
   - [x] VIDEO-RANGE
-  - [ ] REQ-VIDEO-LAYOUT
+  - [ ] REQ-VIDEO-LAYOUT: Used for spatial video. Generally not handled by
+        mainstream HLS players.
   - [ ] STABLE-VARIANT-ID: Not really needed for now (only for content steering?)
   - [ ] AVERAGE-BANDWIDTH: Not used yet. I don't know if it's useful yet for us.
-  - [ ] SUPPLEMENTAL-CODECS: In our web use case, I'm not sure if this is only
-        useful for track selection API or if filtering also needs to be done based
-        on this.
-  - [ ] SUBTITLES: No subtitles support for now
+  - [ ] SUPPLEMENTAL-CODECS: Might be useful in the future for retro-compatible
+        codec work.
   - [ ] CLOSED-CAPTIONS: that one is just ignored for now
   - [ ] PATHWAY-ID: Content Steering not handled yet
   - [ ] HDCP-LEVEL: DRM are not handled for now
   - [ ] ALLOWED-CPC: DRM are not handled for now
 - [ ] EXT-X-VERSION: Not specifically considered for now, most differences
       handled until now had compatible behaviors from version to version
-- [ ] EXT-X-INDEPENDENT-SEGMENTS: Might needs to be considered once we're
+- [ ] EXT-X-INDEPENDENT-SEGMENTS: Might need to be considered once we're
       doing some manual cleaning?
-- [ ] EXT-X-I-FRAMES-ONLY: To handle one day, perhaps (very low priority)
+- [ ] EXT-X-I-FRAMES-ONLY: To handle one day, perhaps (low priority)
 - [ ] EXT-X-PART: low-latency related
 - [ ] EXT-X-PART-INF: low-latency related
 - [ ] EXT-X-SERVER-CONTROL: low-latency related?

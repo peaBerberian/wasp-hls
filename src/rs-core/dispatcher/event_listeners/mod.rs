@@ -326,6 +326,7 @@ pub struct MediaObservation {
     seeking: bool,
     ended: bool,
     duration: f64,
+    // XXX TODO: Add text buffered ranges and text_buffered(), and feed them from text storage.
     audio_buffered: Option<JsTimeRanges>,
     video_buffered: Option<JsTimeRanges>,
 }

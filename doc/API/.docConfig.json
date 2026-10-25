@@ -55,6 +55,10 @@
     {
       "path": "./Audio_Track_Selection/",
       "displayName": "Audio Track Selection"
+    },
+    {
+      "path": "./Subtitle_Track_Selection/",
+      "displayName": "Subtitle Track Selection"
     }
   ]
 }
