@@ -516,8 +516,8 @@ impl PlaylistStore {
     /// Force a given variant and prevent it from changing, by communicating its `id`.
     /// This can also make the initial variant selection.
     ///
-    /// To be able to change again the variant, you can call `lock_variant` again or
-    /// you can call the `unlock_variant` method.
+    /// Call `lock_variant` again to replace the lock, or `unlock_variant` to resume adaptation.
+    /// Incompatible track changes and unsupported-variant recovery can also remove the lock.
     ///
     /// Returns whether the variant was newly locked, was already locked, or could not be found.
     pub(crate) fn lock_variant(&mut self, variant_id: u32) -> LockVariantResponse {
@@ -536,8 +536,7 @@ impl PlaylistStore {
             changed_playlists,
             tracks,
             variant_changed,
-            locked_variant_change: _, // The successful lock is reported by VariantLocked.
-        } = self.set_variant(variant_id);
+        } = self.apply_variant(variant_id);
         self.is_variant_locked = true;
         LockVariantResponse::VariantLocked {
             changed_playlists,
@@ -1074,7 +1073,16 @@ impl PlaylistStore {
 
     /// Apply a specific variant selection and return the media types whose selected playlist
     /// changed as a consequence.
-    pub(crate) fn set_variant(&mut self, variant_id: u32) -> VariantUpdate {
+    /// Rejects a different variant while a lock is active, without changing any state.
+    pub(crate) fn set_variant(&mut self, variant_id: u32) -> Result<VariantUpdate, VariantLocked> {
+        if self.is_variant_locked && self.current_variant_id != Some(variant_id) {
+            return Err(VariantLocked);
+        }
+        Ok(self.apply_variant(variant_id))
+    }
+
+    /// Apply a selection after checking the lock, or when explicitly replacing it.
+    fn apply_variant(&mut self, variant_id: u32) -> VariantUpdate {
         let mut changes = VariantUpdate::default();
         self.set_curr_variant_and_media_id(variant_id, &mut changes);
         let (playlist_changed, track_change) = match self.resolve_subtitle_selection() {
@@ -1179,10 +1187,6 @@ impl PlaylistStore {
         if self.current_variant_id != Some(variant_id) {
             self.current_variant_id = Some(variant_id);
             changes.variant_changed = true;
-            if self.is_variant_locked {
-                // XXX TODO: Do that mean a `set_variant` is stronger than a lock? Is that intended?
-                changes.locked_variant_change = Some(variant_id);
-            }
         }
         let (current_audio_id, current_video_id) = Self::normalize_current_media_ids(
             match self.audio_track_id_for_variant(variant) {
@@ -1493,6 +1497,11 @@ enum MultivariantStartupStatus {
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) struct IncompatibleTrack;
 
+/// The requested variant differs from the locked variant.
+#[derive(Debug, Error, PartialEq, Eq)]
+#[error("The requested variant differs from the locked variant")]
+pub(crate) struct VariantLocked;
+
 /// Reason a track selection was rejected without changing the store.
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) enum TrackSelectionError {
@@ -1553,8 +1562,6 @@ pub(crate) struct VariantUpdate {
     tracks: TrackChanges,
     /// The current variant ID changed.
     variant_changed: bool,
-    /// The new locked variant ID, if an existing lock changed.
-    locked_variant_change: Option<u32>,
 }
 
 /// Selection changes made when probe information identifies a direct playlist's media type.
@@ -1579,10 +1586,12 @@ impl TrackChanges {
 }
 
 impl AudioTrackUpdate {
+    /// The selected audio playlist ID changed.
     pub(crate) fn audio_playlist_changed(&self) -> bool {
         self.audio_playlist_changed
     }
 
+    /// The selected subtitle playlist ID changed.
     pub(crate) fn subtitle_playlist_changed(&self) -> bool {
         self.subtitle_playlist_changed
     }
@@ -1595,6 +1604,7 @@ impl AudioTrackUpdate {
         self.variant_lock_removed
     }
 
+    /// The request was saved, but needs another variant before its playlist can be selected.
     pub(crate) fn needs_variant_selection(&self) -> bool {
         self.needs_variant_selection
     }
@@ -1613,6 +1623,7 @@ impl SubtitleTrackUpdate {
         self.variant_lock_removed
     }
 
+    /// The request was saved, but needs another variant before its playlist can be selected.
     pub(crate) fn needs_variant_selection(&self) -> bool {
         self.needs_variant_selection
     }
@@ -1635,10 +1646,6 @@ impl VariantUpdate {
 
     pub(crate) fn variant_changed(&self) -> bool {
         self.variant_changed
-    }
-
-    pub(crate) fn locked_variant_change(&self) -> Option<u32> {
-        self.locked_variant_change
     }
 
     pub(crate) fn into_changed_playlists(self) -> Vec<MediaType> {
@@ -1700,7 +1707,7 @@ pub(crate) enum PlaylistStoreError {
 mod tests {
     use super::{
         LockVariantResponse, MultivariantStartupStatus, PlaylistStore, PlaylistStoreError,
-        StartupStatus, TrackChange, TrackSelectionError,
+        StartupStatus, TrackChange, TrackSelectionError, VariantLocked,
     };
     use crate::{
         adaptive::{AdaptiveQualitySelector, PlaybackConditions},
@@ -1724,7 +1731,7 @@ mod tests {
             )
             .unwrap();
             let variant_id = store.available_variants().next().unwrap().id();
-            store.set_variant(variant_id);
+            store.set_variant(variant_id).unwrap();
             let expected = store
                 .audio_tracks()
                 .iter()
@@ -1753,7 +1760,7 @@ mod tests {
             PlaylistStore::try_new(&manifest[..], parse_url("https://example.com/master.m3u8"))
                 .unwrap();
         let variant_id = store.available_variants().next().unwrap().id();
-        store.set_variant(variant_id);
+        store.set_variant(variant_id).unwrap();
         assert_eq!(store.current_variant_id(), Some(variant_id));
         assert!(store.current_media_playlist_id(MediaType::Video).is_some());
         assert!(store.current_media_playlist_id(MediaType::Text).is_none());
@@ -1787,7 +1794,7 @@ c.m3u8
         )
         .unwrap();
         let id = store.available_variants().next().unwrap().id();
-        store.set_variant(id);
+        store.set_variant(id).unwrap();
         store
     }
 
@@ -1814,7 +1821,7 @@ fr-video.m3u8
 "#, parse_url("https://example.com/master.m3u8")).unwrap();
         let first = store.available_variants().next().unwrap().id();
         let other = store.available_variants().nth(1).unwrap().id();
-        store.set_variant(first);
+        store.set_variant(first).unwrap();
         let current = *store.current_media_playlist_id(MediaType::Text).unwrap();
         let candidate = store
             .resolve_playlist_id_for_variant(store.variant(other).unwrap(), MediaType::Text)
@@ -1826,7 +1833,7 @@ fr-video.m3u8
             store.current_media_playlist_id(MediaType::Text),
             Some(&current)
         );
-        store.set_variant(other);
+        store.set_variant(other).unwrap();
         assert_eq!(
             store.current_media_playlist_id(MediaType::Text),
             Some(&candidate)
@@ -1866,6 +1873,7 @@ fr-video.m3u8
             .collect();
         assert!(store
             .set_variant(variants[1])
+            .unwrap()
             .changed_playlists
             .contains(&MediaType::Text));
         assert_eq!(store.current_subtitle_track_id(), Some(french));
@@ -1873,10 +1881,10 @@ fr-video.m3u8
             store.current_media_playlist_id(MediaType::Text),
             Some(&first_playlist)
         );
-        store.set_variant(variants[2]);
+        store.set_variant(variants[2]).unwrap();
         assert_eq!(store.current_subtitle_track_id(), None);
         assert_eq!(store.fixed_subtitle_track_id(), Some(french));
-        store.set_variant(variants[0]);
+        store.set_variant(variants[0]).unwrap();
         assert_eq!(store.current_subtitle_track_id(), Some(french));
         assert_eq!(
             store.current_media_playlist_id(MediaType::Text),
@@ -1894,7 +1902,7 @@ fr-video.m3u8
         store.disable_subtitle_track();
         assert_eq!(store.current_subtitle_track_id(), None);
         let other = store.available_variants().nth(1).unwrap().id();
-        store.set_variant(other);
+        store.set_variant(other).unwrap();
         assert_eq!(store.current_subtitle_track_id(), None);
         store.set_subtitle_track(None).unwrap();
         assert_eq!(store.fixed_subtitle_track_id(), None);
@@ -1963,17 +1971,17 @@ fr-video.m3u8
             .available_variants()
             .map(|variant| variant.id())
             .collect();
-        store.set_variant(variants[0]);
+        store.set_variant(variants[0]).unwrap();
         assert_eq!(
             store.current_subtitle_track_id(),
             Some(subtitle_id(&store, "English"))
         );
-        store.set_variant(variants[1]);
+        store.set_variant(variants[1]).unwrap();
         assert_eq!(
             store.current_subtitle_track_id(),
             Some(subtitle_id(&store, "Forced French"))
         );
-        store.set_variant(variants[0]);
+        store.set_variant(variants[0]).unwrap();
         assert_eq!(
             store.current_subtitle_track_id(),
             Some(subtitle_id(&store, "English"))
@@ -2011,7 +2019,7 @@ fr-video.m3u8
                 .collect::<Vec<_>>(),
             vec![variants[1]]
         );
-        store.set_variant(variants[1]);
+        store.set_variant(variants[1]).unwrap();
         assert_eq!(store.current_subtitle_track_id(), Some(sdh));
         store.disable_subtitle_track();
         assert_eq!(store.compatible_variants().count(), 3);
@@ -2134,7 +2142,7 @@ fr-video.m3u8
         )
         .unwrap();
         let variant = store.available_variants().next().unwrap().id();
-        store.set_variant(variant);
+        store.set_variant(variant).unwrap();
         assert!(matches!(
             store.startup_status(0.),
             Err(PlaylistStoreError::NoSupportedVariant)
@@ -2251,7 +2259,7 @@ high.m3u8
         let high = store.available_variants().nth(1).unwrap().id();
 
         assert_eq!(
-            store.set_variant(low).changed_playlists,
+            store.set_variant(low).unwrap().changed_playlists,
             vec![MediaType::Audio]
         );
         let low_playlist = *store.current_media_playlist_id(MediaType::Audio).unwrap();
@@ -2262,7 +2270,7 @@ high.m3u8
         ));
 
         assert_eq!(
-            store.set_variant(high).changed_playlists,
+            store.set_variant(high).unwrap().changed_playlists,
             vec![MediaType::Audio]
         );
         assert_ne!(
@@ -2271,7 +2279,7 @@ high.m3u8
         );
         assert!(store.current_media_playlist_id(MediaType::Video).is_none());
         assert_eq!(
-            store.set_variant(low).changed_playlists,
+            store.set_variant(low).unwrap().changed_playlists,
             vec![MediaType::Audio]
         );
         assert_eq!(
@@ -2316,12 +2324,12 @@ video.m3u8
         .unwrap();
         let first = store.available_variants().next().unwrap().id();
         let second = store.available_variants().nth(1).unwrap().id();
-        store.set_variant(first);
+        store.set_variant(first).unwrap();
         let video_id = *store.current_media_playlist_id(MediaType::Video).unwrap();
         let audio_id = *store.current_media_playlist_id(MediaType::Audio).unwrap();
 
         assert_eq!(
-            store.set_variant(second).changed_playlists,
+            store.set_variant(second).unwrap().changed_playlists,
             vec![MediaType::Audio]
         );
         assert_eq!(
@@ -2350,7 +2358,7 @@ unknown.m3u8
         )
         .unwrap();
         let low = store.available_variants().next().unwrap().id();
-        store.set_variant(low);
+        store.set_variant(low).unwrap();
         for (media_type, loaded, sequence) in [
             (MediaType::Video, video_loaded, 100),
             (MediaType::Audio, audio_loaded, 200),
@@ -2564,7 +2572,7 @@ video.m3u8
                     .reduce(f64::max),
             },
         ) {
-            store.set_variant(selection.best_variant_id);
+            store.set_variant(selection.best_variant_id).unwrap();
         }
         store
     }
@@ -2603,7 +2611,7 @@ video.m3u8
             Some(6.)
         );
 
-        store.set_variant(high_id);
+        store.set_variant(high_id).unwrap();
         assert_eq!(
             store
                 .current_media_playlist(MediaType::Video)
@@ -2633,7 +2641,7 @@ video.m3u8
             Some(6.)
         );
 
-        store.set_variant(low_id);
+        store.set_variant(low_id).unwrap();
         assert!(store.has_loaded_media_playlist(MediaType::Video));
         assert_eq!(
             store
@@ -2775,7 +2783,7 @@ video.m3u8
     }
 
     #[test]
-    fn adaptive_update_does_not_override_a_variant_lock() {
+    fn variant_selection_does_not_override_a_variant_lock() {
         let multivariant = r#"#EXTM3U
 #EXT-X-STREAM-INF:BANDWIDTH=1000
 low.m3u8
@@ -2801,15 +2809,45 @@ high.m3u8
             LockVariantResponse::AlreadyLocked
         ));
         assert_eq!(store.compatible_variants().count(), 2);
-        // Automatic recommendations respect the lock; explicit selection happens through locking.
-
+        let video_id = store.current_video_id;
+        let previous_support = store.variant_support.clone();
+        store.selected_media_support_resolved = true;
+        assert_eq!(store.set_variant(low_id), Err(VariantLocked));
         assert_eq!(store.current_variant_id(), Some(high_id));
+        assert_eq!(store.current_video_id, video_id);
+        assert_eq!(store.variant_support, previous_support);
+        assert!(store.selected_media_support_resolved);
+        assert!(store.is_variant_locked());
+
+        // Applying the same variant is allowed and keeps the lock.
+        assert!(!store.set_variant(high_id).unwrap().variant_changed());
+        assert!(store.is_variant_locked());
 
         store.unlock_variant();
         assert!(!store.is_variant_locked());
         assert_eq!(store.current_variant_id(), Some(high_id));
-        store.set_variant(low_id);
+        store.set_variant(low_id).unwrap();
         assert_eq!(store.current_variant_id(), Some(low_id));
+    }
+
+    #[test]
+    fn explicit_lock_replaces_the_locked_variant() {
+        let mut store = subtitle_store(true);
+        let variants: Vec<_> = store.available_variants().map(|v| v.id()).collect();
+        assert!(matches!(
+            store.lock_variant(variants[0]),
+            LockVariantResponse::VariantLocked { .. }
+        ));
+        assert!(matches!(
+            store.lock_variant(variants[1]),
+            LockVariantResponse::VariantLocked {
+                variant_changed: true,
+                ..
+            }
+        ));
+        assert_eq!(store.current_variant_id(), Some(variants[1]));
+        assert!(store.is_variant_locked());
+        assert_eq!(store.set_variant(variants[0]), Err(VariantLocked));
     }
 
     #[test]
@@ -2823,7 +2861,7 @@ high.m3u8
             .unwrap()
             .id();
         store.set_subtitle_track(Some(sdh)).unwrap();
-        store.set_variant(variants[1]);
+        store.set_variant(variants[1]).unwrap();
         assert!(matches!(
             store.lock_variant(variants[1]),
             LockVariantResponse::VariantLocked { .. }
@@ -2858,7 +2896,7 @@ high.m3u8
         assert!(pending.variant_lock_removed);
         assert!(!pending.playlist_changed);
         assert_eq!(store.current_text_id, selected); // The variant switch applies the new playlist.
-        let applied = store.set_variant(variants[1]);
+        let applied = store.set_variant(variants[1]).unwrap();
         assert!(applied.variant_changed);
         assert!(applied.changed_playlists.contains(&MediaType::Text));
         assert_eq!(applied.tracks.subtitles, TrackChange::Changed(Some(sdh)));
@@ -2883,7 +2921,7 @@ high.m3u8
     fn variant_results_do_not_confuse_playlist_changes_with_track_changes() {
         let mut store = subtitle_store(true);
         let other = store.available_variants().nth(1).unwrap().id();
-        let changes = store.set_variant(other);
+        let changes = store.set_variant(other).unwrap();
         assert!(changes.variant_changed);
         assert!(changes.changed_playlists.contains(&MediaType::Text));
         assert_eq!(changes.tracks.subtitles, TrackChange::Unchanged);
@@ -2940,7 +2978,7 @@ high.m3u8
 video.m3u8
 "#, parse_url("https://example.com/master.m3u8")).unwrap();
         let variant = store.available_variants().next().unwrap().id();
-        store.set_variant(variant);
+        store.set_variant(variant).unwrap();
         let french = store
             .audio_tracks()
             .iter()
@@ -2983,7 +3021,7 @@ high.m3u8
             .find(|track| track.name() == Some("French"))
             .unwrap()
             .id();
-        store.set_variant(low_id);
+        store.set_variant(low_id).unwrap();
 
         let LockVariantResponse::VariantLocked {
             changed_playlists: _,
@@ -3025,7 +3063,7 @@ muxed.m3u8
         .unwrap();
         let separate_id = store.available_variants().next().unwrap().id();
         let muxed_id = store.available_variants().nth(1).unwrap().id();
-        store.set_variant(separate_id);
+        store.set_variant(separate_id).unwrap();
         assert!(store.current_audio_track_id().is_some());
 
         let LockVariantResponse::VariantLocked {
@@ -3146,7 +3184,7 @@ fr-video.m3u8
         )
         .unwrap();
         let variants: Vec<_> = store.available_variants().map(|v| v.id()).collect();
-        store.set_variant(variants[0]);
+        store.set_variant(variants[0]).unwrap();
         let english = store
             .audio_tracks()
             .iter()
@@ -3187,7 +3225,7 @@ fr-video.m3u8
             );
             assert_eq!(store.fixed_audio_track_id(), Some(requested));
             assert!(!store.is_variant_locked());
-            store.set_variant(destination);
+            store.set_variant(destination).unwrap();
         }
     }
 
@@ -3204,7 +3242,7 @@ video.m3u8
         )
         .unwrap();
         let variant = store.available_variants().next().unwrap().id();
-        store.set_variant(variant);
+        store.set_variant(variant).unwrap();
         assert!(store.current_audio_id.is_some());
         let french = store
             .audio_tracks()
@@ -3231,7 +3269,7 @@ video.m3u8
             .available_variants()
             .map(|variant| variant.id())
             .collect();
-        store.set_variant(variants[2]); // This variant has no subtitle group.
+        store.set_variant(variants[2]).unwrap(); // This variant has no subtitle group.
         assert!(matches!(
             store.lock_variant(variants[2]),
             LockVariantResponse::VariantLocked { .. }
@@ -3264,7 +3302,7 @@ video.m3u8
         );
         assert!(!store.is_variant_locked());
 
-        store.set_variant(variants[0]);
+        store.set_variant(variants[0]).unwrap();
         let selected = store.current_text_id;
         assert!(selected.is_some());
         assert_eq!(store.resolve_subtitle_selection(), Ok(selected));
@@ -3375,7 +3413,7 @@ fr-high.m3u8
                 },
             )
             .unwrap();
-        store.set_variant(selection.best_variant_id);
+        store.set_variant(selection.best_variant_id).unwrap();
         assert_eq!(store.current_variant().unwrap().bandwidth(), 2000);
         assert_eq!(store.current_audio_track_id(), Some(french_id));
         assert_ne!(
@@ -3429,9 +3467,10 @@ fr-high.m3u8
                 },
             )
             .unwrap();
-        store.set_variant(selection.best_variant_id);
+        assert!(store.unlock_variant());
+        store.set_variant(selection.best_variant_id).unwrap();
         assert_eq!(store.current_variant().unwrap().bandwidth(), 2000);
-        assert!(store.is_variant_locked());
+        assert!(!store.is_variant_locked());
 
         store.set_variant_support(selection.best_variant_id, false);
         let last_id = store.compatible_variants().next().unwrap().id();

@@ -195,15 +195,22 @@ impl Dispatcher {
                 if changes.needs_variant_selection() || changes.audio_playlist_changed() {
                     // Choose the final compatible variant before requesting the new track's playlist.
                     // The old track's buffer should not justify an additive-only choice here.
-                    let variant_update = self
-                        .compute_optimal_variant()
-                        .and_then(|selection| {
-                            let playlist_store = self.playlist_store.as_mut()?;
-                            Some(playlist_store.set_variant(selection.safe_variant_id))
-                        })
-                        .unwrap_or_default();
+                    let mut variant_update = VariantUpdate::default();
+                    if let Some(selection) = self.compute_optimal_variant() {
+                        let Some(playlist_store) = self.playlist_store.as_mut() else {
+                            return;
+                        };
+                        match playlist_store.set_variant(selection.safe_variant_id) {
+                            Ok(update) => variant_update = update,
+                            Err(err) => {
+                                log_error!(
+                                    "Core: Could not select variant for audio track: {}",
+                                    err
+                                );
+                            }
+                        }
+                    }
                     let variant_tracks = variant_update.tracks();
-                    let locked_variant_change = variant_update.locked_variant_change();
                     let mut changed_playlists = variant_update.into_changed_playlists();
                     // The audio playlist may already have changed in set_audio_track. It must also
                     // be flushed when the final variant uses the same playlist as the previous one.
@@ -211,9 +218,7 @@ impl Dispatcher {
                         changed_playlists.push(MediaType::Audio);
                     }
 
-                    if let Some(id) = locked_variant_change {
-                        jsAnnounceVariantLockStatusChange(Some(id));
-                    } else if changes.variant_lock_removed() {
+                    if changes.variant_lock_removed() {
                         jsAnnounceVariantLockStatusChange(None);
                     }
                     self.announce_current_variant();
@@ -644,16 +649,20 @@ impl Dispatcher {
                 let Some(pl_store) = self.playlist_store.as_mut() else {
                     return;
                 };
-                variant_update = pl_store.set_variant(selection.safe_variant_id);
+                let update = match pl_store.set_variant(selection.safe_variant_id) {
+                    Ok(update) => update,
+                    Err(err) => {
+                        log_error!("Core: Could not select variant for subtitle track: {}", err);
+                        return;
+                    }
+                };
+                variant_update = update;
             }
         }
         let tracks = variant_update.tracks();
         let variant_changed = variant_update.variant_changed();
-        let locked_variant_change = variant_update.locked_variant_change();
         let changed_playlists = variant_update.into_changed_playlists();
-        if let Some(id) = locked_variant_change {
-            jsAnnounceVariantLockStatusChange(Some(id));
-        } else if changes.variant_lock_removed() {
+        if changes.variant_lock_removed() {
             jsAnnounceVariantLockStatusChange(None);
         }
         if changes.needs_variant_selection() || variant_changed {
@@ -937,7 +946,15 @@ impl Dispatcher {
                     None,
                     &self.playback_conditions(&pl_store),
                 ) {
-                    pl_store.set_variant(selection.safe_variant_id);
+                    if let Err(err) = pl_store.set_variant(selection.safe_variant_id) {
+                        jsSendOtherError(
+                            true,
+                            OtherErrorCode::Unknown,
+                            &format!("Could not select initial variant: {err}"),
+                        );
+                        self.stop_current_content();
+                        return;
+                    }
                 }
 
                 // A top-level playlist may be a media playlist directly.
@@ -1367,15 +1384,17 @@ impl Dispatcher {
             && Some(variant_id) != pl_store.current_variant_id()
         {
             // TODO: Verify transitions between separate and muxed audio in both directions.
-            let changes = pl_store.set_variant(variant_id);
+            let changes = match pl_store.set_variant(variant_id) {
+                Ok(changes) => changes,
+                Err(err) => {
+                    log_error!("Core: Could not select variant for segment: {}", err);
+                    return;
+                }
+            };
             let tracks = changes.tracks();
-            let locked_variant_change = changes.locked_variant_change();
             let changed_playlists = changes.into_changed_playlists();
-            // Announce the selection mode and variant before the affected tracks.
-            if let Some(id) = locked_variant_change {
-                jsAnnounceVariantLockStatusChange(Some(id));
-            }
-            if tracks != TrackChanges::default() || locked_variant_change.is_some() {
+            // Announce the variant before the affected tracks.
+            if tracks != TrackChanges::default() {
                 self.announce_current_variant();
             }
             self.announce_track_changes(&[tracks]);
@@ -1915,7 +1934,7 @@ video.m3u8
         )
         .unwrap();
         let variant_id = pl_store.available_variants().next().unwrap().id();
-        pl_store.set_variant(variant_id);
+        pl_store.set_variant(variant_id).unwrap();
         pl_store
     }
 
@@ -2055,7 +2074,7 @@ video.m3u8
             let old_audio = *pl_store
                 .current_media_playlist_id(MediaType::Audio)
                 .unwrap();
-            let changed = pl_store.set_variant(high).into_changed_playlists();
+            let changed = pl_store.set_variant(high).unwrap().into_changed_playlists();
             assert_eq!(pl_store.current_variant_id(), Some(high));
             assert!(changed.contains(&MediaType::Video));
             assert_eq!(changed.contains(&MediaType::Audio), !shared_audio);
@@ -2114,7 +2133,7 @@ video.m3u8
                 .clone();
             pl_store.assume_variant_supported_for_test(low);
             pl_store.assume_variant_supported_for_test(high);
-            pl_store.set_variant(low);
+            pl_store.set_variant(low).unwrap();
             let recommendation = Some(crate::adaptive::AdaptiveVariantSelection {
                 best_variant_id: high,
                 safe_variant_id: low,
@@ -2196,7 +2215,7 @@ video.m3u8
         let variant_ids: Vec<_> = pl_store.available_variants().map(|v| v.id()).collect();
         for (variant_id, duration) in variant_ids.iter().zip([Some(4), Some(4), high_duration]) {
             if let Some(duration) = duration {
-                pl_store.set_variant(*variant_id);
+                pl_store.set_variant(*variant_id).unwrap();
                 let id = *pl_store
                     .current_media_playlist_id(MediaType::Video)
                     .unwrap();
@@ -2215,7 +2234,7 @@ video.m3u8
         for variant_id in &variant_ids {
             pl_store.assume_variant_supported_for_test(*variant_id);
         }
-        pl_store.set_variant(variant_ids[0]);
+        pl_store.set_variant(variant_ids[0]).unwrap();
         let mut dispatcher =
             dispatcher_with_buffer_observation(None, Some(vec![0., 10. + buffer_level]));
         dispatcher.adaptive_selector = crate::adaptive::AdaptiveQualitySelector::new(1_875_000.);
@@ -2229,7 +2248,7 @@ video.m3u8
             let mut dispatcher = dispatcher_with_abr_playlists(Some(4), buffer);
             let playlist_store = dispatcher.playlist_store.as_mut().unwrap();
             let high = playlist_store.available_variants().nth(2).unwrap().id();
-            playlist_store.set_variant(high);
+            playlist_store.set_variant(high).unwrap();
             let playlist_id = *playlist_store
                 .current_media_playlist_id(MediaType::Video)
                 .unwrap();
@@ -2338,7 +2357,7 @@ video.m3u8
                 }
                 playlist_store.assume_variant_supported_for_test(variant_id);
             }
-            playlist_store.set_variant(variant_ids[1]);
+            playlist_store.set_variant(variant_ids[1]).unwrap();
             let audio_id = playlist_store
                 .resolve_playlist_id_for_variant(
                     playlist_store.variant(variant_ids[origin]).unwrap(),
@@ -2687,7 +2706,8 @@ video.m3u8
             .playlist_store
             .as_mut()
             .unwrap()
-            .set_variant(previous_variant);
+            .set_variant(previous_variant)
+            .unwrap();
         dispatcher
             .media_element_ref
             .on_observation(MediaObservation::new(
@@ -2745,7 +2765,7 @@ video.m3u8
                 Url::new("https://example.com/safe.m3u8".into()),
             )
             .unwrap();
-        pl_store.set_variant(best_variant);
+        pl_store.set_variant(best_variant).unwrap();
         let best =
             segment_selection_candidate_for_variant(Some(best_variant), pl_store, MediaType::Video)
                 .unwrap();
@@ -2824,7 +2844,7 @@ video.m3u8
         pl_store.update_media_playlist(&safe_id,
             b"#EXTM3U\n#EXT-X-TARGETDURATION:4\n#EXT-X-MEDIA-SEQUENCE:100\n#EXTINF:4,\nsegment-100.ts\n".as_slice(),
             Url::new("https://example.com/safe.m3u8".into())).unwrap();
-        pl_store.set_variant(ids[2]);
+        pl_store.set_variant(ids[2]).unwrap();
         let context = crate::dispatcher::segment_request_contexts::PendingSegmentRequest::Media {
             variant_id: ids[1],
             media_type: MediaType::Video,
@@ -2870,7 +2890,7 @@ video.m3u8
             assert_eq!(variant_id, high_id);
             assert_ne!(variant_id, selection.safe_variant_id);
             let pl_store = dispatcher.playlist_store.as_mut().unwrap();
-            pl_store.set_variant(variant_id);
+            pl_store.set_variant(variant_id).unwrap();
             assert!(!pl_store.has_loaded_media_playlist(MediaType::Video));
             assert_eq!(
                 pl_store
@@ -2912,7 +2932,7 @@ video.m3u8
                 .best_variant_id;
             assert_eq!(variant_id, medium_id);
             let pl_store = dispatcher.playlist_store.as_mut().unwrap();
-            pl_store.set_variant(variant_id);
+            pl_store.set_variant(variant_id).unwrap();
             assert_eq!(
                 pl_store
                     .current_media_playlists()
@@ -3017,7 +3037,7 @@ fr-video.m3u8
             .unwrap()
             .id();
         store.set_audio_track(Some(french)).unwrap();
-        store.set_variant(variants[1]);
+        store.set_variant(variants[1]).unwrap();
         let recommendation = crate::adaptive::AdaptiveVariantSelection {
             best_variant_id: variants[0],
             safe_variant_id: variants[1],

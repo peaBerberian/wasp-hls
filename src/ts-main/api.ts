@@ -1067,7 +1067,8 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
    *
    * The `WaspHlsPlayer` will then only load media data linked to this variant
    * until either a new content is loaded, a track change has necessitated the
-   * selection of another variant, or if `unlockVariant` was called.
+   * selection of another variant, the variant proves unsupported, or
+   * `unlockVariant` was called. Calling `lockVariant` again replaces the lock.
    *
    * You will receive `variantLockUpdate` events both when the lock is
    * effectively put in place (unless it was already put in place for that same

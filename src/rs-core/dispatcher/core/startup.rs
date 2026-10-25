@@ -100,13 +100,24 @@ fn ensure_ready_playlists(dispatcher: &mut Dispatcher, wanted_position: f64) -> 
                 return false;
             };
             let variant_id = selection.safe_variant_id;
-            let changes = playlist_store.set_variant(variant_id);
+            let changes = match playlist_store.set_variant(variant_id) {
+                Ok(changes) => changes,
+                Err(err) => {
+                    if variant_lock_removed {
+                        jsAnnounceVariantLockStatusChange(None);
+                    }
+                    jsSendOtherError(
+                        true,
+                        OtherErrorCode::Unknown,
+                        &format!("Could not select variant during startup: {err}"),
+                    );
+                    dispatcher.stop_current_content();
+                    return false;
+                }
+            };
             let tracks = changes.tracks();
-            let locked_variant_change = changes.locked_variant_change();
             let changed_playlists = changes.into_changed_playlists();
-            if let Some(id) = locked_variant_change {
-                jsAnnounceVariantLockStatusChange(Some(id));
-            } else if variant_lock_removed {
+            if variant_lock_removed {
                 jsAnnounceVariantLockStatusChange(None);
             }
             dispatcher.announce_current_variant();
