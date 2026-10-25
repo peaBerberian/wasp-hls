@@ -6,15 +6,6 @@ import {
 import generateFrameOfSilence from "./generate_frame_of_silence.ts";
 import type { TrackInfo } from "./types.ts";
 
-/**
- * Sum the `byteLength` properties of the data in each AAC frame
- * @param {Array.<Object>} array
- * @returns {number}
- */
-function sumFrameByteLengths(array: Array<{ data: Uint8Array }>): number {
-  return array.reduce((acc, arr) => acc + arr.data.byteLength, 0);
-}
-
 export interface FrameData {
   data: Uint8Array;
   dts: number;
@@ -145,25 +136,4 @@ function generateSampleTable(frames: FrameData[]): Array<{
   return samples;
 }
 
-/**
- * Generate the track's sample table from an array of frames.
- * @param {Array.<Object>} frames
- * @returns {Uint8Array}
- */
-function concatenateFrameData(frames: FrameData[]): Uint8Array {
-  let dataOffset = 0;
-  const data = new Uint8Array(sumFrameByteLengths(frames));
-
-  for (const currentFrame of frames) {
-    data.set(currentFrame.data, dataOffset);
-    dataOffset += currentFrame.data.byteLength;
-  }
-  return data;
-}
-
-export {
-  prefixWithSilence,
-  trimAdtsFramesByEarliestDts,
-  generateSampleTable,
-  concatenateFrameData,
-};
+export { prefixWithSilence, trimAdtsFramesByEarliestDts, generateSampleTable };

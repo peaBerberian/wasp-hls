@@ -1,5 +1,4 @@
 import {
-  concatenateNalData,
   extendFirstKeyFrame,
   generateSampleTable,
   groupFramesIntoGops,
@@ -7,7 +6,8 @@ import {
 } from "./frame-utils.ts";
 import type { ParsedNalUnit } from "./H264NalUnitProducer.ts";
 import { NalUnitType } from "./H264NalUnitProducer.ts";
-import { createMdat, createMoof } from "./mp4-utils.ts";
+import { createFragment, type Mp4Fragment } from "./mp4-fragment.ts";
+import { createMoof } from "./mp4-utils.ts";
 import {
   calculateTrackBaseMediaDecodeTime,
   clearDtsInfo,
@@ -19,8 +19,8 @@ import type { TrackInfo } from "./types.ts";
 export interface Mp4VideoSegmentData {
   /** Extracted information about the current video track. */
   trackInfo: TrackInfo;
-  /** Constructed video-related ISOBMFF boxes for that segment. */
-  boxes: Uint8Array;
+  /** Headers and borrowed NAL payloads, ready for final assembly. */
+  fragment: Mp4Fragment;
   /** Timing metadata included in that segment. */
   timingInfo: {
     /** Start time, in timescale. */
@@ -234,8 +234,15 @@ export default class Mp4VideoSegmentGenerator {
     // samples (that is, frames) in the video data
     this._trackInfo.samples = generateSampleTable(gops);
 
-    // Concatenate the video data and construct the mdat
-    const mdat = createMdat(concatenateNalData(gops));
+    // Capture every NAL before the last GOP is moved into the continuity cache.
+    const payload: Uint8Array[] = [];
+    for (const gop of gops) {
+      for (const frame of gop) {
+        for (const nal of frame) {
+          payload.push(nal.data);
+        }
+      }
+    }
 
     this._trackInfo.baseMediaDecodeTime = calculateTrackBaseMediaDecodeTime(
       this._trackInfo,
@@ -257,15 +264,8 @@ export default class Mp4VideoSegmentGenerator {
 
     const moof = createMoof(this._sequenceNumber, [this._trackInfo]);
 
-    // it would be great to allocate this array up front instead of
-    // throwing away hundreds of media segment fragments
-    const boxes = new Uint8Array(moof.byteLength + mdat.byteLength);
-
     // Bump the sequence number for next time
     this._sequenceNumber++;
-
-    boxes.set(moof);
-    boxes.set(mdat, moof.byteLength);
 
     const duration = (this._trackInfo.samples ?? []).reduce(
       (acc: number, sample: { duration: number }) => acc + sample.duration,
@@ -275,7 +275,7 @@ export default class Mp4VideoSegmentGenerator {
     this.resetStream_();
     return {
       trackInfo,
-      boxes,
+      fragment: createFragment(moof, payload, true),
       timingInfo: {
         start: trackInfo.baseMediaDecodeTime,
         end: trackInfo.baseMediaDecodeTime + duration,

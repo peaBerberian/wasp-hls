@@ -3,9 +3,9 @@ import {
   prefixWithSilence,
   trimAdtsFramesByEarliestDts,
   generateSampleTable as generateAudioSampleTable,
-  concatenateFrameData,
 } from "./audio-frame-utils.ts";
-import { createMdat, createMoof } from "./mp4-utils.ts";
+import { createFragment, type Mp4Fragment } from "./mp4-fragment.ts";
+import { createMoof } from "./mp4-utils.ts";
 import {
   calculateTrackBaseMediaDecodeTime,
   clearDtsInfo,
@@ -17,8 +17,8 @@ import type { TrackInfo } from "./types.ts";
 export interface Mp4AudioSegmentData {
   /** Extracted information about the current audio track. */
   trackInfo: TrackInfo;
-  /** Constructed audio-related ISOBMFF boxes for that segment. */
-  boxes: Uint8Array;
+  /** Headers and borrowed AAC frame payloads, ready for final assembly. */
+  fragment: Mp4Fragment;
   /** Timing metadata included in that segment. */
   timingInfo: {
     /** Start time, in timescale. */
@@ -106,19 +106,12 @@ export class Mp4AudioSegmentGenerator {
     // samples (that is, adts frames) in the audio data
     this._trackInfo.samples = generateAudioSampleTable(frames);
 
-    // concatenate the audio data to constuct the mdat
-    const mdat = createMdat(concatenateFrameData(frames));
-
     this._aacFrames = [];
 
     const moof = createMoof(this._sequenceNumber, [this._trackInfo]);
-    const boxes = new Uint8Array(moof.byteLength + mdat.byteLength);
 
     // bump the sequence number for next time
     this._sequenceNumber++;
-
-    boxes.set(moof);
-    boxes.set(mdat, moof.byteLength);
 
     const continuityStart = this._trackInfo.baseMediaDecodeTime;
     const duration = (this._trackInfo.samples ?? []).reduce(
@@ -131,7 +124,11 @@ export class Mp4AudioSegmentGenerator {
 
     return {
       trackInfo: this._trackInfo,
-      boxes,
+      fragment: createFragment(
+        moof,
+        frames.map((frame) => frame.data),
+        false,
+      ),
       timingInfo: {
         start: continuityStart,
         end: continuityEnd,

@@ -10,7 +10,6 @@ const BOXES_NAME = {
   esds: [101, 115, 100, 115],
   ftyp: [102, 116, 121, 112],
   hdlr: [104, 100, 108, 114],
-  mdat: [109, 100, 97, 116],
   mdhd: [109, 100, 104, 100],
   mdia: [109, 100, 105, 97],
   mfhd: [109, 102, 104, 100],
@@ -333,15 +332,6 @@ function createFtyp(): Uint8Array {
  */
 function createHdlr(hdlrType: "audio" | "video"): Uint8Array {
   return createBox(BOXES_NAME.hdlr, HDLR_TYPES[hdlrType]);
-}
-
-/**
- * Create a `mdat` ISOBMFF box with the corresponding data.
- * @param {Uint8Array} data
- * @returns {Uint8Array}
- */
-function createMdat(data: Uint8Array): Uint8Array {
-  return createBox(BOXES_NAME.mdat, data);
 }
 
 /**
@@ -1288,4 +1278,4 @@ function createInitSegment(tracks: TrackInfo[]): Uint8Array {
   return result;
 }
 
-export { createFtyp, createMdat, createMoof, createMoov, createInitSegment };
+export { createFtyp, createMoof, createMoov, createInitSegment };
