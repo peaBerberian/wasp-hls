@@ -106,13 +106,6 @@ impl PlaylistStore {
         })
     }
 
-    /// Returns a reference to the `Url` to the top-level Playlist stored by this
-    /// `PlaylistStore`.
-    /// XXX TODO: top_level_url?
-    pub(crate) fn url(&self) -> &Url {
-        self.playlist.url()
-    }
-
     /// Returns which kind of Top-level Playlist we're relying on currently (either
     /// a MultiVariant Playlist or a direct Media Playlist one)
     pub(crate) fn playlist_kind(&self) -> crate::bindings::PlaylistType {
