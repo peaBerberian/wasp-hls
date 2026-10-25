@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Bug fixes
+
+- Set a default track ID when transmuxing raw aac
+
 ## v0.6.0 (2026-10-20)
 
 ### Changes
