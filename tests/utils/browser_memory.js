@@ -64,17 +64,12 @@ export async function takeMemoryMeasurement(workerTelemetry) {
 function formatMeasurement(pageMemory, workerSnapshot) {
   const pageUserAgentSpecificBytes = pageMemory.bytes;
   const pageJsHeapUsedBytes = pageMemory.usedJSHeapSize ?? null;
-  const workerUserAgentSpecificBytes =
-    workerSnapshot.userAgentSpecificBytes ?? null;
-  const workerJsHeapUsedBytes = workerSnapshot.jsHeapUsedBytes ?? null;
   const workerWasmMemoryBytes = workerSnapshot.wasmMemoryBytes ?? null;
   const breakdownEntryCount = Array.isArray(pageMemory.breakdown)
     ? pageMemory.breakdown.length
     : null;
-  const workerTrackedBytes =
-    workerUserAgentSpecificBytes ??
-    (workerJsHeapUsedBytes ?? 0) + (workerWasmMemoryBytes ?? 0);
-  const totalMemoryBytes = pageMemory.bytes + workerTrackedBytes;
+  // The page measurement includes its dedicated workers.
+  const totalMemoryBytes = pageMemory.bytes;
 
   return {
     totalMemoryBytes,
