@@ -82,7 +82,6 @@ describe("Worker request injection - retries", function () {
           scenarioId: "fmp4-multivariant-no-codecs",
           playerConfig: {
             multiVariantPlaylistMaxRetry: 3,
-            multiVariantPlaylistRequestTimeout: 50,
             multiVariantPlaylistBackoffBase: 500,
             multiVariantPlaylistBackoffMax: 1200,
           },
@@ -117,7 +116,6 @@ describe("Worker request injection - retries", function () {
           ruleId: "media-playlist",
           configUpdate: {
             mediaPlaylistMaxRetry: 3,
-            mediaPlaylistRequestTimeout: 50,
             mediaPlaylistBackoffBase: 500,
             mediaPlaylistBackoffMax: 1200,
           },
@@ -143,7 +141,6 @@ describe("Worker request injection - retries", function () {
           ruleId: "segment-request",
           configUpdate: {
             segmentMaxRetry: 3,
-            segmentRequestTimeout: 50,
             segmentBackoffBase: 500,
             segmentBackoffMax: 1200,
           },
@@ -162,7 +159,6 @@ describe("Worker request injection - retries", function () {
           scenarioId: "fmp4-multivariant-no-codecs",
           playerConfig: {
             multiVariantPlaylistMaxRetry: 2,
-            multiVariantPlaylistRequestTimeout: 50,
             multiVariantPlaylistBackoffBase: 1,
             multiVariantPlaylistBackoffMax: 1,
           },
@@ -192,7 +188,6 @@ describe("Worker request injection - retries", function () {
           scenarioId: "fmp4-multivariant-no-codecs",
           playerConfig: {
             multiVariantPlaylistMaxRetry: 3,
-            multiVariantPlaylistRequestTimeout: 50,
             multiVariantPlaylistBackoffBase: 1,
             multiVariantPlaylistBackoffMax: 1,
           },
