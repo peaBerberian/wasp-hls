@@ -18,7 +18,7 @@
 
 ### Other
 
-- Send `variantUpdate` before related track updates during playback, as at startup.
+- Send related selection events mostly in the same order: lock status, variant, audio track, subtitle track.
 
 ## v0.6.0 (2026-10-20)
 

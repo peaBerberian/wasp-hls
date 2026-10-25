@@ -26,7 +26,14 @@ it(
     expect(ctx.variantLockUpdates.at(-1)).toBe(ctx.variants[1]);
     ctx.finish("high-video.m3u8", ctx.playlist("high-video"));
 
+    const eventsBeforeProbe = ctx.selectionEvents.length;
     expect(() => ctx.finish("high-video-0.ts")).not.toThrow();
+    expect(
+      ctx.selectionEvents.slice(eventsBeforeProbe, eventsBeforeProbe + 2),
+    ).toEqual([
+      { type: "lock", id: undefined },
+      { type: "variant", id: ctx.variants[0] },
+    ]);
     expect(ctx.announcedVariants.at(-1)).toBe(ctx.variants[0]);
     expect(ctx.variantLockUpdates).toEqual([ctx.variants[1], undefined]);
     expect(ctx.errors).toEqual([]);
@@ -56,7 +63,14 @@ it(
       ctx.finish("high-video.m3u8", ctx.playlist("high-video"));
       ctx.finish("high-audio.m3u8", ctx.playlist("high-audio"));
       const checksBeforeProbe = ctx.supportChecks.length;
+      const eventsBeforeProbe = ctx.selectionEvents.length;
       ctx.finish("high-audio-0.ts");
+      expect(
+        ctx.selectionEvents.slice(eventsBeforeProbe, eventsBeforeProbe + 2),
+      ).toEqual([
+        { type: "lock", id: undefined },
+        { type: "variant", id: ctx.variants[0] },
+      ]);
       expect(ctx.supportChecks.length - checksBeforeProbe).toBe(4);
       expect(ctx.supportChecks.slice(checksBeforeProbe)).toContainEqual({
         type: MediaType.Audio,
