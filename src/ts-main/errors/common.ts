@@ -3,6 +3,16 @@
  * returned by the `WaspHlsPlayer`.
  */
 export const WaspErrorCode = {
+  /** Loading of the media element's resource was aborted. */
+  MediaAbortedError: "MediaAbortedError",
+  /** The media element reported a network error. */
+  MediaNetworkError: "MediaNetworkError",
+  /** The browser could not decode media data. */
+  MediaDecodeError: "MediaDecodeError",
+  /** The media element could not use the supplied media resource. */
+  MediaSourceNotSupportedError: "MediaSourceNotSupportedError",
+  /** The browser reported an unknown media error. */
+  MediaOtherError: "MediaOtherError",
   /** The requested track ID does not exist. */
   UnknownTrack: "UnknownTrack",
   /** No variant can provide the requested track. */
