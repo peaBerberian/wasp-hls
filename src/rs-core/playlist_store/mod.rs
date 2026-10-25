@@ -540,7 +540,7 @@ impl PlaylistStore {
         } = self.set_variant(variant_id);
         self.is_variant_locked = true;
         LockVariantResponse::VariantLocked {
-            changed_media_types: changed_playlists,
+            changed_playlists,
             tracks,
             variant_changed,
         }
@@ -1670,8 +1670,8 @@ pub(crate) enum LockVariantResponse {
     AlreadyLocked,
     /// The variant has been locked alongside changes performed by this request.
     VariantLocked {
-        // XXX TODO: Isn't it more changed_media_playlists?
-        changed_media_types: Vec<MediaType>,
+        /// Media types whose selected playlist ID changed.
+        changed_playlists: Vec<MediaType>,
         tracks: TrackChanges,
         variant_changed: bool,
     },
@@ -2735,7 +2735,7 @@ video.m3u8
         assert_eq!(store.current_media_playlist_id(MediaType::Video), None);
 
         let LockVariantResponse::VariantLocked {
-            changed_media_types,
+            changed_playlists,
             tracks,
             variant_changed,
         } = store.lock_variant(variant_id)
@@ -2743,7 +2743,7 @@ video.m3u8
             panic!("Expected the initial variant to be locked");
         };
         assert!(variant_changed);
-        assert_eq!(changed_media_types, vec![MediaType::Video]);
+        assert_eq!(changed_playlists, vec![MediaType::Video]);
         assert_eq!(tracks.audio, TrackChange::Unchanged);
         assert_eq!(tracks.subtitles, TrackChange::Unchanged);
         assert_eq!(store.current_variant_id(), Some(variant_id));
@@ -2986,7 +2986,7 @@ high.m3u8
         store.set_variant(low_id);
 
         let LockVariantResponse::VariantLocked {
-            changed_media_types: _,
+            changed_playlists: _,
             tracks,
             variant_changed: _,
         } = store.lock_variant(high_id)
@@ -2998,7 +2998,7 @@ high.m3u8
         store.unlock_variant();
         store.set_audio_track(Some(french_id)).unwrap();
         let LockVariantResponse::VariantLocked {
-            changed_media_types: _,
+            changed_playlists: _,
             tracks,
             variant_changed: _,
         } = store.lock_variant(high_id)
@@ -3029,7 +3029,7 @@ muxed.m3u8
         assert!(store.current_audio_track_id().is_some());
 
         let LockVariantResponse::VariantLocked {
-            changed_media_types: _,
+            changed_playlists: _,
             tracks,
             variant_changed: _,
         } = store.lock_variant(muxed_id)
