@@ -591,6 +591,8 @@ impl Dispatcher {
 
     /// Method to call when a new codec support report has been received.
     pub(super) fn on_codecs_support_update_core(&mut self) {
+        // XXX TODO: Refresh variant/audio/subtitle lists when codec checks or probing change
+        // what can play. Emit list events only when a list changes.
         self.recheck_player_state();
     }
 

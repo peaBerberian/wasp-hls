@@ -883,7 +883,18 @@ impl PlaylistStore {
             .or(direct_audio_track)
             .or_else(|| self.current_audio_track_id());
         let mut changes = AudioTrackUpdate::default();
+        let previous_fixed_track = self.fixed_audio_track;
         self.fixed_audio_track = track_id;
+
+        // Check support with the requested audio, not the previous choice.
+        // Unknown support stays eligible. A known impossible request changes no state.
+        if track_id.is_some()
+            && matches!(&self.playlist, TopLevelPlaylist::Multivariant(_))
+            && self.compatible_variants().next().is_none()
+        {
+            self.fixed_audio_track = previous_fixed_track;
+            return Err(TrackSelectionError::NoCompatibleVariant);
+        }
 
         if let Some(variant) = self.current_variant() {
             match self.audio_track_id_for_variant(variant) {
@@ -1403,6 +1414,8 @@ impl PlaylistStore {
                 return Ok(MultivariantStartupStatus::VariantSelectionNeeded);
             }
             log_error!("PS: No supported variant in the given MultivariantPlaylist");
+            // TODO: If probing rules out a newly chosen audio track, warn and try automatic
+            // audio selection instead of stopping playback when another track could work.
             return Err(PlaylistStoreError::NoSupportedVariant);
         }
 
@@ -3238,6 +3251,77 @@ video.m3u8
             Ok(ref changes) if !changes.needs_variant_selection && !changes.audio_playlist_changed
         ));
         assert_eq!(store.fixed_audio_track_id(), None);
+    }
+
+    #[test]
+    fn known_unsupported_audio_is_rejected_using_the_requested_track_without_changing_state() {
+        let mut store = subtitle_store(true);
+        let variants: Vec<_> = store
+            .available_variants()
+            .map(|variant| variant.id())
+            .collect();
+        for id in variants {
+            store.set_variant_support(id, true);
+        }
+        let english = store.current_audio_track_id().unwrap();
+        let french = store
+            .audio_tracks()
+            .iter()
+            .find(|track| track.language() == Some("fr"))
+            .unwrap()
+            .id();
+
+        // French is still eligible while its format is unknown.
+        store.set_audio_track(Some(french)).unwrap();
+        store.set_external_media_info(
+            ExternalMediaInfo {
+                media_type: MediaType::Audio,
+                mime_type: "audio/mp4".into(),
+                codec: "ec-3".into(),
+            },
+            MediaType::Audio,
+        );
+        store.save_support(
+            super::TypeSupportKey {
+                media_type: MediaType::Audio,
+                mime_type: Some("audio/mp4".into()),
+                codecs: "ec-3".into(),
+            },
+            false,
+        );
+
+        // The old French choice is unsupported, but requesting English must still work.
+        store.set_audio_track(Some(english)).unwrap();
+        store
+            .set_subtitle_track(Some(subtitle_id(&store, "English")))
+            .unwrap();
+        let variant = store.current_variant_id().unwrap();
+        store.lock_variant(variant);
+        let selected = (
+            store.current_audio_id,
+            store.current_video_id,
+            store.current_text_id,
+        );
+        let support = store.type_support.clone();
+        let fixed_subtitle = store.fixed_subtitle_track;
+
+        assert_eq!(
+            store.set_audio_track(Some(french)),
+            Err(TrackSelectionError::NoCompatibleVariant)
+        );
+        assert_eq!(store.fixed_audio_track, Some(english));
+        assert_eq!(store.fixed_subtitle_track, fixed_subtitle);
+        assert_eq!(
+            (
+                store.current_audio_id,
+                store.current_video_id,
+                store.current_text_id
+            ),
+            selected
+        );
+        assert_eq!(store.current_variant_id(), Some(variant));
+        assert!(store.is_variant_locked());
+        assert_eq!(store.type_support, support);
     }
 
     #[test]
