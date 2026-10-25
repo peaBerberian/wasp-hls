@@ -1,0 +1,17 @@
+{
+  "name": "wasp-hls-player-benchmarks",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test unit.test.mjs",
+    "check": "tsc -p tsconfig.json",
+    "start": "node run.mjs"
+  },
+  "dependencies": {
+    "hls.js": "1.6.15",
+    "shaka-player": "4.15.7"
+  },
+  "devDependencies": {
+    "typescript": "6.0.3"
+  }
+}
