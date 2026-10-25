@@ -28,6 +28,7 @@ export {
   WaspErrorCode,
   WaspContentCompatibilityError,
   WaspInitializationError,
+  WaspMediaError,
   WaspMediaPlaylistParsingError,
   WaspMediaPlaylistRequestError,
   WaspMultivariantPlaylistParsingError,

@@ -27,7 +27,7 @@ import {
 } from "../wasm/index.js";
 import DEFAULT_CONFIG from "./default_config.ts";
 import type { WaspError } from "./errors/index.ts";
-import { WaspInitializationError } from "./errors/index.ts";
+import { WaspInitializationError, WaspMediaError } from "./errors/index.ts";
 import postMessageToWorker from "./postMessageToWorker.ts";
 import type { ContentMetadata } from "./types.ts";
 import { PlayerState } from "./types.ts";
@@ -304,14 +304,39 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
         this.trigger("playing", null);
       }
     };
+    const onMediaError = () => {
+      const contentMetadata = this.__contentMetadata__;
+      const mediaError = this.videoElement.error;
+      if (
+        contentMetadata === null ||
+        contentMetadata.mediaSourceId === null ||
+        contentMetadata.error !== null ||
+        mediaError === null
+      ) {
+        return;
+      }
+      // Capture the browser's error before detaching the source clears it.
+      const error = new WaspMediaError(mediaError);
+      requestStopForContent(
+        contentMetadata,
+        this.videoElement,
+        this.__worker__,
+      );
+      contentMetadata.error = error;
+      this._triggerFatalError(contentMetadata, error);
+    };
     this.videoElement.addEventListener("pause", onPause);
     this.videoElement.addEventListener("play", onPlay);
     this.videoElement.addEventListener("ended", onEnded);
+    this.videoElement.addEventListener("error", onMediaError);
+    this.videoElement.addEventListener("abort", onMediaError);
 
     this.__destroyAbortController__.signal.addEventListener("abort", () => {
       this.videoElement.removeEventListener("pause", onPause);
       this.videoElement.removeEventListener("play", onPlay);
       this.videoElement.removeEventListener("ended", onEnded);
+      this.videoElement.removeEventListener("error", onMediaError);
+      this.videoElement.removeEventListener("abort", onMediaError);
     });
   }
 
@@ -1385,14 +1410,8 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
 
         case WorkerMessageType.Error: {
           const error = onErrorMessage(data, this.__contentMetadata__);
-          if (error !== null) {
-            const contentMetadata = this.__contentMetadata__;
-            logger.error("API: sending fatal error", error);
-            this.trigger("error", error);
-            if (contentMetadata !== this.__contentMetadata__) {
-              break;
-            }
-            this.trigger("playerStateChange", PlayerState.Error);
+          if (error !== null && this.__contentMetadata__ !== null) {
+            this._triggerFatalError(this.__contentMetadata__, error);
           }
           break;
         }
@@ -1499,6 +1518,20 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
         type: MainMessageType.UpdateLoggerLevel,
         value: level,
       });
+    }
+  }
+
+  private _triggerFatalError(
+    contentMetadata: ContentMetadata,
+    error: WaspError,
+  ): void {
+    logger.error("API: sending fatal error", error);
+    this.trigger("error", error);
+    if (
+      contentMetadata === this.__contentMetadata__ &&
+      contentMetadata.error === error
+    ) {
+      this.trigger("playerStateChange", PlayerState.Error);
     }
   }
 

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   waitForLoadedState,
+  waitForPlayback,
   waitForPlayerEvent,
 } from "../../utils/player_test_tools.js";
 import { ensureVodScenarioReady } from "../../utils/vod_scenarios.js";
@@ -25,13 +26,9 @@ async function expectPlayback(ctx, url) {
   await waitForLoadedState(ctx.player, ctx.videoElement, () =>
     ctx.getLastPlayerError(),
   );
-  const timeUpdate = waitForPlayerEvent(
-    ctx.videoElement,
-    "timeupdate",
-    () => ctx.videoElement.currentTime > 0.5,
+  await waitForPlayback(ctx.player, ctx.videoElement, () =>
+    ctx.getLastPlayerError(),
   );
-  ctx.player.resume();
-  await timeUpdate;
   expect(ctx.player.getError()).toBeNull();
 }
 

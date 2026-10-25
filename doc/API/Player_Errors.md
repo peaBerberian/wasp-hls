@@ -512,6 +512,49 @@ selection stays unchanged.
 - `trackId`: Requested track ID.
 - `message`: Description of the failed selection.
 
+## Error type: `WaspMediaError`
+
+`WaspMediaError` errors are triggered when the browser reports an error on
+the player's `<video>` element.
+
+Its `name` property is set to `"WaspMediaError"`:
+
+```js
+player.addEventListener("error", (error) => {
+  if (error.name === "WaspMediaError") {
+    // The browser reported an error on the video element
+  }
+});
+```
+
+`WaspMediaError` also has the following property:
+
+- `mediaErrorCode` (`number`): The original `HTMLMediaElement.error.code`
+  reported by the browser.
+
+### Error codes
+
+A `WaspMediaError`'s `code` property can be set to any of the following values:
+
+- `"MediaAbortedError"`:
+  The media element reported `MEDIA_ERR_ABORTED` (1): loading of its media resource
+  was interrupted at the user's request.
+
+- `"MediaNetworkError"`:
+  The media element reported `MEDIA_ERR_NETWORK` (2), a network failure at the
+  media element level. Wasp's playlist and segment request failures have their
+  own request error types.
+
+- `"MediaDecodeError"`:
+  The browser could not decode media data.
+
+- `"MediaSourceNotSupportedError"`:
+  The media element reported `MEDIA_ERR_SRC_NOT_SUPPORTED` (4): it could not use
+  the supplied media resource, for example because its format was unsupported.
+
+- `"MediaOtherError"`:
+  The browser reported an unrecognized media error code.
+
 ## Error type: `WaspOtherError`
 
 `WaspOtherError` are errors that are other, uncategorized errors that didn't fit

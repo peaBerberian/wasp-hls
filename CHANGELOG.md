@@ -8,6 +8,7 @@
 - Add `getSubtitleTrackList()`, `getCurrentSubtitleTrack()`, `setSubtitleTrack()`, `resetSubtitleTrack()` and `disableSubtitleTrack()` methods
 - Add `subtitleTrackUpdate` and `subtitleTrackListUpdate` events
 - Add `initialSubtitleTrack` `load` option
+- Add `WaspMediaError` error type and corresponding types
 
 ### Bug fixes
 
