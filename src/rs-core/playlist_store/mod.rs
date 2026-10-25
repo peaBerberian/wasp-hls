@@ -13,7 +13,7 @@ use crate::{
     text,
     utils::{logger::*, url::Url},
 };
-use std::{collections::HashMap, io::BufRead};
+use std::{borrow::Cow, collections::HashMap, io::BufRead};
 
 use crate::parser::ByteRange;
 pub(crate) use crate::parser::MediaPlaylistPermanentId;
@@ -60,7 +60,7 @@ pub(crate) struct PlaylistStore {
     is_variant_locked: bool,
 
     /// Settled support checks, retained across variant and track changes.
-    type_support: HashMap<TypeSupportKey, bool>,
+    type_support: HashMap<TypeSupportKey<'static>, bool>,
 
     /// Probe metadata inferred for currently known multivariant media playlists.
     multivariant_media_info: HashMap<MediaPlaylistPermanentId, ExternalMediaInfo>,
@@ -72,15 +72,23 @@ pub(crate) struct PlaylistStore {
     max_observed_text_target_duration: Option<f64>,
 }
 
-/// The source container can be unknown before a candidate's playlist is loaded.
+/// Lookups can use existing strings. Saved keys keep their own strings.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-struct TypeSupportKey {
-    // XXX TODO: Why not MediaType here?
-    media_type: u32,
-    // XXX TODO: Needs to be owned?
-    mime_type: Option<String>,
-    // XXX TODO: Needs to be owned?
-    codecs: String,
+struct TypeSupportKey<'a> {
+    media_type: MediaType,
+    mime_type: Option<Cow<'a, str>>,
+    codecs: Cow<'a, str>,
+}
+
+// Result of a codec-support check.
+enum TypeSupportCheck {
+    // We know whether the given configuration is supported: `true` if it is, `false` if it isn't
+    Cached(bool),
+    // We don't know yet, it should be asked to the host. `TypeSupportKey` is the corresponding
+    // cache key.
+    Needed(TypeSupportKey<'static>),
+    // We don't have enough information to know nor ask for support yet.
+    MissingCodec,
 }
 
 impl PlaylistStore {
@@ -439,13 +447,12 @@ impl PlaylistStore {
         };
         variants
             .iter()
-            .filter(|variant| self.variant_support(variant.id()) != Some(false))
+            .filter(|variant| self.variant_support(variant) != Some(false))
     }
 
     /// Iterate over variants compatible with the current track choices, excluding known
     /// unsupported variants. A variant lock does not change this pool.
     pub(crate) fn compatible_variants(&self) -> impl Iterator<Item = &VariantStream> {
-        // XXX TODO: To review heavily, the diff to main is large in that one
         let playlist = match &self.playlist {
             TopLevelPlaylist::Multivariant(playlist) => Some(playlist),
             TopLevelPlaylist::DirectMedia(_) => None,
@@ -830,7 +837,7 @@ impl PlaylistStore {
                 .variants_for_subtitle(track_id)
                 .iter()
                 .any(|variant| {
-                    self.variant_support(variant.id()) != Some(false)
+                    self.variant_support(variant) != Some(false)
                         && audio_variants.as_ref().is_none_or(|variants| {
                             variants
                                 .iter()
@@ -1200,10 +1207,9 @@ impl PlaylistStore {
         }
     }
 
-    // XXX TODO: Pass a variant instead?
-    // XXX TODO: Document
-    fn variant_support(&self, variant_id: u32) -> Option<bool> {
-        let variant = self.variant(variant_id)?;
+    /// Read cached support for this variant and the selected audio track.
+    /// `Some(true)` if supported, `Some(false)` if not, `None` if unknown for now.
+    fn variant_support(&self, variant: &VariantStream) -> Option<bool> {
         if variant.has_type(MediaType::Text)
             && !variant.has_type(MediaType::Audio)
             && !variant.has_type(MediaType::Video)
@@ -1211,79 +1217,119 @@ impl PlaylistStore {
             // Text-only variants are not supported
             return Some(false);
         }
-        let mut supported = None;
-        let checks = self.variant_type_checks(variant);
-        let mut has_pending_check =
-            [MediaType::Audio, MediaType::Video]
-                .into_iter()
-                .any(|media_type| {
-                    // XXX TODO: Too magical code, hide too much machinery, I don't even know what
-                    // it means
-                    self.resolve_playlist_id_for_variant(variant, media_type)
-                        .ok()
-                        .flatten()
-                        .is_some()
-                        && !checks.iter().any(|key| key.media_type == media_type as u32)
-                });
-        for key in checks {
-            match self.type_support.get(&key) {
-                Some(false) => return Some(false),
-                Some(true) => supported = Some(true),
-                // XXX TODO: why not return None here?
-                None => has_pending_check = true,
+        let mut has_supported_format = false;
+        let mut has_unknown_support = false;
+        for check in self.variant_type_checks(variant) {
+            match check {
+                TypeSupportCheck::Cached(false) => return Some(false),
+                TypeSupportCheck::Cached(true) => has_supported_format = true,
+                // Keep checking: another format may already be known to be unsupported.
+                TypeSupportCheck::MissingCodec | TypeSupportCheck::Needed(_) => {
+                    has_unknown_support = true;
+                }
             }
         }
-
-        // XXX TODO: Can probably be simplified out
-        if has_pending_check {
-            None
+        if has_supported_format && !has_unknown_support {
+            Some(true)
         } else {
-            supported
+            None
         }
     }
 
-    /// Resolve each candidate's formats, including metadata from earlier probes.
-    /// XXX TODO: I'm unsure of what "resolve" and "candidate" means here. The documentation should
-    /// be rewritten so it can be understood
-    /// XXX TODO: Should it return a Vec Or iterator?
-    fn variant_type_checks(&self, variant: &VariantStream) -> Vec<TypeSupportKey> {
-        [MediaType::Video, MediaType::Audio]
-            .into_iter()
-            .filter_map(|media_type| {
-                // XXX TODO: Too magic
-                let id = self
-                    .resolve_playlist_id_for_variant(variant, media_type)
-                    .ok()
-                    .flatten();
-                let info = id
-                    .as_ref()
-                    .and_then(|id| self.multivariant_media_info.get(id));
-
-                // XXX TODO: So we're cloning all the time here?
-                let codecs = info
-                    .map(|info| info.codec.clone())
-                    .or_else(|| variant.codecs(media_type))?;
-                let mime_type = info.map(|info| info.mime_type.clone()).or_else(|| {
-                    self.media_playlist(&id?)
-                        .and_then(|playlist| playlist.mime_type(media_type))
-                        .map(str::to_owned)
-                });
-                Some(TypeSupportKey {
-                    media_type: media_type as u32,
-                    mime_type,
-                    codecs,
-                })
-            })
-            .collect()
+    /// Build audio/video checks for this variant using the selected audio track.
+    /// Use MIME type and codecs from the probe when available.
+    /// Otherwise, get codecs from the variant and MIME type from its media playlist.
+    /// Report when a required codec is still unknown.
+    fn variant_type_checks(&self, variant: &VariantStream) -> Vec<TypeSupportCheck> {
+        let mut checks = Vec::with_capacity(2);
+        for media_type in [MediaType::Video, MediaType::Audio] {
+            let playlist_id = match self.resolve_playlist_id_for_variant(variant, media_type) {
+                Ok(id) => id,
+                Err(IncompatibleTrack) => {
+                    // The chosen track is unavailable here, so only variant-declared codecs can be
+                    // used.
+                    if let Some(codecs) = variant.codecs(media_type) {
+                        checks.push(self.type_support_check(media_type, None, &codecs));
+                    }
+                    continue;
+                }
+            };
+            let info = playlist_id
+                .as_ref()
+                .and_then(|id| self.multivariant_media_info.get(id));
+            if let Some(info) = info {
+                checks.push(self.type_support_check(
+                    media_type,
+                    Some(&info.mime_type),
+                    &info.codec,
+                ));
+                continue;
+            }
+            let Some(codecs) = variant.codecs(media_type) else {
+                if playlist_id.is_some() {
+                    // This media playlist is required, but its codec is still unknown.
+                    checks.push(TypeSupportCheck::MissingCodec);
+                }
+                continue;
+            };
+            let mime_type = playlist_id
+                .as_ref()
+                .and_then(|id| self.media_playlist(id))
+                .and_then(|playlist| playlist.mime_type(media_type));
+            checks.push(self.type_support_check(media_type, mime_type, &codecs));
+        }
+        checks
     }
 
-    // XXX TODO: Document what method is doing
-    fn check_type_support(&mut self, key: TypeSupportKey) -> Option<bool> {
-        if let Some(supported) = self.type_support.get(&key) {
-            return Some(*supported);
+    /// Look for a result we already have.
+    /// Otherwise, copy the MIME type and codecs so we can ask JavaScript later.
+    fn type_support_check(
+        &self,
+        media_type: MediaType,
+        mime_type: Option<&str>,
+        codecs: &str,
+    ) -> TypeSupportCheck {
+        match self.get_saved_support(media_type, mime_type, codecs) {
+            Some(supported) => TypeSupportCheck::Cached(supported),
+            None => TypeSupportCheck::Needed(TypeSupportKey {
+                media_type,
+                mime_type: mime_type.map(|mime_type| Cow::Owned(mime_type.to_owned())),
+                codecs: Cow::Owned(codecs.to_owned()),
+            }),
         }
-        let supported = jsIsTypeSupported(MediaType::from_raw(key.media_type), &key.codecs)?;
+    }
+
+    /// Retrieve from cache if the given MediaType+MimeType+codec combination is currently
+    /// supported.
+    /// `Some(true)` if supported, `Some(false)` if not, `None` if unknown for now.
+    fn get_saved_support(
+        &self,
+        media_type: MediaType,
+        mime_type: Option<&str>,
+        codecs: &str,
+    ) -> Option<bool> {
+        let key = TypeSupportKey {
+            media_type,
+            mime_type: mime_type.map(Cow::Borrowed),
+            codecs: Cow::Borrowed(codecs),
+        };
+        self.type_support.get(&key).copied()
+    }
+
+    fn save_support(&mut self, key: TypeSupportKey<'static>, supported: bool) {
         self.type_support.insert(key, supported);
+    }
+
+    /// Reuse a settled result, or ask the host and cache its answer.
+    /// An unanswered host query returns None and is not cached.
+    fn check_type_support(&mut self, key: TypeSupportKey<'static>) -> Option<bool> {
+        if let Some(supported) =
+            self.get_saved_support(key.media_type, key.mime_type.as_deref(), &key.codecs)
+        {
+            return Some(supported);
+        }
+        let supported = jsIsTypeSupported(key.media_type, &key.codecs)?;
+        self.save_support(key, supported);
         Some(supported)
     }
 
@@ -1322,20 +1368,20 @@ impl PlaylistStore {
                 .all_variants()
                 .iter()
                 .flat_map(|variant| self.variant_type_checks(variant))
-                // XXX TODO: Why collecting here? Seems unneeded
                 .collect::<Vec<_>>(),
             TopLevelPlaylist::DirectMedia(_) => return Ok(MultivariantStartupStatus::Ready),
         };
 
         // Populate cache
-        for key in checks {
-            self.check_type_support(key);
+        for check in checks {
+            if let TypeSupportCheck::Needed(key) = check {
+                self.check_type_support(key);
+            }
         }
 
-        // XXX TODO: Couldnt the previous loop already tell us that?
         if self
-            .current_variant_id
-            .and_then(|id| self.variant_support(id))
+            .current_variant()
+            .and_then(|variant| self.variant_support(variant))
             == Some(false)
         {
             if self.compatible_variants().next().is_some() {
@@ -1380,6 +1426,21 @@ impl PlaylistStore {
 
     /// Support for the selected format
     fn current_media_support(&mut self, media_type: MediaType) -> Option<bool> {
+        if matches!(media_type, MediaType::Audio | MediaType::Video) {
+            let info = match &self.playlist {
+                TopLevelPlaylist::Multivariant(_) => self.curr_multivariant_media_info(media_type),
+                TopLevelPlaylist::DirectMedia(playlist) => playlist
+                    .external_media_info()
+                    .filter(|info| info.media_type == media_type),
+            };
+            if let Some(info) = info {
+                if let Some(supported) =
+                    self.get_saved_support(media_type, Some(&info.mime_type), &info.codec)
+                {
+                    return Some(supported);
+                }
+            }
+        }
         let codec = self.current_codec(media_type)?;
         match media_type {
             // XXX TODO: An unrecognized declared text codec or inferred MIME type should trigger
@@ -1387,54 +1448,66 @@ impl PlaylistStore {
             // before deciding that it is unsupported.
             MediaType::Text => Some(text::supports_codec(&codec)),
             MediaType::Audio | MediaType::Video => self.check_type_support(TypeSupportKey {
-                media_type: media_type as u32,
-                mime_type: self.current_mime_type(media_type),
-                codecs: codec,
+                media_type,
+                mime_type: self.current_mime_type(media_type).map(Cow::Owned),
+                codecs: Cow::Owned(codec),
             }),
         }
     }
 
     #[cfg(test)]
     fn set_variant_support(&mut self, variant_id: u32, supported: bool) {
-        let variant = self.variant(variant_id).unwrap();
-        let ids = [MediaType::Video, MediaType::Audio]
-            .into_iter()
-            .filter_map(|media_type| {
-                self.resolve_playlist_id_for_variant(variant, media_type)
-                    .ok()
-                    .flatten()
-                    .map(|id| (media_type, id))
-            })
-            .collect::<Vec<_>>();
-        for (media_type, id) in ids {
-            if self
-                .variant(variant_id)
-                .unwrap()
-                .codecs(media_type)
-                .is_none()
-                && !self.multivariant_media_info.contains_key(&id)
-            {
-                self.multivariant_media_info.insert(
-                    id,
-                    ExternalMediaInfo {
-                        media_type,
-                        mime_type: if media_type == MediaType::Audio {
-                            "audio/mp4"
-                        } else {
-                            "video/mp4"
-                        }
-                        .into(),
-                        codec: format!("test-{media_type}-{variant_id}"),
-                    },
-                );
+        let mut keys = Vec::new();
+        for media_type in [MediaType::Video, MediaType::Audio] {
+            let variant = self.variant(variant_id).unwrap();
+            let id = self
+                .resolve_playlist_id_for_variant(variant, media_type)
+                .unwrap_or_default();
+            if let Some(id) = id {
+                if variant.codecs(media_type).is_none()
+                    && !self.multivariant_media_info.contains_key(&id)
+                {
+                    self.multivariant_media_info.insert(
+                        id,
+                        ExternalMediaInfo {
+                            media_type,
+                            mime_type: if media_type == MediaType::Audio {
+                                "audio/mp4"
+                            } else {
+                                "video/mp4"
+                            }
+                            .into(),
+                            codec: format!("test-{media_type}-{variant_id}"),
+                        },
+                    );
+                }
             }
+            let info = id
+                .as_ref()
+                .and_then(|id| self.multivariant_media_info.get(id));
+            let codecs = info
+                .map(|info| info.codec.clone())
+                .or_else(|| self.variant(variant_id).unwrap().codecs(media_type));
+            let Some(codecs) = codecs else {
+                continue;
+            };
+            let mime_type = info.map(|info| info.mime_type.clone()).or_else(|| {
+                id.as_ref()
+                    .and_then(|id| self.media_playlist(id))
+                    .and_then(|playlist| playlist.mime_type(media_type))
+                    .map(str::to_owned)
+            });
+            keys.push(TypeSupportKey {
+                media_type,
+                mime_type: mime_type.map(Cow::Owned),
+                codecs: Cow::Owned(codecs),
+            });
         }
-        for key in self
-            .variant_type_checks(self.variant(variant_id).unwrap())
+        for key in keys
             .into_iter()
             .take(if supported { usize::MAX } else { 1 })
         {
-            self.type_support.insert(key, supported);
+            self.save_support(key, supported);
         }
     }
 
@@ -2075,7 +2148,10 @@ fr-video.m3u8
                 MediaType::Text,
             );
             assert_eq!(store.current_media_support(MediaType::Text), Some(expected));
-            assert_eq!(store.variant_support(variant), Some(true));
+            assert_eq!(
+                store.variant_support(store.variant(variant).unwrap()),
+                Some(true)
+            );
         }
     }
 
@@ -2099,16 +2175,25 @@ fr-video.m3u8
         store.set_variant_support(variant, true);
         store.set_external_media_info(info.clone(), MediaType::Audio);
         store.set_audio_track(Some(english)).unwrap();
-        assert_eq!(store.variant_support(variant), Some(true));
+        assert_eq!(
+            store.variant_support(store.variant(variant).unwrap()),
+            Some(true)
+        );
 
         // A different playlist with an unknown codec needs its own support check.
         store.set_audio_track(Some(french)).unwrap();
-        assert_eq!(store.variant_support(variant), None);
+        assert_eq!(store.variant_support(store.variant(variant).unwrap()), None);
         store.set_external_media_info(info.clone(), MediaType::Audio);
-        assert_eq!(store.variant_support(variant), Some(true));
+        assert_eq!(
+            store.variant_support(store.variant(variant).unwrap()),
+            Some(true)
+        );
         // Returning to a known format reuses its settled support result.
         store.set_audio_track(Some(english)).unwrap();
-        assert_eq!(store.variant_support(variant), Some(true));
+        assert_eq!(
+            store.variant_support(store.variant(variant).unwrap()),
+            Some(true)
+        );
 
         // A different source MIME type has a separate support result, even with the same codec.
         store.set_external_media_info(
@@ -2118,9 +2203,12 @@ fr-video.m3u8
             },
             MediaType::Audio,
         );
-        assert_eq!(store.variant_support(variant), None);
+        assert_eq!(store.variant_support(store.variant(variant).unwrap()), None);
         store.set_external_media_info(info.clone(), MediaType::Audio);
-        assert_eq!(store.variant_support(variant), Some(true));
+        assert_eq!(
+            store.variant_support(store.variant(variant).unwrap()),
+            Some(true)
+        );
 
         store.set_external_media_info(
             ExternalMediaInfo {
@@ -2129,7 +2217,33 @@ fr-video.m3u8
             },
             MediaType::Audio,
         );
-        assert_eq!(store.variant_support(variant), None);
+        assert_eq!(store.variant_support(store.variant(variant).unwrap()), None);
+    }
+
+    #[test]
+    fn rejected_audio_takes_priority_over_an_unknown_video_codec() {
+        let mut store = subtitle_store(true);
+        let variant_id = store.current_variant_id().unwrap();
+        store.set_external_media_info(
+            ExternalMediaInfo {
+                media_type: MediaType::Audio,
+                mime_type: "audio/mp4".into(),
+                codec: "ec-3".into(),
+            },
+            MediaType::Audio,
+        );
+        store.save_support(
+            super::TypeSupportKey {
+                media_type: MediaType::Audio,
+                mime_type: Some("audio/mp4".into()),
+                codecs: "ec-3".into(),
+            },
+            false,
+        );
+        assert_eq!(
+            store.variant_support(store.variant(variant_id).unwrap()),
+            Some(false)
+        );
     }
 
     #[test]

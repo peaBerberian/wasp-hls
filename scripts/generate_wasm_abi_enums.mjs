@@ -12,7 +12,11 @@ import prettier from "prettier";
 
 /**
  * @typedef {{ value: number; doc?: string[] }} EnumMemberSpec
- * @typedef {{ doc?: string[]; default: string; members: Record<string, number | EnumMemberSpec> }} EnumSpec
+ * @typedef {Object} EnumSpec
+ * @property {string[]} [doc]
+ * @property {string} default
+ * @property {Record<string, number | EnumMemberSpec>} members
+ * @property {string[]} [rustDerives] Rust traits to derive. Defaults to an empty list.
  * @typedef {{ enums: Record<string, EnumSpec> }} EnumManifest
  */
 
@@ -110,7 +114,10 @@ function renderRust() {
   for (const [name, spec] of enums) {
     blocks.push(...renderRustDoc(spec.doc));
     blocks.push("#[repr(u32)]");
-    blocks.push("#[derive(Clone, Copy, Debug, PartialEq, Eq)]");
+    const derives = spec.rustDerives ?? [];
+    if (derives.length > 0) {
+      blocks.push(`#[derive(${derives.join(", ")})]`);
+    }
     blocks.push(`pub enum ${name} {`);
     for (const [member, memberSpec] of Object.entries(spec.members)) {
       const normalizedMember = getMemberSpec(memberSpec);
