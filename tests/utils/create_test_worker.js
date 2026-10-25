@@ -1,5 +1,6 @@
 import { runTestWorkerBootstrap } from "./test_worker_bootstrap.js";
 import EmbeddedWorker from "../../build/embedded/worker.js";
+import { PLAYER_EVENT_TIMEOUT_MS } from "./timeouts.js";
 
 /**
  * @typedef {Object} TestWorkerFetchRule
@@ -113,7 +114,7 @@ function createTelemetryCollector(channelName, { storeHistory = true } = {}) {
     releaseFetch(requestId) {
       channel.postMessage({ type: "release-fetch", requestId });
     },
-    waitFor(predicate, timeoutMs = 20_000) {
+    waitFor(predicate, timeoutMs = PLAYER_EVENT_TIMEOUT_MS) {
       return new Promise((resolve, reject) => {
         const existingEvent = events.find(predicate);
         if (existingEvent !== undefined) {
@@ -138,7 +139,7 @@ function createTelemetryCollector(channelName, { storeHistory = true } = {}) {
         }
       });
     },
-    waitForCount(predicate, count, timeoutMs = 10_000) {
+    waitForCount(predicate, count, timeoutMs = PLAYER_EVENT_TIMEOUT_MS) {
       return new Promise((resolve, reject) => {
         const getMatchingEvents = () => events.filter(predicate);
         const existingMatches = getMatchingEvents();
