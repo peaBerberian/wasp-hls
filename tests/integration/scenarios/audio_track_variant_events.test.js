@@ -112,7 +112,7 @@ describe("Variant and audio-track event ordering", function () {
   );
 
   it.each(["fmp4-player-api", "fmp4-multivariant-no-codecs", "fmp4-alt-audio"])(
-    "announces lists, audio, subtitles, then variant at startup (%s)",
+    "announces lists, variant, audio, then subtitles at startup (%s)",
     { timeout: TEST_TIMEOUT_MS },
     async (scenario) => {
       const ctx = await createPlayerHarness({ fetchRules: [] });
@@ -122,23 +122,23 @@ describe("Variant and audio-track event ordering", function () {
           "variantListUpdate",
           "audioTrackListUpdate",
           "subtitleTrackListUpdate",
+          "variantUpdate",
           "audioTrackUpdate",
           "subtitleTrackUpdate",
-          "variantUpdate",
         ]) {
           ctx.player.addEventListener(name, () => events.push(name));
         }
         ctx.player.addEventListener("audioTrackUpdate", () => {
-          expect(ctx.player.getCurrentVariant()).toBeUndefined();
+          expect(ctx.player.getCurrentVariant()).toBeDefined();
           expect(ctx.player.getCurrentSubtitleTrack()).toBeUndefined();
         });
         ctx.player.addEventListener("subtitleTrackUpdate", () => {
-          expect(ctx.player.getCurrentVariant()).toBeUndefined();
+          expect(ctx.player.getCurrentVariant()).toBeDefined();
           expect(ctx.player.getCurrentSubtitleTrack()).toBeNull();
         });
         ctx.player.addEventListener("variantUpdate", () => {
           expect(ctx.player.getCurrentVariant()).toBeDefined();
-          expect(ctx.player.getCurrentSubtitleTrack()).toBeNull();
+          expect(ctx.player.getCurrentSubtitleTrack()).toBeUndefined();
         });
         ctx.player.load(getVodScenarioUrl(scenario));
         await waitForLoadedState(
@@ -150,9 +150,9 @@ describe("Variant and audio-track event ordering", function () {
           "variantListUpdate",
           "audioTrackListUpdate",
           "subtitleTrackListUpdate",
+          "variantUpdate",
           "audioTrackUpdate",
           "subtitleTrackUpdate",
-          "variantUpdate",
         ]);
       } finally {
         ctx.dispose();
@@ -161,7 +161,7 @@ describe("Variant and audio-track event ordering", function () {
   );
 
   it(
-    "announces track, variant, and lock without waiting for the locked playlist",
+    "announces variant, tracks, and lock without waiting for the locked playlist",
     { timeout: TEST_TIMEOUT_MS },
     async () => {
       const baseUrl = new URL(".", getVodScenarioUrl("fmp4-alt-audio"));
@@ -208,18 +208,19 @@ ${alternativeVideoUrl}
         ctx.player.addEventListener("audioTrackUpdate", () => {
           events.push("audioTrackUpdate");
           expect(ctx.player.getCurrentAudioTrack()?.language).toBe("fr");
-          expect(ctx.player.getCurrentVariant()).toEqual(initialVariant);
+          expect(ctx.player.getCurrentVariant()).toEqual(target);
         });
         ctx.player.addEventListener("subtitleTrackUpdate", (track) => {
           events.push("subtitleTrackUpdate");
           expect(track?.language).toBe("fr");
           expect(ctx.player.getCurrentAudioTrack()?.language).toBe("fr");
           expect(ctx.player.getCurrentSubtitleTrack()?.language).toBe("fr");
-          expect(ctx.player.getCurrentVariant()).toEqual(initialVariant);
+          expect(ctx.player.getCurrentVariant()).toEqual(target);
           expect(ctx.player.getLockedVariant()).toBeNull();
         });
         ctx.player.addEventListener("variantUpdate", () => {
-          expect(ctx.player.getCurrentSubtitleTrack()?.language).toBe("fr");
+          expect(ctx.player.getCurrentAudioTrack()?.language).toBe("en");
+          expect(ctx.player.getCurrentSubtitleTrack()?.language).toBe("en");
           events.push("variantUpdate");
           expect(ctx.player.getCurrentVariant()).toEqual(target);
         });
@@ -237,9 +238,9 @@ ${alternativeVideoUrl}
             event.type === "fetch-start" && event.url === alternativeVideoUrl,
         );
         expect(events).toEqual([
+          "variantUpdate",
           "audioTrackUpdate",
           "subtitleTrackUpdate",
-          "variantUpdate",
           "variantLockUpdate",
         ]);
         expect(
@@ -336,18 +337,17 @@ ${alternativeVideoUrl}
         ctx.player.addEventListener("audioTrackUpdate", () => {
           events.push("audioTrackUpdate");
           expect(ctx.player.getCurrentAudioTrack()?.id).toBe(frenchTrack.id);
-          expect(ctx.player.getCurrentVariant()?.id).toBe(initialVariant.id);
+          expect(ctx.player.getCurrentVariant()?.bandwidth).toBe(
+            variantChanges ? alternativeBandwidth : currentBandwidth,
+          );
         });
         ctx.player.addEventListener("variantUpdate", () => {
           events.push("variantUpdate");
-          expect(ctx.player.getCurrentAudioTrack()?.id).toBe(frenchTrack.id);
+          expect(ctx.player.getCurrentAudioTrack()?.language).toBe("en");
         });
         const warnings = eventListener(ctx.player, "warning");
         const lockUpdates = eventListener(ctx.player, "variantLockUpdate");
-        const updated = waitForPlayerEvent(
-          ctx.player,
-          variantChanges ? "variantUpdate" : "audioTrackUpdate",
-        );
+        const updated = waitForPlayerEvent(ctx.player, "audioTrackUpdate");
         ctx.player.setAudioTrack(frenchTrack.id);
         await updated;
 
@@ -390,7 +390,7 @@ ${alternativeVideoUrl}
 
         expect(events).toEqual(
           variantChanges
-            ? ["audioTrackUpdate", "variantUpdate"]
+            ? ["variantUpdate", "audioTrackUpdate"]
             : ["audioTrackUpdate"],
         );
         expect(lockUpdates.getCurrentCount()).toBe(0);
@@ -521,7 +521,7 @@ ${baseUrl}video.m3u8
   );
 
   it(
-    "announces the track, variant, then automatic unlocking in that order",
+    "announces the variant, tracks, then automatic unlocking in that order",
     { timeout: TEST_TIMEOUT_MS },
     async () => {
       const baseUrl = new URL(".", getVodScenarioUrl("fmp4-alt-audio"));
@@ -567,20 +567,24 @@ ${baseUrl}video.m3u8
         ctx.player.addEventListener("audioTrackUpdate", () => {
           events.push("audioTrackUpdate");
           expect(ctx.player.getCurrentAudioTrack()?.id).toBe(frenchTrack.id);
-          expect(ctx.player.getCurrentVariant()?.id).toBe(initialVariant.id);
+          expect(ctx.player.getCurrentVariant()?.id).not.toBe(
+            initialVariant.id,
+          );
         });
         ctx.player.addEventListener("subtitleTrackUpdate", (track) => {
           events.push("subtitleTrackUpdate");
           expect(track?.language).toBe("fr");
           expect(ctx.player.getCurrentAudioTrack()?.language).toBe("fr");
           expect(ctx.player.getCurrentSubtitleTrack()?.language).toBe("fr");
-          expect(ctx.player.getCurrentVariant()).toEqual(initialVariant);
+          expect(ctx.player.getCurrentVariant()?.id).not.toBe(
+            initialVariant.id,
+          );
           expect(ctx.player.getLockedVariant()).toEqual(initialVariant);
         });
         ctx.player.addEventListener("variantUpdate", () => {
-          expect(ctx.player.getCurrentSubtitleTrack()?.language).toBe("fr");
+          expect(ctx.player.getCurrentSubtitleTrack()?.language).toBe("en");
           events.push("variantUpdate");
-          expect(ctx.player.getCurrentAudioTrack()?.id).toBe(frenchTrack.id);
+          expect(ctx.player.getCurrentAudioTrack()?.language).toBe("en");
         });
         ctx.player.addEventListener("variantLockUpdate", () => {
           events.push("variantLockUpdate");
@@ -595,9 +599,9 @@ ${baseUrl}video.m3u8
         ctx.player.setAudioTrack(frenchTrack.id);
         await unlocked;
         expect(events).toEqual([
+          "variantUpdate",
           "audioTrackUpdate",
           "subtitleTrackUpdate",
-          "variantUpdate",
           "variantLockUpdate",
         ]);
       } finally {
@@ -606,7 +610,7 @@ ${baseUrl}video.m3u8
     },
   );
   it(
-    "announces the subtitle track, variant, then automatic unlocking in that order",
+    "announces the variant, subtitle track, then automatic unlocking in that order",
     { timeout: TEST_TIMEOUT_MS },
     async () => {
       const baseUrl = new URL(".", getVodScenarioUrl("fmp4-alt-audio"));
@@ -650,11 +654,11 @@ ${baseUrl}video.m3u8
           events.push("subtitle");
           expect(track?.id).toBe(french.id);
           expect(ctx.player.getCurrentSubtitleTrack()?.id).toBe(french.id);
-          expect(ctx.player.getCurrentVariant()?.id).toBe(initial.id);
+          expect(ctx.player.getCurrentVariant()?.id).not.toBe(initial.id);
         });
         ctx.player.addEventListener("variantUpdate", () => {
           events.push("variant");
-          expect(ctx.player.getCurrentSubtitleTrack()?.id).toBe(french.id);
+          expect(ctx.player.getCurrentSubtitleTrack()?.language).toBe("en");
         });
         ctx.player.addEventListener("variantLockUpdate", () => {
           events.push("unlock");
@@ -669,7 +673,7 @@ ${baseUrl}video.m3u8
         );
         ctx.player.setSubtitleTrack(french.id);
         await unlocked;
-        expect(events).toEqual(["subtitle", "variant", "unlock"]);
+        expect(events).toEqual(["variant", "subtitle", "unlock"]);
       } finally {
         ctx.dispose();
       }

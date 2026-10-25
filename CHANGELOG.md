@@ -2,10 +2,6 @@
 
 ## Unreleased
 
-### Changes
-
-- Send `audioTrackUpdate` before `variantUpdate` at startup, matching later track changes.
-
 ### Features
 
 - Handle IMSC1 and WebVTT subtitles
@@ -19,6 +15,10 @@
 - `audioTrackUpdate`: suppress duplicate announcements of the same track.
 - `setAudioTrack()`: announce track changes even when the media playlist stays the same.
 - Fix stale audio/video codec support results after segment probing.
+
+### Other
+
+- Send `variantUpdate` before related track updates during playback, as at startup.
 
 ## v0.6.0 (2026-10-20)
 

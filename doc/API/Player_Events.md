@@ -274,6 +274,8 @@ The payload of that event is an object with the following self-explanatory prope
 The `variantUpdate` event is sent when the HLS variant chosen for loading
 subsequent segments changes.
 
+Use it to follow automatic or manual quality changes.
+
 The event can occur before a segment request starts, while the player prepares
 the chosen variant. Requests already in progress may finish using the previous
 variant, and buffered media from previous variants may continue playing. Audio
@@ -325,6 +327,8 @@ method.
 The `"variantLockUpdate` event is sent when the current variant has been
 "locked" or unlocked.
 
+Use it to keep an "Auto" quality option in sync with the player.
+
 A variant lock is the result of calling the [`lockVariant`](./Variant_Selection/lockVariant.md)
 method, which allows to force a given variant (e.g. manually forcing 1080p video
 content).
@@ -332,7 +336,7 @@ When a single variant is forced, we say that it is "locked", when the
 `WaspHlsPlayer` actually chooses its variant amongst the pool of
 currenly-available ones, we say that it is "unlocked".
 
-This variant may be locked due to various events. For example due to a
+The variant may be unlocked due to various events. For example due to an
 [`unlockVariant`](./Variant_Selection/unlockVariant.md) call or due to a change
 of track (e.g. through the [`setAudioTrack`](./Audio_Track_Selection/setAudioTrack.md)
 method) incompatible with the locked variant.
@@ -385,6 +389,8 @@ from the [`getLockedVariant`](./Variant_Selection/getLockedVariant.md) method.
 The `"variantListUpdate` event is sent when the list of available variants,
 which basically represent the video and audio qualities, has changed.
 
+Use it to update the choices in a quality selector.
+
 The payload of that event contains an array object, each object containing the
 information available for a particular variant.
 
@@ -426,12 +432,15 @@ You can also know at any time the list of available variants by calling the
 
 ## Event: `audioTrackUpdate`
 
-The `"audioTrackUpdate` event is sent when the currently-loaded audio track has
-changed.
+The `audioTrackUpdate` event is sent when the selected audio track changes.
+
+Use it to update the selected language or other audio choice in your application.
 
 Audio tracks group one or more renditions sharing the same characteristics:
 language, accessibility role, etc. Multiple renditions may exist under one track
 when, for example, several audio quality levels are available.
+
+Switching between renditions of the same track does not trigger this event.
 
 These correspond to distinctly selectable tracks, not just to the presence of
 audio samples in the content: muxed media playlists containing video and audio
@@ -493,6 +502,8 @@ method.
 The `"audioTrackListUpdate` event is sent when the list of available audio
 tracks has changed.
 
+Use it to fill an audio selector; `audioTrackUpdate` tells you which track is selected.
+
 Only selectable audio tracks are listed through that event. Muxed media
 playlists containing video and audio combined will not generally lead to an
 audio track being exposed through this API
@@ -552,6 +563,10 @@ You can also know at any time the list of available audio tracks by calling the
 
 Sent when the active subtitle track changes. The payload contains the track's
 information, or `null` when subtitles are disabled.
+
+Use it to mark the selected subtitle option, including when the player chooses it
+automatically.
+
 See [`getSubtitleTrackList`](./Subtitle_Track_Selection/getSubtitleTrackList.md)
 for the track's properties.
 
@@ -560,3 +575,6 @@ for the track's properties.
 Sent when the list of available subtitle tracks changes. The payload is an array
 of track objects, with the same properties as those returned by
 [`getSubtitleTrackList`](./Subtitle_Track_Selection/getSubtitleTrackList.md).
+
+Use it to fill a subtitle selector; `subtitleTrackUpdate` tells you which track
+is selected.

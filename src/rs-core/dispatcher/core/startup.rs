@@ -104,8 +104,8 @@ fn ensure_ready_playlists(dispatcher: &mut Dispatcher, wanted_position: f64) -> 
             let tracks = changes.tracks();
             let locked_variant_change = changes.locked_variant_change();
             let changed_media_types = changes.into_changed_playlists();
-            dispatcher.announce_track_changes(&[tracks]);
             dispatcher.announce_current_variant();
+            dispatcher.announce_track_changes(&[tracks]);
             if let Some(id) = locked_variant_change {
                 jsAnnounceVariantLockStatusChange(Some(id));
             } else if variant_lock_removed {
@@ -229,11 +229,11 @@ fn advance_awaiting_playlist_info_state(dispatcher: &mut Dispatcher) {
             audio_tracks_info,
             subtitle_tracks_info,
         );
+        dispatcher.announce_current_variant();
         dispatcher.announce_track_changes(&[TrackChanges::new(
             TrackChange::Changed(curr_audio_track),
             TrackChange::Changed(curr_subtitle_track),
         )]);
-        dispatcher.announce_current_variant();
 
         dispatcher.ready_state = PlayerReadyState::AwaitingPlaylistInfo {
             starting_position,
