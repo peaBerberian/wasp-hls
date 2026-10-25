@@ -19,6 +19,7 @@ export async function createDispatcher({
   const variants = [];
   const announcedVariants = [];
   const variantLockUpdates = [];
+  const selectionEvents = [];
   const rebufferingEvents = [];
   const errors = [];
   const supportChecks = [];
@@ -44,8 +45,14 @@ export async function createDispatcher({
           variants.push(info[1 + i * 7]);
         }
       },
-      announceVariantUpdate: (id) => announcedVariants.push(id),
-      announceVariantLockStatusChange: (id) => variantLockUpdates.push(id),
+      announceVariantUpdate(id) {
+        announcedVariants.push(id);
+        selectionEvents.push({ type: "variant", id });
+      },
+      announceVariantLockStatusChange(id) {
+        variantLockUpdates.push(id);
+        selectionEvents.push({ type: "lock", id });
+      },
       addSourceBuffer: () => ({ value: nextBuffer++ }),
       appendBuffer: () => ({
         value: {
@@ -147,6 +154,7 @@ export async function createDispatcher({
     variants,
     announcedVariants,
     variantLockUpdates,
+    selectionEvents,
     rebufferingEvents,
     errors,
     supportChecks,

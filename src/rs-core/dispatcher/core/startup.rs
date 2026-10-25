@@ -104,13 +104,13 @@ fn ensure_ready_playlists(dispatcher: &mut Dispatcher, wanted_position: f64) -> 
             let tracks = changes.tracks();
             let locked_variant_change = changes.locked_variant_change();
             let changed_media_types = changes.into_changed_playlists();
-            dispatcher.announce_current_variant();
-            dispatcher.announce_track_changes(&[tracks]);
             if let Some(id) = locked_variant_change {
                 jsAnnounceVariantLockStatusChange(Some(id));
             } else if variant_lock_removed {
                 jsAnnounceVariantLockStatusChange(None);
             }
+            dispatcher.announce_current_variant();
+            dispatcher.announce_track_changes(&[tracks]);
             if changed_media_types.contains(&MediaType::Text) {
                 dispatcher.reset_subtitle_playlist();
             }
