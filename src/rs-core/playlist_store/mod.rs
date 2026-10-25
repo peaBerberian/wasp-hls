@@ -1,7 +1,3 @@
-// XXX TODO: After review of the file, private methods should be moved under the
-// |                           private methods                           |
-// comment
-
 use crate::{
     bindings::{
         formatters::DIRECT_MEDIA_AUDIO_TRACK_ID, jsIsTypeSupported, MediaType, PlaylistNature,
@@ -773,39 +769,6 @@ impl PlaylistStore {
         }
     }
 
-    /// Return the audio track ID to use for this variant.
-    /// Return Ok(None) to use the variant's own audio, if present.
-    /// Return Err if the fixed audio track is unavailable on this variant.
-    fn audio_track_id_for_variant(
-        &self,
-        variant: &VariantStream,
-    ) -> Result<Option<u32>, IncompatibleTrack> {
-        let TopLevelPlaylist::Multivariant(playlist) = &self.playlist else {
-            return Ok(None);
-        };
-        if let Some(track_id) = self.fixed_audio_track {
-            if playlist
-                .audio_renditions_for(variant)
-                .any(|(track, _)| track.id() == track_id)
-            {
-                return Ok(Some(track_id));
-            }
-            return Err(IncompatibleTrack);
-        }
-        let mut renditions = playlist.audio_renditions_for(variant);
-        let Some((first_track, first_media)) = renditions.next() else {
-            return Ok(None);
-        };
-        if first_media.is_default() {
-            return Ok(Some(first_track.id()));
-        }
-        Ok(Some(
-            renditions
-                .find(|(_, media)| media.is_default())
-                .map_or(first_track.id(), |(track, _)| track.id()),
-        ))
-    }
-
     /// Returns the `id` of the `AudioTrack` object explicitely selected through the
     /// `set_audio_track` API.
     ///
@@ -873,84 +836,6 @@ impl PlaylistStore {
         }
     }
 
-    /// Update the subtitle playlist and report whether its playlist ID and track ID changed.
-    fn update_text_playlist_id(
-        &mut self,
-        playlist_id: Option<MediaPlaylistPermanentId>,
-    ) -> (bool, TrackChange) {
-        if self.current_text_id == playlist_id {
-            return (false, TrackChange::Unchanged);
-        }
-        let previous_track = self.current_subtitle_track_id();
-        self.current_text_id = playlist_id;
-        let track = self.current_subtitle_track_id();
-        let track_change = if previous_track != track {
-            TrackChange::Changed(track)
-        } else {
-            TrackChange::Unchanged
-        };
-        (true, track_change)
-    }
-
-    /// Resolve the current subtitle choice without changing the selected playlist.
-    /// Return an error if the fixed track choice requires a different variant.
-    fn resolve_subtitle_selection(
-        &self,
-    ) -> Result<Option<MediaPlaylistPermanentId>, IncompatibleTrack> {
-        let Some(variant) = self.current_variant() else {
-            return Ok(None);
-        };
-        self.resolve_playlist_id_for_variant(variant, MediaType::Text)
-    }
-
-    /// Resolve subtitles within this variant; reject an unavailable fixed choice.
-    fn subtitle_track_id_for_variant(
-        &self,
-        variant: &VariantStream,
-    ) -> Result<Option<u32>, IncompatibleTrack> {
-        if self.subtitles_disabled {
-            return Ok(None);
-        }
-        let TopLevelPlaylist::Multivariant(playlist) = &self.playlist else {
-            return Ok(None);
-        };
-        if let Some(track_id) = self.fixed_subtitle_track {
-            if playlist
-                .subtitle_renditions_for(variant)
-                .any(|(track, _)| track.id() == track_id)
-            {
-                return Ok(Some(track_id));
-            }
-            return Err(IncompatibleTrack);
-        }
-        let audio_language = self
-            .audio_track_id_for_variant(variant)?
-            .and_then(|id| self.audio_tracks().iter().find(|track| track.id() == id))
-            .and_then(|track| track.language());
-        Ok(playlist
-            .subtitle_renditions_for(variant)
-            .filter(|(_, media)| {
-                media.is_default()
-                    || (media.is_forced()
-                        && media.is_autoselect()
-                        && media.language().zip(audio_language).is_some_and(
-                            |(candidate, language)| candidate.eq_ignore_ascii_case(language),
-                        ))
-            })
-            .max_by_key(|(_, media)| {
-                (
-                    media.is_default(),
-                    media
-                        .language()
-                        .zip(audio_language)
-                        .is_some_and(|(candidate, language)| {
-                            candidate.eq_ignore_ascii_case(language)
-                        }),
-                )
-            })
-            .map(|(track, _)| track.id()))
-    }
-
     /// Returns the list of available audio tracks on the current content.
     pub(crate) fn audio_tracks(&self) -> &[AudioTrack] {
         match &self.playlist {
@@ -963,50 +848,6 @@ impl PlaylistStore {
         match &self.playlist {
             TopLevelPlaylist::Multivariant(playlist) => playlist.subtitle_tracks(),
             TopLevelPlaylist::DirectMedia(_) => &[],
-        }
-    }
-
-    // Return `true` if the audio track id is found anywhere in the current top level playlist.
-    // Return `false` otherwise.
-    fn audio_track_id_exists(&self, track_id: u32) -> bool {
-        match &self.playlist {
-            TopLevelPlaylist::Multivariant(playlist) => playlist
-                .audio_tracks()
-                .iter()
-                .any(|track| track.id() == track_id),
-            TopLevelPlaylist::DirectMedia(_) => {
-                track_id == DIRECT_MEDIA_AUDIO_TRACK_ID
-                    && self.has_distinct_media_type(MediaType::Audio)
-            }
-        }
-    }
-
-    /// Return `true` if the current content has at least one variant linked to the given audio
-    /// track id and the potentially fixed subtitle track id.
-    /// /!\ Compatible here does not mean "supported", the codec might not be actually supported.
-    fn audio_track_id_has_compatible_variants(&self, track_id: u32) -> bool {
-        let subtitle_track = self
-            .fixed_subtitle_track
-            .filter(|_| !self.subtitles_disabled);
-
-        match &self.playlist {
-            TopLevelPlaylist::Multivariant(playlist) => {
-                // Collect once because each audio variant searches these results.
-                let subtitle_variants =
-                    subtitle_track.map(|id| playlist.variants_for_subtitle(id).collect::<Vec<_>>());
-                playlist.variants_for_audio(track_id).iter().any(|variant| {
-                    subtitle_variants.as_ref().is_none_or(|variants| {
-                        variants
-                            .iter()
-                            .any(|candidate| candidate.id() == variant.id())
-                    })
-                })
-            }
-            TopLevelPlaylist::DirectMedia(_) => {
-                // This playlist must provide the audio track.
-                // Direct media has no separate subtitle tracks.
-                self.audio_track_id_exists(track_id) && subtitle_track.is_none()
-            }
         }
     }
 
@@ -1102,6 +943,165 @@ impl PlaylistStore {
         Ok(self.apply_variant(variant_id))
     }
 
+    // +---------------------------------------------------------------------+
+    // |                           private methods                           |
+    // +---------------------------------------------------------------------+
+
+    /// Return the audio track ID to use for this variant.
+    /// Return Ok(None) to use the variant's own audio, if present.
+    /// Return Err if the fixed audio track is unavailable on this variant.
+    fn audio_track_id_for_variant(
+        &self,
+        variant: &VariantStream,
+    ) -> Result<Option<u32>, IncompatibleTrack> {
+        let TopLevelPlaylist::Multivariant(playlist) = &self.playlist else {
+            return Ok(None);
+        };
+        if let Some(track_id) = self.fixed_audio_track {
+            if playlist
+                .audio_renditions_for(variant)
+                .any(|(track, _)| track.id() == track_id)
+            {
+                return Ok(Some(track_id));
+            }
+            return Err(IncompatibleTrack);
+        }
+        let mut renditions = playlist.audio_renditions_for(variant);
+        let Some((first_track, first_media)) = renditions.next() else {
+            return Ok(None);
+        };
+        if first_media.is_default() {
+            return Ok(Some(first_track.id()));
+        }
+        Ok(Some(
+            renditions
+                .find(|(_, media)| media.is_default())
+                .map_or(first_track.id(), |(track, _)| track.id()),
+        ))
+    }
+
+    /// Update the subtitle playlist and report whether its playlist ID and track ID changed.
+    fn update_text_playlist_id(
+        &mut self,
+        playlist_id: Option<MediaPlaylistPermanentId>,
+    ) -> (bool, TrackChange) {
+        if self.current_text_id == playlist_id {
+            return (false, TrackChange::Unchanged);
+        }
+        let previous_track = self.current_subtitle_track_id();
+        self.current_text_id = playlist_id;
+        let track = self.current_subtitle_track_id();
+        let track_change = if previous_track != track {
+            TrackChange::Changed(track)
+        } else {
+            TrackChange::Unchanged
+        };
+        (true, track_change)
+    }
+
+    /// Resolve the current subtitle choice without changing the selected playlist.
+    /// Return an error if the fixed track choice requires a different variant.
+    fn resolve_subtitle_selection(
+        &self,
+    ) -> Result<Option<MediaPlaylistPermanentId>, IncompatibleTrack> {
+        let Some(variant) = self.current_variant() else {
+            return Ok(None);
+        };
+        self.resolve_playlist_id_for_variant(variant, MediaType::Text)
+    }
+
+    /// Resolve subtitles within this variant; reject an unavailable fixed choice.
+    fn subtitle_track_id_for_variant(
+        &self,
+        variant: &VariantStream,
+    ) -> Result<Option<u32>, IncompatibleTrack> {
+        if self.subtitles_disabled {
+            return Ok(None);
+        }
+        let TopLevelPlaylist::Multivariant(playlist) = &self.playlist else {
+            return Ok(None);
+        };
+        if let Some(track_id) = self.fixed_subtitle_track {
+            if playlist
+                .subtitle_renditions_for(variant)
+                .any(|(track, _)| track.id() == track_id)
+            {
+                return Ok(Some(track_id));
+            }
+            return Err(IncompatibleTrack);
+        }
+        let audio_language = self
+            .audio_track_id_for_variant(variant)?
+            .and_then(|id| self.audio_tracks().iter().find(|track| track.id() == id))
+            .and_then(|track| track.language());
+        Ok(playlist
+            .subtitle_renditions_for(variant)
+            .filter(|(_, media)| {
+                media.is_default()
+                    || (media.is_forced()
+                        && media.is_autoselect()
+                        && media.language().zip(audio_language).is_some_and(
+                            |(candidate, language)| candidate.eq_ignore_ascii_case(language),
+                        ))
+            })
+            .max_by_key(|(_, media)| {
+                (
+                    media.is_default(),
+                    media
+                        .language()
+                        .zip(audio_language)
+                        .is_some_and(|(candidate, language)| {
+                            candidate.eq_ignore_ascii_case(language)
+                        }),
+                )
+            })
+            .map(|(track, _)| track.id()))
+    }
+
+    // Return `true` if the audio track id is found anywhere in the current top level playlist.
+    // Return `false` otherwise.
+    fn audio_track_id_exists(&self, track_id: u32) -> bool {
+        match &self.playlist {
+            TopLevelPlaylist::Multivariant(playlist) => playlist
+                .audio_tracks()
+                .iter()
+                .any(|track| track.id() == track_id),
+            TopLevelPlaylist::DirectMedia(_) => {
+                track_id == DIRECT_MEDIA_AUDIO_TRACK_ID
+                    && self.has_distinct_media_type(MediaType::Audio)
+            }
+        }
+    }
+
+    /// Return `true` if the current content has at least one variant linked to the given audio
+    /// track id and the potentially fixed subtitle track id.
+    /// /!\ Compatible here does not mean "supported", the codec might not be actually supported.
+    fn audio_track_id_has_compatible_variants(&self, track_id: u32) -> bool {
+        let subtitle_track = self
+            .fixed_subtitle_track
+            .filter(|_| !self.subtitles_disabled);
+
+        match &self.playlist {
+            TopLevelPlaylist::Multivariant(playlist) => {
+                // Collect once because each audio variant searches these results.
+                let subtitle_variants =
+                    subtitle_track.map(|id| playlist.variants_for_subtitle(id).collect::<Vec<_>>());
+                playlist.variants_for_audio(track_id).iter().any(|variant| {
+                    subtitle_variants.as_ref().is_none_or(|variants| {
+                        variants
+                            .iter()
+                            .any(|candidate| candidate.id() == variant.id())
+                    })
+                })
+            }
+            TopLevelPlaylist::DirectMedia(_) => {
+                // This playlist must provide the audio track.
+                // Direct media has no separate subtitle tracks.
+                self.audio_track_id_exists(track_id) && subtitle_track.is_none()
+            }
+        }
+    }
+
     /// Apply a selection after checking the lock, or when explicitly replacing it.
     fn apply_variant(&mut self, variant_id: u32) -> VariantUpdate {
         let mut changes = VariantUpdate::default();
@@ -1148,10 +1148,6 @@ impl PlaylistStore {
         changes.tracks.subtitles = track_change;
         changes
     }
-
-    // +---------------------------------------------------------------------+
-    // |                           private methods                           |
-    // +---------------------------------------------------------------------+
 
     /// Returns a reference to the `VariantStream` currently selected.
     fn current_variant(&self) -> Option<&VariantStream> {
