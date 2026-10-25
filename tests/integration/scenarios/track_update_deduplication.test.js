@@ -3,6 +3,7 @@ import EmbeddedWorker from "../../../build/embedded/worker.js";
 import { onTrackUpdateMessage } from "../../../build/es6/ts-main/worker-message-handlers.js";
 import { MediaType } from "../../../build/es6/wasm/js/enums.js";
 import { waitForLoadedState } from "../../utils/player_test_tools.js";
+import { TEST_TIMEOUT_MS } from "../../utils/timeouts.js";
 import { getVodScenarioUrl } from "../../utils/vod_scenarios.js";
 import setupPlayer from "../utils/player_setup";
 
@@ -61,27 +62,31 @@ describe("Track events with duplicate worker messages", () => {
     },
   });
 
-  it("announces absent tracks once per load", { timeout: 60_000 }, async () => {
-    const audio = [];
-    const subtitles = [];
-    ctx.player.addEventListener("audioTrackUpdate", (track) => {
-      expect(ctx.player.getCurrentAudioTrack()).toBeUndefined();
-      audio.push(track);
-    });
-    ctx.player.addEventListener("subtitleTrackUpdate", (track) => {
-      expect(ctx.player.getCurrentSubtitleTrack()).toBeNull();
-      subtitles.push(track);
-    });
+  it(
+    "announces absent tracks once per load",
+    { timeout: TEST_TIMEOUT_MS },
+    async () => {
+      const audio = [];
+      const subtitles = [];
+      ctx.player.addEventListener("audioTrackUpdate", (track) => {
+        expect(ctx.player.getCurrentAudioTrack()).toBeUndefined();
+        audio.push(track);
+      });
+      ctx.player.addEventListener("subtitleTrackUpdate", (track) => {
+        expect(ctx.player.getCurrentSubtitleTrack()).toBeNull();
+        subtitles.push(track);
+      });
 
-    for (let load = 1; load <= 2; load++) {
-      ctx.player.load(getVodScenarioUrl("fmp4-direct-media"));
-      await waitForLoadedState(
-        ctx.player,
-        ctx.videoElement,
-        () => ctx.lastPlayerError,
-      );
-      expect(audio).toEqual(Array(load).fill(undefined));
-      expect(subtitles).toEqual(Array(load).fill(null));
-    }
-  });
+      for (let load = 1; load <= 2; load++) {
+        ctx.player.load(getVodScenarioUrl("fmp4-direct-media"));
+        await waitForLoadedState(
+          ctx.player,
+          ctx.videoElement,
+          () => ctx.lastPlayerError,
+        );
+        expect(audio).toEqual(Array(load).fill(undefined));
+        expect(subtitles).toEqual(Array(load).fill(null));
+      }
+    },
+  );
 });

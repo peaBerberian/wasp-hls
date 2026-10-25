@@ -4,9 +4,8 @@ import {
   waitForPlayerEvent,
 } from "../../utils/player_test_tools.js";
 import { ensureVodScenarioReady } from "../../utils/vod_scenarios.js";
+import { TEST_TIMEOUT_MS } from "../../utils/timeouts.js";
 import { createPlayerHarness } from "../utils/request_integration_test_tools.js";
-
-const TEST_TIMEOUT_MS = 120_000;
 
 async function readPlaylist(url) {
   const response = await fetch(url);
