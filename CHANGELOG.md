@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Other
+
+- Improve performance of our transmuxer when handling h264 in mpeg-ts
+
 ## v0.6.0 (2026-10-20)
 
 ### Changes
