@@ -363,21 +363,11 @@ export default class Transmuxer {
       if (segmentInfo === null) {
         return null;
       }
-      const initSegmentLength = segmentInfo.initSegment?.byteLength ?? 0;
-      const transmuxedSegment = new Uint8Array(
-        initSegmentLength + (segmentInfo.data?.length ?? 0),
-      );
-      if (transmuxedSegment.byteLength === 0) {
+      if (segmentInfo.data === null || segmentInfo.data.byteLength === 0) {
         return null;
       }
-      if (segmentInfo.initSegment !== null) {
-        transmuxedSegment.set(segmentInfo.initSegment, 0);
-      }
-      if (segmentInfo.data !== null) {
-        transmuxedSegment.set(segmentInfo.data, initSegmentLength);
-      }
       return {
-        data: transmuxedSegment,
+        data: segmentInfo.data,
         timingInfo: continuityTiming,
       };
     }

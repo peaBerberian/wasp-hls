@@ -211,31 +211,6 @@ function generateSampleTable(gops: any, baseDataOffset?: number): any[] {
   return samples;
 }
 
-// generate the track's raw mdat data from an array of gops
-function concatenateNalData(gops: any): Uint8Array {
-  let dataOffset = 0;
-  const nalsByteLength = gops.byteLength;
-  const numberOfNals = gops.nalCount;
-  const totalByteLength = nalsByteLength + 4 * numberOfNals;
-  const data = new Uint8Array(totalByteLength);
-  const view = new DataView(data.buffer);
-
-  // For each Gop..
-  for (const currentGop of gops) {
-    // For each Frame..
-    for (const currentFrame of currentGop) {
-      // For each NAL..
-      for (const currentNal of currentFrame) {
-        view.setUint32(dataOffset, currentNal.data.byteLength);
-        dataOffset += 4;
-        data.set(currentNal.data, dataOffset);
-        dataOffset += currentNal.data.byteLength;
-      }
-    }
-  }
-  return data;
-}
-
 // generate the track's sample table from a frame
 function generateSampleTableForFrame(
   frame: any,
@@ -272,7 +247,6 @@ export {
   groupFramesIntoGops,
   extendFirstKeyFrame,
   generateSampleTable,
-  concatenateNalData,
   generateSampleTableForFrame,
   concatenateNalDataForFrame,
 };
