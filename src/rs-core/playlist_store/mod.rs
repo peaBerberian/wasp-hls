@@ -521,19 +521,13 @@ impl PlaylistStore {
     }
 
     /// Force a given variant and prevent it from changing, by communicating its `id`.
+    /// This can also make the initial variant selection.
     ///
     /// To be able to change again the variant, you can call `lock_variant` again or
     /// you can call the `unlock_variant` method.
     ///
     /// Returns whether the variant was newly locked, was already locked, or could not be found.
     pub(crate) fn lock_variant(&mut self, variant_id: u32) -> LockVariantResponse {
-        let Some(current_variant_id) = self.current_variant_id else {
-            // XXX TODO: What if it happens? Isn't it the wrong error?
-            //
-            // We're unitialized. Throw closest error.
-            return LockVariantResponse::NoVariantWithId;
-        };
-
         let is_compatible = self
             .compatible_variants()
             .any(|variant| variant.id() == variant_id);
@@ -542,7 +536,7 @@ impl PlaylistStore {
             return LockVariantResponse::NoVariantWithId;
         }
 
-        if self.is_variant_locked && current_variant_id == variant_id {
+        if self.is_variant_locked && self.current_variant_id == Some(variant_id) {
             return LockVariantResponse::AlreadyLocked;
         }
         let VariantUpdate {
@@ -2723,6 +2717,68 @@ video.m3u8
             .unwrap();
             assert_eq!(new_store.max_observed_target_duration(media_type), None);
         }
+    }
+
+    #[test]
+    fn variant_lock_can_make_the_initial_selection() {
+        let mut store = PlaylistStore::try_new(
+            b"#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1000\nvideo.m3u8\n",
+            parse_url("https://example.com/master.m3u8"),
+        )
+        .unwrap();
+        let variant = store.compatible_variants().next().unwrap();
+        let variant_id = variant.id();
+        let video_id = store
+            .resolve_playlist_id_for_variant(variant, MediaType::Video)
+            .unwrap()
+            .unwrap();
+
+        assert!(matches!(
+            store.lock_variant(u32::MAX),
+            LockVariantResponse::NoVariantWithId
+        ));
+        assert_eq!(store.current_variant_id(), None);
+        assert!(!store.is_variant_locked());
+        assert_eq!(store.current_media_playlist_id(MediaType::Video), None);
+
+        let LockVariantResponse::VariantLocked {
+            changed_media_types,
+            tracks,
+            variant_changed,
+        } = store.lock_variant(variant_id)
+        else {
+            panic!("Expected the initial variant to be locked");
+        };
+        assert!(variant_changed);
+        assert_eq!(changed_media_types, vec![MediaType::Video]);
+        assert_eq!(tracks.audio, TrackChange::Unchanged);
+        assert_eq!(tracks.subtitles, TrackChange::Unchanged);
+        assert_eq!(store.current_variant_id(), Some(variant_id));
+        assert!(store.is_variant_locked());
+        assert_eq!(
+            store.current_media_playlist_id(MediaType::Video),
+            Some(&video_id)
+        );
+        assert!(matches!(
+            store.lock_variant(variant_id),
+            LockVariantResponse::AlreadyLocked
+        ));
+    }
+
+    #[test]
+    fn direct_media_playlist_rejects_a_variant_lock() {
+        let mut store = PlaylistStore::try_new(
+            b"#EXTM3U\n#EXT-X-TARGETDURATION:6\n#EXTINF:6,\nsegment.ts\n#EXT-X-ENDLIST\n",
+            parse_url("https://example.com/direct.m3u8"),
+        )
+        .unwrap();
+
+        assert!(matches!(
+            store.lock_variant(0),
+            LockVariantResponse::NoVariantWithId
+        ));
+        assert_eq!(store.current_variant_id(), None);
+        assert!(!store.is_variant_locked());
     }
 
     #[test]
