@@ -44,8 +44,8 @@ Likewise, calling the [`getCurrentAudioTrack` method](./getCurrentAudioTrack.md)
 synchronously after calling `setAudioTrack` may not returns the characteristics
 of the set audio track yet.
 
-You will receive a `audioTrackUpdate` [event](../Player_Events.md) once the
-audio track is known to be actively loaded by the `WaspHlsPlayer`.
+The `audioTrackUpdate` [event](../Player_Events.md#event-audiotrackupdate)
+reports when the selected audio track changes.
 
 ## Syntax
 

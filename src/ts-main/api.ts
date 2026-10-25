@@ -138,27 +138,34 @@ interface WaspHlsPlayerEvents {
    * the chosen variant. Requests already in progress may finish using the
    * previous variant, and buffered media from previous variants may continue
    * playing. `getCurrentVariant()` returns the same choice.
+   * Use this event to follow automatic and manual quality choices.
    */
   variantUpdate: VariantInfo | undefined;
   /**
    * Sent when a variant becomes locked (in which case the payload corresponds
    * to the information on the locked variant) or unlocked (in which case the
    * payload is set to `null`).
+   * Use this event to update the automatic or manual quality selection mode.
    */
   variantLockUpdate: VariantInfo | null;
   /**
    * Sent when the list of available HLS variants changed.
+   * Use this event to fill a quality selector's options.
    */
   variantListUpdate: VariantInfo[];
   /**
-   * Sent when the current audio track loaded by the `WaspHlsPlayer` changed.
+   * Sent when the selected audio track changes, e.g. its language or role.
+   * Switching between renditions of the same track does not trigger this event.
    */
   audioTrackUpdate: AudioTrackInfo | undefined;
   /**
    * Sent when the list of available audio tracks changed.
+   * Use this event to fill an audio selector's options.
    */
   audioTrackListUpdate: AudioTrackInfo[];
+  /** Sent when the available subtitle choices change. Use it to fill a subtitle selector. */
   subtitleTrackListUpdate: SubtitleTrackInfo[];
+  /** Sent when the selected subtitle choice changes, or subtitles are disabled (null). */
   subtitleTrackUpdate: SubtitleTrackInfo | null;
 }
 
@@ -994,7 +1001,8 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
   }
 
   /**
-   * Returns the information on the currently loaded audio track.
+   * Returns information on the selected audio track, as announced through
+   * `audioTrackUpdate`.
    * Returns `undefined` if unknown, if no content is loaded or if the content
    * has no audio track.
    *
