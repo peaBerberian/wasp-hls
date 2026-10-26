@@ -4,6 +4,7 @@
 
 ### Bug fixes
 
+- When a non-aligned segment replacement leads to the loss of frames, reload a segment with those instead of skipping over it
 - Set a default track ID when transmuxing raw aac
 
 ## v0.6.0 (2026-10-20)

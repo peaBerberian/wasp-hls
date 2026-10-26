@@ -133,6 +133,7 @@ impl NextSegmentSelectors {
 
 pub(crate) struct NextSegmentSelector {
     /// Interface allowing to keep track of which audio and video segments we need to load next.
+    // TODO: scan the wanted window on each selection instead of keeping a cursor?
     segment_cursor: SegmentCursor,
 
     /// History of accepted media.
@@ -227,7 +228,6 @@ impl NextSegmentSelector {
     pub(crate) fn advance_position(&mut self, base_pos: f64) {
         self.base_pos = f64::max(0., base_pos);
 
-        self.validated_segments.evict_before(self.base_pos);
         self.clean_skipped_segments();
     }
 
@@ -236,13 +236,15 @@ impl NextSegmentSelector {
         self.base_pos = f64::max(0., base_pos);
         self.segment_cursor = SegmentCursor::new(base_pos);
         self.needs_starting_position_recompute = true;
-        self.validated_segments.clear();
         self.skipped_segments.clear();
     }
 
     /// Check reported buffer ranges for removed data. Times are in playlist seconds.
     pub(crate) fn check_for_removed_data(&mut self, buffered: &[(f64, f64)]) {
-        self.validated_segments.synchronize(buffered, self.base_pos);
+        if let Some(position) = self.validated_segments.synchronize(buffered, self.base_pos) {
+            self.segment_cursor
+                .move_cursor(self.segment_cursor.current_cursor.min(position));
+        }
     }
 
     /// Calling this method allows to indicate that the initialization segment identified by `id`
@@ -268,10 +270,8 @@ impl NextSegmentSelector {
         end: f64,
     ) {
         self.segment_cursor.move_cursor(end);
-        if end > self.base_pos {
-            self.validated_segments
-                .insert(playlist_id, identity, start, end);
-        }
+        self.validated_segments
+            .insert(playlist_id, identity, start, end);
     }
 
     /// Returns the current most needed segment(s) according to the current situation and to the
@@ -355,7 +355,10 @@ impl NextSegmentSelector {
 
         // Detect for GCed data
         if replacement_segment.is_none() {
-            if let Some(position) = self.validated_segments.first_position_to_reload() {
+            if let Some(position) = self
+                .validated_segments
+                .first_position_to_reload(self.base_pos)
+            {
                 self.segment_cursor
                     .move_cursor(self.segment_cursor.current_cursor.min(position));
             }
@@ -379,9 +382,11 @@ impl NextSegmentSelector {
                         && segment_list.media().iter().all(|segment| {
                             segment.duration() <= 0.
                                 || segment.end() <= self.base_pos
-                                || !self
-                                    .validated_segments
-                                    .needs_loading(selected_playlist_id, segment.identity())
+                                || !self.validated_segments.needs_loading(
+                                    selected_playlist_id,
+                                    segment.identity(),
+                                    self.base_pos,
+                                )
                                 || self.can_be_skipped(
                                     segment.start(),
                                     segment.end(),
@@ -563,10 +568,11 @@ impl NextSegmentSelector {
         // Smart quality switching below relies on the inventory; history remembers supplied
         // segments even when the inventory no longer contains them. Reload only if history
         // detected removed data and allowed another attempt.
-        if !self
-            .validated_segments
-            .needs_loading(context.playlist_id(), si.identity())
-        {
+        if !self.validated_segments.needs_loading(
+            context.playlist_id(),
+            si.identity(),
+            self.base_pos,
+        ) {
             self.segment_cursor.move_cursor(segment_end);
             return self.recursively_check_most_needed_media_segment(
                 media_segments,
@@ -882,6 +888,96 @@ mod tests {
         .unwrap()
     }
 
+    fn next_start(
+        selector: &mut NextSegmentSelector,
+        list: &SegmentList,
+        context: &SegmentQualityContext,
+        inventory: &[BufferedChunk],
+    ) -> Option<f64> {
+        selector
+            .most_needed_segment(
+                candidate(list, context),
+                candidate(list, context),
+                inventory,
+            )
+            .needed_segments
+            .map(|needed| needed.media_segment.unwrap().0.start())
+    }
+
+    #[test]
+    fn history_survives_playback_and_seeks_to_recover_prefix_and_tail_loss() {
+        let TopLevelPlaylist::DirectMedia(playlist) = playlist_starting_at(0, 5) else {
+            panic!("expected media playlist");
+        };
+        let list = playlist.playlist().segment_list();
+        let context = SegmentQualityContext::new(1., test_playlist_id(1));
+        for lost_tail in [false, true] {
+            let mut inventory: Vec<_> = list.media()[..4]
+                .iter()
+                .map(|segment| BufferedChunk::new_for_test(segment.start(), segment.end(), context))
+                .collect();
+            let mut selector = NextSegmentSelector::new(0., 30.);
+            for segment in &list.media()[..4] {
+                validate(&mut selector, segment, &context);
+            }
+            selector.check_for_removed_data(&[(0., 16.)]);
+            selector.advance_position(17.);
+            selector.restart_from_position(1.);
+            assert_eq!(
+                next_start(&mut selector, list, &context, &inventory),
+                Some(16.)
+            );
+            validate(&mut selector, &list.media()[4], &context);
+            selector.check_for_removed_data(&[(0., 20.)]);
+            let retry_index = if lost_tail {
+                inventory.truncate(2);
+                selector.check_for_removed_data(&[(0., 8.), (16., 20.)]);
+                2
+            } else {
+                inventory[1] = BufferedChunk::new_for_test(6., 8., context);
+                selector.check_for_removed_data(&[(0., 4.), (6., 20.)]);
+                1
+            };
+            let retry = &list.media()[retry_index];
+            assert_eq!(
+                next_start(&mut selector, list, &context, &inventory),
+                Some(retry.start())
+            );
+            validate(&mut selector, retry, &context);
+            assert_ne!(
+                next_start(&mut selector, list, &context, &inventory),
+                Some(retry.start())
+            );
+        }
+    }
+
+    #[test]
+    fn a_backward_seek_retries_lost_coverage_without_another_observation() {
+        let TopLevelPlaylist::DirectMedia(playlist) = playlist_starting_at(0, 3) else {
+            panic!("expected media playlist");
+        };
+        let list = playlist.playlist().segment_list();
+        let context = SegmentQualityContext::new(1., test_playlist_id(1));
+        let mut selector = NextSegmentSelector::new(0., 30.);
+        for segment in list.media() {
+            validate(&mut selector, segment, &context);
+        }
+        selector.check_for_removed_data(&[(0., 12.)]);
+        selector.advance_position(10.);
+        selector.check_for_removed_data(&[(2., 12.)]);
+
+        selector.restart_from_position(0.5);
+        let inventory = [
+            BufferedChunk::new_for_test(2., 4., context),
+            BufferedChunk::new_for_test(4., 8., context),
+            BufferedChunk::new_for_test(8., 12., context),
+        ];
+        assert_eq!(
+            next_start(&mut selector, list, &context, &inventory),
+            Some(0.)
+        );
+    }
+
     #[test]
     fn completion_distinguishes_buffer_goal_endlist_and_missing_media() {
         let TopLevelPlaylist::DirectMedia(playlist) = TopLevelPlaylist::parse(
@@ -1190,6 +1286,10 @@ mod tests {
         }
         selector.restart_from_position(10.);
         let selected = selector.most_needed_segment(ended(), ended(), &[]);
+        assert!(selected.needed_segments().is_none());
+        assert!(selected.loading_complete());
+        selector.reset(10.);
+        let selected = selector.most_needed_segment(ended(), ended(), &[]);
         assert_eq!(
             selected
                 .needed_segments()
@@ -1273,7 +1373,7 @@ mod tests {
                 .unwrap()
                 .0
                 .start(),
-            0.
+            4.
         );
     }
 
@@ -1398,7 +1498,7 @@ mod tests {
                 .unwrap()
                 .0
                 .start(),
-            8.
+            24.
         );
     }
 
@@ -1855,8 +1955,8 @@ mod tests {
         };
         let list = playlist.playlist().segment_list();
         for (has_replacement, seek_position, expected_start, change_media) in [
-            (false, 4., 24., false),
-            (true, 4., 8., false),
+            (false, 4., 28., false),
+            (true, 4., 12., false),
             (false, 30., 28., false),
             (false, 4., 24., true),
         ] {
