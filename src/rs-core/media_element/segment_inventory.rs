@@ -166,6 +166,10 @@ impl BufferedChunk {
         self.playlist_end
     }
 
+    pub(super) fn is_pending_append(&self) -> bool {
+        !self.validated
+    }
+
     /// Returns estimated current playlist start of the segment, in seconds, after we last
     /// synchronized it with the actual content of the buffer.
     pub(crate) fn last_buffered_start(&self) -> f64 {

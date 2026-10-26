@@ -1,0 +1,535 @@
+--> sending to worker: load demo.js:9:67298
+268942.00 load_content called worker.js:1:78674
+268942.00 Core: Stopping current content (if one) and resetting player worker.js:1:78674
+268942.00 Core: Updating min_buffer_time: {min_buffer_time} worker.js:1:78705
+268942.00 Req: Fetching playlist u:{url_ref}, id:{host_id} worker.js:1:78674
+268942.00 Attaching MediaSource worker.js:1:78674
+<-- sending to main: create-ms worker.js:1:29550
+<-- sending to main: rebuf-start worker.js:1:29550
+--> sending to worker: ms-state demo.js:9:67298
+268947.00 Core: MediaSource state changed: Open worker.js:1:78674
+268955.00 Core: top-level playlist loaded worker.js:1:78674
+268955.00 Parser: this is a multivariant playlist, parsing... worker.js:1:78674
+268956.00 Core: top-level playlist parsed successfully worker.js:1:78674
+268956.00 Req: Fetching playlist u:{url_ref}, id:{host_id} worker.js:1:78674
+<-- sending to main: m-playlist worker.js:1:29550
+<-- sending to main: variant-upd worker.js:1:29550
+<-- sending to main: track-upd worker.js:1:29550
+268963.00 Media playlist loaded successfully: https://test-streams.mux.dev/x36xhzz/url_8/193039199_mp4_h264_aac_fhd_7.m3u8 worker.js:1:78674
+268963.00 Core: Updating min_buffer_time: {min_buffer_time} worker.js:1:78705
+<-- sending to main: content-upd worker.js:1:29550
+<-- sending to main: upd-ms-dur worker.js:1:29550
+268964.00 PS: Support has been resolved for the current multivariant startup path worker.js:1:78674
+<-- sending to main: upd-ms-dur worker.js:1:29550
+268964.00 Creating new video SourceBuffer worker.js:1:78674
+<-- sending to main: creat-sb worker.js:1:29550
+<-- sending to main: start-obs worker.js:1:29550
+268964.00 Selector: Initial media selection, computing starting position worker.js:1:78705
+268964.00 Selector: Starting position at base position: 0 worker.js:1:78705
+268964.00 Req: Asking to request video segment: t: 0, d: 10 worker.js:1:78674
+268964.00 Req: pushing segment request to queue worker.js:1:78705
+<-- sending to main: variant-upd worker.js:1:29550
+268964.00 Req: Performing segment request. u:{url_ref} id:{host_id} worker.js:1:78705
+--> sending to worker: obs demo.js:9:67298
+268965.00 Tick received: Init 0 worker.js:1:78705
+<-- sending to main: variant-upd worker.js:1:29550
+269083.00 Loaded video segment: t: 0, d: 10 worker.js:1:78674
+269083.00 SI: first video segment pushed (s:0, e:10) worker.js:1:78705
+269083.00 Req: Asking to request video segment: t: 10, d: 10 worker.js:1:78674
+269084.00 Req: pushing segment request to queue worker.js:1:78705
+<-- sending to main: variant-upd worker.js:1:29550
+269084.00 Req: Performing segment request. u:{url_ref} id:{host_id} worker.js:1:78705
+269084.00 Buffer: determine dts hint from playlist time worker.js:1:78705
+269084.00 Buffer 0 (video/mp2t;codecs="mp4a.40.2,avc1.640028"): Pushing seq 0 worker.js:1:78705
+Worker: transmuxed segment with start=0.000 end=10.000 hinted=0.000 worker.js:1:85226
+<-- sending to main: push-sb worker.js:1:29550
+269138.00 Setting media offset: 0 worker.js:1:78674
+<-- sending to main: media-off-upd worker.js:1:29550
+QSB: receiving order to push data to the SourceBuffer demo.js:9:69658
+QSB: pushing data demo.js:9:71145
+269164.00 Loaded video segment: t: 10, d: 10 worker.js:1:78674
+269164.00 SI: Pushing video segment strictly after previous one (s:10, e:20, pe: 10). worker.js:1:78705
+269164.00 Req: Asking to request video segment: t: 20, d: 10 worker.js:1:78674
+269164.00 Req: pushing segment request to queue worker.js:1:78705
+<-- sending to main: variant-upd worker.js:1:29550
+269164.00 Req: Performing segment request. u:{url_ref} id:{host_id} worker.js:1:78705
+269164.00 Buffer: determine dts hint as last segment end dts worker.js:1:78705
+269164.00 Buffer 0 (video/mp2t;codecs="mp4a.40.2,avc1.640028"): Pushing seq 1 worker.js:1:78705
+--> sending to worker: obs demo.js:9:67298
+--> sending to worker: sb-s demo.js:9:67298
+--> sending to worker: obs 3 demo.js:9:67298
+Worker: transmuxed segment with start=10.000 end=20.000 hinted=10.000 worker.js:1:85226
+<-- sending to main: push-sb worker.js:1:29550
+269258.00 Setting media offset: 0 worker.js:1:78674
+<-- sending to main: media-off-upd worker.js:1:29550
+QSB: receiving order to push data to the SourceBuffer demo.js:9:69658
+QSB: pushing data demo.js:9:71145
+269259.00 Tick received: LoadedMetadata 0 worker.js:1:78705
+<-- sending to main: variant-upd worker.js:1:29550
+269259.00 Core: Jumping over a browser buffer hole (p:0, e:0, n:0.033322) worker.js:1:78644
+<-- sending to main: seek worker.js:1:29550
+<-- sending to main: request-obs worker.js:1:29550
+269259.00 Tick received: LoadedData 0 worker.js:1:78705
+<-- sending to main: variant-upd worker.js:1:29550
+269259.00 Core: Jumping over a browser buffer hole (p:0, e:0, n:0.033322) worker.js:1:78644
+<-- sending to main: seek worker.js:1:29550
+269259.00 Tick received: CanPlay 0 worker.js:1:78705
+<-- sending to main: variant-upd worker.js:1:29550
+269259.00 Core: Jumping over a browser buffer hole (p:0, e:0, n:0.033322) worker.js:1:78644
+<-- sending to main: seek worker.js:1:29550
+269260.00 Tick received: CanPlayThrough 0 worker.js:1:78705
+<-- sending to main: variant-upd worker.js:1:29550
+269260.00 Core: Jumping over a browser buffer hole (p:0, e:0, n:0.033322) worker.js:1:78644
+<-- sending to main: seek worker.js:1:29550
+--> sending to worker: obs demo.js:9:67298
+269260.00 Tick received: Requested 0.043322 worker.js:1:78705
+269260.00 Quitting rebuffering period. bg: 9.974569 worker.js:1:78674
+<-- sending to main: rebuf-end worker.js:1:29550
+<-- sending to main: variant-upd worker.js:1:29550
+--> sending to worker: obs demo.js:9:67298
+269261.00 Tick received: Seeking 0.043322 worker.js:1:78705
+<-- sending to main: variant-upd worker.js:1:29550
+--> sending to worker: obs demo.js:9:67298
+269261.00 Tick received: Seeking 0.043322 worker.js:1:78705
+<-- sending to main: variant-upd worker.js:1:29550
+--> sending to worker: obs demo.js:9:67298
+269261.00 Tick received: Seeking 0.043322 worker.js:1:78705
+<-- sending to main: variant-upd worker.js:1:29550
+--> sending to worker: obs 2 demo.js:9:67298
+269261.00 Tick received: RateChange 0.043322 worker.js:1:78705
+<-- sending to main: variant-upd worker.js:1:29550
+269261.00 Tick received: Seeking 0.043322 worker.js:1:78705
+<-- sending to main: variant-upd worker.js:1:29550
+269270.00 Loaded video segment: t: 20, d: 10 worker.js:1:78674
+269270.00 SI: Pushing video segment strictly after previous one (s:20, e:30, pe: 20). worker.js:1:78705
+269270.00 Selector: Recomputing starting position for the current media worker.js:1:78705
+269270.00 Selector: Starting position after inventory: 30 worker.js:1:78705
+269270.00 Req: Asking to request video segment: t: 30, d: 10 worker.js:1:78674
+269270.00 Req: pushing segment request to queue worker.js:1:78705
+<-- sending to main: variant-upd worker.js:1:29550
+269270.00 Req: Performing segment request. u:{url_ref} id:{host_id} worker.js:1:78705
+269271.00 Buffer: determine dts hint as last segment end dts worker.js:1:78705
+269271.00 Buffer 0 (video/mp2t;codecs="mp4a.40.2,avc1.640028"): Pushing seq 2 worker.js:1:78705
+Worker: transmuxed segment with start=20.000 end=30.000 hinted=20.000 worker.js:1:85226
+<-- sending to main: push-sb worker.js:1:29550
+QSB: receiving order to push data to the SourceBuffer demo.js:9:69658
+269306.00 Setting media offset: 0 worker.js:1:78674
+<-- sending to main: media-off-upd worker.js:1:29550
+QSB: pushing data demo.js:9:71145
+--> sending to worker: sb-s 2 demo.js:9:67298
+--> sending to worker: obs 2 demo.js:9:67298
+269387.00 Tick received: Seeked 0.043322 worker.js:1:78705
+<-- sending to main: variant-upd worker.js:1:29550
+269387.00 Tick received: CanPlay 0.043322 worker.js:1:78705
+<-- sending to main: variant-upd worker.js:1:29550
+--> sending to worker: obs demo.js:9:67298
+269387.00 Tick received: CanPlayThrough 0.043322 worker.js:1:78705
+<-- sending to main: variant-upd worker.js:1:29550
+--> sending to worker: obs demo.js:9:67298
+269389.00 Tick received: Play 0.043322 worker.js:1:78705
+--> sending to worker: obs demo.js:9:67298
+<-- sending to main: variant-upd worker.js:1:29550
+269389.00 Tick received: Playing 0.043322 worker.js:1:78705
+<-- sending to main: variant-upd worker.js:1:29550
+269476.00 Loaded video segment: t: 30, d: 10 worker.js:1:78674
+269476.00 SI: video segment pushed updates end of previous one (s:30, e:40, ps: 20, pe:30.010272) worker.js:1:78705
+<-- sending to main: variant-upd worker.js:1:29550
+269476.00 Buffer: determine dts hint as last segment end dts worker.js:1:78705
+269476.00 Buffer 0 (video/mp2t;codecs="mp4a.40.2,avc1.640028"): Pushing seq 3 worker.js:1:78705
+Worker: transmuxed segment with start=30.000 end=40.000 hinted=30.000 worker.js:1:85226
+--> sending to worker: obs demo.js:9:67298
+<-- sending to main: push-sb worker.js:1:29550
+QSB: receiving order to push data to the SourceBuffer demo.js:9:69658
+269562.00 Setting media offset: 0 worker.js:1:78674
+QSB: pushing data demo.js:9:71145
+<-- sending to main: media-off-upd worker.js:1:29550
+269562.00 Tick received: RegularInterval 0.165079 worker.js:1:78705
+<-- sending to main: variant-upd worker.js:1:29550
+--> sending to worker: sb-s demo.js:9:67298
+--> sending to worker: obs demo.js:9:67298
+270562.00 Tick received: RegularInterval 1.168031 worker.js:1:78705
+<-- sending to main: variant-upd worker.js:1:29550
+--> sending to worker: obs demo.js:9:67298
+271562.00 Tick received: RegularInterval 2.178069 worker.js:1:78705
+<-- sending to main: variant-upd worker.js:1:29550
+--> sending to worker: obs demo.js:9:67298
+--> sending to worker: obs demo.js:9:67298
+271837.00 Tick received: Seeking 213.7945458984375 worker.js:1:78705
+271837.00 Starting rebuffering period due to no buffer gap worker.js:1:78674
+<-- sending to main: rebuf-start worker.js:1:29550
+271837.00 Selector: Recomputing starting position for the current media worker.js:1:78705
+271837.00 Selector: Starting position at base position: 213.5945458984375 worker.js:1:78705
+271837.00 Req: Asking to request video segment: t: 210, d: 10 worker.js:1:78674
+271837.00 Req: pushing segment request to queue worker.js:1:78705
+<-- sending to main: variant-upd worker.js:1:29550
+--> sending to worker: obs demo.js:9:67298
+271838.00 Req: Performing segment request. u:{url_ref} id:{host_id} worker.js:1:78705
+271838.00 Tick received: Waiting 213.7945458984375 worker.js:1:78705
+<-- sending to main: variant-upd worker.js:1:29550
+271838.00 Tick received: RateChange 213.7945458984375 worker.js:1:78705
+<-- sending to main: variant-upd worker.js:1:29550
+271868.00 Loaded video segment: t: 210, d: 10 worker.js:1:78674
+271868.00 SI: Pushing video segment strictly after previous one (s:210, e:220, pe: 40.018072). worker.js:1:78705
+271868.00 Req: Asking to request video segment: t: 220, d: 10 worker.js:1:78674
+271868.00 Req: pushing segment request to queue worker.js:1:78705
+<-- sending to main: variant-upd worker.js:1:29550
+271869.00 Req: Performing segment request. u:{url_ref} id:{host_id} worker.js:1:78705
+271869.00 Buffer: determine dts hint from playlist time worker.js:1:78705
+271869.00 Buffer 0 (video/mp2t;codecs="mp4a.40.2,avc1.640028"): Pushing seq 21 worker.js:1:78705
+Worker: transmuxed segment with start=210.000 end=220.000 hinted=210.000 worker.js:1:85226
+<-- sending to main: push-sb worker.js:1:29550
+QSB: receiving order to push data to the SourceBuffer demo.js:9:69658
+271936.00 Setting media offset: 0 worker.js:1:78674
+<-- sending to main: media-off-upd worker.js:1:29550
+QSB: pushing data demo.js:9:71145
+271948.00 Loaded video segment: t: 220, d: 10 worker.js:1:78674
+271949.00 SI: Pushing video segment strictly after previous one (s:220, e:230, pe: 220). worker.js:1:78705
+271949.00 Req: Asking to request video segment: t: 230, d: 10 worker.js:1:78674
+271949.00 Req: pushing segment request to queue worker.js:1:78705
+<-- sending to main: variant-upd worker.js:1:29550
+271949.00 Req: Performing segment request. u:{url_ref} id:{host_id} worker.js:1:78705
+271949.00 Buffer: determine dts hint as last segment end dts worker.js:1:78705
+271949.00 Buffer 0 (video/mp2t;codecs="mp4a.40.2,avc1.640028"): Pushing seq 22 worker.js:1:78705
+Worker: transmuxed segment with start=220.000 end=230.000 hinted=220.000 worker.js:1:85226
+<-- sending to main: push-sb worker.js:1:29550
+272001.00 Setting media offset: 0 worker.js:1:78674
+<-- sending to main: media-off-upd worker.js:1:29550
+QSB: receiving order to push data to the SourceBuffer demo.js:9:69658
+QSB: pushing data demo.js:9:71145
+--> sending to worker: sb-s demo.js:9:67298
+<-- sending to main: request-obs worker.js:1:29550
+--> sending to worker: obs demo.js:9:67298
+272004.00 Tick received: Requested 213.7945458984375 worker.js:1:78705
+<-- sending to main: variant-upd worker.js:1:29550
+272017.00 Loaded video segment: t: 230, d: 10 worker.js:1:78674
+272017.00 SI: Pushing video segment strictly after previous one (s:230, e:240, pe: 230). worker.js:1:78705
+272017.00 Req: Asking to request video segment: t: 240, d: 10 worker.js:1:78674
+272017.00 Req: pushing segment request to queue worker.js:1:78705
+<-- sending to main: variant-upd worker.js:1:29550
+272017.00 Req: Performing segment request. u:{url_ref} id:{host_id} worker.js:1:78705
+272017.00 Buffer: determine dts hint as last segment end dts worker.js:1:78705
+272017.00 Buffer 0 (video/mp2t;codecs="mp4a.40.2,avc1.640028"): Pushing seq 23 worker.js:1:78705
+--> sending to worker: sb-s demo.js:9:67298
+Worker: transmuxed segment with start=230.000 end=240.000 hinted=230.000 worker.js:1:85226
+<-- sending to main: push-sb worker.js:1:29550
+272076.00 Setting media offset: 0 worker.js:1:78674
+<-- sending to main: media-off-upd worker.js:1:29550
+QSB: receiving order to push data to the SourceBuffer demo.js:9:69658
+QSB: pushing data demo.js:9:71145
+<-- sending to main: request-obs worker.js:1:29550
+--> sending to worker: obs demo.js:9:67298
+272089.00 Tick received: Requested 213.7945458984375 worker.js:1:78705
+272089.00 Quitting rebuffering period. bg: 16.238776101562507 worker.js:1:78674
+<-- sending to main: rebuf-end worker.js:1:29550
+<-- sending to main: variant-upd worker.js:1:29550
+--> sending to worker: obs demo.js:9:67298
+272089.00 Tick received: RateChange 213.7945458984375 worker.js:1:78705
+<-- sending to main: variant-upd worker.js:1:29550
+272100.00 Loaded video segment: t: 240, d: 10 worker.js:1:78674
+272100.00 SI: Pushing video segment strictly after previous one (s:240, e:250, pe: 240). worker.js:1:78705
+<-- sending to main: variant-upd worker.js:1:29550
+272100.00 Buffer: determine dts hint as last segment end dts worker.js:1:78705
+272100.00 Buffer 0 (video/mp2t;codecs="mp4a.40.2,avc1.640028"): Pushing seq 24 worker.js:1:78705
+--> sending to worker: sb-s demo.js:9:67298
+--> sending to worker: obs 4 demo.js:9:67298
+Worker: transmuxed segment with start=240.000 end=250.000 hinted=240.000 worker.js:1:85226
+<-- sending to main: push-sb worker.js:1:29550
+272172.00 Setting media offset: 0 worker.js:1:78674
+<-- sending to main: media-off-upd worker.js:1:29550
+QSB: receiving order to push data to the SourceBuffer demo.js:9:69658
+272172.00 Tick received: Seeked 213.7945458984375 worker.js:1:78705
+QSB: pushing data demo.js:9:71145
+<-- sending to main: variant-upd worker.js:1:29550
+272173.00 Tick received: CanPlay 213.7945458984375 worker.js:1:78705
+<-- sending to main: variant-upd worker.js:1:29550
+272173.00 Tick received: Playing 213.7945458984375 worker.js:1:78705
+<-- sending to main: variant-upd worker.js:1:29550
+272173.00 Tick received: CanPlayThrough 213.7945458984375 worker.js:1:78705
+<-- sending to main: variant-upd worker.js:1:29550
+--> sending to worker: sb-s demo.js:9:67298
+--> sending to worker: obs demo.js:9:67298
+272397.00 Tick received: RegularInterval 214.001822 worker.js:1:78705
+<-- sending to main: variant-upd worker.js:1:29550
+--> sending to worker: obs demo.js:9:67298
+272838.00 Tick received: RegularInterval 214.451853 worker.js:1:78705
+<-- sending to main: variant-upd worker.js:1:29550
+--> sending to worker: obs demo.js:9:67298
+--> sending to worker: obs demo.js:9:67298
+273427.00 Tick received: Seeking 197.6824931640625 worker.js:1:78705
+273427.00 Starting rebuffering period due to no buffer gap worker.js:1:78674
+<-- sending to main: rebuf-start worker.js:1:29550
+273427.00 Selector: Recomputing starting position for the current media worker.js:1:78705
+273427.00 Selector: Segment non-contiguous or GCed starting from 197.4824931640625 worker.js:1:78705
+273427.00 Req: Asking to request video segment: t: 190, d: 10 worker.js:1:78674
+273427.00 Req: pushing segment request to queue worker.js:1:78705
+<-- sending to main: variant-upd worker.js:1:29550
+--> sending to worker: obs demo.js:9:67298
+273427.00 Req: Performing segment request. u:{url_ref} id:{host_id} worker.js:1:78705
+273427.00 Tick received: Waiting 197.6824931640625 worker.js:1:78705
+<-- sending to main: variant-upd worker.js:1:29550
+273428.00 Tick received: RateChange 197.6824931640625 worker.js:1:78705
+<-- sending to main: variant-upd worker.js:1:29550
+273457.00 Loaded video segment: t: 190, d: 10 worker.js:1:78674
+273457.00 SI: Pushing video segment strictly after previous one (s:190, e:200, pe: 40.018072). worker.js:1:78705
+273457.00 Req: Asking to request video segment: t: 200, d: 10 worker.js:1:78674
+273457.00 Req: pushing segment request to queue worker.js:1:78705
+<-- sending to main: variant-upd worker.js:1:29550
+273458.00 Req: Performing segment request. u:{url_ref} id:{host_id} worker.js:1:78705
+273458.00 Buffer: determine dts hint from playlist time worker.js:1:78705
+273458.00 Buffer 0 (video/mp2t;codecs="mp4a.40.2,avc1.640028"): Pushing seq 19 worker.js:1:78705
+Worker: transmuxed segment with start=190.000 end=200.000 hinted=190.000 worker.js:1:85226
+<-- sending to main: push-sb worker.js:1:29550
+273525.00 Setting media offset: 0 worker.js:1:78674
+<-- sending to main: media-off-upd worker.js:1:29550
+QSB: receiving order to push data to the SourceBuffer demo.js:9:69658
+QSB: pushing data demo.js:9:71145
+273536.00 Loaded video segment: t: 200, d: 10 worker.js:1:78674
+273536.00 SI: Pushing video segment strictly after previous one (s:200, e:210, pe: 200). worker.js:1:78705
+273536.00 Selector: Segment can be skipped (s:210, d: 10) worker.js:1:78705
+273536.00 Selector: Segment can be skipped (s:220, d: 10) worker.js:1:78705
+<-- sending to main: variant-upd worker.js:1:29550
+273536.00 Buffer: determine dts hint as last segment end dts worker.js:1:78705
+273536.00 Buffer 0 (video/mp2t;codecs="mp4a.40.2,avc1.640028"): Pushing seq 20 worker.js:1:78705
+Worker: transmuxed segment with start=200.000 end=210.000 hinted=200.000 worker.js:1:85226
+<-- sending to main: push-sb worker.js:1:29550
+273581.00 Setting media offset: 0 worker.js:1:78674
+<-- sending to main: media-off-upd worker.js:1:29550
+QSB: receiving order to push data to the SourceBuffer demo.js:9:69658
+QSB: pushing data demo.js:9:71145
+--> sending to worker: sb-s demo.js:9:67298
+<-- sending to main: request-obs worker.js:1:29550
+--> sending to worker: obs demo.js:9:67298
+273587.00 Tick received: Requested 197.6824931640625 worker.js:1:78705
+<-- sending to main: variant-upd worker.js:1:29550
+273588.00 Core: Jumping over a browser buffer hole (p:197.6824931640625, e:200.00356, n:210.033322) worker.js:1:78644
+<-- sending to main: seek worker.js:1:29550
+--> sending to worker: obs demo.js:9:67298
+273588.00 Tick received: Seeking 210.043322 worker.js:1:78705
+273588.00 Quitting rebuffering period. bg: 39.976020000000005 worker.js:1:78674
+<-- sending to main: rebuf-end worker.js:1:29550
+273588.00 Selector: Recomputing starting position for the current media worker.js:1:78705
+273588.00 Selector: Starting position after inventory: 250 worker.js:1:78705
+<-- sending to main: variant-upd worker.js:1:29550
+--> sending to worker: obs demo.js:9:67298
+273589.00 Tick received: RateChange 210.043322 worker.js:1:78705
+<-- sending to main: variant-upd worker.js:1:29550
+--> sending to worker: sb-s demo.js:9:67298
+273628.00 SI: video segment has been partially GCed at the end (pbe:220, nbe:210.033333) worker.js:1:78674
+273628.00 SI: video segment became too small removing (s:210.033322, e:220, bs:210.033322, be:210.033333) worker.js:1:78705
+--> sending to worker: obs demo.js:9:67298
+--> sending to worker: obs demo.js:9:67298
+--> sending to worker: obs demo.js:9:67298
+--> sending to worker: obs demo.js:9:67298
+273641.00 Tick received: Seeked 210.043322 worker.js:1:78705
+273641.00 Starting rebuffering period due to no buffer gap worker.js:1:78674
+<-- sending to main: rebuf-start worker.js:1:29550
+<-- sending to main: variant-upd worker.js:1:29550
+273641.00 Core: Jumping over a browser buffer hole (p:210.043322, e:210.043322, n:210.35) worker.js:1:78644
+<-- sending to main: seek worker.js:1:29550
+273641.00 Tick received: CanPlay 210.043322 worker.js:1:78705
+--> sending to worker: obs demo.js:9:67298
+<-- sending to main: variant-upd worker.js:1:29550
+273641.00 Core: Jumping over a browser buffer hole (p:210.043322, e:210.043322, n:210.35) worker.js:1:78644
+<-- sending to main: seek worker.js:1:29550
+273642.00 Tick received: Playing 210.043322 worker.js:1:78705
+--> sending to worker: obs demo.js:9:67298
+<-- sending to main: variant-upd worker.js:1:29550
+273642.00 Core: Jumping over a browser buffer hole (p:210.043322, e:210.043322, n:210.35) worker.js:1:78644
+--> sending to worker: obs demo.js:9:67298
+<-- sending to main: seek worker.js:1:29550
+--> sending to worker: obs demo.js:9:67298
+273642.00 Tick received: CanPlayThrough 210.043322 worker.js:1:78705
+<-- sending to main: variant-upd worker.js:1:29550
+273642.00 Core: Jumping over a browser buffer hole (p:210.043322, e:210.043322, n:210.35) worker.js:1:78644
+<-- sending to main: seek worker.js:1:29550
+--> sending to worker: obs demo.js:9:67298
+273642.00 Tick received: RateChange 210.043351 worker.js:1:78705
+<-- sending to main: variant-upd worker.js:1:29550
+--> sending to worker: obs demo.js:9:67298
+273642.00 Core: Jumping over a browser buffer hole (p:210.043351, e:210.043351, n:210.35) worker.js:1:78644
+<-- sending to main: seek worker.js:1:29550
+273642.00 Tick received: Seeking 210.35999999999999 worker.js:1:78705
+--> sending to worker: obs demo.js:9:67298
+273642.00 Quitting rebuffering period. bg: 39.65934200000001 worker.js:1:78674
+<-- sending to main: rebuf-end worker.js:1:29550
+273642.00 Selector: Recomputing starting position for the current media worker.js:1:78705
+273642.00 Selector: Segment non-contiguous or GCed starting from 210.16 worker.js:1:78705
+273642.00 Req: Asking to request video segment: t: 210, d: 10 worker.js:1:78674
+273642.00 Req: pushing segment request to queue worker.js:1:78705
+<-- sending to main: variant-upd worker.js:1:29550
+--> sending to worker: obs demo.js:9:67298
+273643.00 Req: Performing segment request. u:{url_ref} id:{host_id} worker.js:1:78705
+273643.00 Tick received: Waiting 210.35999999999999 worker.js:1:78705
+<-- sending to main: variant-upd worker.js:1:29550
+273643.00 Tick received: Seeking 210.35999999999999 worker.js:1:78705
+<-- sending to main: variant-upd worker.js:1:29550
+273643.00 Tick received: Seeking 210.35999999999999 worker.js:1:78705
+<-- sending to main: variant-upd worker.js:1:29550
+273643.00 Tick received: Seeking 210.35999999999999 worker.js:1:78705
+<-- sending to main: variant-upd worker.js:1:29550
+273643.00 Tick received: Seeking 210.35999999999999 worker.js:1:78705
+<-- sending to main: variant-upd worker.js:1:29550
+273643.00 Tick received: RateChange 210.35999999999999 worker.js:1:78705
+<-- sending to main: variant-upd worker.js:1:29550
+273673.00 Loaded video segment: t: 210, d: 10 worker.js:1:78674
+273673.00 SI: video segment pushed updates end of previous one (s:210, e:220, ps: 200, pe:210.033333) worker.js:1:78705
+273674.00 Selector: Recomputing starting position for the current media worker.js:1:78705
+273674.00 Selector: Starting position after inventory: 250 worker.js:1:78705
+<-- sending to main: variant-upd worker.js:1:29550
+273674.00 Buffer: determine dts hint as last segment end dts worker.js:1:78705
+273674.00 Buffer 0 (video/mp2t;codecs="mp4a.40.2,avc1.640028"): Pushing seq 21 worker.js:1:78705
+Worker: transmuxed segment with start=210.000 end=220.000 hinted=210.000 worker.js:1:85226
+<-- sending to main: push-sb worker.js:1:29550
+273746.00 Setting media offset: 0 worker.js:1:78674
+<-- sending to main: media-off-upd worker.js:1:29550
+QSB: receiving order to push data to the SourceBuffer demo.js:9:69658
+QSB: pushing data demo.js:9:71145
+--> sending to worker: sb-s demo.js:9:67298
+273790.00 SI: video segment has been partially GCed at the end (pbe:230, nbe:220.033333) worker.js:1:78674
+--> sending to worker: obs demo.js:9:67298
+273889.00 Tick received: RegularInterval 210.35999999999999 worker.js:1:78705
+<-- sending to main: variant-upd worker.js:1:29550
+--> sending to worker: obs demo.js:9:67298
+273950.00 Tick received: RegularInterval 210.35999999999999 worker.js:1:78705
+<-- sending to main: variant-upd worker.js:1:29550
+--> sending to worker: obs 2 demo.js:9:67298
+273960.00 Tick received: Seeked 210.35999999999999 worker.js:1:78705
+--> sending to worker: obs 2 demo.js:9:67298
+<-- sending to main: variant-upd worker.js:1:29550
+273960.00 Tick received: CanPlay 210.35999999999999 worker.js:1:78705
+<-- sending to main: variant-upd worker.js:1:29550
+273960.00 Tick received: Playing 210.35999999999999 worker.js:1:78705
+<-- sending to main: variant-upd worker.js:1:29550
+273960.00 Tick received: CanPlayThrough 210.35999999999999 worker.js:1:78705
+<-- sending to main: variant-upd worker.js:1:29550
+--> sending to worker: obs demo.js:9:67298
+274428.00 Tick received: RegularInterval 210.802896 worker.js:1:78705
+<-- sending to main: variant-upd worker.js:1:29550
+--> sending to worker: obs demo.js:9:67298
+274642.00 Tick received: RegularInterval 211.007128 worker.js:1:78705
+<-- sending to main: variant-upd worker.js:1:29550
+--> sending to worker: obs demo.js:9:67298
+275643.00 Tick received: RegularInterval 212.016572 worker.js:1:78705
+<-- sending to main: variant-upd worker.js:1:29550
+--> sending to worker: obs demo.js:9:67298
+276644.00 Tick received: RegularInterval 213.031011 worker.js:1:78705
+<-- sending to main: variant-upd worker.js:1:29550
+--> sending to worker: obs demo.js:9:67298
+277645.00 Tick received: RegularInterval 214.002361 worker.js:1:78705
+<-- sending to main: variant-upd worker.js:1:29550
+--> sending to worker: obs demo.js:9:67298
+278646.00 Tick received: RegularInterval 215.018618 worker.js:1:78705
+<-- sending to main: variant-upd worker.js:1:29550
+--> sending to worker: obs demo.js:9:67298
+279647.00 Tick received: RegularInterval 216.021295 worker.js:1:78705
+<-- sending to main: variant-upd worker.js:1:29550
+--> sending to worker: obs demo.js:9:67298
+280647.00 Tick received: RegularInterval 217.029931 worker.js:1:78705
+<-- sending to main: variant-upd worker.js:1:29550
+--> sending to worker: obs demo.js:9:67298
+281647.00 Tick received: RegularInterval 218.032995 worker.js:1:78705
+<-- sending to main: variant-upd worker.js:1:29550
+--> sending to worker: obs demo.js:9:67298
+282648.00 Tick received: RegularInterval 219.036045 worker.js:1:78705
+<-- sending to main: variant-upd worker.js:1:29550
+--> sending to worker: obs demo.js:9:67298
+283652.00 Tick received: RegularInterval 220.007276 worker.js:1:78705
+283652.00 Starting rebuffering period. bg: 0.026057000000008657 worker.js:1:78674
+<-- sending to main: rebuf-start worker.js:1:29550
+<-- sending to main: variant-upd worker.js:1:29550
+283653.00 Core: Jumping over a browser buffer hole (p:220.007276, e:220.033333, n:224.933322) worker.js:1:78644
+<-- sending to main: seek worker.js:1:29550
+--> sending to worker: obs demo.js:9:67298
+283654.00 Tick received: Waiting 220.050834 worker.js:1:78705
+<-- sending to main: variant-upd worker.js:1:29550
+283654.00 Core: Jumping over a browser buffer hole (p:220.050834, e:220.050834, n:224.933322) worker.js:1:78644
+<-- sending to main: seek worker.js:1:29550
+--> sending to worker: obs demo.js:9:67298
+283655.00 Tick received: RateChange 220.050834 worker.js:1:78705
+<-- sending to main: variant-upd worker.js:1:29550
+283655.00 Core: Jumping over a browser buffer hole (p:220.050834, e:220.050834, n:224.933322) worker.js:1:78644
+<-- sending to main: seek worker.js:1:29550
+--> sending to worker: obs demo.js:9:67298
+--> sending to worker: obs demo.js:9:67298
+283655.00 Tick received: Seeking 224.943322 worker.js:1:78705
+283655.00 Quitting rebuffering period. bg: 25.07602 worker.js:1:78674
+<-- sending to main: rebuf-end worker.js:1:29550
+--> sending to worker: obs demo.js:9:67298
+283655.00 Selector: Recomputing starting position for the current media worker.js:1:78705
+283655.00 Selector: Segment non-contiguous or GCed starting from 224.743322 worker.js:1:78705
+283655.00 Req: Asking to request video segment: t: 220, d: 10 worker.js:1:78674
+283655.00 Req: pushing segment request to queue worker.js:1:78705
+<-- sending to main: variant-upd worker.js:1:29550
+--> sending to worker: obs demo.js:9:67298
+283655.00 Req: Performing segment request. u:{url_ref} id:{host_id} worker.js:1:78705
+283656.00 Tick received: Seeking 224.943322 worker.js:1:78705
+<-- sending to main: variant-upd worker.js:1:29550
+283656.00 Tick received: Seeking 224.943322 worker.js:1:78705
+<-- sending to main: variant-upd worker.js:1:29550
+283656.00 Tick received: RateChange 224.943322 worker.js:1:78705
+<-- sending to main: variant-upd worker.js:1:29550
+--> sending to worker: obs 4 demo.js:9:67298
+283659.00 Tick received: Seeked 224.943322 worker.js:1:78705
+<-- sending to main: variant-upd worker.js:1:29550
+283660.00 Tick received: CanPlay 224.943322 worker.js:1:78705
+<-- sending to main: variant-upd worker.js:1:29550
+283660.00 Tick received: Playing 224.943322 worker.js:1:78705
+<-- sending to main: variant-upd worker.js:1:29550
+283660.00 Tick received: CanPlayThrough 224.943322 worker.js:1:78705
+<-- sending to main: variant-upd worker.js:1:29550
+283671.00 Loaded video segment: t: 220, d: 10 worker.js:1:78674
+283672.00 SI: video segment pushed replace another one (s:220, e:230, pe:230) worker.js:1:78705
+283672.00 Selector: Recomputing starting position for the current media worker.js:1:78705
+283672.00 Selector: Starting position after inventory: 250 worker.js:1:78705
+283672.00 Req: Asking to request video segment: t: 250, d: 10 worker.js:1:78674
+283672.00 Req: pushing segment request to queue worker.js:1:78705
+<-- sending to main: variant-upd worker.js:1:29550
+283672.00 Req: Performing segment request. u:{url_ref} id:{host_id} worker.js:1:78705
+283672.00 Buffer: determine dts hint as last segment end dts worker.js:1:78705
+283672.00 Buffer 0 (video/mp2t;codecs="mp4a.40.2,avc1.640028"): Pushing seq 22 worker.js:1:78705
+Worker: transmuxed segment with start=220.000 end=230.000 hinted=220.000 worker.js:1:85226
+<-- sending to main: push-sb worker.js:1:29550
+QSB: receiving order to push data to the SourceBuffer demo.js:9:69658
+283728.00 Setting media offset: 0 worker.js:1:78674
+<-- sending to main: media-off-upd worker.js:1:29550
+QSB: pushing data demo.js:9:71145
+283739.00 Loaded video segment: t: 250, d: 10 worker.js:1:78674
+283740.00 SI: video segment pushed updates end of previous one (s:250, e:260, ps: 240, pe:250.019342) worker.js:1:78705
+<-- sending to main: variant-upd worker.js:1:29550
+283740.00 Buffer: using base dts hint worker.js:1:78705
+283740.00 Buffer 0 (video/mp2t;codecs="mp4a.40.2,avc1.640028"): Pushing seq 25 worker.js:1:78705
+--> sending to worker: sb-s demo.js:9:67298
+Worker: transmuxed segment with start=250.000 end=260.000 hinted=250.000 worker.js:1:85226
+<-- sending to main: push-sb worker.js:1:29550
+QSB: receiving order to push data to the SourceBuffer demo.js:9:69658
+283820.00 Setting media offset: 0 worker.js:1:78674
+QSB: pushing data demo.js:9:71145
+<-- sending to main: media-off-upd worker.js:1:29550
+--> sending to worker: sb-s demo.js:9:67298
+--> sending to worker: obs demo.js:9:67298
+283973.00 Tick received: RegularInterval 225.224359 worker.js:1:78705
+<-- sending to main: variant-upd worker.js:1:29550
+--> sending to worker: obs demo.js:9:67298
+284656.00 Tick received: RegularInterval 225.915307 worker.js:1:78705
+<-- sending to main: variant-upd worker.js:1:29550
+QSB: Failed to abort a SourceBuffer during disposal DOMException: An attempt was made to use an object that is not, or is no longer, usable
+    dispose https://peaberberian.github.io/wasp-hls/demo.js:9
+    no https://peaberberian.github.io/wasp-hls/demo.js:9
+    stop https://peaberberian.github.io/wasp-hls/demo.js:9
+    A0 https://peaberberian.github.io/wasp-hls/demo.js:9
+    Bg https://peaberberian.github.io/wasp-hls/demo.js:8
+    rc https://peaberberian.github.io/wasp-hls/demo.js:8
+    Bp https://peaberberian.github.io/wasp-hls/demo.js:8
+    rc https://peaberberian.github.io/wasp-hls/demo.js:8
+    hf https://peaberberian.github.io/wasp-hls/demo.js:9
+    a_ https://peaberberian.github.io/wasp-hls/demo.js:9
+demo.js:9:70276
+--> sending to worker: stop demo.js:9:67298
+284904.00 Core: Stopping current content (if one) and resetting player worker.js:1:78674
+<-- sending to main: stop-obs worker.js:1:29550
+<-- sending to main: clear-ms worker.js:1:29550
+284904.00 Core: Updating min_buffer_time: {min_buffer_time} worker.js:1:78705
+<-- sending to main: ctnt-stop worker.js:1:29550
+API: Ignoring `stop-playback-observation` due to wrong `mediaSourceId` demo.js:9:79787
+API: Ignoring MediaSource clearing due to wrong `mediaSourceId` demo.js:9:76036
+API: Ignoring `content-stopped` due to wrong `contentId` demo.js:9:85342

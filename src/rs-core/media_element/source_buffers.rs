@@ -6,7 +6,7 @@ use crate::bindings::{
     TimescaledTimestamp,
 };
 use crate::dispatcher::JsMemoryBlob;
-use crate::parser::{MediaPlaylistPermanentId, SegmentTimeInfo};
+use crate::parser::{MediaPlaylistPermanentId, SegmentIdentity, SegmentTimeInfo};
 use crate::utils::logger::*;
 
 /// The failed operation and media appends cancelled before they could run.
@@ -130,6 +130,14 @@ impl SourceBuffer {
     /// isn't finished yet.
     pub(super) fn has_operations_pending(&self) -> bool {
         !self.queue.is_empty()
+    }
+
+    /// Check pending media appends using the time bounds supplied by the caller.
+    pub(super) fn has_pending_append_in_range(&self, start: f64, end: f64) -> bool {
+        self.queue.iter().any(|operation| {
+            matches!(operation, SourceBufferQueueElement::PushMedia { data, .. }
+                if data.time_info.start() < end && data.time_info.end() > start)
+        })
     }
 
     /// Pushes a new initialization segment to the underlying `SourceBuffer.
@@ -365,6 +373,19 @@ pub(crate) struct PreparedPushData {
 
     /// Identity of the media sequence this append belongs to.
     pub(super) media_sequence_identity: MediaSequenceIdentity,
+}
+
+impl PreparedPushData {
+    /// Metadata supplied by the caller, returned after append completion.
+    pub(crate) fn segment_info(
+        &self,
+    ) -> (MediaPlaylistPermanentId, SegmentIdentity, &SegmentTimeInfo) {
+        (
+            self.media_sequence_identity.media_playlist_id,
+            SegmentIdentity::new(self.sequence_number, self.discontinuity_sequence),
+            &self.time_info,
+        )
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

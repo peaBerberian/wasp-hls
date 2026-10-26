@@ -17,7 +17,7 @@ use crate::{
     },
     dispatcher::segment_request_contexts::PendingSegmentRequest,
     media_element::SegmentPushMetadata,
-    parser::{PlaylistRefreshInfo, SegmentIdentity},
+    parser::PlaylistRefreshInfo,
     playlist_store::{
         AudioTrackChange, LockVariantResponse, MediaPlaylistPermanentId, PlaylistStore,
         ProbeSegmentMetadata, SetAudioTrackResponse,
@@ -426,8 +426,22 @@ impl Dispatcher {
         source_buffer_id: SourceBufferId,
         buffered: JsTimeRanges,
     ) {
-        self.media_element_ref
-            .on_source_buffer_update(source_buffer_id, buffered, true);
+        let completed =
+            self.media_element_ref
+                .on_source_buffer_update(source_buffer_id, &buffered, true);
+        if let Some(media_type) = self.media_element_ref.media_type_for(source_buffer_id) {
+            let selector = self.segment_selectors.get_mut(media_type);
+            if let Some(data) = completed {
+                let (playlist_id, identity, time_info) = data.segment_info();
+                selector.validate_media(playlist_id, identity, time_info.start(), time_info.end());
+            }
+            if let Some(ranges) = self
+                .media_element_ref
+                .media_ranges_to_playlist_ranges(&buffered)
+            {
+                selector.check_for_removed_data(&ranges);
+            }
+        }
         // More playable data does not necessarily cause a media-element event.
         // Request an observation now if it means we could go out of rebuffering faster
         if self.media_element_ref.is_rebuffering() {
@@ -442,8 +456,9 @@ impl Dispatcher {
         code: PushedSegmentErrorCode,
         buffered: JsTimeRanges,
     ) {
-        self.media_element_ref
-            .on_source_buffer_update(source_buffer_id, buffered, false);
+        let _ = self
+            .media_element_ref
+            .on_source_buffer_update(source_buffer_id, &buffered, false);
 
         match self.media_element_ref.media_type_for(source_buffer_id) {
             Some(mt) => {
@@ -506,8 +521,9 @@ impl Dispatcher {
         source_buffer_id: SourceBufferId,
         buffered: JsTimeRanges,
     ) {
-        self.media_element_ref
-            .on_source_buffer_update(source_buffer_id, buffered, false);
+        let _ = self
+            .media_element_ref
+            .on_source_buffer_update(source_buffer_id, &buffered, false);
         match self.media_element_ref.media_type_for(source_buffer_id) {
             Some(mt) => {
                 let message =
@@ -1061,6 +1077,10 @@ impl Dispatcher {
                 addition_candidate,
                 replacement_candidate,
                 self.media_element_ref.inventory(media_type),
+                |start, end| {
+                    self.media_element_ref
+                        .has_pending_append_in_range(media_type, start, end)
+                },
             );
         let Some(needed) = selected.needed_segments() else {
             let refresh_id = selected.playlist_to_refresh();
@@ -1173,6 +1193,10 @@ impl Dispatcher {
                 addition_candidate,
                 replacement_candidate,
                 self.media_element_ref.inventory(media_type),
+                |start, end| {
+                    self.media_element_ref
+                        .has_pending_append_in_range(media_type, start, end)
+                },
             );
         let refresh_id = selected.playlist_to_refresh();
         self.media_element_ref
@@ -1457,9 +1481,6 @@ impl Dispatcher {
         let segment_start = push_md.time_info.start();
         let segment_end = push_md.time_info.end();
         let media_type = push_md.media_type;
-        let playlist_id = push_md.context.playlist_id();
-        let identity =
-            SegmentIdentity::new(push_md.sequence_number, push_md.discontinuity_sequence);
         let prepared_data = self
             .media_element_ref
             .announce_incoming_media_segment(push_md);
@@ -1469,12 +1490,6 @@ impl Dispatcher {
         //
         // We still announce the incoming segment first to ensure the `MediaElementReference`'s
         // inventory is up-to-date.
-        self.segment_selectors.get_mut(media_type).validate_media(
-            playlist_id,
-            identity,
-            segment_start,
-            segment_end,
-        );
         self.check_segments_to_request();
         // Preceding check could have led to a fatal error
         if matches!(self.ready_state, PlayerReadyState::Stopped) {
@@ -2393,7 +2408,7 @@ video.m3u8
         let selected = dispatcher
             .segment_selectors
             .get_mut(MediaType::Video)
-            .most_needed_segment(best, safe, &inventory);
+            .most_needed_segment(best, safe, &inventory, |_, _| false);
         let needed = selected.needed_segments().unwrap();
         assert_eq!(needed.variant_id(), safe_variant);
         assert_eq!(needed.media_segment().unwrap().0.start(), 8.);

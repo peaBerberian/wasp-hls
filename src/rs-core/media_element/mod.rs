@@ -195,14 +195,22 @@ impl MediaElementReference {
     /// Reported ranges for this buffer, converted to playlist time.
     /// None while the ranges or timestamp offset are unknown.
     pub(crate) fn buffered_ranges_for(&self, media_type: MediaType) -> Option<Vec<(f64, f64)>> {
-        let offset = self.media_offset?;
         let observation = self.last_observation.as_ref()?;
         let buffered = match media_type {
             MediaType::Audio => observation.audio_buffered(),
             MediaType::Video => observation.video_buffered(),
         }?;
+        self.media_ranges_to_playlist_ranges(buffered)
+    }
+
+    /// Convert media ranges to playlist time. None while the offset is unknown.
+    pub(crate) fn media_ranges_to_playlist_ranges(
+        &self,
+        ranges: &JsTimeRanges,
+    ) -> Option<Vec<(f64, f64)>> {
+        let offset = self.media_offset?;
         Some(
-            buffered
+            ranges
                 .into_iter()
                 .map(|(start, end)| (start - offset, end - offset))
                 .collect(),
@@ -516,6 +524,23 @@ impl MediaElementReference {
         }
     }
 
+    /// Check pending media appends using the time bounds supplied by the caller.
+    pub(crate) fn has_pending_append_in_range(
+        &self,
+        media_type: MediaType,
+        start: f64,
+        end: f64,
+    ) -> bool {
+        // Announcement precedes append submission, so also include that short interval.
+        self.inventory(media_type).iter().any(|segment| {
+            segment.is_pending_append()
+                && segment.playlist_start() < end
+                && segment.playlist_end() > start
+        }) || self
+            .buffer_for(media_type)
+            .is_some_and(|buffer| buffer.has_pending_append_in_range(start, end))
+    }
+
     /// Method to call once a `MediaObservation` has been received.
     pub(crate) fn on_observation(&mut self, observation: MediaObservation) {
         if let Some(media_offset) = self.media_offset {
@@ -605,9 +630,10 @@ impl MediaElementReference {
     pub(crate) fn on_source_buffer_update(
         &mut self,
         source_buffer_id: SourceBufferId,
-        buffered: JsTimeRanges,
+        buffered: &JsTimeRanges,
         success: bool,
-    ) {
+    ) -> Option<PreparedPushData> {
+        let mut completed_media = None;
         if let Some(ref mut sb) = self.audio_buffer {
             if sb.id() == source_buffer_id {
                 let queue_elt = if success {
@@ -621,15 +647,16 @@ impl MediaElementReference {
                         .discard_pending(&cancelled.cancelled_media_ids);
                     cancelled.current
                 };
-                if let Some(SourceBufferQueueElement::PushMedia { id, .. }) = queue_elt {
+                if let Some(SourceBufferQueueElement::PushMedia { id, data }) = queue_elt {
                     if let Some(media_offset) = self.media_offset {
                         self.audio_inventory.reconcile_push_result(
                             id,
-                            &buffered,
+                            buffered,
                             media_offset,
                             success,
                         );
                     }
+                    completed_media = Some(data);
                 }
             }
         }
@@ -644,19 +671,21 @@ impl MediaElementReference {
                         .discard_pending(&cancelled.cancelled_media_ids);
                     cancelled.current
                 };
-                if let Some(SourceBufferQueueElement::PushMedia { id, .. }) = queue_elt {
+                if let Some(SourceBufferQueueElement::PushMedia { id, data }) = queue_elt {
                     if let Some(media_offset) = self.media_offset {
                         self.video_inventory.reconcile_push_result(
                             id,
-                            &buffered,
+                            buffered,
                             media_offset,
                             success,
                         );
                     }
+                    completed_media = Some(data);
                 }
             }
         }
         self.check_end_of_stream();
+        completed_media
     }
 
     /// Method to call if a `SourceBuffer`'s creation asynchronously failed.
@@ -846,6 +875,24 @@ mod tests {
             discontinuity_sequence: 0,
             context: SegmentQualityContext::new(1.0, MediaPlaylistPermanentId::new_for_test(1)),
         }
+    }
+
+    #[test]
+    fn announced_media_blocks_overlapping_requests_before_append_submission() {
+        let mut media_element = MediaElementReference::new();
+        let id = media_element
+            .video_inventory
+            .insert_segment(metadata(0., 4.));
+        assert!(media_element.has_pending_append_in_range(MediaType::Video, 2., 6.));
+        assert!(!media_element.has_pending_append_in_range(MediaType::Video, 4., 8.));
+        assert!(!media_element.has_pending_append_in_range(MediaType::Audio, 0., 4.));
+        media_element.video_inventory.reconcile_push_result(
+            id,
+            &JsTimeRanges::new(vec![0., 4.]),
+            0.,
+            true,
+        );
+        assert!(!media_element.has_pending_append_in_range(MediaType::Video, 0., 4.));
     }
 
     #[test]
