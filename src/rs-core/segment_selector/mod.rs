@@ -241,7 +241,12 @@ impl NextSegmentSelector {
 
     /// Check reported buffer ranges for removed data. Times are in playlist seconds.
     pub(crate) fn check_for_removed_data(&mut self, buffered: &[(f64, f64)]) {
-        if let Some(position) = self.validated_segments.synchronize(buffered, self.base_pos) {
+        let reload_position = self.validated_segments.synchronize(
+            buffered,
+            self.base_pos,
+            self.base_pos + self.buffer_goal,
+        );
+        if let Some(position) = reload_position {
             self.segment_cursor
                 .move_cursor(self.segment_cursor.current_cursor.min(position));
         }
@@ -261,7 +266,8 @@ impl NextSegmentSelector {
         self.init_status = InitializationSegmentSelectorStatus::Validated(id);
     }
 
-    /// Record media loaded and advance the `NextSegmentSelector` to the next segment.
+    /// Register the corresponding segment as "validated" so it's not proposed again by the
+    /// `NextSegmentSelector` (unless it has since been GCed).
     pub(crate) fn validate_media(
         &mut self,
         playlist_id: MediaPlaylistPermanentId,
@@ -269,7 +275,6 @@ impl NextSegmentSelector {
         start: f64,
         end: f64,
     ) {
-        self.segment_cursor.move_cursor(end);
         self.validated_segments
             .insert(playlist_id, identity, start, end);
     }
@@ -979,6 +984,135 @@ mod tests {
     }
 
     #[test]
+    fn validation_advances_selection_without_observations_or_inventory() {
+        let TopLevelPlaylist::DirectMedia(playlist) = playlist_starting_at(0, 3) else {
+            panic!("expected media playlist");
+        };
+        let list = playlist.playlist().segment_list();
+        let context = SegmentQualityContext::new(1., test_playlist_id(1));
+        let mut selector = NextSegmentSelector::new(0., 30.);
+        for segment in list.media() {
+            // Selection alone must not consume the proposed segment.
+            for _ in 0..2 {
+                assert_eq!(
+                    next_start(&mut selector, list, &context, &[]),
+                    Some(segment.start())
+                );
+            }
+            validate(&mut selector, segment, &context);
+        }
+        assert_eq!(next_start(&mut selector, list, &context, &[]), None);
+    }
+
+    #[test]
+    fn a_later_download_does_not_overwrite_recovery_after_complete_removal() {
+        let TopLevelPlaylist::DirectMedia(playlist) = playlist_starting_at(0, 5) else {
+            panic!("expected media playlist");
+        };
+        let list = playlist.playlist().segment_list();
+        let context = SegmentQualityContext::new(1., test_playlist_id(1));
+        let mut selector = NextSegmentSelector::new(0., 30.);
+        let mut inventory: Vec<_> = list.media()[..4]
+            .iter()
+            .map(|segment| BufferedChunk::new_for_test(segment.start(), segment.end(), context))
+            .collect();
+        for segment in &list.media()[..4] {
+            validate(&mut selector, segment, &context);
+        }
+        selector.check_for_removed_data(&[(0., 16.)]);
+        assert_eq!(
+            next_start(&mut selector, list, &context, &inventory),
+            Some(16.)
+        );
+
+        // The tail disappears while the 16-20s segment is being downloaded.
+        inventory.truncate(2);
+        selector.check_for_removed_data(&[(0., 8.)]);
+        validate(&mut selector, &list.media()[4], &context);
+        inventory.push(BufferedChunk::new_for_test(16., 20., context));
+        for index in [2, 3] {
+            let segment = &list.media()[index];
+            assert_eq!(
+                next_start(&mut selector, list, &context, &inventory),
+                Some(segment.start())
+            );
+            validate(&mut selector, segment, &context);
+        }
+        assert_eq!(next_start(&mut selector, list, &context, &inventory), None);
+    }
+
+    #[test]
+    fn discarded_future_entries_are_revisited_when_the_needed_window_grows() {
+        let TopLevelPlaylist::DirectMedia(playlist) = playlist_starting_at(0, 5) else {
+            panic!("expected media playlist");
+        };
+        let list = playlist.playlist().segment_list();
+        let context = SegmentQualityContext::new(1., test_playlist_id(1));
+        for previously_observed in [false, true] {
+            let mut selector = NextSegmentSelector::new(0., 8.);
+            let mut inventory: Vec<_> = list
+                .media()
+                .iter()
+                .map(|segment| BufferedChunk::new_for_test(segment.start(), segment.end(), context))
+                .collect();
+            for segment in list.media() {
+                validate(&mut selector, segment, &context);
+            }
+            if previously_observed {
+                selector.check_for_removed_data(&[(0., 20.)]);
+            }
+            assert_eq!(next_start(&mut selector, list, &context, &inventory), None);
+            assert_eq!(selector.segment_cursor.current_cursor, 20.);
+
+            inventory.truncate(3);
+            selector.check_for_removed_data(&[(0., 12.)]);
+            assert!(!selector
+                .validated_segments
+                .contains(context.playlist_id(), list.media()[3].identity()));
+            // Validation outside the needed window must not undo the rewind.
+            validate(&mut selector, &list.media()[4], &context);
+            inventory.push(BufferedChunk::new_for_test(16., 20., context));
+            assert_eq!(next_start(&mut selector, list, &context, &inventory), None);
+
+            selector.buffer_goal = 16.;
+            assert_eq!(
+                next_start(&mut selector, list, &context, &inventory),
+                Some(12.)
+            );
+        }
+    }
+
+    #[test]
+    fn skipped_segments_are_rechecked_when_quality_changes_without_buffer_loss() {
+        let TopLevelPlaylist::DirectMedia(playlist) = playlist_starting_at(0, 3) else {
+            panic!("expected media playlist");
+        };
+        let list = playlist.playlist().segment_list();
+        let context = SegmentQualityContext::new(2., test_playlist_id(2));
+        let higher = SegmentQualityContext::new(3., test_playlist_id(3));
+        let lower = SegmentQualityContext::new(1., test_playlist_id(1));
+        let mut selector = NextSegmentSelector::new(0., 20.);
+        let mut inventory = [BufferedChunk::new_for_test(4., 8., higher)];
+        assert_eq!(
+            next_start(&mut selector, list, &context, &inventory),
+            Some(0.)
+        );
+        validate(&mut selector, &list.media()[0], &context);
+        assert_eq!(
+            next_start(&mut selector, list, &context, &inventory),
+            Some(8.)
+        );
+        selector.check_for_removed_data(&[(0., 8.)]);
+
+        inventory[0] = BufferedChunk::new_for_test(4., 8., lower);
+        selector.check_for_removed_data(&[(0., 8.)]);
+        assert_eq!(
+            next_start(&mut selector, list, &context, &inventory),
+            Some(4.)
+        );
+    }
+
+    #[test]
     fn completion_distinguishes_buffer_goal_endlist_and_missing_media() {
         let TopLevelPlaylist::DirectMedia(playlist) = TopLevelPlaylist::parse(
             b"#EXTM3U\n#EXT-X-TARGETDURATION:4\n#EXTINF:4,\n0.m4s\n#EXTINF:4,\n1.m4s\n#EXT-X-ENDLIST\n",
@@ -1343,7 +1477,7 @@ mod tests {
         let mut selector = NextSegmentSelector::new(0., 30.);
         // Establish the playlist before validating media, as during playback.
         selector.most_needed_segment(candidate(list, &context), candidate(list, &context), &[]);
-        for (validated_index, expected_start) in [(5, 24.), (0, 8.)] {
+        for (validated_index, expected_start) in [(5, 8.), (0, 8.)] {
             selector.advance_position(10.);
             validate(&mut selector, &list.media()[validated_index], &context);
             let selected = selector.most_needed_segment(
