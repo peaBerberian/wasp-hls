@@ -57,29 +57,30 @@ pub(super) fn is_stale_segment_request_context(
     match context {
         PendingSegmentRequest::Media {
             quality_context,
-            sequence_number,
+            sequence_info,
             ..
         } => playlist_store.as_ref().is_some_and(|pl_store| {
             pl_store
                 .media_playlist(&quality_context.playlist_id())
-                .is_some_and(|playlist| !playlist.contains_sequence(*sequence_number))
+                .is_some_and(|playlist| !playlist.contains_sequence(sequence_info.sequence()))
         }),
 
         PendingSegmentRequest::Probe {
             requested_media_type,
             probe_segment:
                 ProbeSegmentMetadata {
-                    context: ProbeSegmentContext::Media { sequence, .. },
+                    context: ProbeSegmentContext::Media { sequence_info, .. },
                     ..
                 },
         } => match requested_media_type {
             Some(media_type) => playlist_store.is_some_and(|pl_store| {
                 pl_store.has_loaded_media_playlist(*media_type)
-                    && !pl_store.loaded_playlist_contains_sequence(*media_type, *sequence)
+                    && !pl_store
+                        .loaded_playlist_contains_sequence(*media_type, sequence_info.sequence())
             }),
             None => playlist_store
                 .and_then(|pl_store| pl_store.direct_media_playlist())
-                .is_some_and(|(_, playlist)| !playlist.contains_sequence(*sequence)),
+                .is_some_and(|(_, playlist)| !playlist.contains_sequence(sequence_info.sequence())),
         },
         _ => false,
     }

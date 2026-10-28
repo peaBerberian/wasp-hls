@@ -3,7 +3,8 @@ pub(crate) type SegmentRequestId = u32;
 use std::collections::HashMap;
 
 use crate::{
-    bindings::MediaType, media_element::SegmentQualityContext, playlist_store::ProbeSegmentMetadata,
+    bindings::MediaType, media_element::SegmentQualityContext, parser::PlaylistSequenceInfo,
+    playlist_store::ProbeSegmentMetadata,
 };
 
 /// Simple store util which maps pending async segment operations to an u32
@@ -94,10 +95,8 @@ pub(crate) enum PendingSegmentRequest {
         init_segment_id: Option<f64>,
         /// Additional context required for ABR
         quality_context: SegmentQualityContext,
-        // The media segment sequence number, as infered by the HLS playlist
-        sequence_number: u32,
-        // The media segment discontinuity sequence number, as infered by the HLS playlist
-        discontinuity_sequence: u32,
+        /// Sequence information from the playlist.
+        sequence_info: PlaylistSequenceInfo,
     },
     /// This request concerns a "probe" request: we're loading a segment to know about a media's
     /// characteristics

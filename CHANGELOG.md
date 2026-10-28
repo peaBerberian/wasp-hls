@@ -7,6 +7,10 @@
 - When a non-aligned segment replacement leads to the loss of frames, reload a segment with those instead of skipping over it
 - Set a default track ID when transmuxing raw aac
 
+### Other
+
+- When a pushed segments leads to partial data in the buffer due to a `QuotaExceededError`, re-push that segment to prevent a hole in the buffer
+
 ## v0.6.0 (2026-10-20)
 
 ### Changes

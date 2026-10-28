@@ -222,7 +222,7 @@ mod tests {
         Some(PlaylistRefreshInfo {
             target_duration: 6.,
             last_segment_duration: Some(6.),
-            tail: Some((crate::parser::SegmentIdentity::new(1, 0), 6.)),
+            tail: Some((crate::parser::PlaylistSequenceInfo::new(1, 0), 6.)),
         })
     }
 
@@ -250,13 +250,13 @@ mod tests {
         // No new media: half the target (five seconds), minus request duration.
         CLOCK.with_borrow(|clock| assert_eq!(clock.timers, vec![5000., 4000.]));
 
-        refresh_info.tail = Some((crate::parser::SegmentIdentity::new(2, 0), 6.));
+        refresh_info.tail = Some((crate::parser::PlaylistSequenceInfo::new(2, 0), 6.));
         CLOCK.with_borrow_mut(|clock| clock.now = 12200.);
         manager.on_playlist_loaded(id, Some(refresh_info), 11200.);
         CLOCK.with_borrow(|clock| assert_eq!(clock.timers, vec![5000., 4000., 5000.]));
 
         // A growing final segment also counts as new media, even with the same sequence.
-        refresh_info.tail = Some((crate::parser::SegmentIdentity::new(2, 0), 7.));
+        refresh_info.tail = Some((crate::parser::PlaylistSequenceInfo::new(2, 0), 7.));
         refresh_info.last_segment_duration = Some(7.);
         CLOCK.with_borrow_mut(|clock| clock.now = 18200.);
         manager.on_playlist_loaded(id, Some(refresh_info), 17200.);

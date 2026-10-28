@@ -8,6 +8,7 @@ import initializeWasm, {
   PlaybackTickReason,
   MediaType,
   SegmentParsingErrorCode,
+  PushedSegmentErrorCode,
 } from "../../../build/es6/wasm/js/index.js";
 
 // Keep host callbacks synchronous, like the real WASM bindings. Network and MSE
@@ -16,6 +17,7 @@ async function createProbeHarness({
   audioInit = false,
   singleTrack = false,
   audioDuration = 4,
+  mediaDuration = 12,
   observeBeforeReady = false,
   failAppend,
 } = {}) {
@@ -24,6 +26,7 @@ async function createProbeHarness({
   const resourceUrls = new Map();
   const buffers = new Map();
   const appends = [];
+  const removals = [];
   const offsets = [];
   const errors = [];
   let ended = 0;
@@ -93,6 +96,10 @@ async function createProbeHarness({
           },
         };
       },
+      removeBuffer(bufferId, start, end) {
+        removals.push({ bufferId, start, end });
+        return { value: true };
+      },
       setMediaOffset: (offset) => offsets.push(offset),
       endOfStream() {
         ended++;
@@ -154,7 +161,7 @@ async function createProbeHarness({
           ? `#EXT-X-MAP:URI="${name}-audio-init.mp4"\n`
           : "";
       const segments = Array.from(
-        { length: 12 / duration },
+        { length: mediaDuration / duration },
         (_, index) =>
           `${index * duration === 8 ? "#EXT-X-DISCONTINUITY\n" : ""}#EXTINF:${duration},\n${name}-${type}-${index}.ts\n`,
       ).join("");
@@ -210,6 +217,7 @@ async function createProbeHarness({
     requests,
     resources,
     appends,
+    removals,
     offsets,
     errors,
     buffers,
@@ -235,10 +243,10 @@ it.each([
       if (singleTrack) {
         expect(video.fetches).toContain("https://example.com/first-video-1.ts");
       }
-      expect(ctx.resources.has(videoProbe)).toBe(true);
-      // Init bytes are copied by the synchronous host binding and released as
-      // soon as it returns; media bytes remain owned until append completion.
-      expect(ctx.resources.has(audioProbe)).toBe(!singleTrack && !audioInit);
+      // The host consumes the bytes synchronously. Pending appends must not
+      // keep the original downloaded resources alive.
+      expect(ctx.resources.has(videoProbe)).toBe(false);
+      expect(ctx.resources.has(audioProbe)).toBe(false);
       expect(ctx.offsets).toEqual(audioInit || singleTrack ? [2] : [2, 2]);
       ctx.completeAppends();
       expect(ctx.resources.has(videoProbe)).toBe(false);
@@ -323,3 +331,69 @@ it.each([
     }
   },
 );
+
+it("requests a failed append again after BufferFull cleanup despite old partial coverage", async () => {
+  const ctx = await createProbeHarness({
+    singleTrack: true,
+    mediaDuration: 40,
+  });
+  const observe = (ranges) =>
+    ctx.dispatcher.on_playback_tick(
+      new MediaObservation(
+        PlaybackTickReason.RegularInterval,
+        2,
+        4,
+        new JsTimeRanges(new Float64Array(ranges)),
+        true,
+        false,
+        false,
+        42,
+        undefined,
+        new JsTimeRanges(new Float64Array(ranges)),
+      ),
+    );
+  const requestsFor = (suffix) =>
+    ctx.requests.filter((request) => request.url.endsWith(suffix));
+  try {
+    ctx.start();
+    ctx.completeAppends();
+    for (let index = 1; index < 8; index++) {
+      ctx.finish(`first-video-${index}.ts`);
+      ctx.completeAppends();
+    }
+    observe([2, 34]);
+    ctx.dispatcher.set_buffer_goal(4);
+    // Playlist positions are two seconds earlier than media positions.
+    // The 4-8s segment loses its prefix; its old 6-8s data remains.
+    observe([2, 6, 8, 34]);
+    expect(requestsFor("first-video-1.ts")).toHaveLength(2);
+    ctx.finish("first-video-1.ts");
+    const [bufferId, buffer] = [...ctx.buffers][0];
+    buffer.pending.length = 0;
+    ctx.dispatcher.on_append_buffer_error(
+      bufferId,
+      PushedSegmentErrorCode.BufferFull,
+      new JsTimeRanges(new Float64Array([2, 6, 8, 34])),
+    );
+    expect(ctx.removals).toHaveLength(2);
+    expect(ctx.errors).toEqual([]);
+    // Complete both cleanup removals while keeping the old partial data.
+    for (const removal of ctx.removals) {
+      ctx.dispatcher.on_source_buffer_update(
+        removal.bufferId,
+        new JsTimeRanges(new Float64Array([2, 6, 8, 14])),
+      );
+    }
+    observe([2, 6, 8, 14]);
+    expect(requestsFor("first-video-1.ts")).toHaveLength(3);
+    ctx.finish("first-video-1.ts");
+    ctx.completeAppends();
+    observe([2, 10]);
+    expect(requestsFor("first-video-1.ts")).toHaveLength(3);
+    expect(ctx.errors).toEqual([]);
+    expect(ctx.resources.size).toBe(0);
+  } finally {
+    ctx.dispatcher.stop();
+    ctx.dispatcher.free();
+  }
+});

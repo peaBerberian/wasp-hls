@@ -105,6 +105,12 @@ pub(crate) struct BufferedChunk {
     // but whether supplied data may be loaded again belongs to SegmentLoadingHistory.
     validated: bool,
 
+    /// This chunk is considered "dirty" in this inventory: something happened, like e.g.
+    /// an append failure, or an especially ugly orverlap, making the actual confidence
+    /// of whether that chunk correspond to the anounced data or whether it should be considered
+    /// as a fully-appended segment doubtful.
+    dirty: bool,
+
     /// Indicator of the desirability of the current quality a higher number
     /// meaning a higher quality.
     variant_score: f64,
@@ -136,6 +142,7 @@ impl BufferedChunk {
             last_buffered_end: metadata.end,
             last_buffered_start: metadata.start,
             validated: false,
+            dirty: false,
             precise_start: None,
             precise_end: None,
         }
@@ -176,6 +183,14 @@ impl BufferedChunk {
     /// synchronized it with the actual content of the buffer.
     pub(crate) fn last_buffered_end(&self) -> f64 {
         self.last_buffered_end
+    }
+
+    pub(crate) fn mark_dirty(&mut self) {
+        self.dirty = true;
+    }
+
+    pub(crate) fn is_dirty(&self) -> bool {
+        self.dirty
     }
 
     /// Returns true if the given segment appears to be garbage collected, at least since the
@@ -789,7 +804,8 @@ impl SegmentInventory {
                             playlist_id: seg.playlist_id,
                         },
                     };
-                    let duplicated_after = BufferedChunk::new(duplicated, seg.id);
+                    let mut duplicated_after = BufferedChunk::new(duplicated, seg.id);
+                    duplicated_after.dirty = seg.dirty;
                     seg.end = start;
                     self.inventory
                         .insert(index + 1, BufferedChunk::new(metadata, segment_id));
@@ -888,6 +904,13 @@ impl SegmentInventory {
             })
             .max_by(|a, b| a.0.total_cmp(&b.0))
             .map(|(_, precise_end)| precise_end)
+    }
+
+    /// Mark all remaining pieces of an append as uncertain.
+    pub(super) fn mark_dirty(&mut self, id: u64) {
+        for segment in self.inventory.iter_mut().filter(|segment| segment.id == id) {
+            segment.mark_dirty();
+        }
     }
 
     /// Remove entries for media appends cancelled before they could run.
@@ -1369,6 +1392,48 @@ mod tests {
             .inventory()
             .iter()
             .any(|segment| segment.id == other));
+    }
+
+    #[test]
+    fn failed_append_keeps_partial_data_dirty_until_replaced() {
+        let mut inventory = SegmentInventory::new(MediaType::Video);
+        let previous = inventory.insert_segment(metadata(150., 160.));
+        inventory.reconcile_push_result(previous, &JsTimeRanges::new(vec![150., 160.]), 0., true);
+        let id = inventory.insert_segment(metadata(160., 170.));
+        let ranges = JsTimeRanges::new(vec![150., 160., 167.751, 170.]);
+        inventory.reconcile_push_result(id, &ranges, 0., false);
+        inventory.mark_dirty(id);
+        inventory.synchronize(&ranges, 0.);
+        let chunk = inventory
+            .inventory()
+            .iter()
+            .find(|chunk| chunk.id == id)
+            .unwrap();
+        assert_eq!(chunk.playlist_start(), 160.);
+        assert_eq!(chunk.last_buffered_start(), 167.751);
+        assert_eq!(chunk.last_buffered_end(), 170.);
+        assert!(chunk.is_dirty());
+        assert!(!chunk.appears_garbage_collected(135.));
+
+        let retry = inventory.insert_segment(metadata(160., 170.));
+        inventory.reconcile_push_result(retry, &ranges, 0., true);
+        assert!(inventory.inventory().iter().all(|chunk| !chunk.is_dirty()));
+    }
+
+    #[test]
+    fn splitting_a_dirty_entry_keeps_both_old_pieces_dirty() {
+        let mut inventory = SegmentInventory::new(MediaType::Video);
+        let id = inventory.insert_segment(metadata(0., 12.));
+        inventory.reconcile_push_result(id, &JsTimeRanges::new(vec![0., 12.]), 0., true);
+        inventory.mark_dirty(id);
+        inventory.insert_segment(metadata(4., 8.));
+        assert_eq!(inventory.inventory().len(), 3);
+        let dirty: Vec<_> = inventory
+            .inventory()
+            .iter()
+            .map(|chunk| chunk.is_dirty())
+            .collect();
+        assert_eq!(dirty, vec![true, false, true]);
     }
 
     #[test]

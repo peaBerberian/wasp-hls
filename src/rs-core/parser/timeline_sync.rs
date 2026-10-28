@@ -39,7 +39,7 @@ impl TimelineReference {
             .iter()
             .filter_map(|segment| {
                 Some(TimelineReferencePdtAnchor {
-                    discontinuity_sequence: segment.discontinuity_sequence,
+                    discontinuity_sequence: segment.discontinuity_sequence(),
                     start: segment.start(),
                     program_date_time: segment.program_date_time?,
                 })
@@ -49,13 +49,13 @@ impl TimelineReference {
         let mut discontinuities: Vec<TimelineReferenceDiscontinuity> = Vec::new();
         for segment in media {
             match discontinuities.last_mut() {
-                Some(entry) if entry.discontinuity_sequence == segment.discontinuity_sequence => {
+                Some(entry) if entry.discontinuity_sequence == segment.discontinuity_sequence() => {
                     if entry.program_date_time.is_none() {
                         entry.program_date_time = segment.program_date_time()
                     }
                 }
                 _ => discontinuities.push(TimelineReferenceDiscontinuity {
-                    discontinuity_sequence: segment.discontinuity_sequence,
+                    discontinuity_sequence: segment.discontinuity_sequence(),
                     start: segment.start(),
                     program_date_time: segment.program_date_time(),
                 }),
@@ -64,9 +64,9 @@ impl TimelineReference {
 
         Self {
             uses_program_date_time,
-            first_sequence: media.first().map(|segment| segment.sequence),
+            first_sequence: media.first().map(|segment| segment.sequence()),
             first_start: media.first().map(MediaSegmentInfo::start),
-            last_sequence: media.last().map(|segment| segment.sequence),
+            last_sequence: media.last().map(|segment| segment.sequence()),
             last_end: media.last().map(MediaSegmentInfo::end),
             segment_starts: media.iter().map(MediaSegmentInfo::start).collect(),
             discontinuities,
@@ -130,8 +130,8 @@ impl TimelineReference {
     fn align_by_discontinuity_sequence(&self, media_segments: &[MediaSegmentInfo]) -> Option<f64> {
         let reference_start_cc = self.first_discontinuity_sequence()?;
         let reference_end_cc = self.last_discontinuity_sequence()?;
-        let start_cc = media_segments.first()?.discontinuity_sequence;
-        let end_cc = media_segments.last()?.discontinuity_sequence;
+        let start_cc = media_segments.first()?.discontinuity_sequence();
+        let end_cc = media_segments.last()?.discontinuity_sequence();
         if !(start_cc < reference_end_cc && end_cc > reference_start_cc) {
             return None;
         }
@@ -140,7 +140,7 @@ impl TimelineReference {
         let ref_start = self.discontinuity_start(target_cc)?;
         let seg = media_segments
             .iter()
-            .find(|seg| seg.discontinuity_sequence == target_cc)?;
+            .find(|seg| seg.discontinuity_sequence() == target_cc)?;
         let delta = ref_start - seg.start();
         log_debug!(
             "Parser: aligning playlist using discontinuity sequence {} (diff:{})",
@@ -163,8 +163,8 @@ impl TimelineReference {
 
         let reference_start_cc = self.first_discontinuity_sequence()?;
         let reference_end_cc = self.last_discontinuity_sequence()?;
-        let start_cc = media_segments.first()?.discontinuity_sequence;
-        let end_cc = media_segments.last()?.discontinuity_sequence;
+        let start_cc = media_segments.first()?.discontinuity_sequence();
+        let end_cc = media_segments.last()?.discontinuity_sequence();
         let target_cc = reference_end_cc.min(end_cc);
 
         let (ref_anchor, seg) = if reference_start_cc < target_cc && start_cc < target_cc {
@@ -172,7 +172,7 @@ impl TimelineReference {
                 self.discontinuity_pdt_anchor(target_cc),
                 media_segments
                     .iter()
-                    .find(|seg| seg.discontinuity_sequence == target_cc),
+                    .find(|seg| seg.discontinuity_sequence() == target_cc),
             )
         } else {
             (None, None)
@@ -182,7 +182,7 @@ impl TimelineReference {
         let seg = seg.unwrap_or_else(|| {
             media_segments
                 .iter()
-                .find(|seg| seg.discontinuity_sequence == ref_anchor.discontinuity_sequence)
+                .find(|seg| seg.discontinuity_sequence() == ref_anchor.discontinuity_sequence)
                 .unwrap_or(&media_segments[media_segments.len() / 2])
         });
 
@@ -221,21 +221,21 @@ impl TimelineReference {
         let ref_last_sequence = self.last_sequence?;
         let ref_last_end = self.last_end?;
 
-        if let Some(ref_start) = self.start_for_sequence(new_first.sequence) {
+        if let Some(ref_start) = self.start_for_sequence(new_first.sequence()) {
             let offset = ref_start - new_first.start();
             log_debug!(
                 "Parser: aligning playlist based on media sequence {} (diff:{})",
-                new_first.sequence,
+                new_first.sequence(),
                 offset
             );
             return Some(offset);
         }
 
-        if ref_last_sequence.wrapping_add(1) == new_first.sequence {
+        if ref_last_sequence.wrapping_add(1) == new_first.sequence() {
             let offset = ref_last_end - new_first.start();
             log_debug!(
                 "Parser: aligning playlist based on first/last media sequence {} (diff:{})",
-                new_first.sequence,
+                new_first.sequence(),
                 offset
             );
             return Some(offset);

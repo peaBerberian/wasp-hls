@@ -9,6 +9,7 @@ use super::{
     SourceBufferCreationErrorCode, TimerReason, TrackSelectionErrorCode,
 };
 use crate::{
+    dispatcher::JsMemoryBlob,
     media_element::{PushSegmentError, SegmentHints},
     parser::{
         MediaPlaylistParsingError, MediaPlaylistUpdateError, MultivariantPlaylistParsingError,
@@ -341,6 +342,8 @@ pub fn jsInspectSegment(
 }
 
 /// Append media data to the given SourceBuffer.
+/// The host prepares or copies the data before returning. This function consumes
+/// the original resource and frees it without waiting for append completion.
 ///
 /// This process is asynchronous, meaning that the data might not be appended
 /// directly after calling `jsAppendBuffer`.
@@ -359,9 +362,10 @@ pub fn jsInspectSegment(
 /// SourceBuffer is not usable anymore.
 pub fn jsAppendBuffer(
     source_buffer_id: SourceBufferId,
-    segment_id: ResourceId,
+    segment: JsMemoryBlob,
     segment_hints: &SegmentHints,
 ) -> Result<Option<ParsedSegmentInfo>, (SegmentParsingErrorCode, Option<String>)> {
+    let segment_id = segment.id();
     let mut has_start = 0;
     let mut start_value_hi = 0;
     let mut start_value_lo = 0;

@@ -18,7 +18,7 @@ pub(crate) use multi_variant_playlist::{
     MediaPlaylistPermanentId, MediaPlaylistUpdateError, MultivariantPlaylistParsingError,
 };
 pub(crate) use segment_list::{
-    InitSegmentInfo, MediaSegmentInfo, SegmentIdentity, SegmentList, SegmentTimeInfo,
+    InitSegmentInfo, MediaSegmentInfo, PlaylistSequenceInfo, SegmentList, SegmentTimeInfo,
 };
 pub(crate) use top_level_playlist::{
     ExternalMediaInfo, TopLevelPlaylist, TopLevelPlaylistParsingError,

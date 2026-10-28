@@ -2,7 +2,9 @@ use super::{
     attribute_list::{parse_enumerated_string, AttributeListIter},
     multi_variant_playlist::MediaPlaylistContext,
     playlist_lines::read_playlist_line,
-    segment_list::{InitSegmentInfo, MediaSegmentInfo, SegmentList, SegmentTimeInfo},
+    segment_list::{
+        InitSegmentInfo, MediaSegmentInfo, PlaylistSequenceInfo, SegmentList, SegmentTimeInfo,
+    },
     timeline_sync::TimelineReference,
     top_level_playlist::ExternalMediaInfo,
     top_level_playlist::{
@@ -47,7 +49,7 @@ pub(crate) struct PlaylistRefreshInfo {
 
     /// Identity of the last declared segment
     /// If two iterations of a given media playlist have the same tail, it hadn't updated
-    pub(crate) tail: Option<(super::SegmentIdentity, f64)>,
+    pub(crate) tail: Option<(super::PlaylistSequenceInfo, f64)>,
 }
 
 /// Errors that may arise when parsing a Media Playlist
@@ -386,8 +388,7 @@ impl MediaPlaylist {
                         discontinuity_sequence.wrapping_add(pending_discontinuities);
                     pending_discontinuities = 0;
                     let seg = MediaSegmentInfo {
-                        sequence: 0,
-                        discontinuity_sequence,
+                        sequence_info: PlaylistSequenceInfo::new(0, discontinuity_sequence),
                         time_info: SegmentTimeInfo::new(curr_start_time, duration),
                         program_date_time: curr_program_date_time,
                         byte_range: next_segment_byte_range,
@@ -411,7 +412,10 @@ impl MediaPlaylist {
                         });
                     }
                     media_segments.push(MediaSegmentInfo {
-                        sequence: media_sequence + media_segments.len() as u32,
+                        sequence_info: PlaylistSequenceInfo::new(
+                            media_sequence + media_segments.len() as u32,
+                            discontinuity_sequence,
+                        ),
                         ..seg
                     });
                     curr_start_time += duration;
@@ -542,7 +546,7 @@ impl MediaPlaylist {
                 .segment_list
                 .media()
                 .last()
-                .map(|segment| (segment.identity(), segment.duration())),
+                .map(|segment| (segment.sequence_info(), segment.duration())),
         })
     }
 
@@ -712,8 +716,8 @@ fn infer_live_timeline_offset(
     if let Some(prev_playlist) = prev_playlist {
         for new_seg in media_segments {
             if let Some(prev_seg) = prev_playlist.segment_list.media.iter().find(|prev_seg| {
-                prev_seg.sequence == new_seg.sequence
-                    && prev_seg.discontinuity_sequence == new_seg.discontinuity_sequence
+                prev_seg.sequence() == new_seg.sequence()
+                    && prev_seg.discontinuity_sequence() == new_seg.discontinuity_sequence()
                     && urls_match_for_reload(&prev_seg.url, &new_seg.url)
             }) {
                 return Some((
@@ -728,8 +732,8 @@ fn infer_live_timeline_offset(
             media_segments.first(),
         ) {
             (Some(prev_last), Some(new_first))
-                if prev_last.sequence.wrapping_add(1) == new_first.sequence
-                    && prev_last.discontinuity_sequence == new_first.discontinuity_sequence =>
+                if prev_last.sequence().wrapping_add(1) == new_first.sequence()
+                    && prev_last.discontinuity_sequence() == new_first.discontinuity_sequence() =>
             {
                 return Some((
                     prev_last.end() - new_first.start(),
@@ -1291,7 +1295,7 @@ seg-92.m4s
         assert_eq!(info.last_segment_duration, Some(2.98667));
         assert_eq!(
             info.tail,
-            Some((super::super::SegmentIdentity::new(92, 0), 0.))
+            Some((super::super::PlaylistSequenceInfo::new(92, 0), 0.))
         );
     }
 }

@@ -1,5 +1,6 @@
 use std::collections::VecDeque;
 
+use super::MediaAppendInfo;
 use crate::bindings::{
     jsAddSourceBuffer, jsAppendBuffer, jsFlush, jsRemoveBuffer, AddSourceBufferErrorCode,
     MediaType, ParsedSegmentInfo, ResourceId, SegmentParsingErrorCode, SourceBufferId,
@@ -12,7 +13,7 @@ use crate::utils::logger::*;
 /// The failed operation and media appends cancelled before they could run.
 pub(super) struct CancelledOperations {
     pub(super) current: Option<SourceBufferQueueElement>,
-    pub(super) cancelled_media_ids: Vec<u64>,
+    pub(super) cancelled_media: Vec<MediaAppendInfo>,
 }
 
 /// Abstraction over the Media Source Extension's `SourceBuffer` concept.
@@ -151,7 +152,7 @@ impl SourceBuffer {
             self.id,
             self.typ
         );
-        match jsAppendBuffer(self.id, segment_data.id(), &SegmentHints::new(0, 1, true)) {
+        match jsAppendBuffer(self.id, segment_data, &SegmentHints::new(0, 1, true)) {
             Err(err) => Err(PushSegmentError::from_js_append_buffer_error(
                 self.media_type,
                 err,
@@ -178,10 +179,13 @@ impl SourceBuffer {
         data: PreparedPushData,
     ) -> Result<AppendBufferResponse, PushSegmentError> {
         self.was_used = true;
-        let sequence_number = data.sequence_number;
-        let segment_data = data.segment_data.id();
+        let sequence_number = data.append_info.sequence_info.sequence();
         let segment_time_info = data.time_info.clone();
-        let media_sequence_identity = data.media_sequence_identity;
+        let media_sequence_identity = MediaSequenceIdentity::new(
+            data.append_info.playlist_id,
+            data.append_info.sequence_info.discontinuity_sequence(),
+            data.init_segment_id,
+        );
         let should_reset_transmuxer = should_reset_transmuxer(
             self.last_pushed_segment_info
                 .as_ref()
@@ -205,16 +209,15 @@ impl SourceBuffer {
         );
         self.reset_transmuxer_on_next_segment = false;
 
-        let id = data.id;
         log_debug!(
             "Buffer {} ({}): Pushing seq {}",
             self.id,
             self.typ,
-            data.sequence_number
+            sequence_number
         );
         self.queue
-            .push_back(SourceBufferQueueElement::PushMedia { data, id });
-        let parsed = match jsAppendBuffer(self.id, segment_data, &segment_hints) {
+            .push_back(SourceBufferQueueElement::PushMedia(data.append_info));
+        let parsed = match jsAppendBuffer(self.id, data.segment_data, &segment_hints) {
             Err(err) => {
                 return Err(PushSegmentError::from_js_append_buffer_error(
                     self.media_type,
@@ -294,18 +297,19 @@ impl SourceBuffer {
     /// success-oriented side effects such as reflushes.
     pub(super) fn cancel_current_operations(&mut self) -> CancelledOperations {
         let current = self.queue.pop_front();
-        let cancelled_media_ids = self
+        let cancelled_media = self
             .queue
             .iter()
             .filter_map(|operation| match operation {
-                SourceBufferQueueElement::PushMedia { id, .. } => Some(*id),
+                SourceBufferQueueElement::PushMedia(info) => Some(*info),
                 _ => None,
             })
             .collect();
+        // A failed append does not by itself require a transmuxer reset.
         self.clear_queue();
         CancelledOperations {
             current,
-            cancelled_media_ids,
+            cancelled_media,
         }
     }
 
@@ -328,7 +332,7 @@ impl SourceBuffer {
                 self.needs_reflush = true;
                 jsFlush();
             }
-            Some(SourceBufferQueueElement::PushMedia { .. }) if self.needs_reflush => {
+            Some(SourceBufferQueueElement::PushMedia(_)) if self.needs_reflush => {
                 self.needs_reflush = false;
                 jsFlush();
             }
@@ -340,11 +344,7 @@ impl SourceBuffer {
 
 /// Structure describing a media segment that should be pushed to the SourceBuffer.
 pub(crate) struct PreparedPushData {
-    /// Identifier used to identify the pushed segment in question.
-    ///
-    /// It can be useful for example to easily detect which segment has succesfully been pushed or
-    /// caused an issue.
-    pub(super) id: u64,
+    pub(super) append_info: MediaAppendInfo,
 
     /// Raw data of the segment to push.
     pub(super) segment_data: JsMemoryBlob,
@@ -352,19 +352,11 @@ pub(crate) struct PreparedPushData {
     /// Time information for that segment as sourced from the media playlist.
     pub(super) time_info: SegmentTimeInfo,
 
-    /// Media sequence number associated with this segment. Used to detect contiguous/non-contiguous
-    /// segments.
-    pub(super) sequence_number: u32,
-
-    /// Discontinuity sequence (from the HLS playlist) associated with this segment.
-    /// Used to detect contiguous/non-contiguous segments or state reset from previous segment.
-    pub(super) discontinuity_sequence: u32,
+    /// Initialization segment used for continuity checks.
+    pub(super) init_segment_id: Option<f64>,
 
     /// Optional precise timing anchor to align this append against an already buffered segment.
     pub(super) base_dts_hint: Option<TimescaledTimestamp>,
-
-    /// Identity of the media sequence this append belongs to.
-    pub(super) media_sequence_identity: MediaSequenceIdentity,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -444,10 +436,8 @@ pub(crate) enum SourceBufferQueueElement {
     /// A new initialization segment needs to be pushed.
     PushInit(ResourceId),
 
-    /// A new chunk of media data needs to be pushed.
-    /// The `u64` is the corresponding `id` of the given `PreparedPushData` when the
-    /// `push_media_segment` method was called.
-    PushMedia { data: PreparedPushData, id: u64 },
+    /// Metadata kept until a media append finishes.
+    PushMedia(MediaAppendInfo),
 
     /// Some already-buffered needs to be removed, `start` and `end` giving the
     /// time range of the data to remove, in seconds.

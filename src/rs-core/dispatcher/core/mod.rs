@@ -17,7 +17,7 @@ use crate::{
     },
     dispatcher::segment_request_contexts::PendingSegmentRequest,
     media_element::SegmentPushMetadata,
-    parser::{PlaylistRefreshInfo, SegmentIdentity},
+    parser::PlaylistRefreshInfo,
     playlist_store::{
         AudioTrackChange, LockVariantResponse, MediaPlaylistPermanentId, PlaylistStore,
         ProbeSegmentMetadata, SetAudioTrackResponse,
@@ -427,7 +427,7 @@ impl Dispatcher {
         buffered: JsTimeRanges,
     ) {
         self.media_element_ref
-            .on_source_buffer_update(source_buffer_id, buffered, true);
+            .on_source_buffer_update(source_buffer_id, buffered);
         // More playable data does not necessarily cause a media-element event.
         // Request an observation now if it means we could go out of rebuffering faster
         if self.media_element_ref.is_rebuffering() {
@@ -442,11 +442,17 @@ impl Dispatcher {
         code: PushedSegmentErrorCode,
         buffered: JsTimeRanges,
     ) {
-        self.media_element_ref
-            .on_source_buffer_update(source_buffer_id, buffered, false);
+        let cancelled_media = self
+            .media_element_ref
+            .on_source_buffer_failure(source_buffer_id, buffered);
 
         match self.media_element_ref.media_type_for(source_buffer_id) {
             Some(mt) => {
+                for info in cancelled_media {
+                    self.segment_selectors
+                        .get_mut(mt)
+                        .invalidate_media(info.playlist_id, info.sequence_info);
+                }
                 if code == PushedSegmentErrorCode::BufferFull {
                     let wanted_pos = self.media_element_ref.wanted_position();
                     let min_pos = if wanted_pos < 10. {
@@ -507,7 +513,7 @@ impl Dispatcher {
         buffered: JsTimeRanges,
     ) {
         self.media_element_ref
-            .on_source_buffer_update(source_buffer_id, buffered, false);
+            .on_source_buffer_failure(source_buffer_id, buffered);
         match self.media_element_ref.media_type_for(source_buffer_id) {
             Some(mt) => {
                 let message =
@@ -1266,9 +1272,8 @@ impl Dispatcher {
                     media_type,
                     init_segment_id,
                     time_info: media.time_info().clone(),
+                    sequence_info: media.sequence_info(),
                     context: quality_context,
-                    sequence_number: media.sequence(),
-                    discontinuity_sequence: media.discontinuity_sequence(),
                 });
                 return;
             }
@@ -1279,8 +1284,7 @@ impl Dispatcher {
                     media_type,
                     init_segment_id,
                     quality_context,
-                    sequence_number: media.sequence(),
-                    discontinuity_sequence: media.discontinuity_sequence(),
+                    sequence_info: media.sequence_info(),
                 });
             self.requester
                 .request_media_segment(media_type, &media, req_id);
@@ -1400,8 +1404,7 @@ impl Dispatcher {
                 media_type: req_media_type,
                 init_segment_id,
                 quality_context,
-                sequence_number,
-                discontinuity_sequence,
+                sequence_info,
                 ..
             } => {
                 let time_info = segment_req
@@ -1416,9 +1419,8 @@ impl Dispatcher {
                     media_type: req_media_type,
                     init_segment_id,
                     time_info,
+                    sequence_info,
                     context: quality_context,
-                    sequence_number,
-                    discontinuity_sequence,
                 });
             }
             PendingSegmentRequest::Init {
@@ -1458,8 +1460,7 @@ impl Dispatcher {
         let segment_end = push_md.time_info.end();
         let media_type = push_md.media_type;
         let playlist_id = push_md.context.playlist_id();
-        let identity =
-            SegmentIdentity::new(push_md.sequence_number, push_md.discontinuity_sequence);
+        let identity = push_md.sequence_info;
         let prepared_data = self
             .media_element_ref
             .announce_incoming_media_segment(push_md);
@@ -1638,6 +1639,7 @@ mod tests {
     use crate::{
         bindings::MediaType,
         dispatcher::{JsTimeRanges, MediaObservation, PlaybackTickReason},
+        parser::PlaylistSequenceInfo,
         playlist_store::PlaylistStore,
         utils::url::Url,
     };
@@ -2007,8 +2009,7 @@ video.m3u8
                     media_type: MediaType::Audio,
                     init_segment_id: None,
                     quality_context,
-                    sequence_number: old_audio.sequence(),
-                    discontinuity_sequence: old_audio.discontinuity_sequence(),
+                    sequence_info: old_audio.sequence_info(),
                 },
             );
             dispatcher
@@ -2453,8 +2454,7 @@ video.m3u8
             quality_context: pl_store
                 .variant_segment_quality_context(ids[1], MediaType::Video)
                 .unwrap(),
-            sequence_number: 100,
-            discontinuity_sequence: 0,
+            sequence_info: PlaylistSequenceInfo::new(100, 0),
         };
         assert!(!crate::dispatcher::utils::is_stale_segment_request_context(
             Some(pl_store),

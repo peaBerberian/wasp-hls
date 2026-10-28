@@ -6,12 +6,12 @@ use crate::bindings::{
     AttachMediaSourceErrorCode, MediaType, SourceBufferId, TimescaledTimestamp,
 };
 use crate::dispatcher::{JsMemoryBlob, JsTimeRanges, MediaObservation, MediaSourceReadyState};
-use crate::parser::SegmentTimeInfo;
+use crate::parser::{MediaPlaylistPermanentId, PlaylistSequenceInfo, SegmentTimeInfo};
 use crate::utils::logger::*;
 pub(crate) use source_buffers::{PushSegmentError, RemoveDataError};
 
 pub(crate) use self::segment_inventory::{BufferedChunk, SegmentQualityContext};
-pub(crate) use source_buffers::{MediaSequenceIdentity, PreparedPushData, SegmentHints};
+pub(crate) use source_buffers::{PreparedPushData, SegmentHints};
 
 mod segment_inventory;
 mod source_buffers;
@@ -360,20 +360,19 @@ impl MediaElementReference {
         &mut self,
         md: SegmentPushMetadata,
     ) -> PreparedPushData {
-        let dts_hint =
-            self.infer_probable_base_dts(md.media_type, &md.time_info, md.discontinuity_sequence);
+        let dts_hint = self.infer_probable_base_dts(
+            md.media_type,
+            &md.time_info,
+            md.sequence_info.discontinuity_sequence(),
+        );
         let metadata_start = md.time_info.start();
         let metadata_end = md.time_info.end();
-        let media_sequence_identity = MediaSequenceIdentity::new(
-            md.context.playlist_id(),
-            md.discontinuity_sequence,
-            md.init_segment_id,
-        );
+        let playlist_id = md.context.playlist_id();
         let inventory_metadata = BufferedSegmentMetadata {
             start: metadata_start,
             end: metadata_end,
             context: md.context,
-            discontinuity_sequence: md.discontinuity_sequence,
+            discontinuity_sequence: md.sequence_info.discontinuity_sequence(),
             playlist_start: metadata_start,
             playlist_end: metadata_end,
         };
@@ -382,13 +381,15 @@ impl MediaElementReference {
             MediaType::Video => self.video_inventory.insert_segment(inventory_metadata),
         };
         PreparedPushData {
-            id,
+            append_info: MediaAppendInfo {
+                inventory_id: id,
+                playlist_id,
+                sequence_info: md.sequence_info,
+            },
             segment_data: md.data,
             time_info: md.time_info,
             base_dts_hint: dts_hint,
-            media_sequence_identity,
-            sequence_number: md.sequence_number,
-            discontinuity_sequence: md.discontinuity_sequence,
+            init_segment_id: md.init_segment_id,
         }
     }
 
@@ -412,7 +413,7 @@ impl MediaElementReference {
 
             Some(sb) => {
                 let metadata_start = metadata.time_info.start();
-                let seg_id = metadata.id;
+                let seg_id = metadata.append_info.inventory_id;
                 let response = sb.push_media_segment(metadata)?;
                 match media_type {
                     MediaType::Audio => self.audio_inventory.update_precise_timing(
@@ -600,63 +601,76 @@ impl MediaElementReference {
         self.check_end_of_stream();
     }
 
-    /// Callback that should be called once one of the `SourceBuffer` linked to this
-    /// `MediaElementReference` has "updated" (meaning: one of its operation has ended).
+    /// Callback for a successfully completed buffer operation.
     pub(crate) fn on_source_buffer_update(
         &mut self,
         source_buffer_id: SourceBufferId,
         buffered: JsTimeRanges,
-        success: bool,
     ) {
-        if let Some(ref mut sb) = self.audio_buffer {
-            if sb.id() == source_buffer_id {
-                let queue_elt = if success {
-                    sb.on_operation_end()
-                } else {
-                    // Completion assumed the queued appends would succeed. A failure cancels
-                    // the remaining operations, so that decision can no longer be trusted.
-                    sb.set_end_when_done(false);
-                    let cancelled = sb.cancel_current_operations();
-                    self.audio_inventory
-                        .discard_pending(&cancelled.cancelled_media_ids);
-                    cancelled.current
-                };
-                if let Some(SourceBufferQueueElement::PushMedia { id, .. }) = queue_elt {
-                    if let Some(media_offset) = self.media_offset {
-                        self.audio_inventory.reconcile_push_result(
-                            id,
-                            &buffered,
-                            media_offset,
-                            success,
-                        );
-                    }
-                }
-            }
-        }
-        if let Some(ref mut sb) = self.video_buffer {
-            if sb.id() == source_buffer_id {
-                let queue_elt = if success {
-                    sb.on_operation_end()
-                } else {
-                    sb.set_end_when_done(false);
-                    let cancelled = sb.cancel_current_operations();
-                    self.video_inventory
-                        .discard_pending(&cancelled.cancelled_media_ids);
-                    cancelled.current
-                };
-                if let Some(SourceBufferQueueElement::PushMedia { id, .. }) = queue_elt {
-                    if let Some(media_offset) = self.media_offset {
-                        self.video_inventory.reconcile_push_result(
-                            id,
-                            &buffered,
-                            media_offset,
-                            success,
-                        );
-                    }
+        let media_offset = self.media_offset;
+        if let Some(media_type) = self.media_type_for(source_buffer_id) {
+            let operation = self
+                .buffer_mut_for(media_type)
+                .and_then(|sb| sb.on_operation_end());
+            if let Some(SourceBufferQueueElement::PushMedia(info)) = operation {
+                if let Some(media_offset) = media_offset {
+                    let inventory = match media_type {
+                        MediaType::Audio => &mut self.audio_inventory,
+                        MediaType::Video => &mut self.video_inventory,
+                    };
+                    inventory.reconcile_push_result(
+                        info.inventory_id,
+                        &buffered,
+                        media_offset,
+                        true,
+                    );
                 }
             }
         }
         self.check_end_of_stream();
+    }
+
+    /// Reconcile a failed operation and return the affected media segment identities.
+    pub(crate) fn on_source_buffer_failure(
+        &mut self,
+        source_buffer_id: SourceBufferId,
+        buffered: JsTimeRanges,
+    ) -> Vec<MediaAppendInfo> {
+        let media_offset = self.media_offset;
+        let mut affected_media = Vec::new();
+        if let Some(media_type) = self.media_type_for(source_buffer_id) {
+            let cancelled = self.buffer_mut_for(media_type).map(|sb| {
+                sb.set_end_when_done(false);
+                sb.cancel_current_operations()
+            });
+            if let Some(cancelled) = cancelled {
+                let inventory = match media_type {
+                    MediaType::Audio => &mut self.audio_inventory,
+                    MediaType::Video => &mut self.video_inventory,
+                };
+                let ids: Vec<_> = cancelled
+                    .cancelled_media
+                    .iter()
+                    .map(|info| info.inventory_id)
+                    .collect();
+                inventory.discard_pending(&ids);
+                if let Some(SourceBufferQueueElement::PushMedia(info)) = cancelled.current {
+                    if let Some(media_offset) = media_offset {
+                        inventory.reconcile_push_result(
+                            info.inventory_id,
+                            &buffered,
+                            media_offset,
+                            false,
+                        );
+                    }
+                    inventory.mark_dirty(info.inventory_id);
+                    affected_media.push(info);
+                }
+                affected_media.extend(cancelled.cancelled_media);
+            }
+        }
+        self.check_end_of_stream();
+        affected_media
     }
 
     /// Method to call if a `SourceBuffer`'s creation asynchronously failed.
@@ -1233,14 +1247,18 @@ pub(crate) struct SegmentPushMetadata {
     /// Time information for that segment as sourced from the media playlist.
     pub(crate) time_info: SegmentTimeInfo,
 
-    /// Media sequence number associated with this segment. Used to detect contiguous/non-contiguous
-    /// segments.
-    pub(crate) sequence_number: u32,
-
-    /// Discontinuity sequence (from the HLS playlist) associated with this segment.
-    /// Used to detect contiguous/non-contiguous segments or state reset from previous segment.
-    pub(super) discontinuity_sequence: u32,
+    /// Sequence information from the playlist.
+    pub(crate) sequence_info: PlaylistSequenceInfo,
 
     /// Context from the rendition this segment is attached to
     pub(crate) context: SegmentQualityContext,
+}
+
+/// Information kept until a media append finishes. Does not own segment bytes.
+#[derive(Clone, Copy)]
+pub(crate) struct MediaAppendInfo {
+    /// ID of the inventory entry for this append.
+    pub(crate) inventory_id: u64,
+    pub(crate) playlist_id: MediaPlaylistPermanentId,
+    pub(crate) sequence_info: PlaylistSequenceInfo,
 }

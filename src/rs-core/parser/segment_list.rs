@@ -97,32 +97,36 @@ impl InitSegmentInfo {
     }
 }
 
-/// Identity of a media segment within one media playlist lineage, independently of timestamps.
-/// Compare it alongside the playlist's media ID when identifying media across playlists.
+/// Sequence and discontinuity numbers of a segment in its playlist.
+/// It can identify a segment when also compared with the playlist's ID.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) struct SegmentIdentity {
+pub(crate) struct PlaylistSequenceInfo {
     sequence: u32,
     discontinuity_sequence: u32,
 }
 
-impl SegmentIdentity {
+impl PlaylistSequenceInfo {
     pub(crate) fn new(sequence: u32, discontinuity_sequence: u32) -> Self {
         Self {
             sequence,
             discontinuity_sequence,
         }
     }
+
+    pub(crate) fn sequence(&self) -> u32 {
+        self.sequence
+    }
+
+    pub(crate) fn discontinuity_sequence(&self) -> u32 {
+        self.discontinuity_sequence
+    }
 }
 
 /// Information linked to a single media segment.
 #[derive(Clone, Debug)]
 pub(crate) struct MediaSegmentInfo {
-    /// Media sequence number identifying this segment within the current playlist lineage.
-    /// TODO: Do we associate that one to **every segment** compated to a single base sequence
-    /// number? Seems unnecessary...
-    pub(super) sequence: u32,
-    /// Discontinuity sequence number identifying the timeline continuity context of the segment.
-    pub(super) discontinuity_sequence: u32,
+    /// Sequence information from the playlist.
+    pub(super) sequence_info: PlaylistSequenceInfo,
     /// Information on the time boundaries of that segment.
     ///
     /// It should be exclusive to the time boundaries of all other segments in this Media Playlist.
@@ -138,18 +142,18 @@ pub(crate) struct MediaSegmentInfo {
 }
 
 impl MediaSegmentInfo {
-    pub(crate) fn identity(&self) -> SegmentIdentity {
-        SegmentIdentity::new(self.sequence, self.discontinuity_sequence)
+    pub(crate) fn sequence_info(&self) -> PlaylistSequenceInfo {
+        self.sequence_info
     }
 
     /// Media sequence number identifying this segment within the current playlist lineage.
     pub(crate) fn sequence(&self) -> u32 {
-        self.sequence
+        self.sequence_info.sequence()
     }
 
     /// Discontinuity sequence number identifying the timeline continuity context of the segment.
     pub(crate) fn discontinuity_sequence(&self) -> u32 {
-        self.discontinuity_sequence
+        self.sequence_info.discontinuity_sequence()
     }
 
     /// First presentation time the segment contains media data for, in seconds.

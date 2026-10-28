@@ -2,8 +2,8 @@ use crate::{
     bindings::MediaType,
     media_element::{BufferedChunk, SegmentQualityContext},
     parser::{
-        InitSegmentInfo, MediaPlaylistPermanentId, MediaSegmentInfo, SegmentIdentity, SegmentList,
-        SegmentTimeInfo,
+        InitSegmentInfo, MediaPlaylistPermanentId, MediaSegmentInfo, PlaylistSequenceInfo,
+        SegmentList, SegmentTimeInfo,
     },
     utils::logger::*,
 };
@@ -271,12 +271,24 @@ impl NextSegmentSelector {
     pub(crate) fn validate_media(
         &mut self,
         playlist_id: MediaPlaylistPermanentId,
-        identity: SegmentIdentity,
+        sequence_info: PlaylistSequenceInfo,
         start: f64,
         end: f64,
     ) {
         self.validated_segments
-            .insert(playlist_id, identity, start, end);
+            .insert(playlist_id, sequence_info, start, end);
+    }
+
+    /// Remove the segment's validation and move the cursor back to reconsider it.
+    pub(crate) fn invalidate_media(
+        &mut self,
+        playlist_id: MediaPlaylistPermanentId,
+        sequence_info: PlaylistSequenceInfo,
+    ) {
+        if let Some(start) = self.validated_segments.remove(playlist_id, sequence_info) {
+            self.segment_cursor
+                .move_cursor(self.segment_cursor.current_cursor.min(start));
+        }
     }
 
     /// Returns the current most needed segment(s) according to the current situation and to the
@@ -389,7 +401,7 @@ impl NextSegmentSelector {
                                 || segment.end() <= self.base_pos
                                 || !self.validated_segments.needs_loading(
                                     selected_playlist_id,
-                                    segment.identity(),
+                                    segment.sequence_info(),
                                     self.base_pos,
                                 )
                                 || self.can_be_skipped(
@@ -446,6 +458,7 @@ impl NextSegmentSelector {
         let maximum_position = self.base_pos + self.buffer_goal;
         for chunk in &inventory[first_index..] {
             if chunk.playlist_start() > previous_end + 0.001
+                || chunk.is_dirty()
                 || chunk.appears_garbage_collected(previous_end)
             {
                 break;
@@ -492,7 +505,7 @@ impl NextSegmentSelector {
         segment: &MediaSegmentInfo,
     ) -> bool {
         self.validated_segments
-            .contains(playlist_id, segment.identity())
+            .contains(playlist_id, segment.sequence_info())
     }
 
     /// Find where additions should resume, based on continuous inventory coverage.
@@ -509,6 +522,7 @@ impl NextSegmentSelector {
         let mut prev_end = start;
         while let Some(segment) = inventory.get(curr_idx) {
             if segment.playlist_start() > (prev_end + 0.001)
+                || segment.is_dirty()
                 || segment.appears_garbage_collected(prev_end)
             {
                 log_debug!(
@@ -575,7 +589,7 @@ impl NextSegmentSelector {
         // detected removed data and allowed another attempt.
         if !self.validated_segments.needs_loading(
             context.playlist_id(),
-            si.identity(),
+            si.sequence_info(),
             self.base_pos,
         ) {
             self.segment_cursor.move_cursor(segment_end);
@@ -629,7 +643,8 @@ impl NextSegmentSelector {
         if let Some(mut curr_idx) = first_seg_pos {
             let mut prev_seg_end = start;
             while let Some(mut curr_seg) = inventory.get(curr_idx) {
-                if curr_seg.appears_garbage_collected(self.base_pos)
+                if curr_seg.is_dirty()
+                    || curr_seg.appears_garbage_collected(self.base_pos)
                     || curr_seg.is_worse_than(context)
                     || curr_seg.playlist_start() > (prev_seg_end + 0.05)
                 {
@@ -873,7 +888,7 @@ mod tests {
     ) {
         selector.validate_media(
             context.playlist_id(),
-            segment.identity(),
+            segment.sequence_info(),
             segment.start(),
             segment.end(),
         );
@@ -907,6 +922,50 @@ mod tests {
             )
             .needed_segments
             .map(|needed| needed.media_segment.unwrap().0.start())
+    }
+
+    #[test]
+    fn cancelled_appends_are_retried_after_cleanup_without_forgetting_other_attempts() {
+        let TopLevelPlaylist::DirectMedia(playlist) = playlist_starting_at(0, 5) else {
+            panic!("expected media playlist");
+        };
+        let list = playlist.playlist().segment_list();
+        let context = SegmentQualityContext::new(1., test_playlist_id(1));
+        let mut selector = NextSegmentSelector::new(0., 30.);
+        for segment in &list.media()[..4] {
+            validate(&mut selector, segment, &context);
+        }
+        selector.check_for_removed_data(&[(0., 8.), (10., 12.)]);
+        // 8-12s failed, and the queued 12-16s append was cancelled. The
+        // inventory keeps the failed append as dirty; old data remains at 10-12s.
+        let mut inventory: Vec<_> = list.media()[..3]
+            .iter()
+            .map(|segment| BufferedChunk::new_for_test(segment.start(), segment.end(), context))
+            .collect();
+        inventory[2].mark_dirty();
+        assert!(!selector.can_be_skipped(8., 12., &context, &inventory));
+        for segment in &list.media()[2..4] {
+            selector.invalidate_media(context.playlist_id(), segment.sequence_info());
+        }
+        selector.restart_from_position(0.);
+        selector.check_for_removed_data(&[(0., 8.), (10., 12.)]);
+        for segment in &list.media()[2..4] {
+            assert_eq!(
+                next_start(&mut selector, list, &context, &inventory),
+                Some(segment.start())
+            );
+            validate(&mut selector, segment, &context);
+            if segment.start() == 8. {
+                inventory[2] = BufferedChunk::new_for_test(8., 12., context);
+            }
+        }
+        // A successful retry with the same partial result must not loop.
+        selector.check_for_removed_data(&[(0., 8.), (10., 16.)]);
+        selector.restart_from_position(0.);
+        assert_eq!(
+            next_start(&mut selector, list, &context, &inventory),
+            Some(16.)
+        );
     }
 
     #[test]
@@ -1068,7 +1127,7 @@ mod tests {
             selector.check_for_removed_data(&[(0., 12.)]);
             assert!(!selector
                 .validated_segments
-                .contains(context.playlist_id(), list.media()[3].identity()));
+                .contains(context.playlist_id(), list.media()[3].sequence_info()));
             // Validation outside the needed window must not undo the rewind.
             validate(&mut selector, &list.media()[4], &context);
             inventory.push(BufferedChunk::new_for_test(16., 20., context));

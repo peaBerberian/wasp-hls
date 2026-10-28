@@ -11,8 +11,8 @@ use crate::{
 };
 use std::{collections::HashMap, io::BufRead};
 
-use crate::parser::ByteRange;
 pub(crate) use crate::parser::MediaPlaylistPermanentId;
+use crate::parser::{ByteRange, PlaylistSequenceInfo};
 
 /// Stores information about the current loaded Multivariant Playlist and its sub-playlists:
 ///   - Information on the Multivariant Playlist itself.
@@ -975,8 +975,7 @@ impl PlaylistStore {
                 url: media_segment.url().clone(),
                 byte_range: media_segment.byte_range().cloned(),
                 context: ProbeSegmentContext::Media {
-                    sequence: media_segment.sequence(),
-                    discontinuity_sequence: media_segment.discontinuity_sequence(),
+                    sequence_info: media_segment.sequence_info(),
                     time_info: media_segment.time_info().clone(),
                 },
             })
@@ -1205,10 +1204,8 @@ pub(crate) enum ProbeSegmentContext {
     Init { id: f64 },
     /// This probe segment is a full valid Media segment
     Media {
-        /// Sequence number identifying that segment in the playlist.
-        sequence: u32,
-        /// Discontinuity sequence associated with that segment in the playlist.
-        discontinuity_sequence: u32,
+        /// Sequence information from the playlist.
+        sequence_info: PlaylistSequenceInfo,
         /// Timing information linked to that media segment
         time_info: SegmentTimeInfo,
     },
