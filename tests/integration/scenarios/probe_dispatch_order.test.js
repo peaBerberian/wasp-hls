@@ -15,6 +15,7 @@ import initializeWasm, {
 // completions are delivered explicitly after the dispatcher has returned.
 async function createProbeHarness({
   audioInit = false,
+  videoInit = false,
   singleTrack = false,
   audioDuration = 4,
   mediaDuration = 12,
@@ -157,13 +158,20 @@ async function createProbeHarness({
     for (const type of singleTrack ? ["video"] : ["video", "audio"]) {
       const duration = type === "audio" ? audioDuration : 4;
       const init =
-        type === "audio" && audioInit
-          ? `#EXT-X-MAP:URI="${name}-audio-init.mp4"\n`
-          : "";
+        type === "video" && videoInit
+          ? `#EXT-X-MAP:URI="${name}-video-initA.mp4"\n`
+          : type === "audio" && audioInit
+            ? `#EXT-X-MAP:URI="${name}-audio-init.mp4"\n`
+            : "";
       const segments = Array.from(
         { length: mediaDuration / duration },
-        (_, index) =>
-          `${index * duration === 8 ? "#EXT-X-DISCONTINUITY\n" : ""}#EXTINF:${duration},\n${name}-${type}-${index}.ts\n`,
+        (_, index) => {
+          const map =
+            type === "video" && videoInit && (index === 2 || index === 3)
+              ? `#EXT-X-MAP:URI="${name}-video-init${index === 2 ? "B" : "C"}.mp4"\n`
+              : "";
+          return `${index * duration === 8 ? "#EXT-X-DISCONTINUITY\n" : ""}${map}#EXTINF:${duration},\n${name}-${type}-${index}.ts\n`;
+        },
       ).join("");
       finish(
         `${name}-${type}.m3u8`,
@@ -171,7 +179,9 @@ async function createProbeHarness({
       );
     }
     dispatcher.on_media_source_state_change(MediaSourceReadyState.Open);
-    const videoProbe = finish(`${name}-video-0.ts`);
+    const videoProbe = finish(
+      videoInit ? `${name}-video-initA.mp4` : `${name}-video-0.ts`,
+    );
     if (singleTrack) return { videoProbe };
     expect(
       appends.filter((append) => append.resourceId === videoProbe),
@@ -390,6 +400,92 @@ it("requests a failed append again after BufferFull cleanup despite old partial 
     ctx.completeAppends();
     observe([2, 10]);
     expect(requestsFor("first-video-1.ts")).toHaveLength(3);
+    expect(ctx.errors).toEqual([]);
+    expect(ctx.resources.size).toBe(0);
+  } finally {
+    ctx.dispatcher.stop();
+    ctx.dispatcher.free();
+  }
+});
+
+it("requests a cancelled initialization again when recovery resumes after the failed segment", async () => {
+  const ctx = await createProbeHarness({
+    singleTrack: true,
+    videoInit: true,
+    mediaDuration: 40,
+  });
+  const observe = (
+    position,
+    ranges,
+    reason = PlaybackTickReason.RegularInterval,
+  ) =>
+    ctx.dispatcher.on_playback_tick(
+      new MediaObservation(
+        reason,
+        position,
+        4,
+        new JsTimeRanges(new Float64Array(ranges)),
+        true,
+        false,
+        false,
+        42,
+        undefined,
+        new JsTimeRanges(new Float64Array(ranges)),
+      ),
+    );
+  try {
+    ctx.start();
+    ctx.finish("first-video-0.ts");
+    ctx.completeAppends();
+    for (let index = 1; index < 8; index++) {
+      if (index === 2) ctx.finish("first-video-initB.mp4");
+      if (index === 3) ctx.finish("first-video-initC.mp4");
+      ctx.finish(`first-video-${index}.ts`);
+      ctx.completeAppends();
+    }
+    observe(2, [2, 34]);
+    ctx.dispatcher.set_buffer_goal(8);
+    // Playlist 4-6s and 8-10s disappear. Queue their media and init appends again.
+    const ranges = [2, 6, 8, 10, 12, 34];
+    observe(2, ranges);
+    ctx.finish("first-video-initA.mp4");
+    ctx.finish("first-video-1.ts");
+    ctx.finish("first-video-initB.mp4");
+    ctx.finish("first-video-2.ts");
+    const [bufferId, buffer] = [...ctx.buffers][0];
+    // Init A completes, but its media append is still pending. Seek to playlist 9s.
+    buffer.pending.shift();
+    ctx.dispatcher.on_source_buffer_update(
+      bufferId,
+      new JsTimeRanges(new Float64Array(ranges)),
+    );
+    observe(11, ranges, PlaybackTickReason.Seeking);
+    // Media A fails; init B and media B are cancelled before running.
+    buffer.pending.length = 0;
+    ctx.dispatcher.on_append_buffer_error(
+      bufferId,
+      PushedSegmentErrorCode.BufferFull,
+      new JsTimeRanges(new Float64Array(ranges)),
+    );
+    const requestCount = ctx.requests.length;
+    expect(ctx.removals).toHaveLength(2);
+    const afterCleanup = [2, 6, 8, 10, 12, 29];
+    for (const removal of ctx.removals) {
+      ctx.dispatcher.on_source_buffer_update(
+        removal.bufferId,
+        new JsTimeRanges(new Float64Array(afterCleanup)),
+      );
+    }
+    observe(11, afterCleanup);
+    expect(
+      ctx.requests
+        .slice(requestCount)
+        .map((request) => request.url.split("/").at(-1)),
+    ).toEqual(["first-video-initB.mp4"]);
+    ctx.finish("first-video-initB.mp4");
+    expect(ctx.requests.at(-1).url).toMatch(/first-video-2\.ts$/);
+    ctx.finish("first-video-2.ts");
+    ctx.completeAppends();
     expect(ctx.errors).toEqual([]);
     expect(ctx.resources.size).toBe(0);
   } finally {

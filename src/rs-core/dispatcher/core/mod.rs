@@ -448,10 +448,13 @@ impl Dispatcher {
 
         match self.media_element_ref.media_type_for(source_buffer_id) {
             Some(mt) => {
+                // The failed append also cancelled following buffer operations.
+                // Let the selector request those media segments again. The last init
+                // may also have been cancelled, so clear its validation too.
+                let selector = self.segment_selectors.get_mut(mt);
+                selector.invalidate_init();
                 for info in cancelled_media {
-                    self.segment_selectors
-                        .get_mut(mt)
-                        .invalidate_media(info.playlist_id, info.sequence_info);
+                    selector.invalidate_media(info.playlist_id, info.sequence_info);
                 }
                 if code == PushedSegmentErrorCode::BufferFull {
                     let wanted_pos = self.media_element_ref.wanted_position();

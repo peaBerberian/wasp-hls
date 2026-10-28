@@ -266,6 +266,11 @@ impl NextSegmentSelector {
         self.init_status = InitializationSegmentSelectorStatus::Validated(id);
     }
 
+    /// Clear the initialization validation.
+    pub(crate) fn invalidate_init(&mut self) {
+        self.init_status = InitializationSegmentSelectorStatus::Unchecked;
+    }
+
     /// Register the corresponding segment as "validated" so it's not proposed again by the
     /// `NextSegmentSelector` (unless it has since been GCed).
     pub(crate) fn validate_media(

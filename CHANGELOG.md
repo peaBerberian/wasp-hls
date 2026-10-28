@@ -5,6 +5,7 @@
 ### Bug fixes
 
 - When a non-aligned segment replacement leads to the loss of frames, reload a segment with those instead of skipping over it
+- Re-request the needed initialization segment after a `QuotaExceededError`, as its append might have been cancelled
 - Set a default track ID when transmuxing raw aac
 
 ### Other
