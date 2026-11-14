@@ -133,6 +133,16 @@ impl SourceBuffer {
         !self.queue.is_empty()
     }
 
+    /// Whether an append could still fill data before this playlist position.
+    /// Include initialization appends as media may depend on them.
+    pub(super) fn has_pending_append_before(&self, position: f64) -> bool {
+        self.queue.iter().any(|operation| match operation {
+            SourceBufferQueueElement::PushMedia(info) => info.playlist_start < position,
+            SourceBufferQueueElement::PushInit(_) => true,
+            SourceBufferQueueElement::Remove { .. } | SourceBufferQueueElement::Emptying => false,
+        })
+    }
+
     /// Pushes a new initialization segment to the underlying `SourceBuffer.
     ///
     /// # Arguments
