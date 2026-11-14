@@ -32,6 +32,9 @@ struct SeekTarget {
 ///   - pausing playback and resuming it
 ///   - seeking
 ///   - etc.
+///
+/// Positions and range bounds exposed to the core use playlist seconds. Browser callbacks
+/// receive media seconds; decode timestamps keep their own timescale.
 pub(crate) struct MediaElementReference {
     /// Wanted position until an observation accounts for the seek.
     /// Also holds seeks which cannot be sent yet, for example before a `1` `readyState`.
@@ -176,42 +179,46 @@ impl MediaElementReference {
     ///
     ///   - Else if no seek is pending, the last known media playhead position
     ///     converted to a playlist position.
+    ///
+    /// Before an observation can be converted, the initial playlist position is zero.
     pub(crate) fn wanted_position(&self) -> f64 {
         match self.seek_target {
             Some(target) => target.position,
-            None => {
-                let last_media_pos = self
-                    .last_observation
-                    .as_ref()
-                    .map(|o| o.current_time())
-                    .unwrap_or(0.);
-                self.media_pos_to_playlist_pos(last_media_pos)
-                    .unwrap_or(last_media_pos)
-            }
+            None => self
+                .last_observation
+                .as_ref()
+                .and_then(|o| self.media_pos_to_playlist_pos(o.current_time()))
+                .unwrap_or(0.),
         }
     }
 
     /// Returns the buffered range where the currently wanted position resides
-    /// as a tuple of its start and end values in seconds.
+    /// as a tuple of its start and end values in playlist seconds.
     ///
-    /// Returns `None` if the wanted_position is not yet present in a buffered range.
+    /// Returns `None` if the offset or containing range is unknown.
     pub(crate) fn current_buffered_range(&self) -> Option<(f64, f64)> {
+        let offset = self.media_offset?;
+        let position = self.wanted_position() + offset;
         self.last_observation
-            .as_ref()
-            .and_then(|o| o.buffered().range_for(self.wanted_position()))
+            .as_ref()?
+            .buffered()
+            .range_for(position)
+            .map(|(start, end)| (start - offset, end - offset))
     }
 
     /// Returns the next buffered range that starts strictly after the currently wanted position
-    /// as a tuple of its start and end values in seconds.
+    /// as a tuple of its start and end values in playlist seconds.
     ///
-    /// Returns `None` if there is no buffered range beyond the wanted position.
+    /// Returns `None` if the offset is unknown or there is no following range.
     pub(crate) fn next_buffered_range(&self) -> Option<(f64, f64)> {
-        let wanted_pos = self.wanted_position();
+        let offset = self.media_offset?;
+        let position = self.wanted_position() + offset;
         self.last_observation
             .as_ref()?
             .buffered()
             .into_iter()
-            .find(|range| range.0 > wanted_pos)
+            .find(|range| range.0 > position)
+            .map(|(start, end)| (start - offset, end - offset))
     }
 
     /// Reported ranges for this buffer, converted to playlist time.
@@ -232,9 +239,8 @@ impl MediaElementReference {
     }
 
     /// Contiguous duration buffered ahead of the wanted position for this SourceBuffer.
-    /// Returns media seconds, or zero when the corresponding ranges are unavailable.
-    ///
-    /// `None` if unknown.
+    /// Returns a duration in seconds, or zero when no range contains the wanted position.
+    /// Returns `None` when the ranges or the wanted seek's media offset are unknown.
     pub(crate) fn buffer_ahead_for(&self, media_type: MediaType) -> Option<f64> {
         let observation = self.last_observation.as_ref()?;
         let position = match self.seek_target {
@@ -248,7 +254,7 @@ impl MediaElementReference {
         buffered.map(|ranges| ranges.buffer_gap(position).unwrap_or(0.))
     }
 
-    /// Perform a seek, that is, move the current position to another one.
+    /// Perform a seek to a position in playlist seconds.
     ///
     /// Note that depending on that `MediaElementReference`'s state, seeks might
     /// not be able to be performed right now, and might in that case be postponed
@@ -474,7 +480,9 @@ impl MediaElementReference {
         }
     }
 
-    /// Remove media data, based on a `start` and `end` time in seconds.
+    /// Remove media data between `start` and `end`, in playlist seconds.
+    /// Returns an error if the media offset is unknown. Converted bounds are clamped to media
+    /// zero, and empty intervals are ignored.
     ///
     /// You should have created a SourceBuffer of the corresponding type with
     /// `create_source_buffer` before calling this method. If you did not this method will return a
@@ -489,10 +497,17 @@ impl MediaElementReference {
         start: f64,
         end: f64,
     ) -> Result<(), RemoveDataError> {
+        let offset = self
+            .media_offset
+            .ok_or(RemoveDataError::UnknownMediaOffset)?;
+        let start = (start + offset).max(0.);
+        let end = (end + offset).max(0.);
         match self.buffer_mut_for(media_type) {
             None => Err(RemoveDataError::NoSourceBuffer(media_type)),
             Some(sb) => {
-                sb.remove_buffer(start, end);
+                if start < end {
+                    sb.remove_buffer(start, end);
+                }
                 Ok(())
             }
         }
@@ -532,7 +547,7 @@ impl MediaElementReference {
         }
     }
 
-    /// Method to call once a `MediaObservation` has been received.
+    /// Receive a browser observation whose positions and ranges are in media seconds.
     pub(crate) fn on_observation(&mut self, observation: MediaObservation) {
         if self.seek_target.is_some_and(|target| {
             target.media_command_number.is_some_and(|command_number| {
@@ -623,7 +638,7 @@ impl MediaElementReference {
         self.check_end_of_stream();
     }
 
-    /// Callback for a successfully completed buffer operation.
+    /// Callback for a successfully completed buffer operation. Ranges are in media seconds.
     pub(crate) fn on_source_buffer_update(
         &mut self,
         source_buffer_id: SourceBufferId,
@@ -652,7 +667,7 @@ impl MediaElementReference {
         self.check_end_of_stream();
     }
 
-    /// Reconcile a failed operation and return the affected media segment identities.
+    /// Reconcile a failed operation using ranges in media seconds and return affected segment identities.
     pub(crate) fn on_source_buffer_failure(
         &mut self,
         source_buffer_id: SourceBufferId,
@@ -1173,6 +1188,7 @@ mod tests {
     #[test]
     fn next_buffered_range_returns_following_range_when_in_buffer() {
         let mut media_element = MediaElementReference::new();
+        media_element.media_offset = Some(0.);
         media_element.last_observation = Some(MediaObservation::new(
             PlaybackTickReason::RegularInterval,
             9.8,
@@ -1193,6 +1209,7 @@ mod tests {
     #[test]
     fn next_buffered_range_returns_following_range_when_in_hole() {
         let mut media_element = MediaElementReference::new();
+        media_element.media_offset = Some(0.);
         media_element.last_observation = Some(MediaObservation::new(
             PlaybackTickReason::RegularInterval,
             10.5,
@@ -1213,6 +1230,7 @@ mod tests {
     #[test]
     fn next_buffered_range_is_none_without_future_range() {
         let mut media_element = MediaElementReference::new();
+        media_element.media_offset = Some(0.);
         media_element.last_observation = Some(MediaObservation::new(
             PlaybackTickReason::RegularInterval,
             10.5,
@@ -1228,6 +1246,86 @@ mod tests {
         ));
 
         assert_eq!(media_element.next_buffered_range(), None);
+    }
+
+    #[test]
+    fn positions_and_ranges_use_playlist_time() {
+        for offset in [0., 2., 100., -1_704_164_645.] {
+            let mut media_element = MediaElementReference::new();
+            media_element.media_offset = Some(offset);
+            media_element.last_observation = Some(buffer_observation(
+                110.,
+                vec![100., 120., 130., 140.],
+                None,
+                None,
+            ));
+
+            assert_eq!(media_element.wanted_position(), 110. - offset);
+            assert_eq!(
+                media_element.current_buffered_range(),
+                Some((100. - offset, 120. - offset))
+            );
+            assert_eq!(
+                media_element.next_buffered_range(),
+                Some((130. - offset, 140. - offset))
+            );
+
+            media_element.last_observation = Some(buffer_observation(
+                125.,
+                vec![100., 120., 130., 140.],
+                None,
+                None,
+            ));
+            assert_eq!(media_element.current_buffered_range(), None);
+            assert_eq!(
+                media_element.next_buffered_range(),
+                Some((130. - offset, 140. - offset))
+            );
+
+            media_element.seek_target = Some(super::SeekTarget {
+                position: 135. - offset,
+                media_command_number: None,
+            });
+            assert_eq!(media_element.wanted_position(), 135. - offset);
+            assert_eq!(
+                media_element.current_buffered_range(),
+                Some((130. - offset, 140. - offset))
+            );
+            assert_eq!(media_element.next_buffered_range(), None);
+        }
+    }
+
+    #[test]
+    fn startup_position_stays_in_playlist_time_until_conversion_is_possible() {
+        let mut media_element = MediaElementReference::new();
+        assert_eq!(media_element.wanted_position(), 0.);
+        media_element.last_observation = Some(buffer_observation(
+            110.,
+            vec![100., 120., 130., 140.],
+            None,
+            None,
+        ));
+        assert_eq!(media_element.wanted_position(), 0.);
+        assert_eq!(media_element.current_buffered_range(), None);
+        assert_eq!(media_element.next_buffered_range(), None);
+        assert!(matches!(
+            media_element.remove_data(MediaType::Video, 0., 10.),
+            Err(super::RemoveDataError::UnknownMediaOffset)
+        ));
+
+        media_element.seek_target = Some(super::SeekTarget {
+            position: 10.,
+            media_command_number: None,
+        });
+        assert_eq!(media_element.wanted_position(), 10.);
+        assert_eq!(media_element.current_buffered_range(), None);
+        assert_eq!(media_element.next_buffered_range(), None);
+
+        media_element.media_offset = Some(100.);
+        media_element.seek_target = None;
+        assert_eq!(media_element.wanted_position(), 10.);
+        media_element.last_observation = None;
+        assert_eq!(media_element.wanted_position(), 0.);
     }
 }
 

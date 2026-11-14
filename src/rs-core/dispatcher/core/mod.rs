@@ -2078,6 +2078,8 @@ video.m3u8
                 .segment_list()
                 .media()[index]
                 .clone();
+            // This fixture has no media offset; provide the requested playlist position.
+            dispatcher.media_element_ref.seek(40.);
             dispatcher
                 .media_element_ref
                 .on_observation(MediaObservation::new(

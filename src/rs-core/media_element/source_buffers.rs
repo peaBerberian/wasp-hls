@@ -584,6 +584,8 @@ impl PushSegmentError {
 pub(crate) enum RemoveDataError {
     #[error("No SourceBuffer created for {0}")]
     NoSourceBuffer(MediaType),
+    #[error("Cannot convert removal bounds without a media offset")]
+    UnknownMediaOffset,
 }
 
 /// Context about the continuity context of a pushed segment with a previously-pushed one.

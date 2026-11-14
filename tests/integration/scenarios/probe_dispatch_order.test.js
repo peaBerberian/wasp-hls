@@ -356,22 +356,24 @@ it.each([
   },
 );
 
-it("requests a failed append again after BufferFull cleanup despite old partial coverage", async () => {
+it.each([0, 2, 100])("quota removal, offset %s", async (mediaOffset) => {
   const ctx = await createProbeHarness({
     singleTrack: true,
     mediaDuration: 40,
+    mediaOffset,
   });
+  const mediaRanges = (values) => values.map((value) => value + mediaOffset);
   const observe = (ranges) =>
     ctx.dispatcher.on_playback_tick(
       new MediaObservation(
         PlaybackTickReason.RegularInterval,
-        2,
+        mediaOffset,
         4,
         new JsTimeRanges(new Float64Array(ranges)),
         true,
         false,
         false,
-        42,
+        mediaOffset + 40,
         undefined,
         new JsTimeRanges(new Float64Array(ranges)),
         ctx.mediaCommandNumber,
@@ -386,11 +388,10 @@ it("requests a failed append again after BufferFull cleanup despite old partial 
       ctx.finish(`first-video-${index}.ts`);
       ctx.completeAppends();
     }
-    observe([2, 34]);
+    observe(mediaRanges([0, 32]));
     ctx.dispatcher.set_buffer_goal(4);
-    // Playlist positions are two seconds earlier than media positions.
     // The 4-8s segment loses its prefix; its old 6-8s data remains.
-    observe([2, 6, 8, 34]);
+    observe(mediaRanges([0, 4, 6, 32]));
     expect(requestsFor("first-video-1.ts")).toHaveLength(2);
     ctx.finish("first-video-1.ts");
     const [bufferId, buffer] = [...ctx.buffers][0];
@@ -398,22 +399,24 @@ it("requests a failed append again after BufferFull cleanup despite old partial 
     ctx.dispatcher.on_append_buffer_error(
       bufferId,
       PushedSegmentErrorCode.BufferFull,
-      new JsTimeRanges(new Float64Array([2, 6, 8, 34])),
+      new JsTimeRanges(new Float64Array(mediaRanges([0, 4, 6, 32]))),
     );
-    expect(ctx.removals).toHaveLength(2);
+    expect(ctx.removals).toEqual([
+      { bufferId, start: mediaOffset + 14, end: Number.MAX_VALUE },
+    ]);
     expect(ctx.errors).toEqual([]);
-    // Complete both cleanup removals while keeping the old partial data.
+    // The empty prefix removal is skipped. Complete the tail removal.
     for (const removal of ctx.removals) {
       ctx.dispatcher.on_source_buffer_update(
         removal.bufferId,
-        new JsTimeRanges(new Float64Array([2, 6, 8, 14])),
+        new JsTimeRanges(new Float64Array(mediaRanges([0, 4, 6, 12]))),
       );
     }
-    observe([2, 6, 8, 14]);
+    observe(mediaRanges([0, 4, 6, 12]));
     expect(requestsFor("first-video-1.ts")).toHaveLength(3);
     ctx.finish("first-video-1.ts");
     ctx.completeAppends();
-    observe([2, 10]);
+    observe(mediaRanges([0, 8]));
     expect(requestsFor("first-video-1.ts")).toHaveLength(3);
     expect(ctx.errors).toEqual([]);
     expect(ctx.resources.size).toBe(0);
@@ -484,7 +487,7 @@ it("requests a cancelled initialization again when recovery resumes after the fa
       new JsTimeRanges(new Float64Array(ranges)),
     );
     const requestCount = ctx.requests.length;
-    expect(ctx.removals).toHaveLength(2);
+    expect(ctx.removals).toHaveLength(1);
     const afterCleanup = [2, 6, 8, 10, 12, 29];
     for (const removal of ctx.removals) {
       ctx.dispatcher.on_source_buffer_update(
@@ -585,13 +588,13 @@ it.each([
   },
 );
 
-it("keeps the wanted position across snapshots captured before a seek", async () => {
+it.each([0, 2, 100])("seek positions, offset %s", async (mediaOffset) => {
   const ctx = await createProbeHarness({
     singleTrack: true,
     mediaDuration: 40,
-    mediaOffset: 0,
+    mediaOffset,
   });
-  const ranges = [0.5, 4, 5, 32];
+  const ranges = [0.5, 4, 5, 32].map((position) => position + mediaOffset);
   const observe = (
     position,
     reason = PlaybackTickReason.RegularInterval,
@@ -601,13 +604,13 @@ it("keeps the wanted position across snapshots captured before a seek", async ()
     ctx.dispatcher.on_playback_tick(
       new MediaObservation(
         reason,
-        position,
+        position + mediaOffset,
         4,
         new JsTimeRanges(new Float64Array(ranges)),
         false,
         seeking,
         false,
-        40,
+        mediaOffset + 40,
         undefined,
         new JsTimeRanges(new Float64Array(ranges)),
         lastMediaCommandNumber,
@@ -631,7 +634,7 @@ it("keeps the wanted position across snapshots captured before a seek", async ()
     noPendingWork();
     const beforeSeek = ctx.mediaCommandNumber;
     observe(0);
-    expect(ctx.seeks).toEqual([0.51]);
+    expect(ctx.seeks).toEqual([mediaOffset + 0.51]);
     for (const reason of [
       PlaybackTickReason.CanPlay,
       PlaybackTickReason.Playing,
@@ -641,7 +644,7 @@ it("keeps the wanted position across snapshots captured before a seek", async ()
     ]) {
       observe(0, reason, false, beforeSeek);
     }
-    expect(ctx.seeks).toEqual([0.51]);
+    expect(ctx.seeks).toEqual([mediaOffset + 0.51]);
     noPendingWork();
 
     // A snapshot after the command makes its actual position authoritative.
@@ -649,13 +652,13 @@ it("keeps the wanted position across snapshots captured before a seek", async ()
     observe(0.51, PlaybackTickReason.Seeked);
     const beforeSecondSeek = ctx.mediaCommandNumber;
     observe(3.9);
-    expect(ctx.seeks).toEqual([0.51, 5.01]);
+    expect(ctx.seeks).toEqual([mediaOffset + 0.51, mediaOffset + 5.01]);
     observe(3.9, PlaybackTickReason.Requested, false, beforeSecondSeek);
-    expect(ctx.seeks).toEqual([0.51, 5.01]);
+    expect(ctx.seeks).toEqual([mediaOffset + 0.51, mediaOffset + 5.01]);
     // An adjusted browser position is authoritative; an exact target match is unnecessary.
     observe(5.02, PlaybackTickReason.Requested, true);
     noPendingWork();
-    expect(ctx.seeks).toEqual([0.51, 5.01]);
+    expect(ctx.seeks).toEqual([mediaOffset + 0.51, mediaOffset + 5.01]);
     expect(ctx.errors).toEqual([]);
   } finally {
     ctx.dispatcher.stop();
