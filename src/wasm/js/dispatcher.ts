@@ -352,6 +352,7 @@ export class Dispatcher {
             audioLen,
             videoPtr,
             videoLen,
+            observation.last_media_command_number,
           );
         if (audioBuffered != null) {
           return withFloat64Array(audioBuffered, (audioPtr, audioLen) => {

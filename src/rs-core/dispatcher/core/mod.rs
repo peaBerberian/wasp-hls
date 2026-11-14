@@ -11,12 +11,12 @@ use crate::{
         jsSendMediaPlaylistRequestError, jsSendMultivariantPlaylistRequestError, jsSendOtherError,
         jsSendPushedSegmentError, jsSendRemoveBufferError, jsSendSegmentParsingError,
         jsSendSegmentRequestError, jsSendSourceBufferCreationError, jsSendTrackSelectionError,
-        jsSetMediaSourceDuration, jsStopObservingPlayback, jsUpdateContentInfo,
-        AddSourceBufferErrorCode, MediaType, OtherErrorCode, PushedSegmentErrorCode, RequestId,
-        SourceBufferId, TimerId, TrackSelectionErrorCode,
+        jsStopObservingPlayback, jsUpdateContentInfo, AddSourceBufferErrorCode, MediaType,
+        OtherErrorCode, PushedSegmentErrorCode, RequestId, SourceBufferId, TimerId,
+        TrackSelectionErrorCode,
     },
     dispatcher::segment_request_contexts::PendingSegmentRequest,
-    media_element::SegmentPushMetadata,
+    media_element::{MediaElementReference, SegmentPushMetadata},
     parser::PlaylistRefreshInfo,
     playlist_store::{
         AudioTrackChange, LockVariantResponse, MediaPlaylistPermanentId, PlaylistStore,
@@ -701,7 +701,7 @@ impl Dispatcher {
             pl_store.is_finalized(),
             pl_store.uses_program_date_time(),
         );
-        sync_media_source_duration(pl_store);
+        sync_media_source_duration(pl_store, &self.media_element_ref);
         let updated_playlists = [MediaType::Audio, MediaType::Video]
             .map(|media_type| pl_store.current_media_playlist_id(media_type).copied());
         for (index, media_type) in [MediaType::Audio, MediaType::Video].into_iter().enumerate() {
@@ -909,7 +909,7 @@ impl Dispatcher {
             pl_store.is_finalized(),
             pl_store.uses_program_date_time(),
         );
-        sync_media_source_duration(pl_store);
+        sync_media_source_duration(pl_store, &self.media_element_ref);
         self.recheck_player_state();
         self.media_element_ref.check_end_of_stream();
     }
@@ -944,6 +944,9 @@ impl Dispatcher {
     /// Once every segments have been scheduled for the current tick, check if gap jumping (jumping
     /// after holes in the buffer) is needed. If so, seek over it.
     fn check_gap_jumping_after_segment_scheduling(&mut self, wanted_pos: f64) {
+        if self.media_element_ref.is_seek_pending() {
+            return; // Wait for the requested position before considering another jump.
+        }
         if !self.media_element_ref.is_rebuffering() {
             return; // We can play, no point in skipping anything
         }
@@ -1618,10 +1621,10 @@ fn normalize_abr_selection(
 /// PlaylistStore.
 ///
 /// If the content is EVENT/LIVE, set a very large value instead.
-fn sync_media_source_duration(pl_store: &PlaylistStore) {
+fn sync_media_source_duration(pl_store: &PlaylistStore, media_element: &MediaElementReference) {
     if pl_store.is_finalized() {
         if let Some(duration) = pl_store.current_estimated_duration() {
-            let _ = jsSetMediaSourceDuration(duration);
+            media_element.set_duration(duration);
         } else {
             log_warn!("Core: Unknown finalized content duration");
         }
@@ -1629,7 +1632,7 @@ fn sync_media_source_duration(pl_store: &PlaylistStore) {
         // NOTE: u32::MAX selected because of large history of poor support of
         // Infinity or high numbers for various devices.
         // TODO: To perhaps isolate in compatibility related-code to make it clearer.
-        let _ = jsSetMediaSourceDuration(u32::MAX as f64);
+        media_element.set_duration(u32::MAX as f64);
     }
 }
 
@@ -1840,6 +1843,7 @@ video.m3u8
                 f64::MAX,
                 audio.map(JsTimeRanges::new),
                 video.map(JsTimeRanges::new),
+                0,
             ));
         dispatcher
     }
@@ -1950,6 +1954,7 @@ video.m3u8
                             f64::MAX,
                             None,
                             Some(JsTimeRanges::new(vec![0., 70.])),
+                            0,
                         ));
                     // No seek handler or cursor restart, and no urgent quality switch.
                     dispatcher.check_requested_segments_still_needed();
@@ -2086,6 +2091,7 @@ video.m3u8
                     60.,
                     None,
                     Some(JsTimeRanges::new(vec![0., 22.])),
+                    0,
                 ));
             dispatcher.segment_selectors.restart_from_position(39.8);
             dispatcher.requester.lock_segment_requests();
@@ -2146,6 +2152,7 @@ video.m3u8
                     40.,
                     None,
                     Some(JsTimeRanges::new(vec![0., 40.])),
+                    0,
                 ));
             // Run the tick's selection steps without browser-only variant notifications.
             dispatcher
@@ -2203,6 +2210,7 @@ video.m3u8
                 f64::MAX,
                 None,
                 Some(JsTimeRanges::new(vec![0., 20.])),
+                0,
             ));
         dispatcher.requester.lock_segment_requests();
         dispatcher
@@ -2334,6 +2342,7 @@ video.m3u8
                 f64::MAX,
                 None,
                 Some(JsTimeRanges::new(vec![0., 40.])),
+                0,
             ));
         dispatcher.check_requested_segments_still_needed();
         assert!(dispatcher

@@ -59,6 +59,7 @@ export default class PlaybackObserver extends EventEmitter<PlaybackObserverEvent
   private _stop: (() => void) | null;
   private _currentTimeoutId: number | null;
   private _lastObservationTimeStamp: number;
+  private _lastMediaCommandNumber: number;
 
   /**
    * Create a new `PlaybackObserver` associated to the given `HTMLMediaElement`.
@@ -77,6 +78,7 @@ export default class PlaybackObserver extends EventEmitter<PlaybackObserverEvent
     this._minimumObservationInterval = minimumObservationInterval;
     this._currentTimeoutId = null;
     this._lastObservationTimeStamp = 0;
+    this._lastMediaCommandNumber = 0;
   }
 
   /**
@@ -117,6 +119,11 @@ export default class PlaybackObserver extends EventEmitter<PlaybackObserverEvent
   /** Take a fresh observation now. */
   public requestObservation(): void {
     this._generateObservation(PlaybackTickReason.Requested);
+  }
+
+  /** Number of the latest media command received for this observer's MediaSource. */
+  public updateLastMediaCommandNumber(commandNumber: number): void {
+    this._lastMediaCommandNumber = commandNumber;
   }
 
   /**
@@ -172,6 +179,7 @@ export default class PlaybackObserver extends EventEmitter<PlaybackObserverEvent
 
     this._lastObservationTimeStamp = monotonicNow();
     this.trigger("newObservation", {
+      lastMediaCommandNumber: this._lastMediaCommandNumber,
       reason,
       currentTime,
       readyState,

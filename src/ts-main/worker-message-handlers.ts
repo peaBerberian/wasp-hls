@@ -79,11 +79,13 @@ const PLAYBACK_OBSERVATION_INTERVAL_REGULAR = 1000;
  * This object may be mutated.
  * @param {HTMLMediaElement} mediaElement - HTMLMediaElement on which the
  * content plays.
+ * @param {Worker} worker - The worker receiving playback observations.
  */
 export function onAttachMediaSourceMessage(
   msg: AttachMediaSourceWorkerMessage,
   contentMetadata: ContentMetadata | null,
   mediaElement: HTMLMediaElement,
+  worker: Worker,
 ): void {
   if (contentMetadata?.contentId !== msg.value.contentId) {
     logger.info(
@@ -113,6 +115,12 @@ export function onAttachMediaSourceMessage(
     }
   };
   contentMetadata.sourceBuffers = [];
+  contentMetadata.playbackObserver = createPlaybackObserver(
+    contentMetadata,
+    mediaElement,
+    msg.value.mediaSourceId,
+    worker,
+  );
 }
 
 /**
@@ -241,6 +249,12 @@ export function onCreateMediaSourceMessage(
       contentMetadata.mediaSource = mediaSource;
       contentMetadata.disposeMediaSource = disposeMediaSource;
       contentMetadata.sourceBuffers = [];
+      contentMetadata.playbackObserver = createPlaybackObserver(
+        contentMetadata,
+        mediaElement,
+        mediaSourceId,
+        worker,
+      );
     } catch (err) {
       const { name, message } = getErrorInformation(
         err,
@@ -311,6 +325,8 @@ export function onClearMediaSourceMessage(
     );
     return;
   }
+  contentMetadata.playbackObserver?.stop();
+  contentMetadata.playbackObserver = null;
   try {
     if (contentMetadata.disposeMediaSource !== null) {
       contentMetadata.disposeMediaSource();
@@ -561,16 +577,10 @@ export function onRemoveBufferMessage(
  * @param {Object|null} contentMetadata - Metadata of the content currently
  * playing. `null` if no content is currently playing.
  * This object may be mutated.
- * @param {HTMLMediaElement} mediaElement - HTMLMediaElement on which the
- * content plays.
- * @param {Worker} worker - The WebWorker concerned, messages may be sent back
- * to it.
  */
 export function onStartPlaybackObservationMessage(
   msg: StartPlaybackObservationWorkerMessage,
   contentMetadata: ContentMetadata | null,
-  mediaElement: HTMLMediaElement,
-  worker: Worker,
 ): void {
   if (contentMetadata?.mediaSourceId !== msg.value.mediaSourceId) {
     logger.info(
@@ -578,44 +588,46 @@ export function onStartPlaybackObservationMessage(
     );
     return;
   }
-  if (contentMetadata.playbackObserver !== null) {
-    contentMetadata.playbackObserver.stop();
-    contentMetadata.playbackObserver = null;
-  }
-  contentMetadata.playbackObserver = new PlaybackObserver(
+  contentMetadata.playbackObserver?.start();
+}
+
+/** Create an observer and its forwarding listener for one MediaSource. */
+function createPlaybackObserver(
+  contentMetadata: ContentMetadata,
+  mediaElement: HTMLMediaElement,
+  mediaSourceId: string,
+  worker: Worker,
+): PlaybackObserver {
+  const observer = new PlaybackObserver(
     mediaElement,
     PLAYBACK_OBSERVATION_INTERVAL_REBUFFERING,
   );
-  contentMetadata.playbackObserver.addEventListener(
-    "newObservation",
-    (value) => {
-      const sourceBuffersBuffered: Partial<
-        Record<SourceBufferId, Float64Array>
-      > = {};
+  observer.addEventListener("newObservation", (value) => {
+    const sourceBuffersBuffered: Partial<Record<SourceBufferId, Float64Array>> =
+      {};
 
-      for (const sourceBuffer of contentMetadata.sourceBuffers) {
-        try {
-          const ranges = sourceBuffer.queuedSourceBuffer.getBufferedRanges();
-          const toFloat64 = timeRangesToFloat64Array(ranges);
-          sourceBuffersBuffered[sourceBuffer.sourceBufferId] = toFloat64;
-        } catch (_) {
-          // SourceBuffer attachment may already be closing when observation
-          // ticks race with teardown or a fast content switch.
-          sourceBuffersBuffered[sourceBuffer.sourceBufferId] = new Float64Array(
-            [],
-          );
-        }
+    for (const sourceBuffer of contentMetadata.sourceBuffers) {
+      try {
+        const ranges = sourceBuffer.queuedSourceBuffer.getBufferedRanges();
+        const toFloat64 = timeRangesToFloat64Array(ranges);
+        sourceBuffersBuffered[sourceBuffer.sourceBufferId] = toFloat64;
+      } catch (_) {
+        // SourceBuffer attachment may already be closing when observation
+        // ticks race with teardown or a fast content switch.
+        sourceBuffersBuffered[sourceBuffer.sourceBufferId] = new Float64Array(
+          [],
+        );
       }
-      postMessageToWorker(worker, {
-        type: MainMessageType.MediaObservation,
-        value: Object.assign(value, {
-          sourceBuffersBuffered,
-          mediaSourceId: msg.value.mediaSourceId,
-        }),
-      });
-    },
-  );
-  contentMetadata.playbackObserver.start();
+    }
+    postMessageToWorker(worker, {
+      type: MainMessageType.MediaObservation,
+      value: Object.assign(value, {
+        sourceBuffersBuffered,
+        mediaSourceId,
+      }),
+    });
+  });
+  return observer;
 }
 
 /** Request a full sample only for the MediaSource that still owns playback. */
@@ -645,10 +657,7 @@ export function onStopPlaybackObservationMessage(
     );
     return;
   }
-  if (contentMetadata.playbackObserver !== null) {
-    contentMetadata.playbackObserver.stop();
-    contentMetadata.playbackObserver = null;
-  }
+  contentMetadata.playbackObserver?.stop();
 }
 
 /**

@@ -1194,6 +1194,7 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
             data,
             this.__contentMetadata__,
             this.videoElement,
+            worker,
           );
           break;
         case WorkerMessageType.CreateMediaSource:
@@ -1231,12 +1232,7 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
           onRequestPlaybackObservationMessage(data, this.__contentMetadata__);
           break;
         case WorkerMessageType.StartPlaybackObservation:
-          onStartPlaybackObservationMessage(
-            data,
-            this.__contentMetadata__,
-            this.videoElement,
-            worker,
-          );
+          onStartPlaybackObservationMessage(data, this.__contentMetadata__);
           break;
         case WorkerMessageType.StopPlaybackObservation:
           onStopPlaybackObservationMessage(data, this.__contentMetadata__);
@@ -1383,6 +1379,16 @@ export default class WaspHlsPlayer extends EventEmitter<WaspHlsPlayerEvents> {
 
         default:
           assertNever(data);
+      }
+      // Message delivery is ordered. Tag only snapshots captured after the
+      // command reached the browser-facing handler.
+      if (
+        "mediaCommandNumber" in data &&
+        this.__contentMetadata__?.mediaSourceId === data.value.mediaSourceId
+      ) {
+        this.__contentMetadata__.playbackObserver?.updateLastMediaCommandNumber(
+          data.mediaCommandNumber,
+        );
       }
     };
 

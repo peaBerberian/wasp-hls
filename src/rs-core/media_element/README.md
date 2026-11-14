@@ -9,8 +9,7 @@ Its job is to:
 - Attach and remove a MediaSource, create audio/video SourceBuffers and signal
   end of stream once the buffers are finished with their pending operations.
 
-- Keep the last playback observation, the wanted speed and a pending seek if
-  seeking isn't possible yet (e.g. startup before HTML5 `readyState` 1). It
+- Keep the last playback observation, the wanted speed and pending seeks. It
   also handles entering and leaving rebuffering according to the available
   buffer.
 

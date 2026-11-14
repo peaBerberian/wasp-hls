@@ -544,6 +544,8 @@ export interface ContentStoppedWorkerMessage {
 /** Message sent when the Worker want to seek in the content */
 export interface SeekWorkerMessage {
   type: WorkerMessageType.Seek;
+  /** Command number echoed by subsequent playback observations. */
+  mediaCommandNumber: number;
   value: {
     /**
      * Identify the MediaSource currently used by the worker.
@@ -562,6 +564,8 @@ export interface SeekWorkerMessage {
 /** Message sent when the Worker want to flush the media element */
 export interface FlushWorkerMessage {
   type: WorkerMessageType.Flush;
+  /** Command number echoed by subsequent playback observations. */
+  mediaCommandNumber: number;
   value: {
     /**
      * Identify the MediaSource currently used by the worker.
@@ -575,6 +579,8 @@ export interface FlushWorkerMessage {
 /** Message sent when the Worker wants to change the media element's playback rate. */
 export interface UpdatePlaybackRateWorkerMessage {
   type: WorkerMessageType.UpdatePlaybackRate;
+  /** Command number echoed by subsequent playback observations. */
+  mediaCommandNumber: number;
   value: {
     /**
      * Identify the MediaSource currently used by the worker.
@@ -600,6 +606,8 @@ export interface UpdatePlaybackRateWorkerMessage {
  */
 export interface AttachMediaSourceWorkerMessage {
   type: WorkerMessageType.AttachMediaSource;
+  /** Command number echoed by subsequent playback observations. */
+  mediaCommandNumber: number;
   value: {
     /**
      * The identifier for the content on which an error was received.
@@ -636,6 +644,8 @@ export interface AttachMediaSourceWorkerMessage {
  */
 export interface CreateMediaSourceWorkerMessage {
   type: WorkerMessageType.CreateMediaSource;
+  /** Command number echoed by subsequent playback observations. */
+  mediaCommandNumber: number;
   value: {
     /**
      * The identifier for the content on which an error was received.
@@ -658,6 +668,8 @@ export interface CreateMediaSourceWorkerMessage {
  */
 export interface SetMediaSourceDurationWorkerMessage {
   type: WorkerMessageType.UpdateMediaSourceDuration;
+  /** Command number echoed by subsequent playback observations. */
+  mediaCommandNumber: number;
   value: {
     /**
      * Identify the MediaSource currently used by the worker.
@@ -677,6 +689,8 @@ export interface SetMediaSourceDurationWorkerMessage {
  */
 export interface ClearMediaSourceWorkerMessage {
   type: WorkerMessageType.ClearMediaSource;
+  /** Command number echoed by subsequent playback observations. */
+  mediaCommandNumber: number;
   value: {
     /**
      * Identify the MediaSource currently used by the worker.
@@ -694,6 +708,8 @@ export interface ClearMediaSourceWorkerMessage {
  */
 export interface CreateSourceBufferWorkerMessage {
   type: WorkerMessageType.CreateSourceBuffer;
+  /** Command number echoed by subsequent playback observations. */
+  mediaCommandNumber: number;
   value: {
     /**
      * Identify the MediaSource currently used by the worker.
@@ -726,6 +742,8 @@ export interface CreateSourceBufferWorkerMessage {
  */
 export interface AppendBufferWorkerMessage {
   type: WorkerMessageType.AppendBuffer;
+  /** Command number echoed by subsequent playback observations. */
+  mediaCommandNumber: number;
   value: {
     /**
      * Identify the MediaSource currently used by the worker.
@@ -755,6 +773,8 @@ export interface AppendBufferWorkerMessage {
  */
 export interface RemoveBufferWorkerMessage {
   type: WorkerMessageType.RemoveBuffer;
+  /** Command number echoed by subsequent playback observations. */
+  mediaCommandNumber: number;
   value: {
     /**
      * Identify the MediaSource currently used by the worker.
@@ -832,6 +852,8 @@ export interface StopPlaybackObservationWorkerMessage {
  */
 export interface EndOfStreamWorkerMessage {
   type: WorkerMessageType.EndOfStream;
+  /** Command number echoed by subsequent playback observations. */
+  mediaCommandNumber: number;
   value: {
     /**
      * This `mediaSourceId` should be the same `mediaSourceId` than the one on
@@ -866,6 +888,8 @@ export interface AreTypesSupportedWorkerMessage {
  */
 export interface RebufferingStartedWorkerMessage {
   type: WorkerMessageType.RebufferingStarted;
+  /** Command number echoed by subsequent playback observations. */
+  mediaCommandNumber: number;
   value: {
     /**
      * This `mediaSourceId` should be the same `mediaSourceId` than the one on
@@ -892,6 +916,8 @@ export interface RebufferingStartedWorkerMessage {
  */
 export interface RebufferingEndedWorkerMessage {
   type: WorkerMessageType.RebufferingEnded;
+  /** Command number echoed by subsequent playback observations. */
+  mediaCommandNumber: number;
   value: {
     /**
      * This `mediaSourceId` should be the same `mediaSourceId` than the one on
@@ -914,7 +940,10 @@ export interface RebufferingEndedWorkerMessage {
  */
 export interface MediaOffsetUpdateWorkerMessage {
   type: WorkerMessageType.MediaOffsetUpdate;
+  /** Command number echoed by subsequent playback observations. */
+  mediaCommandNumber: number;
   value: {
+    mediaSourceId: string;
     /**
      * A unique identifier for the content being loaded, that will have to be
      * present on the various events concerning that content.
@@ -1123,6 +1152,12 @@ export interface MediaObservationMainMessage {
 export interface MediaObservation {
   /** Identify the MediaSource in question. */
   mediaSourceId: string;
+
+  /**
+   * Latest worker media command received before this snapshot was captured.
+   * This does not imply completion of asynchronous buffer operations.
+   */
+  lastMediaCommandNumber: number;
 
   /** What event triggered the Observation. */
   reason: PlaybackTickReason;

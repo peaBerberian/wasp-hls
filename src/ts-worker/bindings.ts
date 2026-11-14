@@ -69,6 +69,9 @@ import {
 } from "./transmux.js";
 import { formatErrMessage, shouldTransmux } from "./utils.js";
 
+// Incremented for media commands sent to the main thread. Observations echo it.
+let mediaCommandNumber = 0;
+
 const generateMediaSourceId = idGenerator();
 const cachedTextDecoder = new TextDecoder("utf-8", {
   ignoreBOM: true,
@@ -578,19 +581,22 @@ export function abortRequest(id: RequestId): boolean {
 /**
  * @param {number} position
  */
-export function seek(position: number): void {
+export function seek(position: number): number {
   const contentInfo = playerInstance.getContentInfo();
   if (contentInfo === null || contentInfo.mediaSourceObj === null) {
     logger.error("Attempting to seek when no MediaSource is created");
-    return;
+    return mediaCommandNumber;
   }
+  const commandNumber = ++mediaCommandNumber;
   postMessageToMain({
     type: WorkerMessageType.Seek,
+    mediaCommandNumber: commandNumber,
     value: {
       mediaSourceId: contentInfo.mediaSourceObj.mediaSourceId,
       position,
     },
   });
+  return commandNumber;
 }
 
 export function flush(): void {
@@ -601,6 +607,7 @@ export function flush(): void {
   }
   postMessageToMain({
     type: WorkerMessageType.Flush,
+    mediaCommandNumber: ++mediaCommandNumber,
     value: {
       mediaSourceId: contentInfo.mediaSourceObj.mediaSourceId,
     },
@@ -620,6 +627,7 @@ export function setPlaybackRate(position: number): void {
   }
   postMessageToMain({
     type: WorkerMessageType.UpdatePlaybackRate,
+    mediaCommandNumber: ++mediaCommandNumber,
     value: {
       mediaSourceId: contentInfo.mediaSourceObj.mediaSourceId,
       playbackRate: position,
@@ -649,6 +657,7 @@ export function attachMediaSource(): AttachMediaSourceResult {
       };
       postMessageToMain({
         type: WorkerMessageType.CreateMediaSource,
+        mediaCommandNumber: ++mediaCommandNumber,
         value: {
           contentId: contentInfo.contentId,
           mediaSourceId,
@@ -684,6 +693,7 @@ export function attachMediaSource(): AttachMediaSourceResult {
       postMessageToMain(
         {
           type: WorkerMessageType.AttachMediaSource,
+          mediaCommandNumber: ++mediaCommandNumber,
           value: {
             contentId: contentInfo.contentId,
             /* eslint-disable-next-line */
@@ -776,6 +786,7 @@ export function removeMediaSource(): RemoveMediaSourceResult {
 
   postMessageToMain({
     type: WorkerMessageType.ClearMediaSource,
+    mediaCommandNumber: ++mediaCommandNumber,
     value: { mediaSourceId: contentInfo.mediaSourceObj.mediaSourceId },
   });
   return RemoveMediaSourceResult.success();
@@ -812,6 +823,7 @@ export function setMediaSourceDuration(
   } else {
     postMessageToMain({
       type: WorkerMessageType.UpdateMediaSourceDuration,
+      mediaCommandNumber: ++mediaCommandNumber,
       value: {
         mediaSourceId: contentInfo.mediaSourceObj.mediaSourceId,
         duration,
@@ -860,6 +872,7 @@ export function addSourceBuffer(
       contentInfo.mediaSourceObj.nextSourceBufferId++;
       postMessageToMain({
         type: WorkerMessageType.CreateSourceBuffer,
+        mediaCommandNumber: ++mediaCommandNumber,
         value: {
           mediaSourceId: contentInfo.mediaSourceObj.mediaSourceId,
           sourceBufferId,
@@ -1136,6 +1149,7 @@ export function appendBuffer(
       postMessageToMain(
         {
           type: WorkerMessageType.AppendBuffer,
+          mediaCommandNumber: ++mediaCommandNumber,
           value: {
             mediaSourceId: mediaSourceObj.mediaSourceId,
             sourceBufferId,
@@ -1357,6 +1371,7 @@ export function removeBuffer(
     } else {
       postMessageToMain({
         type: WorkerMessageType.RemoveBuffer,
+        mediaCommandNumber: ++mediaCommandNumber,
         value: {
           mediaSourceId: mediaSourceObj.mediaSourceId,
           sourceBufferId,
@@ -1389,6 +1404,7 @@ export function endOfStream(): EndOfStreamResult {
     } else {
       postMessageToMain({
         type: WorkerMessageType.EndOfStream,
+        mediaCommandNumber: ++mediaCommandNumber,
         value: { mediaSourceId: mediaSourceObj.mediaSourceId },
       });
     }
@@ -1448,13 +1464,15 @@ export function stopObservingPlayback() {
  */
 export function setMediaOffset(mediaOffset: number) {
   const contentInfo = playerInstance.getContentInfo();
-  if (contentInfo === null) {
+  if (contentInfo === null || contentInfo.mediaSourceObj === null) {
     return;
   }
   postMessageToMain({
     type: WorkerMessageType.MediaOffsetUpdate,
+    mediaCommandNumber: ++mediaCommandNumber,
     value: {
       contentId: contentInfo.contentId,
+      mediaSourceId: contentInfo.mediaSourceObj.mediaSourceId,
       offset: mediaOffset,
     },
   });
@@ -1640,6 +1658,7 @@ export function startRebuffering(): void {
   }
   postMessageToMain({
     type: WorkerMessageType.RebufferingStarted,
+    mediaCommandNumber: ++mediaCommandNumber,
     value: {
       mediaSourceId: contentInfo.mediaSourceObj.mediaSourceId,
       updatePlaybackRate: true,
@@ -1657,6 +1676,7 @@ export function stopRebuffering(): void {
   }
   postMessageToMain({
     type: WorkerMessageType.RebufferingEnded,
+    mediaCommandNumber: ++mediaCommandNumber,
     value: {
       mediaSourceId: contentInfo.mediaSourceObj.mediaSourceId,
     },

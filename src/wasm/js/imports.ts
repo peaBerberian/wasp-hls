@@ -261,8 +261,8 @@ export function createWasmImports(bindings: HostBindings): WebAssembly.Imports {
       __js_func__set_playback_rate(playbackRate: number): void {
         bindings.setPlaybackRate(playbackRate);
       },
-      __js_func__seek(position: number): void {
-        bindings.seek(position);
+      __js_func__seek(position: number): number {
+        return bindings.seek(position);
       },
       __js_func__flush(): void {
         bindings.flush();

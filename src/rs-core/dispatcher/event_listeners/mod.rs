@@ -318,6 +318,7 @@ impl<'a> IntoIterator for &'a JsTimeRanges {
 }
 
 pub struct MediaObservation {
+    last_media_command_number: u64,
     reason: PlaybackTickReason,
     current_time: f64,
     ready_state: u8,
@@ -343,8 +344,10 @@ impl MediaObservation {
         duration: f64,
         audio_buffered: Option<JsTimeRanges>,
         video_buffered: Option<JsTimeRanges>,
+        last_media_command_number: u64,
     ) -> Self {
         Self {
+            last_media_command_number,
             reason,
             current_time,
             ready_state,
@@ -360,6 +363,12 @@ impl MediaObservation {
 }
 
 impl MediaObservation {
+    /// Latest worker media command received before this snapshot was captured.
+    #[inline(always)]
+    pub fn last_media_command_number(&self) -> u64 {
+        self.last_media_command_number
+    }
+
     #[inline(always)]
     pub fn reason(&self) -> PlaybackTickReason {
         self.reason
@@ -546,6 +555,7 @@ pub extern "C" fn __web_event__playback_tick(
     audio_buffered_len: u32,
     video_buffered_ptr: *const f64,
     video_buffered_len: u32,
+    last_media_command_number: f64,
 ) {
     let observation = MediaObservation::new(
         PlaybackTickReason::from_raw(reason),
@@ -558,6 +568,7 @@ pub extern "C" fn __web_event__playback_tick(
         duration,
         maybe_time_ranges(audio_buffered_ptr, audio_buffered_len),
         maybe_time_ranges(video_buffered_ptr, video_buffered_len),
+        last_media_command_number as u64,
     );
     dispatcher_mut(dispatcher_ptr).on_playback_tick(observation);
 }

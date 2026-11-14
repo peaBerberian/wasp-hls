@@ -202,6 +202,7 @@ export class MediaObservation {
     public duration: number,
     public audio_buffered?: JsTimeRanges | null,
     public video_buffered?: JsTimeRanges | null,
+    public last_media_command_number: number = 0,
   ) {
     this.audio_buffered = audio_buffered ?? undefined;
     this.video_buffered = video_buffered ?? undefined;

@@ -195,6 +195,8 @@ export default function MessageReceiver() {
         let audioSbBuffered: JsTimeRanges | undefined;
         let videoSbBuffered: JsTimeRanges | undefined;
 
+        // TODO: Make the different sampling times explicit if needed: the media
+        // element snapshot comes from main, but these ranges may be read here.
         if (playerInstance.hasMseInWorker() === true) {
           for (const sourceBufferInfo of contentInfo.mediaSourceObj
             .sourceBuffers) {
@@ -241,6 +243,7 @@ export default function MessageReceiver() {
           data.value.duration,
           audioSbBuffered,
           videoSbBuffered,
+          data.value.lastMediaCommandNumber,
         );
         dispatcher.on_playback_tick(mediaObservation);
         break;
