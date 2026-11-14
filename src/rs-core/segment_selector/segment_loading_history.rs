@@ -16,6 +16,9 @@ use crate::{
 #[derive(Default)]
 pub(super) struct SegmentLoadingHistory {
     entries: Vec<SegmentHistoryEntry>,
+    /// Latest reported ranges for this media type, in playlist seconds.
+    /// None means no observation has been received; Some(empty) means the buffer is empty.
+    latest_buffered: Option<TimeRanges>,
 }
 
 struct SegmentHistoryEntry {
@@ -60,28 +63,34 @@ struct SegmentHistoryEntry {
     /// which segment supplied it: another quality covering the same times also counts as buffered
     /// data.
     buffered: TimeRanges,
-    /// Position before which removed data can still be needed.
-    ///
-    /// For example, if we saw 8-12s buffered and now only see 10-12s, this is Some(9.5) (there is a
-    /// 500 ms tolerance).
-    /// Loading can be allowed when needed_from is 9s: one second is missing ahead of it.
-    /// At 9.5s, only 0.5s is missing ahead, which we tolerate, so this no longer allows loading.
-    ///
-    /// None means no observed loss allows loading. Each synchronization updates this from the
-    /// reported ranges, independently of the selector's position. Going back to an earlier
-    /// position can then use the same boundary without waiting for another synchronization.
-    reload_before: Option<f64>,
-    /// A restart also allows retrying parts we never saw buffered.
-    /// Keep that permission until the segment is supplied again.
-    reconsider_before: Option<f64>,
+    /// A restart has occurred since the last supply. Also consider parts of the segment
+    /// that have never been observed buffered when deciding whether to retry.
+    reconsider_initial_holes: bool,
 }
 
 impl SegmentHistoryEntry {
-    fn needs_loading(&self, needed_from: f64) -> bool {
-        self.reload_before
-            .into_iter()
-            .chain(self.reconsider_before)
-            .any(|boundary| needed_from < boundary)
+    fn needs_loading(&self, latest_buffered: Option<&TimeRanges>, needed_from: f64) -> bool {
+        let Some(latest_buffered) = latest_buffered else {
+            // An explicit restart can retry an unobserved attempt before the first report.
+            return self.reconsider_initial_holes && needed_from < self.end;
+        };
+        // Other segments may still be buffered when this segment has completely disappeared.
+        let current = latest_buffered.into_iter().filter_map(|range| {
+            let start = range.start().max(self.start);
+            let end = range.end().min(self.end);
+            (start < end).then_some((start, end))
+        });
+        let boundary = if self.reconsider_initial_holes {
+            missing_data_boundary(std::iter::once((self.start, self.end)), current)
+        } else {
+            missing_data_boundary(
+                self.buffered
+                    .into_iter()
+                    .map(|range| (range.start(), range.end())),
+                current,
+            )
+        };
+        boundary.is_some_and(|boundary| needed_from < boundary)
     }
 }
 
@@ -94,31 +103,35 @@ impl SegmentLoadingHistory {
         needed_from: f64,
         needed_until: f64,
     ) -> Option<f64> {
+        let latest_buffered = self.latest_buffered.get_or_insert_default();
+        latest_buffered.clear();
+        for &(start, end) in buffered {
+            if start < end {
+                latest_buffered.add(start, end);
+            }
+        }
         let mut first_position: Option<f64> = None;
         self.entries.retain_mut(|entry| {
-            let mut current = TimeRanges::new();
-            for &(start, end) in buffered {
-                // Only keep the part of this range inside the segment.
-                let start = start.max(entry.start);
-                let end = end.min(entry.end);
-                if end > start {
-                    current.add(start, end);
-                }
-            }
-            entry.reload_before = missing_data_boundary(&entry.buffered, &current);
-            if entry.needs_loading(needed_from) {
+            if entry.needs_loading(Some(latest_buffered), needed_from) {
                 first_position = Some(first_position.map_or(entry.start, |p| p.min(entry.start)));
             }
-            if current.is_empty() {
+            let mut has_current_coverage = false;
+            for range in &*latest_buffered {
+                // Only keep the part of this range inside the segment.
+                let start = range.start().max(entry.start);
+                let end = range.end().min(entry.end);
+                if end > start {
+                    has_current_coverage = true;
+                    entry.buffered.add(start, end);
+                }
+            }
+            if !has_current_coverage {
                 if entry.start > needed_until {
                     first_position =
                         Some(first_position.map_or(entry.start, |p| p.min(entry.start)));
                     return false;
                 }
                 return entry.end > needed_from;
-            }
-            for range in &current {
-                entry.buffered.add(range.start(), range.end());
             }
             true
         });
@@ -135,14 +148,14 @@ impl SegmentLoadingHistory {
         self.entries
             .iter()
             .find(|entry| entry.playlist_id == playlist_id && entry.sequence_info == sequence_info)
-            .is_none_or(|entry| entry.needs_loading(needed_from))
+            .is_none_or(|entry| entry.needs_loading(self.latest_buffered.as_ref(), needed_from))
     }
 
     /// Earliest start of a segment allowed to reload from the given position.
     pub(super) fn first_position_to_reload(&self, needed_from: f64) -> Option<f64> {
         self.entries
             .iter()
-            .filter(|entry| entry.needs_loading(needed_from))
+            .filter(|entry| entry.needs_loading(self.latest_buffered.as_ref(), needed_from))
             .map(|entry| entry.start)
             .min_by(f64::total_cmp)
     }
@@ -199,8 +212,7 @@ impl SegmentLoadingHistory {
             // of an earlier attempt. Repeated missing or partial results then
             // do not look like fresh removal on every observation.
             entry.buffered.clear();
-            entry.reload_before = None;
-            entry.reconsider_before = None;
+            entry.reconsider_initial_holes = false;
         } else {
             self.entries.push(SegmentHistoryEntry {
                 playlist_id,
@@ -208,8 +220,7 @@ impl SegmentLoadingHistory {
                 start,
                 end,
                 buffered: TimeRanges::new(),
-                reload_before: None,
-                reconsider_before: None,
+                reconsider_initial_holes: false,
             });
         }
     }
@@ -217,9 +228,7 @@ impl SegmentLoadingHistory {
     /// Reconsider initial missing data without forgetting what was supplied or observed.
     pub(super) fn reconsider(&mut self) {
         for entry in &mut self.entries {
-            let mut expected = TimeRanges::new();
-            expected.add(entry.start, entry.end);
-            entry.reconsider_before = missing_data_boundary(&expected, &entry.buffered);
+            entry.reconsider_initial_holes = true;
         }
     }
 }
@@ -242,24 +251,21 @@ impl SegmentLoadingHistory {
 /// empty                   Some(12)     everything; see the rule below
 /// ```
 ///
-/// If `available` is empty, return the latest end in `expected` without subtracting the
-/// tolerance. An empty `expected` always returns None.
-fn missing_data_boundary(expected: &TimeRanges, available: &TimeRanges) -> Option<f64> {
-    if available.is_empty() {
+/// Both inputs are sorted ranges. If `available` is empty, return the latest end in `expected`
+/// without subtracting the tolerance. An empty `expected` always returns None.
+fn missing_data_boundary(
+    expected: impl Iterator<Item = (f64, f64)>,
+    available: impl Iterator<Item = (f64, f64)> + Clone,
+) -> Option<f64> {
+    if available.clone().next().is_none() {
         // If all expected coverage is absent, bypass the 0.5s tolerance.
         // An empty expected range returns None.
-        return expected
-            .into_iter()
-            .map(|range| range.end())
-            .max_by(f64::total_cmp);
+        return expected.map(|(_, end)| end).max_by(f64::total_cmp);
     }
     let mut latest_boundary: Option<f64> = None;
-    for range in expected {
-        let end = range.end();
-        let mut covered_until = range.start();
-        for available_range in available {
-            let available_start = available_range.start();
-            let available_end = available_range.end();
+    for (start, end) in expected {
+        let mut covered_until = start;
+        for (available_start, available_end) in available.clone() {
             if available_end <= covered_until {
                 continue;
             }
@@ -674,7 +680,7 @@ mod tests {
     }
 
     #[test]
-    fn reconsidering_initial_holes_keeps_history_and_permission_until_supply() {
+    fn reconsidering_initial_holes_keeps_history_and_allows_one_new_supply() {
         let playlist = MediaPlaylistPermanentId::new_for_test(1);
         let sequence = PlaylistSequenceInfo::new(1, 0);
         for ranges in [
@@ -705,7 +711,7 @@ mod tests {
     }
 
     #[test]
-    fn reconsideration_uses_all_observed_ranges_and_tolerates_small_holes() {
+    fn reconsideration_tolerates_small_initial_holes() {
         let playlist = MediaPlaylistPermanentId::new_for_test(1);
         let sequence = PlaylistSequenceInfo::new(1, 0);
         for ranges in [
@@ -759,5 +765,72 @@ mod tests {
         history.synchronize(&[(0., 6.)], 0., 12.);
         history.synchronize(&[(2., 6.)], 0., 12.);
         assert!(history.needs_loading(playlist, first, 0.));
+    }
+
+    #[test]
+    fn restored_coverage_withdraws_a_reconsidered_retry_without_another_supply() {
+        let playlist = MediaPlaylistPermanentId::new_for_test(1);
+        let sequence = PlaylistSequenceInfo::new(1, 0);
+        let mut history = SegmentLoadingHistory::default();
+        history.insert(playlist, sequence, 8., 12.);
+        history.synchronize(&[(10., 12.)], 0., 20.);
+        history.reconsider();
+        assert!(history.needs_loading(playlist, sequence, 8.));
+
+        // Any quality can fill the hole before the retry is supplied.
+        assert_eq!(history.synchronize(&[(8., 12.)], 0., 20.), None);
+        assert!(!history.needs_loading(playlist, sequence, 8.));
+        assert_eq!(history.first_position_to_reload(8.), None);
+        assert!(history.contains(playlist, sequence));
+
+        // A separate removal can still justify a retry.
+        assert_eq!(history.synchronize(&[(10., 12.)], 0., 20.), Some(8.));
+        assert!(history.needs_loading(playlist, sequence, 8.));
+    }
+
+    #[test]
+    fn restart_compares_the_total_hole_including_initial_missing_data_and_later_loss() {
+        let playlist = MediaPlaylistPermanentId::new_for_test(1);
+        let sequence = PlaylistSequenceInfo::new(1, 0);
+        for (initial, current) in [
+            (vec![(0.4, 4.)], vec![(0.8, 4.)]),
+            (vec![(0., 3.6)], vec![(0., 3.2)]),
+            (vec![(0., 1.), (1.4, 4.)], vec![(0., 1.), (1.8, 4.)]),
+        ] {
+            let mut history = SegmentLoadingHistory::default();
+            history.insert(playlist, sequence, 0., 4.);
+            history.synchronize(&initial, 0., 8.);
+            history.synchronize(&current, 0., 8.);
+            // The later loss alone is within tolerance.
+            assert!(!history.needs_loading(playlist, sequence, 0.));
+            history.reconsider();
+            assert!(history.needs_loading(playlist, sequence, 0.));
+            assert_eq!(history.first_position_to_reload(0.), Some(0.));
+
+            history.insert(playlist, sequence, 0., 4.);
+            for _ in 0..3 {
+                assert_eq!(history.synchronize(&current, 0., 8.), None);
+                assert!(!history.needs_loading(playlist, sequence, 0.));
+            }
+        }
+    }
+
+    #[test]
+    fn restart_can_retry_an_absent_segment_until_its_playlist_end() {
+        let playlist = MediaPlaylistPermanentId::new_for_test(1);
+        let sequence = PlaylistSequenceInfo::new(1, 0);
+        let mut history = SegmentLoadingHistory::default();
+        history.insert(playlist, sequence, 8., 12.);
+        history.synchronize(&[(8., 11.8)], 0., 20.);
+        // A different segment remains buffered. This one has completely disappeared.
+        history.synchronize(&[(16., 20.)], 0., 20.);
+        assert!(!history.needs_loading(playlist, sequence, 11.9));
+        history.reconsider();
+        assert!(history.needs_loading(playlist, sequence, 11.9));
+        assert_eq!(history.first_position_to_reload(11.9), Some(8.));
+        assert!(!history.needs_loading(playlist, sequence, 12.));
+
+        history.insert(playlist, sequence, 8., 12.);
+        assert!(!history.needs_loading(playlist, sequence, 11.9));
     }
 }
