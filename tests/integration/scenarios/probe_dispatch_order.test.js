@@ -665,3 +665,127 @@ it.each([0, 2, 100])("seek positions, offset %s", async (mediaOffset) => {
     ctx.dispatcher.free();
   }
 });
+
+function observeBuffers(ctx, position, combined, audio, video) {
+  const ranges = (bounds) =>
+    bounds === undefined
+      ? undefined
+      : new JsTimeRanges(new Float64Array(bounds));
+  ctx.dispatcher.on_playback_tick(
+    new MediaObservation(
+      PlaybackTickReason.Requested,
+      position,
+      4,
+      ranges(combined),
+      false,
+      false,
+      false,
+      Number.MAX_VALUE,
+      ranges(audio),
+      ranges(video),
+      ctx.mediaCommandNumber,
+    ),
+  );
+}
+
+it.each(
+  [MediaType.Audio, MediaType.Video].flatMap((pendingType) =>
+    [0, 100].flatMap((mediaOffset) =>
+      [false, true].map((holeRemains) => ({
+        pendingType,
+        mediaOffset,
+        holeRemains,
+      })),
+    ),
+  ),
+)(
+  "waits for relevant appends: %j",
+  async ({ pendingType, mediaOffset, holeRemains }) => {
+    const ctx = await createProbeHarness({ mediaDuration: 40, mediaOffset });
+    const mediaRanges = (bounds) => bounds.map((x) => x + mediaOffset);
+    const hole = mediaRanges([0, 4, 12, 32]);
+    const observe = (fresh) =>
+      observeBuffers(ctx, mediaOffset + 3.9, hole, fresh, fresh);
+    const complete = (id, buffer, bounds) => {
+      expect(buffer.pending.length).toBeGreaterThan(0);
+      buffer.pending.shift();
+      ctx.dispatcher.on_source_buffer_update(
+        id,
+        new JsTimeRanges(new Float64Array(bounds)),
+      );
+    };
+    try {
+      ctx.start();
+      ctx.completeAppends();
+      for (let index = 1; index < 8; index++) {
+        ctx.finish(`first-video-${index}.ts`);
+        ctx.finish(`first-audio-${index}.ts`);
+        for (const [id, buffer] of ctx.buffers) {
+          if (buffer.mediaType !== pendingType)
+            complete(id, buffer, mediaRanges([0, 32]));
+        }
+      }
+      ctx.dispatcher.set_buffer_goal(4);
+      expect(
+        ctx.requests.filter((request) => !request.finished && !request.aborted),
+      ).toEqual([]);
+
+      // Two appends start before the next range; later appends must not block a jump.
+      observe(hole);
+      expect(ctx.seeks).toEqual([]);
+      const [id, buffer] = [...ctx.buffers].find(
+        ([, buffer]) => buffer.mediaType === pendingType,
+      );
+      const partial = holeRemains ? hole : mediaRanges([0, 8, 12, 32]);
+      complete(id, buffer, partial);
+      observe(partial);
+      expect(ctx.seeks).toEqual([]);
+
+      const fresh = holeRemains ? hole : mediaRanges([0, 32]);
+      complete(id, buffer, fresh);
+      expect(buffer.pending.length).toBeGreaterThan(0);
+      // The media-element snapshot still contains the old hole after completion.
+      observe(fresh);
+      expect(ctx.seeks).toEqual(holeRemains ? [mediaOffset + 12.01] : []);
+      expect(ctx.errors).toEqual([]);
+    } finally {
+      ctx.dispatcher.stop();
+      ctx.dispatcher.free();
+    }
+  },
+);
+
+it.each([
+  { audio: [0, 32], video: [0, 32], jump: undefined },
+  { audio: [0, 4, 8, 32], video: [0, 4, 12, 32], jump: 12.01 },
+  { audio: undefined, video: [0, 4, 12, 32], jump: undefined },
+  { audio: [0, 4, 8, 32], video: undefined, jump: undefined },
+  { audio: [], video: [0, 4, 12, 32], jump: undefined },
+  { audio: [0, 32], video: [], jump: undefined },
+  { singleTrack: true, audio: undefined, video: [0, 4, 12, 32], jump: 12.01 },
+])(
+  "uses SourceBuffer ranges for gaps: %j",
+  async ({ singleTrack = false, audio, video, jump }) => {
+    const ctx = await createProbeHarness({
+      mediaDuration: 40,
+      mediaOffset: 0,
+      singleTrack,
+    });
+    try {
+      ctx.start();
+      ctx.completeAppends();
+      for (let index = 1; index < 8; index++) {
+        ctx.finish(`first-video-${index}.ts`);
+        if (!singleTrack) ctx.finish(`first-audio-${index}.ts`);
+        ctx.completeAppends();
+      }
+      ctx.dispatcher.set_buffer_goal(4);
+      observeBuffers(ctx, 3.9, [0, 4, 8, 32], audio, video);
+      expect(ctx.seeks).toEqual(jump === undefined ? [] : [jump]);
+      expect(ctx.errors).toEqual([]);
+    } finally {
+      ctx.dispatcher.stop();
+      ctx.dispatcher.free();
+    }
+  },
+);

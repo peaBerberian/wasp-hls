@@ -238,6 +238,14 @@ impl MediaElementReference {
         )
     }
 
+    /// Whether either buffer has an append pending before this playlist position.
+    pub(crate) fn has_pending_append_before(&self, position: f64) -> bool {
+        [self.audio_buffer.as_ref(), self.video_buffer.as_ref()]
+            .into_iter()
+            .flatten()
+            .any(|buffer| buffer.has_pending_append_before(position))
+    }
+
     /// Contiguous duration buffered ahead of the wanted position for this SourceBuffer.
     /// Returns a duration in seconds, or zero when no range contains the wanted position.
     /// Returns `None` when the ranges or the wanted seek's media offset are unknown.
@@ -406,6 +414,7 @@ impl MediaElementReference {
                 inventory_id: id,
                 playlist_id,
                 sequence_info: md.sequence_info,
+                playlist_start: metadata_start,
             },
             segment_data: md.data,
             time_info: md.time_info,
@@ -1441,4 +1450,7 @@ pub(crate) struct MediaAppendInfo {
 
     /// ID of the inventory entry for this append.
     inventory_id: u64,
+
+    /// Segment start in playlist seconds
+    playlist_start: f64,
 }

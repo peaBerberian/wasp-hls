@@ -1,3 +1,33 @@
+/// Intersect two lists of ordered, non-overlapping ranges in the same time units.
+pub(crate) fn intersect_ranges(first: &[(f64, f64)], second: &[(f64, f64)]) -> Vec<(f64, f64)> {
+    let mut common = Vec::new();
+    for &(first_start, first_end) in first {
+        for &(second_start, second_end) in second {
+            let start = first_start.max(second_start);
+            let end = first_end.min(second_end);
+            if start < end {
+                common.push((start, end));
+            }
+        }
+    }
+    common
+}
+
+/// Find the hole at or after `position`, ending at the next range's start.
+/// Ranges must be ordered and non-overlapping. All values use the same time units.
+pub(crate) fn find_next_gap(ranges: &[(f64, f64)], position: f64) -> Option<(f64, f64)> {
+    let gap_start = ranges
+        .iter()
+        .find(|(start, end)| *start <= position && position < *end)
+        .map(|(_, end)| *end)
+        .unwrap_or(position);
+    let gap_end = ranges
+        .iter()
+        .find(|(start, _)| *start > position)
+        .map(|(start, _)| *start)?;
+    (gap_end >= gap_start).then_some((gap_start, gap_end))
+}
+
 /// Represent a range of time, from a start to an end, generally in seconds
 #[derive(Clone, Debug)]
 pub struct TimeRange {
@@ -136,7 +166,41 @@ impl<'a> IntoIterator for &'a TimeRanges {
 
 #[cfg(test)]
 mod tests {
-    use super::TimeRanges;
+    use super::{find_next_gap, intersect_ranges, TimeRanges};
+
+    #[test]
+    fn next_gap_handles_positions_inside_ranges_and_holes() {
+        let ranges = [(0., 4.), (8., 12.), (16., 20.)];
+        for (position, expected) in [
+            (-1., Some((-1., 0.))),
+            (0., Some((4., 8.))),
+            (3.9, Some((4., 8.))),
+            (4., Some((4., 8.))),
+            (6., Some((6., 8.))),
+            (8., Some((12., 16.))),
+            (12., Some((12., 16.))),
+            (18., None),
+            (20., None),
+        ] {
+            assert_eq!(find_next_gap(&ranges, position), expected);
+        }
+        assert_eq!(find_next_gap(&[], 0.), None);
+    }
+
+    #[test]
+    fn intersection_keeps_only_common_coverage() {
+        let first = [(0., 8.), (12., 40.)];
+        let second = [(2., 15.), (20., 35.)];
+        assert_eq!(
+            intersect_ranges(&first, &second),
+            vec![(2., 8.), (12., 15.), (20., 35.)]
+        );
+        assert_eq!(intersect_ranges(&first, &first), first);
+        assert!(intersect_ranges(&first, &[]).is_empty());
+        assert!(intersect_ranges(&[], &second).is_empty());
+        assert!(intersect_ranges(&[(0., 2.)], &[(2., 4.)]).is_empty());
+        assert!(intersect_ranges(&[(0., 2.)], &[(3., 4.)]).is_empty());
+    }
 
     #[test]
     fn merging_matches_covered_intervals_in_every_insertion_order() {

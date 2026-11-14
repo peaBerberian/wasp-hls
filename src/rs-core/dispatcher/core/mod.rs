@@ -26,7 +26,11 @@ use crate::{
         FinishedRequestType, PlaylistFileType, PlaylistRequestInfo, RetryResult, SegmentRequestInfo,
     },
     segment_selector::SegmentSelectionCandidate,
-    utils::{logger::*, url::Url},
+    utils::{
+        logger::*,
+        time_ranges::{find_next_gap, intersect_ranges},
+        url::Url,
+    },
 };
 
 mod startup;
@@ -953,25 +957,26 @@ impl Dispatcher {
         if !self.ready_to_load_segments() {
             return; // ensure everything is ready before doing anything
         }
-        let playable_until = self
-            .media_element_ref
-            .current_buffered_range()
-            .map(|(_, end)| end)
-            .unwrap_or(wanted_pos);
-
-        if let Some(next_range_start) = self.media_element_ref.next_buffered_range().map(|x| x.0) {
-            if next_range_start - playable_until >= 0.
-                && !self.requester.has_pending_segment_before(next_range_start)
-            {
-                log_warn!(
-                    "Core: Jumping over a browser buffer hole (p:{}, e:{}, n:{})",
-                    wanted_pos,
-                    playable_until,
-                    next_range_start
-                );
-                self.media_element_ref.seek(next_range_start + 0.01);
-            }
+        let Some(buffered) = intersect_media_buffered_ranges(&self.media_element_ref) else {
+            return;
+        };
+        let Some((playable_until, next_range_start)) = find_next_gap(&buffered, wanted_pos) else {
+            return;
+        };
+        if self.requester.has_pending_segment_before(next_range_start)
+            || self
+                .media_element_ref
+                .has_pending_append_before(next_range_start)
+        {
+            return;
         }
+        log_warn!(
+            "Core: Jumping over a browser buffer hole (p:{}, e:{}, n:{})",
+            wanted_pos,
+            playable_until,
+            next_range_start
+        );
+        self.media_element_ref.seek(next_range_start + 0.01);
     }
 
     /// Actions to perform once a seek has been performed on the media element.
@@ -1535,6 +1540,25 @@ impl Dispatcher {
         for req_id in aborted_reqs {
             self.segment_request_contexts.take(req_id);
         }
+    }
+}
+
+/// Buffered ranges shared by every active media buffer, in playlist seconds.
+fn intersect_media_buffered_ranges(
+    media_element: &MediaElementReference,
+) -> Option<Vec<(f64, f64)>> {
+    match (
+        media_element.has_buffer(MediaType::Audio),
+        media_element.has_buffer(MediaType::Video),
+    ) {
+        (true, true) => {
+            let audio = media_element.buffered_ranges_for(MediaType::Audio)?;
+            let video = media_element.buffered_ranges_for(MediaType::Video)?;
+            Some(intersect_ranges(&audio, &video))
+        }
+        (true, false) => media_element.buffered_ranges_for(MediaType::Audio),
+        (false, true) => media_element.buffered_ranges_for(MediaType::Video),
+        (false, false) => None,
     }
 }
 
