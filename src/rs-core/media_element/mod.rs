@@ -1434,8 +1434,11 @@ pub(crate) struct SegmentPushMetadata {
 /// Information kept until a media append finishes. Does not own segment bytes.
 #[derive(Clone, Copy)]
 pub(crate) struct MediaAppendInfo {
-    /// ID of the inventory entry for this append.
-    pub(crate) inventory_id: u64,
+    /// Identifies the MediaPlaylist the appended segment is a part of
     pub(crate) playlist_id: MediaPlaylistPermanentId,
+    /// Identifies the Segment in that MediaPlaylist
     pub(crate) sequence_info: PlaylistSequenceInfo,
+
+    /// ID of the inventory entry for this append.
+    inventory_id: u64,
 }
