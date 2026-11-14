@@ -15,6 +15,9 @@ use segment_loading_history::SegmentLoadingHistory;
 /// Minimum distance from playback, in seconds, before replacing buffered media.
 const MIN_FAST_QUALITY_SWITCH_LEAD_SECONDS: f64 = 3.;
 
+/// Tolerated missing coverage, in playlist seconds.
+const MISSING_DATA_TOLERANCE: f64 = 0.5;
+
 /// Indicate the most prioritary segment to load according to the given situation.
 ///
 /// Internally, the `NextSegmentSelectors` contains a `NextSegmentSelector` for each type of media,
@@ -98,6 +101,7 @@ impl NextSegmentSelectors {
     /// When seeking or flushing buffers, you generally don't want to pick-up from the last returned
     /// segment, as the position might have completely changed. You want to restart from scratch
     /// instead.
+    /// Previously supplied segments with parts never seen buffered can also be proposed again.
     pub(crate) fn restart_from_position(&mut self, pos: f64) {
         let pos = f64::max(0., pos);
         self.audio.restart_from_position(pos);
@@ -237,6 +241,7 @@ impl NextSegmentSelector {
         self.segment_cursor = SegmentCursor::new(base_pos);
         self.needs_starting_position_recompute = true;
         self.skipped_segments.clear();
+        self.validated_segments.reconsider();
     }
 
     /// Check reported buffer ranges for removed data. Times are in playlist seconds.
@@ -272,7 +277,7 @@ impl NextSegmentSelector {
     }
 
     /// Register the corresponding segment as "validated" so it's not proposed again by the
-    /// `NextSegmentSelector` (unless it has since been GCed).
+    /// `NextSegmentSelector` (unless data was removed or selection restarted).
     pub(crate) fn validate_media(
         &mut self,
         playlist_id: MediaPlaylistPermanentId,
@@ -350,15 +355,14 @@ impl NextSegmentSelector {
         let previous_playlist_id = self.last_playlist_id;
         let has_quality_changed =
             previous_playlist_id.is_some() && previous_playlist_id != Some(selected_playlist_id);
-        let should_find_next_unbuffered_position = previous_playlist_id
-            != Some(selected_playlist_id)
+        let should_recompute_starting_position = previous_playlist_id != Some(selected_playlist_id)
             || self.needs_starting_position_recompute;
         self.last_playlist_id = Some(selected_playlist_id);
         // A replacement moves the cursor inside the buffer. Recompute before returning to
         // additions, even when both purposes use the same playlist.
         self.needs_starting_position_recompute = replacement_segment.is_some();
 
-        if should_find_next_unbuffered_position {
+        if should_recompute_starting_position {
             if has_quality_changed {
                 log_debug!("Selector: Quality changed, recomputing starting position");
                 self.init_status = InitializationSegmentSelectorStatus::Unchecked;
@@ -370,7 +374,7 @@ impl NextSegmentSelector {
             self.skipped_segments.clear();
             let start_pos = match replacement_segment {
                 Some(segment) => segment.start(),
-                None => self.find_next_unbuffered_position(inventory),
+                None => self.find_contiguous_buffer_end(inventory),
             };
             self.segment_cursor.move_cursor(start_pos);
         }
@@ -464,7 +468,7 @@ impl NextSegmentSelector {
         for chunk in &inventory[first_index..] {
             if chunk.playlist_start() > previous_end + 0.001
                 || chunk.is_dirty()
-                || chunk.appears_garbage_collected(previous_end)
+                || !chunk.covers_range(previous_end, chunk.playlist_end(), MISSING_DATA_TOLERANCE)
             {
                 break;
             }
@@ -513,9 +517,8 @@ impl NextSegmentSelector {
             .contains(playlist_id, segment.sequence_info())
     }
 
-    /// Find where additions should resume, based on continuous inventory coverage.
-    /// Replacements are selected separately.
-    fn find_next_unbuffered_position(&self, inventory: &[BufferedChunk]) -> f64 {
+    /// Find the end of continuous buffered coverage from base_pos, regardless of quality.
+    fn find_contiguous_buffer_end(&self, inventory: &[BufferedChunk]) -> f64 {
         let start = self.base_pos;
         let Some(mut curr_idx) = inventory
             .iter()
@@ -526,15 +529,23 @@ impl NextSegmentSelector {
         };
         let mut prev_end = start;
         while let Some(segment) = inventory.get(curr_idx) {
-            if segment.playlist_start() > (prev_end + 0.001)
-                || segment.is_dirty()
-                || segment.appears_garbage_collected(prev_end)
-            {
+            if segment.playlist_start() > (prev_end + 0.001) || segment.is_dirty() {
                 log_debug!(
-                    "Selector: Segment non-contiguous or GCed starting from {}",
+                    "Selector: Segment non-contiguous or dirty starting from {}",
                     prev_end
                 );
                 return prev_end;
+            }
+
+            let buffered_start = segment.last_buffered_start();
+            let buffered_end = segment.last_buffered_end();
+            if buffered_start >= buffered_end || buffered_start - prev_end > MISSING_DATA_TOLERANCE
+            {
+                log_debug!("Selector: Segment GCed starting from {}", prev_end);
+                return prev_end;
+            }
+            if segment.playlist_end() - buffered_end > MISSING_DATA_TOLERANCE {
+                return prev_end.max(buffered_end);
             }
             prev_end = segment.playlist_end();
             curr_idx += 1;
@@ -649,7 +660,11 @@ impl NextSegmentSelector {
             let mut prev_seg_end = start;
             while let Some(mut curr_seg) = inventory.get(curr_idx) {
                 if curr_seg.is_dirty()
-                    || curr_seg.appears_garbage_collected(self.base_pos)
+                    || !curr_seg.covers_range(
+                        prev_seg_end.max(self.base_pos),
+                        curr_seg.playlist_end().min(end),
+                        MISSING_DATA_TOLERANCE,
+                    )
                     || curr_seg.is_worse_than(context)
                     || curr_seg.playlist_start() > (prev_seg_end + 0.05)
                 {
@@ -1269,7 +1284,7 @@ mod tests {
         for base_pos in [0., playlist_start - 0.2, playlist_start] {
             let mut selector = NextSegmentSelector::new(base_pos, 30.);
             if base_pos < playlist_start {
-                assert_eq!(selector.find_next_unbuffered_position(&inventory), base_pos);
+                assert_eq!(selector.find_contiguous_buffer_end(&inventory), base_pos);
             }
             assert!(selector
                 .most_needed_segment(ended(), ended(), &inventory)
@@ -1482,7 +1497,23 @@ mod tests {
             assert!(selected.needed_segments().is_none());
             assert!(selected.loading_complete());
         }
+        // A restart can retry supplied media that was never seen buffered.
         selector.restart_from_position(10.);
+        for segment in list.media() {
+            let selected = selector.most_needed_segment(ended(), ended(), &[]);
+            assert_eq!(
+                selected
+                    .needed_segments()
+                    .unwrap()
+                    .media_segment()
+                    .unwrap()
+                    .0
+                    .start(),
+                segment.start()
+            );
+            assert!(!selected.loading_complete());
+            validate(&mut selector, segment, &context);
+        }
         let selected = selector.most_needed_segment(ended(), ended(), &[]);
         assert!(selected.needed_segments().is_none());
         assert!(selected.loading_complete());
@@ -1560,6 +1591,7 @@ mod tests {
                 expected_start
             );
         }
+        // Nothing from the late validation was observed: a restart can retry it.
         selector.restart_from_position(0.);
         let selected =
             selector.most_needed_segment(candidate(list, &context), candidate(list, &context), &[]);
@@ -1571,7 +1603,7 @@ mod tests {
                 .unwrap()
                 .0
                 .start(),
-            4.
+            0.
         );
     }
 
@@ -1682,6 +1714,8 @@ mod tests {
         );
         assert_eq!(stale.playlist_to_refresh(), test_playlist_id(4));
 
+        // The lower-quality data still covers all replacement attempts.
+        selector.check_for_removed_data(&[(0., 24.)]);
         selector.restart_from_position(0.);
         let retry = selector.most_needed_segment(
             candidate(list, &addition_candidate),
@@ -2153,7 +2187,8 @@ mod tests {
         };
         let list = playlist.playlist().segment_list();
         for (has_replacement, seek_position, expected_start, change_media) in [
-            (false, 4., 28., false),
+            // The supplied 24-28s segment has not appeared in the buffer.
+            (false, 4., 24., false),
             (true, 4., 12., false),
             (false, 30., 28., false),
             (false, 4., 24., true),
@@ -2251,7 +2286,7 @@ mod tests {
             &buffered,
         );
         assert_eq!(result.playlist_to_refresh(), test_playlist_id(2));
-        assert_eq!(selector.find_next_unbuffered_position(&buffered), 10.);
+        assert_eq!(selector.find_contiguous_buffer_end(&buffered), 10.);
     }
 
     #[test]
@@ -2291,7 +2326,7 @@ mod tests {
                 "lead={lead}, duration={duration}",
             );
             assert_eq!(
-                selector.find_next_unbuffered_position(&buffered),
+                selector.find_contiguous_buffer_end(&buffered),
                 lead + duration
             );
         }

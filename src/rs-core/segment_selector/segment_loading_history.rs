@@ -1,3 +1,4 @@
+use super::MISSING_DATA_TOLERANCE;
 use crate::{
     parser::{MediaPlaylistPermanentId, PlaylistSequenceInfo},
     utils::time_ranges::TimeRanges,
@@ -59,14 +60,34 @@ struct SegmentHistoryEntry {
     /// which segment supplied it: another quality covering the same times also counts as buffered
     /// data.
     buffered: TimeRanges,
-    /// Reload is allowed when `needed_from` is before this boundary.
-    /// None means no observed loss warrants a reload.
+    /// Position before which removed data can still be needed.
+    ///
+    /// For example, if we saw 8-12s buffered and now only see 10-12s, this is Some(9.5) (there is a
+    /// 500 ms tolerance).
+    /// Loading can be allowed when needed_from is 9s: one second is missing ahead of it.
+    /// At 9.5s, only 0.5s is missing ahead, which we tolerate, so this no longer allows loading.
+    ///
+    /// None means no observed loss allows loading. Each synchronization updates this from the
+    /// reported ranges, independently of the selector's position. Going back to an earlier
+    /// position can then use the same boundary without waiting for another synchronization.
     reload_before: Option<f64>,
+    /// A restart also allows retrying parts we never saw buffered.
+    /// Keep that permission until the segment is supplied again.
+    reconsider_before: Option<f64>,
+}
+
+impl SegmentHistoryEntry {
+    fn needs_loading(&self, needed_from: f64) -> bool {
+        self.reload_before
+            .into_iter()
+            .chain(self.reconsider_before)
+            .any(|boundary| needed_from < boundary)
+    }
 }
 
 impl SegmentLoadingHistory {
-    /// Return the earliest position to reconsider after data loss or discarding empty entries
-    /// ahead of the retention limit. All positions are in playlist time.
+    /// Return the earliest position to reconsider after data loss, a restart, or discarding
+    /// empty entries ahead of the retention limit. All positions are in playlist time.
     pub(super) fn synchronize(
         &mut self,
         buffered: &[(f64, f64)],
@@ -84,11 +105,8 @@ impl SegmentLoadingHistory {
                     current.add(start, end);
                 }
             }
-            entry.reload_before = reload_before(&entry.buffered, &current);
-            if entry
-                .reload_before
-                .is_some_and(|boundary| needed_from < boundary)
-            {
+            entry.reload_before = missing_data_boundary(&entry.buffered, &current);
+            if entry.needs_loading(needed_from) {
                 first_position = Some(first_position.map_or(entry.start, |p| p.min(entry.start)));
             }
             if current.is_empty() {
@@ -117,22 +135,14 @@ impl SegmentLoadingHistory {
         self.entries
             .iter()
             .find(|entry| entry.playlist_id == playlist_id && entry.sequence_info == sequence_info)
-            .is_none_or(|entry| {
-                entry
-                    .reload_before
-                    .is_some_and(|boundary| needed_from < boundary)
-            })
+            .is_none_or(|entry| entry.needs_loading(needed_from))
     }
 
-    /// Earliest start of a segment with lost data still needed from the given position.
+    /// Earliest start of a segment allowed to reload from the given position.
     pub(super) fn first_position_to_reload(&self, needed_from: f64) -> Option<f64> {
         self.entries
             .iter()
-            .filter(|entry| {
-                entry
-                    .reload_before
-                    .is_some_and(|boundary| needed_from < boundary)
-            })
+            .filter(|entry| entry.needs_loading(needed_from))
             .map(|entry| entry.start)
             .min_by(f64::total_cmp)
     }
@@ -190,6 +200,7 @@ impl SegmentLoadingHistory {
             // do not look like fresh removal on every observation.
             entry.buffered.clear();
             entry.reload_before = None;
+            entry.reconsider_before = None;
         } else {
             self.entries.push(SegmentHistoryEntry {
                 playlist_id,
@@ -198,52 +209,78 @@ impl SegmentLoadingHistory {
                 end,
                 buffered: TimeRanges::new(),
                 reload_before: None,
+                reconsider_before: None,
             });
+        }
+    }
+
+    /// Reconsider initial missing data without forgetting what was supplied or observed.
+    pub(super) fn reconsider(&mut self) {
+        for entry in &mut self.entries {
+            let mut expected = TimeRanges::new();
+            expected.add(entry.start, entry.end);
+            entry.reconsider_before = missing_data_boundary(&expected, &entry.buffered);
         }
     }
 }
 
-/// Find the position before which observed loss warrants another load.
-/// Both sets of ranges are limited to one segment. Initial holes do not count as loss.
-fn reload_before(previous: &TimeRanges, current: &TimeRanges) -> Option<f64> {
-    if current.is_empty() {
-        // Complete disappearance bypasses the 0.5s tolerance. Never-observed appends return None
-        // and cannot trigger a reload.
-        return previous
+/// Compare `expected` ranges with `available` ranges, in playlist seconds.
+///
+/// Look for parts of `expected` absent from `available`. Ignore missing parts no longer than
+/// MISSING_DATA_TOLERANCE. For each longer missing part, take its end minus that tolerance.
+/// Return the latest of those positions, or None if there is no such missing part.
+///
+/// For example, with a tolerance of 0.5s and `expected` containing 8-12s:
+///
+/// ```text
+/// available               result       missing parts
+/// 8-12                    None         nothing
+/// 8.25-12                 None         only 0.25s
+/// 10-12                   Some(9.5)    8-10
+/// 8-10                    Some(11.5)   10-12
+/// 8-9 and 10-11           Some(11.5)   9-10 and 11-12; keep the later boundary
+/// empty                   Some(12)     everything; see the rule below
+/// ```
+///
+/// If `available` is empty, return the latest end in `expected` without subtracting the
+/// tolerance. An empty `expected` always returns None.
+fn missing_data_boundary(expected: &TimeRanges, available: &TimeRanges) -> Option<f64> {
+    if available.is_empty() {
+        // If all expected coverage is absent, bypass the 0.5s tolerance.
+        // An empty expected range returns None.
+        return expected
             .into_iter()
             .map(|range| range.end())
             .max_by(f64::total_cmp);
     }
-    let mut reload_before: Option<f64> = None;
-    for range in previous {
+    let mut latest_boundary: Option<f64> = None;
+    for range in expected {
         let end = range.end();
         let mut covered_until = range.start();
-        for current_range in current {
-            let current_start = current_range.start();
-            let current_end = current_range.end();
-            if current_end <= covered_until {
+        for available_range in available {
+            let available_start = available_range.start();
+            let available_end = available_range.end();
+            if available_end <= covered_until {
                 continue;
             }
-            if current_start >= end {
+            if available_start >= end {
                 break;
             }
-            // A missing range only requires a reload while more than 0.5s of it remains ahead
-            // of the wanted position. The latest such boundary covers all missing ranges.
-            if current_start - covered_until > 0.5 {
-                let boundary = current_start - 0.5;
-                reload_before = Some(reload_before.map_or(boundary, |p| p.max(boundary)));
+            if available_start - covered_until > MISSING_DATA_TOLERANCE {
+                let boundary = available_start - MISSING_DATA_TOLERANCE;
+                latest_boundary = Some(latest_boundary.map_or(boundary, |p| p.max(boundary)));
             }
-            covered_until = covered_until.max(current_end);
+            covered_until = covered_until.max(available_end);
             if covered_until >= end {
                 break;
             }
         }
-        if end - covered_until > 0.5 {
-            let boundary = end - 0.5;
-            reload_before = Some(reload_before.map_or(boundary, |p| p.max(boundary)));
+        if end - covered_until > MISSING_DATA_TOLERANCE {
+            let boundary = end - MISSING_DATA_TOLERANCE;
+            latest_boundary = Some(latest_boundary.map_or(boundary, |p| p.max(boundary)));
         }
     }
-    reload_before
+    latest_boundary
 }
 
 #[cfg(test)]
@@ -634,5 +671,93 @@ mod tests {
         history.synchronize(&[(0., 4.)], 0., 8.);
         assert!(!history.needs_loading(first_playlist, sequence_info, 0.));
         assert!(!history.needs_loading(second_playlist, sequence_info, 0.));
+    }
+
+    #[test]
+    fn reconsidering_initial_holes_keeps_history_and_permission_until_supply() {
+        let playlist = MediaPlaylistPermanentId::new_for_test(1);
+        let sequence = PlaylistSequenceInfo::new(1, 0);
+        for ranges in [
+            vec![],
+            vec![(2., 4.)],
+            vec![(0., 2.)],
+            vec![(0., 1.), (3., 4.)],
+        ] {
+            let mut history = SegmentLoadingHistory::default();
+            history.insert(playlist, sequence, 0., 4.);
+            history.synchronize(&ranges, 0., 8.);
+            assert!(!history.needs_loading(playlist, sequence, 0.));
+            history.reconsider();
+            assert!(history.contains(playlist, sequence));
+            for _ in 0..3 {
+                assert_eq!(history.synchronize(&ranges, 0., 8.), Some(0.));
+                assert!(history.needs_loading(playlist, sequence, 0.));
+                assert_eq!(history.first_position_to_reload(0.), Some(0.));
+            }
+            history.insert(playlist, sequence, 0., 4.);
+            for _ in 0..3 {
+                assert_eq!(history.synchronize(&ranges, 0., 8.), None);
+                assert!(!history.needs_loading(playlist, sequence, 0.));
+            }
+            history.reconsider();
+            assert!(history.needs_loading(playlist, sequence, 0.));
+        }
+    }
+
+    #[test]
+    fn reconsideration_uses_all_observed_ranges_and_tolerates_small_holes() {
+        let playlist = MediaPlaylistPermanentId::new_for_test(1);
+        let sequence = PlaylistSequenceInfo::new(1, 0);
+        for ranges in [
+            vec![(0., 4.)],
+            vec![(0.25, 4.)],
+            vec![(0., 3.75)],
+            vec![(0., 1.), (1.25, 4.)],
+        ] {
+            let mut history = SegmentLoadingHistory::default();
+            history.insert(playlist, sequence, 0., 4.);
+            history.synchronize(&ranges, 0., 8.);
+            history.reconsider();
+            assert!(!history.needs_loading(playlist, sequence, 0.));
+        }
+        let mut history = SegmentLoadingHistory::default();
+        history.insert(playlist, sequence, 0., 4.);
+        history.synchronize(&[(2., 4.)], 0., 8.);
+        history.synchronize(&[(0., 4.)], 0., 8.);
+        history.reconsider();
+        assert!(!history.needs_loading(playlist, sequence, 0.));
+    }
+
+    #[test]
+    fn reconsidered_prefix_does_not_require_loading_when_already_behind() {
+        let playlist = MediaPlaylistPermanentId::new_for_test(1);
+        let sequence = PlaylistSequenceInfo::new(1, 0);
+        let mut history = SegmentLoadingHistory::default();
+        history.insert(playlist, sequence, 0., 4.);
+        history.synchronize(&[(2., 4.)], 3., 8.);
+        history.reconsider();
+        assert!(!history.needs_loading(playlist, sequence, 3.));
+        assert!(!history.needs_loading(playlist, sequence, 1.5));
+        assert_eq!(history.first_position_to_reload(3.), None);
+        assert!(history.needs_loading(playlist, sequence, 1.));
+    }
+
+    #[test]
+    fn supplying_one_reconsidered_segment_keeps_other_permissions_and_loss_detection() {
+        let playlist = MediaPlaylistPermanentId::new_for_test(1);
+        let first = PlaylistSequenceInfo::new(1, 0);
+        let second = PlaylistSequenceInfo::new(2, 0);
+        let mut history = SegmentLoadingHistory::default();
+        history.insert(playlist, first, 0., 4.);
+        history.insert(playlist, second, 4., 8.);
+        history.synchronize(&[(2., 6.)], 0., 12.);
+        history.reconsider();
+        history.insert(playlist, first, 0., 4.);
+        history.synchronize(&[(2., 6.)], 0., 12.);
+        assert!(!history.needs_loading(playlist, first, 0.));
+        assert!(history.needs_loading(playlist, second, 0.));
+        history.synchronize(&[(0., 6.)], 0., 12.);
+        history.synchronize(&[(2., 6.)], 0., 12.);
+        assert!(history.needs_loading(playlist, first, 0.));
     }
 }

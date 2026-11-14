@@ -193,17 +193,14 @@ impl BufferedChunk {
         self.dirty
     }
 
-    /// Returns true if the given segment appears to be garbage collected, at least since the
-    /// position given by `min_wanted_pos`, in seconds
-    // TODO: Remove this method once selection checks current buffered bounds instead of full
-    // segment bounds. Keep removal tolerances and permission to reload in SegmentLoadingHistory.
-    pub(crate) fn appears_garbage_collected(&self, min_wanted_pos: f64) -> bool {
-        if self.last_buffered_start - self.start > 0.5 && self.last_buffered_start > min_wanted_pos
-        {
-            true
-        } else {
-            self.end - self.last_buffered_end > 0.5
-        }
+    /// Whether the last reported buffered bounds cover `start` to `end`, in playlist seconds.
+    /// Up to `tolerance` seconds can be missing at each end.
+    /// This only checks the bounds, not the quality or whether this entry is dirty.
+    pub(crate) fn covers_range(&self, start: f64, end: f64, tolerance: f64) -> bool {
+        start >= end
+            || (self.last_buffered_start < self.last_buffered_end
+                && self.last_buffered_start - start <= tolerance
+                && end - self.last_buffered_end <= tolerance)
     }
 
     pub(crate) fn is_worse_than(&self, context: &SegmentQualityContext) -> bool {
@@ -1323,7 +1320,7 @@ fn matches_discontinuity(seg: &BufferedChunk, discontinuity_sequence: u32) -> bo
 
 #[cfg(test)]
 mod tests {
-    use super::{BufferedSegmentMetadata, SegmentInventory, SegmentQualityContext};
+    use super::{BufferedChunk, BufferedSegmentMetadata, SegmentInventory, SegmentQualityContext};
     use crate::{
         bindings::{MediaType, TimescaledTimestamp},
         dispatcher::JsTimeRanges,
@@ -1413,7 +1410,8 @@ mod tests {
         assert_eq!(chunk.last_buffered_start(), 167.751);
         assert_eq!(chunk.last_buffered_end(), 170.);
         assert!(chunk.is_dirty());
-        assert!(!chunk.appears_garbage_collected(135.));
+        assert!(!chunk.covers_range(160., 170., 0.5));
+        assert!(chunk.covers_range(167.751, 170., 0.));
 
         let retry = inventory.insert_segment(metadata(160., 170.));
         inventory.reconcile_push_result(retry, &ranges, 0., true);
@@ -1555,5 +1553,29 @@ mod tests {
             .expect("expected discontinuity-matched overlap anchor");
         assert_eq!(anchor.value(), 900_000);
         assert_eq!(anchor.timescale(), 90_000);
+    }
+
+    #[test]
+    fn coverage_query_uses_requested_range_and_caller_tolerance() {
+        let mut chunk = BufferedChunk::new(metadata(8., 12.), 1);
+        chunk.last_buffered_start = 8.5;
+        chunk.last_buffered_end = 11.5;
+        assert!(chunk.covers_range(8., 12., 0.5));
+        assert!(!chunk.covers_range(8., 12., 0.49));
+        assert!(chunk.covers_range(8.5, 11.5, 0.));
+        assert!(chunk.covers_range(9., 10., 0.));
+        assert!(!chunk.covers_range(8., 10., 0.));
+        assert!(!chunk.covers_range(9., 12., 0.));
+        chunk.mark_dirty();
+        assert!(chunk.covers_range(9., 10., 0.));
+    }
+
+    #[test]
+    fn absent_coverage_does_not_cover_a_small_nonempty_request() {
+        let mut chunk = BufferedChunk::new(metadata(8., 12.), 1);
+        chunk.last_buffered_start = 10.;
+        chunk.last_buffered_end = 10.;
+        assert!(!chunk.covers_range(9.75, 10.25, 0.5));
+        assert!(chunk.covers_range(10., 10., 0.));
     }
 }

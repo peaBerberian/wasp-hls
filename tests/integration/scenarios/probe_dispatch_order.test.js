@@ -208,13 +208,13 @@ async function createProbeHarness({
     return { videoProbe, audioProbe };
   }
 
-  function completeAppends() {
+  function completeAppends(ranges) {
     for (const [id, buffer] of buffers) {
       while (buffer.pending.length) {
         buffer.pending.shift();
         dispatcher.on_source_buffer_update(
           id,
-          new JsTimeRanges(new Float64Array([2, buffer.end])),
+          new JsTimeRanges(new Float64Array(ranges ?? [2, buffer.end])),
         );
       }
     }
@@ -493,3 +493,77 @@ it("requests a cancelled initialization again when recovery resumes after the fa
     ctx.dispatcher.free();
   }
 });
+
+// Exercise the selector through Dispatcher, including the initially corrected inventory bounds.
+it.each([
+  { missingTail: false, fillsHole: false },
+  { missingTail: false, fillsHole: true },
+  { missingTail: true, fillsHole: false },
+  { missingTail: true, fillsHole: true },
+])(
+  "reconsiders initial partial coverage after a seek: %j",
+  async ({ missingTail, fillsHole }) => {
+    const ctx = await createProbeHarness({
+      singleTrack: true,
+      mediaDuration: 40,
+    });
+    const observe = (
+      position,
+      ranges,
+      reason = PlaybackTickReason.RegularInterval,
+    ) => {
+      ctx.dispatcher.on_playback_tick(
+        new MediaObservation(
+          reason,
+          position,
+          4,
+          new JsTimeRanges(new Float64Array(ranges)),
+          true,
+          false,
+          false,
+          42,
+          undefined,
+          new JsTimeRanges(new Float64Array(ranges)),
+        ),
+      );
+    };
+    const count = () =>
+      ctx.requests.filter((r) => r.url.endsWith("first-video-2.ts")).length;
+    try {
+      ctx.start();
+      ctx.completeAppends();
+      ctx.finish("first-video-1.ts");
+      ctx.completeAppends();
+      // Segment 2 covers playlist 8-12s, or media 10-14s.
+      // Its first reported result is already missing either its prefix or its tail.
+      for (let i = 2; i < 8; i++) {
+        ctx.finish(`first-video-${i}.ts`);
+        ctx.completeAppends(
+          missingTail
+            ? [2, 12, 14, (i + 1) * 4 + 2]
+            : [2, 10, 12, (i + 1) * 4 + 2],
+        );
+      }
+      const partial = missingTail ? [2, 12, 14, 34] : [2, 10, 12, 34];
+      observe(15, partial);
+      expect(count()).toBe(1);
+      ctx.dispatcher.set_buffer_goal(4);
+      observe(6, partial, PlaybackTickReason.Seeking);
+      observe(6.5, partial);
+      expect(count()).toBe(2);
+      ctx.finish("first-video-2.ts");
+      const afterRetry = fillsHole ? [2, 34] : partial;
+      ctx.completeAppends(afterRetry);
+      for (let i = 0; i < 10; i++) observe(6.5, afterRetry);
+      expect(count()).toBe(2);
+      // A new seek can reconsider the same missing data again.
+      observe(6.5, afterRetry, PlaybackTickReason.Seeking);
+      expect(count()).toBe(fillsHole ? 2 : 3);
+      expect(ctx.errors).toEqual([]);
+      expect(ctx.resources.size).toBe(0);
+    } finally {
+      ctx.dispatcher.stop();
+      ctx.dispatcher.free();
+    }
+  },
+);
