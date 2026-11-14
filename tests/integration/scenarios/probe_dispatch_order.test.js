@@ -19,6 +19,7 @@ async function createProbeHarness({
   singleTrack = false,
   audioDuration = 4,
   mediaDuration = 12,
+  mediaOffset = 2,
   observeBeforeReady = false,
   failAppend,
 } = {}) {
@@ -29,8 +30,10 @@ async function createProbeHarness({
   const appends = [];
   const removals = [];
   const offsets = [];
+  const seeks = [];
   const errors = [];
   let ended = 0;
+  let mediaCommandNumber = 0;
   let nextResource = 1;
   let nextBuffer = 1;
   const bindings = new Proxy(
@@ -59,7 +62,7 @@ async function createProbeHarness({
       },
       addSourceBuffer(mediaType) {
         const id = nextBuffer++;
-        buffers.set(id, { mediaType, pending: [], end: 2 });
+        buffers.set(id, { mediaType, pending: [], end: mediaOffset });
         return { value: id };
       },
       appendBuffer(bufferId, resourceId, hints) {
@@ -87,7 +90,7 @@ async function createProbeHarness({
         if (index === undefined) return { value: undefined };
         const duration =
           buffer.mediaType === MediaType.Audio ? audioDuration : 4;
-        const start = Number(index) * duration + 2;
+        const start = Number(index) * duration + mediaOffset;
         buffer.end = start + duration;
         return {
           value: {
@@ -102,6 +105,10 @@ async function createProbeHarness({
         return { value: true };
       },
       setMediaOffset: (offset) => offsets.push(offset),
+      seek(position) {
+        seeks.push(position);
+        return ++mediaCommandNumber;
+      },
       endOfStream() {
         ended++;
         return { value: true };
@@ -199,6 +206,7 @@ async function createProbeHarness({
           12,
           undefined,
           undefined,
+          mediaCommandNumber,
         ),
       );
     }
@@ -214,7 +222,9 @@ async function createProbeHarness({
         buffer.pending.shift();
         dispatcher.on_source_buffer_update(
           id,
-          new JsTimeRanges(new Float64Array(ranges ?? [2, buffer.end])),
+          new JsTimeRanges(
+            new Float64Array(ranges ?? [mediaOffset, buffer.end]),
+          ),
         );
       }
     }
@@ -229,8 +239,12 @@ async function createProbeHarness({
     appends,
     removals,
     offsets,
+    seeks,
     errors,
     buffers,
+    get mediaCommandNumber() {
+      return mediaCommandNumber;
+    },
     get ended() {
       return ended;
     },
@@ -360,6 +374,7 @@ it("requests a failed append again after BufferFull cleanup despite old partial 
         42,
         undefined,
         new JsTimeRanges(new Float64Array(ranges)),
+        ctx.mediaCommandNumber,
       ),
     );
   const requestsFor = (suffix) =>
@@ -431,6 +446,7 @@ it("requests a cancelled initialization again when recovery resumes after the fa
         42,
         undefined,
         new JsTimeRanges(new Float64Array(ranges)),
+        ctx.mediaCommandNumber,
       ),
     );
   try {
@@ -524,6 +540,7 @@ it.each([
           42,
           undefined,
           new JsTimeRanges(new Float64Array(ranges)),
+          ctx.mediaCommandNumber,
         ),
       );
     };
@@ -567,3 +584,81 @@ it.each([
     }
   },
 );
+
+it("keeps the wanted position across snapshots captured before a seek", async () => {
+  const ctx = await createProbeHarness({
+    singleTrack: true,
+    mediaDuration: 40,
+    mediaOffset: 0,
+  });
+  const ranges = [0.5, 4, 5, 32];
+  const observe = (
+    position,
+    reason = PlaybackTickReason.RegularInterval,
+    seeking = false,
+    lastMediaCommandNumber = ctx.mediaCommandNumber,
+  ) =>
+    ctx.dispatcher.on_playback_tick(
+      new MediaObservation(
+        reason,
+        position,
+        4,
+        new JsTimeRanges(new Float64Array(ranges)),
+        false,
+        seeking,
+        false,
+        40,
+        undefined,
+        new JsTimeRanges(new Float64Array(ranges)),
+        lastMediaCommandNumber,
+      ),
+    );
+  const noPendingWork = () => {
+    expect(
+      ctx.requests.filter((request) => !request.finished && !request.aborted),
+    ).toEqual([]);
+    for (const buffer of ctx.buffers.values())
+      expect(buffer.pending).toEqual([]);
+  };
+  try {
+    ctx.start();
+    ctx.completeAppends();
+    for (let index = 1; index < 8; index++) {
+      ctx.finish(`first-video-${index}.ts`);
+      ctx.completeAppends();
+    }
+    ctx.dispatcher.set_buffer_goal(4);
+    noPendingWork();
+    const beforeSeek = ctx.mediaCommandNumber;
+    observe(0);
+    expect(ctx.seeks).toEqual([0.51]);
+    for (const reason of [
+      PlaybackTickReason.CanPlay,
+      PlaybackTickReason.Playing,
+      PlaybackTickReason.CanPlayThrough,
+      PlaybackTickReason.Requested,
+      PlaybackTickReason.Seeked,
+    ]) {
+      observe(0, reason, false, beforeSeek);
+    }
+    expect(ctx.seeks).toEqual([0.51]);
+    noPendingWork();
+
+    // A snapshot after the command makes its actual position authoritative.
+    observe(0.51, PlaybackTickReason.Requested, true);
+    observe(0.51, PlaybackTickReason.Seeked);
+    const beforeSecondSeek = ctx.mediaCommandNumber;
+    observe(3.9);
+    expect(ctx.seeks).toEqual([0.51, 5.01]);
+    observe(3.9, PlaybackTickReason.Requested, false, beforeSecondSeek);
+    expect(ctx.seeks).toEqual([0.51, 5.01]);
+    // An adjusted browser position is authoritative; an exact target match is unnecessary.
+    observe(5.02, PlaybackTickReason.Requested, true);
+    noPendingWork();
+    expect(ctx.seeks).toEqual([0.51, 5.01]);
+    expect(ctx.errors).toEqual([]);
+  } finally {
+    ctx.dispatcher.stop();
+    ctx.dispatcher.free();
+  }
+});

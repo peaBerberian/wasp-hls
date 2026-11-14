@@ -148,9 +148,9 @@ export interface HostBindings {
    */
   removeMediaSource(): HostResult<true, RemoveMediaSourceErrorCode>;
   /**
-   * Seek the media element to a new playback position.
+   * Seek the media element and return its media command number.
    */
-  seek(position: number): void;
+  seek(position: number): number;
   /**
    * Emit a media-playlist parsing error to the host.
    */
@@ -540,6 +540,7 @@ export interface WaspWasmExports {
     audioLen: number,
     videoPtr: number,
     videoLen: number,
+    lastMediaCommandNumber: number,
   ): void;
   /**
    * Forward a host timer completion to wasm.

@@ -264,7 +264,7 @@ fn advance_awaiting_media_source_state(dispatcher: &mut Dispatcher) {
         dispatcher.media_element_ref.seek(wanted_start);
     }
 
-    sync_media_source_duration(playlist_store);
+    sync_media_source_duration(playlist_store, &dispatcher.media_element_ref);
 
     if let Some(Err(e)) = init_source_buffer(dispatcher, MediaType::Audio) {
         let (code, msg) = format_source_buffer_creation_err_for_js(e);

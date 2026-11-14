@@ -137,8 +137,8 @@ unsafe extern "C" {
         err_desc_ptr_out: *mut u32,
         err_desc_len_out: *mut u32,
     ) -> u32;
-    /// Seek the media element to a new playback position.
-    pub(super) fn __js_func__seek(position: f64);
+    /// Seek the media element and return its media command number.
+    pub(super) fn __js_func__seek(position: f64) -> f64;
     /// Emit a media-playlist parsing error to the host.
     pub(super) fn __js_func__send_media_playlist_parsing_error(
         fatal: u32,

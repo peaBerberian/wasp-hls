@@ -415,15 +415,15 @@
     },
     {
       "wasmSymbol": "__js_func__seek",
-      "doc": ["Seek the media element to a new playback position."],
+      "doc": ["Seek the media element and return its media command number."],
       "typescript": {
         "methodName": "seek",
         "args": [{ "name": "position", "type": "number" }],
-        "returnType": "void",
+        "returnType": "number",
       },
       "rust": {
         "args": [{ "name": "position", "type": "f64" }],
-        "returnType": "void",
+        "returnType": "f64",
       },
     },
     {
@@ -1282,6 +1282,7 @@
           { "name": "audioLen", "type": "number" },
           { "name": "videoPtr", "type": "number" },
           { "name": "videoLen", "type": "number" },
+          { "name": "lastMediaCommandNumber", "type": "number" },
         ],
         "returnType": "void",
       },

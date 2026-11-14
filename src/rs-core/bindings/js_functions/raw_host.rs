@@ -204,8 +204,8 @@ pub(super) unsafe fn __js_func__remove_media_source(
     non_wasm_binding_panic("__js_func__remove_media_source")
 }
 
-/// Seek the media element to a new playback position.
-pub(super) unsafe fn __js_func__seek(_position: f64) {
+/// Seek the media element and return its media command number.
+pub(super) unsafe fn __js_func__seek(_position: f64) -> f64 {
     non_wasm_binding_panic("__js_func__seek")
 }
 

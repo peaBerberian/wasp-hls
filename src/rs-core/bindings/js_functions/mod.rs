@@ -513,10 +513,9 @@ pub fn jsSetPlaybackRate(playback_rate: f64) {
     unsafe { __js_func__set_playback_rate(playback_rate) }
 }
 
-/// Call the `HTMLMediaElement.prototype.seek` API, allowing to move the current
-/// playback's playhead.
-pub fn jsSeek(position: f64) {
-    unsafe { __js_func__seek(position) }
+/// Request a `currentTime` change and return the media command number.
+pub fn jsSeek(position: f64) -> u64 {
+    unsafe { __js_func__seek(position) as u64 }
 }
 
 pub fn jsFlush() {

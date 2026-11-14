@@ -2,8 +2,9 @@ use self::segment_inventory::{BufferedSegmentMetadata, SegmentInventory};
 use self::source_buffers::SourceBufferQueueElement;
 use crate::bindings::{
     jsAttachMediaSource, jsEndOfStream, jsRemoveMediaSource, jsSeek, jsSetMediaOffset,
-    jsSetPlaybackRate, jsStartRebuffering, jsStopRebuffering, AddSourceBufferErrorCode,
-    AttachMediaSourceErrorCode, MediaType, SourceBufferId, TimescaledTimestamp,
+    jsSetMediaSourceDuration, jsSetPlaybackRate, jsStartRebuffering, jsStopRebuffering,
+    AddSourceBufferErrorCode, AttachMediaSourceErrorCode, MediaType, SourceBufferId,
+    TimescaledTimestamp,
 };
 use crate::dispatcher::{JsMemoryBlob, JsTimeRanges, MediaObservation, MediaSourceReadyState};
 use crate::parser::{MediaPlaylistPermanentId, PlaylistSequenceInfo, SegmentTimeInfo};
@@ -16,6 +17,14 @@ pub(crate) use source_buffers::{PreparedPushData, SegmentHints};
 mod segment_inventory;
 mod source_buffers;
 
+#[derive(Clone, Copy)]
+struct SeekTarget {
+    /// Wanted position in playlist time.
+    position: f64,
+    /// Set once the seek is sent. Older snapshots cannot replace this target.
+    media_command_number: Option<u64>,
+}
+
 /// Structure linked to an HTMLMediaElement which allows to perform media-related actions on it,
 /// such as:
 ///   - attaching a MediaSource and creating SourceBuffers
@@ -24,9 +33,12 @@ mod source_buffers;
 ///   - seeking
 ///   - etc.
 pub(crate) struct MediaElementReference {
-    /// Set when a seek operation will need to be performed once possible on the linked
-    /// HTMLMediaElement.
-    queued_seek: Option<f64>,
+    /// Wanted position until an observation accounts for the seek.
+    /// Also holds seeks which cannot be sent yet, for example before a `1` `readyState`.
+    ///
+    /// Allows to provide the wanted position in the meantime even if observations do not  reflect
+    /// it for now.
+    seek_target: Option<SeekTarget>,
 
     /// Stores the last `MediaObservation` received.
     last_observation: Option<MediaObservation>,
@@ -83,7 +95,7 @@ impl MediaElementReference {
     /// a `MediaSource` already-attached to it.
     pub(crate) fn new() -> Self {
         Self {
-            queued_seek: None,
+            seek_target: None,
             is_rebuffering: false,
             last_observation: None,
             media_source_ready_state: None,
@@ -103,7 +115,7 @@ impl MediaElementReference {
     /// To call once you want to stop the content.
     pub(crate) fn reset(&mut self) {
         let _ = jsRemoveMediaSource();
-        self.queued_seek = None;
+        self.seek_target = None;
         self.last_observation = None;
         self.is_rebuffering = false;
         self.media_source_ready_state = Some(MediaSourceReadyState::Closed);
@@ -145,18 +157,28 @@ impl MediaElementReference {
         Ok(())
     }
 
+    /// Update the attached MediaSource's duration.
+    pub(crate) fn set_duration(&self, duration: f64) {
+        let _ = jsSetMediaSourceDuration(duration);
+    }
+
+    /// Whether a requested seek is still queued or has not been observed yet.
+    pub(crate) fn is_seek_pending(&self) -> bool {
+        self.seek_target.is_some()
+    }
+
     /// Returns the currently wanted playlist position.
     ///
     /// That is:
     ///
-    ///   - If a seek has been asked for but could not be performed yet (for example,
-    ///     because initialization is still pending), the position for that seek
+    ///   - If the last observation predates a requested seek, or that seek cannot
+    ///     be sent yet, the position for that seek
     ///
     ///   - Else if no seek is pending, the last known media playhead position
     ///     converted to a playlist position.
     pub(crate) fn wanted_position(&self) -> f64 {
-        match self.queued_seek {
-            Some(queued_seek) => queued_seek,
+        match self.seek_target {
+            Some(target) => target.position,
             None => {
                 let last_media_pos = self
                     .last_observation
@@ -215,8 +237,8 @@ impl MediaElementReference {
     /// `None` if unknown.
     pub(crate) fn buffer_ahead_for(&self, media_type: MediaType) -> Option<f64> {
         let observation = self.last_observation.as_ref()?;
-        let position = match self.queued_seek {
-            Some(position) => self.playlist_pos_to_media_pos(position)?,
+        let position = match self.seek_target {
+            Some(target) => self.playlist_pos_to_media_pos(target.position)?,
             None => observation.current_time(),
         };
         let buffered = match media_type {
@@ -232,26 +254,19 @@ impl MediaElementReference {
     /// not be able to be performed right now, and might in that case be postponed
     /// until the right conditions are reached.
     ///
-    /// The boolean returned indicates if the seek was able to be performed
-    /// synchronously.
+    /// Returns `true` if the seek was sent immediately instead of queued.
     pub(crate) fn seek(&mut self, position: f64) -> bool {
-        match &self.last_observation {
-            Some(obs) if obs.ready_state() >= 1 => match self.playlist_pos_to_media_pos(position) {
-                Some(media_pos) => {
-                    self.queued_seek = None;
-                    jsSeek(media_pos);
-                    true
-                }
-                None => {
-                    self.queued_seek = Some(position);
-                    false
-                }
-            },
-            _ => {
-                self.queued_seek = Some(position);
-                false
+        let media_command_number = match &self.last_observation {
+            Some(obs) if obs.ready_state() >= 1 => {
+                self.playlist_pos_to_media_pos(position).map(jsSeek)
             }
-        }
+            _ => None,
+        };
+        self.seek_target = Some(SeekTarget {
+            position,
+            media_command_number,
+        });
+        media_command_number.is_some()
     }
 
     /// Returns the last communicated `readyState` of the `MediaSource` attached
@@ -519,6 +534,13 @@ impl MediaElementReference {
 
     /// Method to call once a `MediaObservation` has been received.
     pub(crate) fn on_observation(&mut self, observation: MediaObservation) {
+        if self.seek_target.is_some_and(|target| {
+            target.media_command_number.is_some_and(|command_number| {
+                observation.last_media_command_number() >= command_number
+            })
+        }) {
+            self.seek_target = None;
+        }
         if let Some(media_offset) = self.media_offset {
             if let Some(buffered) = observation.video_buffered() {
                 self.video_inventory.synchronize(buffered, media_offset);
@@ -800,14 +822,21 @@ impl MediaElementReference {
     ///
     /// Returns `true` if a seek has been performed
     fn check_queued_seek(&mut self) -> bool {
-        if let (Some(queued_seek), Some(observation)) =
-            (self.queued_seek, self.last_observation.as_ref())
+        if let (
+            Some(SeekTarget {
+                position,
+                media_command_number: None,
+            }),
+            Some(observation),
+        ) = (self.seek_target, self.last_observation.as_ref())
         {
-            if let Some(media_pos) = self.playlist_pos_to_media_pos(queued_seek) {
+            if let Some(media_pos) = self.playlist_pos_to_media_pos(position) {
                 if should_perform_queued_seek(observation, media_pos) {
-                    log_info!("Perform awaited seek to {} ({})", queued_seek, media_pos);
-                    jsSeek(media_pos);
-                    self.queued_seek = None;
+                    log_info!("Perform awaited seek to {} ({})", position, media_pos);
+                    self.seek_target = Some(SeekTarget {
+                        position,
+                        media_command_number: Some(jsSeek(media_pos)),
+                    });
                     return true;
                 }
             }
@@ -875,6 +904,7 @@ mod tests {
             f64::MAX,
             None,
             None,
+            0,
         );
 
         assert!(super::should_perform_queued_seek(&observation, 1.912));
@@ -893,6 +923,7 @@ mod tests {
             f64::MAX,
             None,
             None,
+            0,
         );
 
         assert!(!super::should_perform_queued_seek(&observation, 0.5));
@@ -944,7 +975,46 @@ mod tests {
             f64::MAX,
             audio.map(JsTimeRanges::new),
             video.map(JsTimeRanges::new),
+            0,
         )
+    }
+
+    #[test]
+    fn seek_target_survives_older_snapshots_and_accepts_the_next_actual_position() {
+        let mut media_element = MediaElementReference::new();
+        media_element.media_offset = Some(2.);
+        media_element.seek_target = Some(super::SeekTarget {
+            position: 20.,
+            media_command_number: Some(3),
+        });
+        let observation = |position, last_command_number| {
+            MediaObservation::new(
+                PlaybackTickReason::Seeked,
+                position,
+                4,
+                JsTimeRanges::new(vec![0., 40.]),
+                false,
+                false,
+                false,
+                f64::MAX,
+                None,
+                Some(JsTimeRanges::new(vec![0., 40.])),
+                last_command_number,
+            )
+        };
+        media_element.on_observation(observation(4., 2));
+        assert_eq!(media_element.wanted_position(), 20.);
+        assert_eq!(media_element.buffer_ahead_for(MediaType::Video), Some(18.));
+        assert!(media_element.is_seek_pending());
+        // Even the requested value in an older snapshot cannot account for the command.
+        media_element.on_observation(observation(22., 2));
+        assert!(media_element.is_seek_pending());
+        // Another command may have followed the seek. The actual position can
+        // also include browser adjustments or a later user seek.
+        media_element.on_observation(observation(25., 4));
+        assert!(!media_element.is_seek_pending());
+        assert_eq!(media_element.wanted_position(), 23.);
+        assert_eq!(media_element.buffer_ahead_for(MediaType::Video), Some(15.));
     }
 
     #[test]
@@ -1065,7 +1135,10 @@ mod tests {
     fn buffer_ahead_uses_queued_seek_target() {
         let mut media_element = MediaElementReference::new();
         media_element.media_offset = Some(100.);
-        media_element.queued_seek = Some(20.);
+        media_element.seek_target = Some(super::SeekTarget {
+            position: 20.,
+            media_command_number: None,
+        });
         media_element.last_observation = Some(buffer_observation(
             110.,
             vec![100., 115., 120., 150.],
@@ -1081,7 +1154,10 @@ mod tests {
     #[test]
     fn buffer_ahead_is_unavailable_for_seek_without_known_offset() {
         let mut media_element = MediaElementReference::new();
-        media_element.queued_seek = Some(20.);
+        media_element.seek_target = Some(super::SeekTarget {
+            position: 20.,
+            media_command_number: None,
+        });
         media_element.last_observation = Some(buffer_observation(
             10.,
             vec![0., 40.],
@@ -1108,6 +1184,7 @@ mod tests {
             18.0,
             None,
             None,
+            0,
         ));
 
         assert_eq!(media_element.next_buffered_range(), Some((12.0, 18.0)));
@@ -1127,6 +1204,7 @@ mod tests {
             18.0,
             None,
             None,
+            0,
         ));
 
         assert_eq!(media_element.next_buffered_range(), Some((12.0, 18.0)));
@@ -1146,6 +1224,7 @@ mod tests {
             10.0,
             None,
             None,
+            0,
         ));
 
         assert_eq!(media_element.next_buffered_range(), None);

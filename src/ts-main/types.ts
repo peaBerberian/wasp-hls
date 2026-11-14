@@ -72,8 +72,8 @@ export interface ContentMetadata {
   }>;
 
   /**
-   * Class allowing to produce playback observations.
-   * `null` if no "playback observation" is currently listened to.
+   * Class allowing to produce playback observations from the media element.
+   * `null` before this object is created or after playback resources are freed.
    */
   playbackObserver: PlaybackObserver | null;
 
