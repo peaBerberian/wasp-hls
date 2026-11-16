@@ -23,6 +23,14 @@ export async function testPerformance(root, args) {
   });
 }
 
+/** @param {string} root @param {string[]} args */
+export async function testPlayerBenchmarks(root, args) {
+  reportStep("TEST", "running player benchmarks...");
+  await exec(process.execPath, ["tests/player-benchmarks/run.mjs", ...args], {
+    cwd: root,
+  });
+}
+
 /** @param {string} root */
 export async function testAll(root) {
   await testRust(root, { filters: [] });

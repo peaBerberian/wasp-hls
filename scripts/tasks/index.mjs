@@ -34,6 +34,7 @@ import {
   testIntegration,
   testMemory,
   testPerformance,
+  testPlayerBenchmarks,
   testRust as runRustTests,
   testTransmux,
 } from "./test.mjs";
@@ -183,6 +184,11 @@ async function run() {
       if (rest[0] === "performance") {
         await testPerformance(ROOT, rest.slice(1));
         reportSuccess("Performance tests");
+        return;
+      }
+      if (rest[0] === "player-benchmarks") {
+        await testPlayerBenchmarks(ROOT, rest.slice(1));
+        reportSuccess("Player benchmarks");
         return;
       }
       const options = parseTestArgs(rest);
@@ -474,6 +480,7 @@ Commands
                --filter is repeatable for scoped test runs
                --watch is supported for integration and transmux
                --browser is supported for integration, memory and performance
+  player-benchmarks Compare Wasp with opt-in external player benchmarks
 
   fmt [--check]   Format Rust and JS/TS/Markdown
   generate        Regenerate wasm ABI enums

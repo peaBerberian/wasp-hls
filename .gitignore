@@ -18,3 +18,7 @@
 /localhost.key
 
 /tmp
+
+/tests/player-benchmarks/node_modules/
+/tests/player-benchmarks/generated/
+/tests/player-benchmarks/results/
