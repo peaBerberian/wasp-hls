@@ -1,6 +1,6 @@
 use crate::{
+    bindings::JsTimeRanges,
     bindings::{MediaType, TimescaledTimestamp},
-    dispatcher::JsTimeRanges,
     parser::MediaPlaylistPermanentId,
     utils::logger::*,
 };
@@ -1322,8 +1322,8 @@ fn matches_discontinuity(seg: &BufferedChunk, discontinuity_sequence: u32) -> bo
 mod tests {
     use super::{BufferedChunk, BufferedSegmentMetadata, SegmentInventory, SegmentQualityContext};
     use crate::{
+        bindings::JsTimeRanges,
         bindings::{MediaType, TimescaledTimestamp},
-        dispatcher::JsTimeRanges,
         parser::MediaPlaylistPermanentId,
     };
 

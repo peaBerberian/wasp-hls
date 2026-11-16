@@ -1,21 +1,25 @@
 use self::segment_inventory::{BufferedSegmentMetadata, SegmentInventory};
 use self::source_buffers::SourceBufferQueueElement;
+use self::stall_resolver::StallResolver;
 use crate::bindings::{
     jsAttachMediaSource, jsEndOfStream, jsRemoveMediaSource, jsSeek, jsSetMediaOffset,
-    jsSetMediaSourceDuration, jsSetPlaybackRate, jsStartRebuffering, jsStopRebuffering,
-    AddSourceBufferErrorCode, AttachMediaSourceErrorCode, MediaType, SourceBufferId,
-    TimescaledTimestamp,
+    jsSetMediaSourceDuration, jsSetPlaybackRate, AddSourceBufferErrorCode,
+    AttachMediaSourceErrorCode, JsMemoryBlob, JsTimeRanges, MediaSourceReadyState, MediaType,
+    SourceBufferId, TimescaledTimestamp,
 };
-use crate::dispatcher::{JsMemoryBlob, JsTimeRanges, MediaObservation, MediaSourceReadyState};
 use crate::parser::{MediaPlaylistPermanentId, PlaylistSequenceInfo, SegmentTimeInfo};
-use crate::utils::logger::*;
+use crate::requester::Requester;
+use crate::utils::{logger::*, time_ranges::intersect_ranges};
 pub(crate) use source_buffers::{PushSegmentError, RemoveDataError};
 
 pub(crate) use self::segment_inventory::{BufferedChunk, SegmentQualityContext};
+pub(crate) use observation::MediaObservation;
 pub(crate) use source_buffers::{PreparedPushData, SegmentHints};
 
+mod observation;
 mod segment_inventory;
 mod source_buffers;
+mod stall_resolver;
 
 #[derive(Clone, Copy)]
 struct SeekTarget {
@@ -46,9 +50,8 @@ pub(crate) struct MediaElementReference {
     /// Stores the last `MediaObservation` received.
     last_observation: Option<MediaObservation>,
 
-    /// If `true`, we're currently forcing a "rebuffering" mode where the playback rate is set to
-    /// `0` and will only be set back to `wanted_speed` once enough data becomes available again.
-    is_rebuffering: bool,
+    /// Rebuffering state and recovery from playback interruptions.
+    stall_resolver: StallResolver,
 
     /// Offset used to convert the media position on the HTMLMediaElement (ultimately linked to
     /// pushed segments and the browser's internal logic) to the playlist position as found in a
@@ -84,10 +87,6 @@ pub(crate) struct MediaElementReference {
     /// Inventory of buffered segments present in the video buffer.
     /// Empty if no video buffer is present.
     video_inventory: SegmentInventory,
-
-    /// When rebuffering, this is the minimum ammount of time to have ahead
-    /// before playing the content
-    min_buffer_time: f64,
 }
 
 impl MediaElementReference {
@@ -99,8 +98,8 @@ impl MediaElementReference {
     pub(crate) fn new() -> Self {
         Self {
             seek_target: None,
-            is_rebuffering: false,
             last_observation: None,
+            stall_resolver: StallResolver::new(),
             media_source_ready_state: None,
             media_offset: None,
             video_buffer: None,
@@ -108,7 +107,6 @@ impl MediaElementReference {
             wanted_speed: 1.,
             audio_inventory: SegmentInventory::new(MediaType::Audio),
             video_inventory: SegmentInventory::new(MediaType::Video),
-            min_buffer_time: 5.,
         }
     }
 
@@ -120,21 +118,14 @@ impl MediaElementReference {
         let _ = jsRemoveMediaSource();
         self.seek_target = None;
         self.last_observation = None;
-        self.is_rebuffering = false;
+        self.stall_resolver = StallResolver::new();
         self.media_source_ready_state = Some(MediaSourceReadyState::Closed);
         self.media_offset = None;
         self.video_buffer = None;
         self.audio_buffer = None;
         self.wanted_speed = 1.;
-        self.min_buffer_time = 5.;
         self.audio_inventory.reset();
         self.video_inventory.reset();
-    }
-
-    /// Returns `true` if we're currently rebuffering due to not enough media data
-    /// being buffered in front of the wanted position.
-    pub(crate) fn is_rebuffering(&self) -> bool {
-        self.is_rebuffering
     }
 
     /// Returns the wanted playback rate
@@ -155,8 +146,7 @@ impl MediaElementReference {
     pub(crate) fn attach_media_source(&mut self) -> Result<(), AttachMediaSourceError> {
         self.reset();
         jsAttachMediaSource()?;
-        self.is_rebuffering = true;
-        jsStartRebuffering();
+        self.stall_resolver.set_rebuffering(true);
         Ok(())
     }
 
@@ -166,7 +156,7 @@ impl MediaElementReference {
     }
 
     /// Whether a requested seek is still queued or has not been observed yet.
-    pub(crate) fn is_seek_pending(&self) -> bool {
+    fn is_seek_pending(&self) -> bool {
         self.seek_target.is_some()
     }
 
@@ -223,7 +213,7 @@ impl MediaElementReference {
 
     /// Reported ranges for this buffer, converted to playlist time.
     /// None while the ranges or timestamp offset are unknown.
-    pub(crate) fn buffered_ranges_for(&self, media_type: MediaType) -> Option<Vec<(f64, f64)>> {
+    fn buffered_ranges_for(&self, media_type: MediaType) -> Option<Vec<(f64, f64)>> {
         let offset = self.media_offset?;
         let observation = self.last_observation.as_ref()?;
         let buffered = match media_type {
@@ -239,7 +229,7 @@ impl MediaElementReference {
     }
 
     /// Whether either buffer has an append pending before this playlist position.
-    pub(crate) fn has_pending_append_before(&self, position: f64) -> bool {
+    fn has_pending_append_before(&self, position: f64) -> bool {
         [self.audio_buffer.as_ref(), self.video_buffer.as_ref()]
             .into_iter()
             .flatten()
@@ -547,7 +537,7 @@ impl MediaElementReference {
     /// New segment information is added to the inventory thanks to the
     /// `announce_incoming_media_segment` method, which thus has to be called before this one if you
     /// want the corresponding segment to be included. Then synchronizations to the lower-level
-    /// buffers are performed automatically on lifecycle methods such as `on_observation` and
+    /// buffers are performed automatically on lifecycle methods such as `synchronize_with` and
     /// `on_source_buffer_update`.
     pub(crate) fn inventory(&self, media_type: MediaType) -> &[BufferedChunk] {
         match media_type {
@@ -556,8 +546,12 @@ impl MediaElementReference {
         }
     }
 
-    /// Receive a browser observation whose positions and ranges are in media seconds.
-    pub(crate) fn on_observation(&mut self, observation: MediaObservation) {
+    /// Store an observation, acknowledge seeks and synchronize inventories.
+    /// Return each buffer's reported ranges in playlist seconds.
+    pub(crate) fn synchronize_with(
+        &mut self,
+        observation: MediaObservation,
+    ) -> impl Iterator<Item = (MediaType, Option<Vec<(f64, f64)>>)> {
         if self.seek_target.is_some_and(|target| {
             target.media_command_number.is_some_and(|command_number| {
                 observation.last_media_command_number() >= command_number
@@ -582,62 +576,46 @@ impl MediaElementReference {
         }
         self.last_observation = Some(observation);
 
-        if !self.check_queued_seek() {
-            let last_observation = self.last_observation.as_ref().unwrap();
-            let buffer_gap = get_buffer_gap(last_observation);
-            // readyState may stay at 2 while playing the last buffered frames.
-            // Keep playing even if buffered data ends slightly before the duration.
-            let can_play_to_end = last_observation.ready_state() >= 2
-                && self.is_buffer_ended(MediaType::Audio)
-                && self.is_buffer_ended(MediaType::Video);
-            if !self.is_rebuffering {
-                if !last_observation.ended() && !can_play_to_end {
-                    match buffer_gap {
-                        None => {
-                            log_info!("Starting rebuffering period due to no buffer gap");
-                            self.is_rebuffering = true;
-                            jsStartRebuffering();
-                        }
-                        Some(buffer_gap) if buffer_gap < 0.5 => {
-                            let current_time = last_observation.current_time();
-                            let duration = last_observation.duration();
-                            if current_time + buffer_gap < duration - 0.001 {
-                                log_info!("Starting rebuffering period. bg: {}", buffer_gap);
-                                self.is_rebuffering = true;
-                                jsStartRebuffering();
-                            }
-                        }
-                        _ => {}
-                    }
-                }
-            } else {
-                let mut quit_rebuffering = false;
-                if let Some(buffer_gap) = buffer_gap {
-                    // Even a zero threshold requires playable data.
-                    if buffer_gap > 0. && buffer_gap >= self.min_buffer_time {
-                        log_info!("Quitting rebuffering period. bg: {}", buffer_gap);
-                        quit_rebuffering = true;
-                    } else {
-                        let current_time = last_observation.current_time();
-                        let duration = last_observation.duration();
-                        if current_time + buffer_gap >= duration - 0.001 {
-                            quit_rebuffering = true;
-                        }
-                    }
-                }
+        self.check_queued_seek();
+        [MediaType::Audio, MediaType::Video]
+            .map(|media_type| (media_type, self.buffered_ranges_for(media_type)))
+            .into_iter()
+    }
 
-                if quit_rebuffering || last_observation.ended() || can_play_to_end {
-                    self.is_rebuffering = false;
-                    jsStopRebuffering();
-                }
-            }
+    /// Check whether to hold, resume or seek, after the caller has scheduled loading.
+    pub(crate) fn check_for_stalls(&mut self, requester: &Requester, loading_ready: bool) {
+        stall_resolver::resolve(self, requester, loading_ready);
+    }
+
+    pub(crate) fn is_rebuffering(&self) -> bool {
+        self.stall_resolver.is_rebuffering()
+    }
+
+    pub(crate) fn update_buffering_settings(
+        &mut self,
+        target_duration: Option<f64>,
+        buffer_goal: f64,
+    ) {
+        self.stall_resolver
+            .update_buffering_settings(target_duration, buffer_goal);
+    }
+
+    /// Buffered ranges shared by every active media buffer, in playlist seconds.
+    fn common_buffered_ranges(&self) -> Option<Vec<(f64, f64)>> {
+        match (self.audio_buffer.is_some(), self.video_buffer.is_some()) {
+            (true, true) => Some(intersect_ranges(
+                &self.buffered_ranges_for(MediaType::Audio)?,
+                &self.buffered_ranges_for(MediaType::Video)?,
+            )),
+            (true, false) => self.buffered_ranges_for(MediaType::Audio),
+            (false, true) => self.buffered_ranges_for(MediaType::Video),
+            (false, false) => None,
         }
     }
 
-    /// The "min_buffer_time" is the minimum amount of time to have in the media element's buffer
-    /// before getting out of rebuffering (and thus also re-starting playback).
-    pub(crate) fn update_min_buffer_time(&mut self, val: f64) {
-        self.min_buffer_time = val;
+    /// Whether all active buffers have supplied their final data and finished their operations.
+    fn buffers_ended(&self) -> bool {
+        self.is_buffer_ended(MediaType::Audio) && self.is_buffer_ended(MediaType::Video)
     }
 
     /// Update the current `readyState` of the `MediaSource`.
@@ -898,8 +876,8 @@ fn should_perform_queued_seek(observation: &MediaObservation, media_pos: f64) ->
 mod tests {
     use super::MediaElementReference;
     use crate::{
-        bindings::{MediaType, TimescaledTimestamp},
-        dispatcher::{JsTimeRanges, MediaObservation, PlaybackTickReason},
+        bindings::{JsTimeRanges, MediaType, PlaybackTickReason, TimescaledTimestamp},
+        media_element::MediaObservation,
         media_element::{segment_inventory::BufferedSegmentMetadata, SegmentQualityContext},
         parser::{MediaPlaylistPermanentId, SegmentTimeInfo},
     };
@@ -1026,16 +1004,16 @@ mod tests {
                 last_command_number,
             )
         };
-        media_element.on_observation(observation(4., 2));
+        let _ = media_element.synchronize_with(observation(4., 2));
         assert_eq!(media_element.wanted_position(), 20.);
         assert_eq!(media_element.buffer_ahead_for(MediaType::Video), Some(18.));
         assert!(media_element.is_seek_pending());
         // Even the requested value in an older snapshot cannot account for the command.
-        media_element.on_observation(observation(22., 2));
+        let _ = media_element.synchronize_with(observation(22., 2));
         assert!(media_element.is_seek_pending());
         // Another command may have followed the seek. The actual position can
         // also include browser adjustments or a later user seek.
-        media_element.on_observation(observation(25., 4));
+        let _ = media_element.synchronize_with(observation(25., 4));
         assert!(!media_element.is_seek_pending());
         assert_eq!(media_element.wanted_position(), 23.);
         assert_eq!(media_element.buffer_ahead_for(MediaType::Video), Some(15.));
@@ -1068,7 +1046,12 @@ mod tests {
         assert_eq!(media_element.buffer_ahead_for(MediaType::Video), Some(30.));
         assert_eq!(media_element.buffer_ahead_for(MediaType::Audio), Some(5.));
         assert_eq!(
-            super::get_buffer_gap(media_element.last_observation.as_ref().unwrap()),
+            media_element
+                .last_observation
+                .as_ref()
+                .unwrap()
+                .buffered()
+                .buffer_gap(10.),
             Some(5.)
         );
     }
@@ -1401,22 +1384,6 @@ impl From<(AttachMediaSourceErrorCode, Option<String>)> for AttachMediaSourceErr
             },
         }
     }
-}
-
-/// From the `MediaObservation` gives the difference between the end of the currently played time
-/// range in the media element's buffered ranges and the current position in seconds.
-///
-/// That is, the amount of seconds that may be played before going into buffer starvation at
-/// regular playback if no new segment is pushed.
-///
-/// Returns `None` if there's no data buffered at the current position.
-fn get_buffer_gap(observation: &MediaObservation) -> Option<f64> {
-    let current_time = observation.current_time();
-    let current_buffered = observation
-        .buffered()
-        .into_iter()
-        .find(|b| current_time >= b.0 && current_time < b.1);
-    Some(current_buffered?.1 - current_time)
 }
 
 // Arguments required when asking to do a media segment push operation

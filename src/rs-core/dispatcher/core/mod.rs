@@ -1,6 +1,6 @@
 use super::{
-    event_listeners::JsTimeRanges, utils, Dispatcher, JsMemoryBlob, MediaObservation,
-    MediaSourceReadyState, PlaybackTickReason, PlayerReadyState, ReadyProbeSegment,
+    utils, Dispatcher, MediaSourceReadyState, PlaybackTickReason, PlayerReadyState,
+    ReadyProbeSegment,
 };
 use crate::{
     adaptive::{should_interrupt_download, AdaptiveVariantSelection, PlaybackConditions},
@@ -11,12 +11,12 @@ use crate::{
         jsSendMediaPlaylistRequestError, jsSendMultivariantPlaylistRequestError, jsSendOtherError,
         jsSendPushedSegmentError, jsSendRemoveBufferError, jsSendSegmentParsingError,
         jsSendSegmentRequestError, jsSendSourceBufferCreationError, jsSendTrackSelectionError,
-        jsStopObservingPlayback, jsUpdateContentInfo, AddSourceBufferErrorCode, MediaType,
-        OtherErrorCode, PushedSegmentErrorCode, RequestId, SourceBufferId, TimerId,
-        TrackSelectionErrorCode,
+        jsStopObservingPlayback, jsUpdateContentInfo, AddSourceBufferErrorCode, JsMemoryBlob,
+        JsTimeRanges, MediaType, OtherErrorCode, PushedSegmentErrorCode, RequestId, SourceBufferId,
+        TimerId, TrackSelectionErrorCode,
     },
     dispatcher::segment_request_contexts::PendingSegmentRequest,
-    media_element::{MediaElementReference, SegmentPushMetadata},
+    media_element::{MediaElementReference, MediaObservation, SegmentPushMetadata},
     parser::PlaylistRefreshInfo,
     playlist_store::{
         AudioTrackChange, LockVariantResponse, MediaPlaylistPermanentId, PlaylistStore,
@@ -26,11 +26,7 @@ use crate::{
         FinishedRequestType, PlaylistFileType, PlaylistRequestInfo, RetryResult, SegmentRequestInfo,
     },
     segment_selector::SegmentSelectionCandidate,
-    utils::{
-        logger::*,
-        time_ranges::{find_next_gap, intersect_ranges},
-        url::Url,
-    },
+    utils::{logger::*, url::Url},
 };
 
 mod startup;
@@ -50,7 +46,7 @@ impl Dispatcher {
         self.media_element_ref.reset();
         self.segment_selectors.reset_selectors(0.);
         self.playlist_store = None;
-        self.update_min_buffer_time();
+        self.update_buffering_settings();
         self.ready_probe_segments.clear();
         self.initial_audio_track_selection.clear();
         self.last_position = 0.;
@@ -540,12 +536,8 @@ impl Dispatcher {
     pub(super) fn on_observation(&mut self, observation: MediaObservation) {
         let reason = observation.reason();
         log_debug!("Tick received: {:?} {}", reason, observation.current_time());
-        // TODO: Group rebuffering and end-of-stream decisions with freezing
-        // detection and possibly gap jumping? Rebuffering currently uses the
-        // previous selection result until the next observation.
-        self.media_element_ref.on_observation(observation);
-        for media_type in [MediaType::Audio, MediaType::Video] {
-            if let Some(buffered) = self.media_element_ref.buffered_ranges_for(media_type) {
+        for (media_type, buffered) in self.media_element_ref.synchronize_with(observation) {
+            if let Some(buffered) = buffered {
                 self.segment_selectors
                     .get_mut(media_type)
                     .check_for_removed_data(&buffered);
@@ -554,6 +546,11 @@ impl Dispatcher {
         match reason {
             PlaybackTickReason::Seeking => self.on_seek(),
             _ => self.on_regular_tick(),
+        }
+        let loading_ready = self.ensure_ready_to_load_segments();
+        if !matches!(self.ready_state, PlayerReadyState::Stopped) {
+            self.media_element_ref
+                .check_for_stalls(&self.requester, loading_ready);
         }
         self.media_element_ref.check_end_of_stream();
     }
@@ -571,7 +568,7 @@ impl Dispatcher {
     /// be requested (when a request finished, when a media playlist has been updated, when the
     /// playhead advances etc.).
     pub(super) fn check_segments_to_request(&mut self) {
-        if !self.ready_to_load_segments() {
+        if !self.ensure_ready_to_load_segments() {
             return;
         }
 
@@ -716,7 +713,7 @@ impl Dispatcher {
 
         // Probe segment may have provided information helping us to determine how much to
         // buffer (e.g. media type)
-        self.update_min_buffer_time();
+        self.update_buffering_settings();
 
         self.ready_probe_segments.insert(ReadyProbeSegment {
             request: probe_segment,
@@ -874,19 +871,14 @@ impl Dispatcher {
         }
     }
 
-    /// Keep playback's resume threshold reachable by the segment scheduler.
-    pub(super) fn update_min_buffer_time(&mut self) {
-        // TODO: account for low-latency playlists.
-        let normal_threshold = self
+    /// Communicate playlist timing and the loading goal to the media element.
+    pub(super) fn update_buffering_settings(&mut self) {
+        let target_duration = self
             .playlist_store
             .as_ref()
-            .and_then(|store| store.segment_target_duration())
-            .map(|duration| (duration - 1.).clamp(2., 8.))
-            .unwrap_or(5.);
-        let min_buffer_time = normal_threshold.min(self.buffer_goal.max(0.));
-        log_debug!("Core: Updating min_buffer_time: {min_buffer_time}");
+            .and_then(|store| store.segment_target_duration());
         self.media_element_ref
-            .update_min_buffer_time(min_buffer_time);
+            .update_buffering_settings(target_duration, self.buffer_goal);
     }
 
     /// Method called once a Media Playlist was parsed with success
@@ -899,7 +891,7 @@ impl Dispatcher {
         self.playlist_refresh_manager
             .on_playlist_loaded(playlist_id, refresh_info, started_at);
 
-        self.update_min_buffer_time();
+        self.update_buffering_settings();
 
         let Some(pl_store) = self.playlist_store.as_ref() else {
             return;
@@ -941,42 +933,6 @@ impl Dispatcher {
         if !was_already_locked {
             self.requester.unlock_segment_requests();
         }
-
-        self.check_gap_jumping_after_segment_scheduling(wanted_pos);
-    }
-
-    /// Once every segments have been scheduled for the current tick, check if gap jumping (jumping
-    /// after holes in the buffer) is needed. If so, seek over it.
-    fn check_gap_jumping_after_segment_scheduling(&mut self, wanted_pos: f64) {
-        if self.media_element_ref.is_seek_pending() {
-            return; // Wait for the requested position before considering another jump.
-        }
-        if !self.media_element_ref.is_rebuffering() {
-            return; // We can play, no point in skipping anything
-        }
-        if !self.ready_to_load_segments() {
-            return; // ensure everything is ready before doing anything
-        }
-        let Some(buffered) = intersect_media_buffered_ranges(&self.media_element_ref) else {
-            return;
-        };
-        let Some((playable_until, next_range_start)) = find_next_gap(&buffered, wanted_pos) else {
-            return;
-        };
-        if self.requester.has_pending_segment_before(next_range_start)
-            || self
-                .media_element_ref
-                .has_pending_append_before(next_range_start)
-        {
-            return;
-        }
-        log_warn!(
-            "Core: Jumping over a browser buffer hole (p:{}, e:{}, n:{})",
-            wanted_pos,
-            playable_until,
-            next_range_start
-        );
-        self.media_element_ref.seek(next_range_start + 0.01);
     }
 
     /// Actions to perform once a seek has been performed on the media element.
@@ -1254,7 +1210,7 @@ impl Dispatcher {
             }
         }
 
-        if !self.ready_to_load_segments() {
+        if !self.ensure_ready_to_load_segments() {
             return;
         }
 
@@ -1543,25 +1499,6 @@ impl Dispatcher {
     }
 }
 
-/// Buffered ranges shared by every active media buffer, in playlist seconds.
-fn intersect_media_buffered_ranges(
-    media_element: &MediaElementReference,
-) -> Option<Vec<(f64, f64)>> {
-    match (
-        media_element.has_buffer(MediaType::Audio),
-        media_element.has_buffer(MediaType::Video),
-    ) {
-        (true, true) => {
-            let audio = media_element.buffered_ranges_for(MediaType::Audio)?;
-            let video = media_element.buffered_ranges_for(MediaType::Video)?;
-            Some(intersect_ranges(&audio, &video))
-        }
-        (true, false) => media_element.buffered_ranges_for(MediaType::Audio),
-        (false, true) => media_element.buffered_ranges_for(MediaType::Video),
-        (false, false) => None,
-    }
-}
-
 fn segment_selection_candidates(
     playlist_store: &PlaylistStore,
     recommendation: Option<AdaptiveVariantSelection>,
@@ -1667,8 +1604,8 @@ mod tests {
         PlayerReadyState,
     };
     use crate::{
-        bindings::MediaType,
-        dispatcher::{JsTimeRanges, MediaObservation, PlaybackTickReason},
+        bindings::{JsTimeRanges, MediaType, PlaybackTickReason},
+        media_element::MediaObservation,
         parser::PlaylistSequenceInfo,
         playlist_store::PlaylistStore,
         utils::url::Url,
@@ -1854,9 +1791,9 @@ video.m3u8
     ) -> Dispatcher {
         let mut dispatcher = Dispatcher::new(3_125_000.);
         dispatcher.ready_state = PlayerReadyState::AwaitingSegments;
-        dispatcher
+        let _ = dispatcher
             .media_element_ref
-            .on_observation(MediaObservation::new(
+            .synchronize_with(MediaObservation::new(
                 PlaybackTickReason::RegularInterval,
                 10.,
                 4,
@@ -1965,9 +1902,9 @@ video.m3u8
                             .request_media_segment(MediaType::Video, &segment, 123);
                     }
                     dispatcher.buffer_goal = buffer_goal;
-                    dispatcher
+                    let _ = dispatcher
                         .media_element_ref
-                        .on_observation(MediaObservation::new(
+                        .synchronize_with(MediaObservation::new(
                             PlaybackTickReason::RegularInterval,
                             position,
                             4,
@@ -2104,9 +2041,9 @@ video.m3u8
                 .clone();
             // This fixture has no media offset; provide the requested playlist position.
             dispatcher.media_element_ref.seek(40.);
-            dispatcher
+            let _ = dispatcher
                 .media_element_ref
-                .on_observation(MediaObservation::new(
+                .synchronize_with(MediaObservation::new(
                     PlaybackTickReason::Seeking,
                     40.,
                     1,
@@ -2165,9 +2102,9 @@ video.m3u8
         dispatcher.requester.lock_segment_requests();
 
         for (position, expected_start) in [(0., 0.), (12., 8.), (12., 8.), (16.2, 16.)] {
-            dispatcher
+            let _ = dispatcher
                 .media_element_ref
-                .on_observation(MediaObservation::new(
+                .synchronize_with(MediaObservation::new(
                     PlaybackTickReason::RegularInterval,
                     position,
                     4,
@@ -2223,9 +2160,9 @@ video.m3u8
             .segment_list()
             .media()[0]
             .clone();
-        dispatcher
+        let _ = dispatcher
             .media_element_ref
-            .on_observation(MediaObservation::new(
+            .synchronize_with(MediaObservation::new(
                 PlaybackTickReason::RegularInterval,
                 0.,
                 4,
@@ -2355,9 +2292,9 @@ video.m3u8
             .as_mut()
             .unwrap()
             .set_variant(previous_variant);
-        dispatcher
+        let _ = dispatcher
             .media_element_ref
-            .on_observation(MediaObservation::new(
+            .synchronize_with(MediaObservation::new(
                 PlaybackTickReason::RegularInterval,
                 0.,
                 4,
