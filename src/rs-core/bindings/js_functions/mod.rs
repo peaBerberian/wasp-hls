@@ -9,7 +9,7 @@ use super::{
     SourceBufferCreationErrorCode, TimerReason, TrackSelectionErrorCode,
 };
 use crate::{
-    dispatcher::JsMemoryBlob,
+    bindings::JsMemoryBlob,
     media_element::{PushSegmentError, SegmentHints},
     parser::{
         MediaPlaylistParsingError, MediaPlaylistUpdateError, MultivariantPlaylistParsingError,

@@ -1,5 +1,5 @@
 use super::super::segment_request_contexts::PendingSegmentRequest;
-use super::{sync_media_source_duration, utils, Dispatcher, JsMemoryBlob, PlayerReadyState};
+use super::{sync_media_source_duration, utils, Dispatcher, PlayerReadyState};
 use crate::playlist_store::ProbeSegmentMetadata;
 use crate::{
     bindings::{
@@ -10,7 +10,8 @@ use crate::{
         },
         jsAnnounceFetchedContent, jsAnnounceTrackUpdate, jsAnnounceVariantLockStatusChange,
         jsSendOtherError, jsSendSegmentParsingError, jsSendSourceBufferCreationError,
-        jsStartObservingPlayback, MediaSourceReadyState, MediaType, OtherErrorCode, PlaylistType,
+        jsStartObservingPlayback, JsMemoryBlob, MediaSourceReadyState, MediaType, OtherErrorCode,
+        PlaylistType,
     },
     media_element::SourceBufferCreationError,
     playlist_store::{ProbeSegmentContext, StartupStatus},
@@ -35,7 +36,7 @@ impl Dispatcher {
         };
     }
 
-    pub(super) fn ready_to_load_segments(&mut self) -> bool {
+    pub(super) fn ensure_ready_to_load_segments(&mut self) -> bool {
         // Earlier states discover metadata and set up SourceBuffers through
         // recheck_player_state.
         matches!(

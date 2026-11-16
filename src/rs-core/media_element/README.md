@@ -9,9 +9,8 @@ Its job is to:
 - Attach and remove a MediaSource, create audio/video SourceBuffers and signal
   end of stream once the buffers are finished with their pending operations.
 
-- Keep the last playback observation, the wanted speed and pending seeks. It
-  also handles entering and leaving rebuffering according to the available
-  buffer.
+- Keep the last playback observation, the wanted speed and pending seeks, and
+  decide when to hold, resume or seek to recover from playback interruptions.
 
 - Keep the offset between playlist positions and media element positions. Those
   aren't necessarily the same, and the offset is only known once we have timing
@@ -20,6 +19,8 @@ Its job is to:
 - Push and remove media data, and keep an inventory of which segments appear to
   still be buffered, with their timing and quality information.
 
+`stall_resolver.rs` handles rebuffering and recovery from buffer holes.
+`observation.rs` defines playback observations received from JavaScript.
 `source_buffers.rs` handles each buffer's pending operations, flush behavior and
 timing continuity hints for transmuxing. `segment_inventory.rs` keeps segment
 metadata and reconciles it with the reported buffered ranges, including after

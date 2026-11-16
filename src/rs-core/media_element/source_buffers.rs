@@ -1,12 +1,12 @@
 use std::collections::VecDeque;
 
 use super::MediaAppendInfo;
+use crate::bindings::JsMemoryBlob;
 use crate::bindings::{
     jsAddSourceBuffer, jsAppendBuffer, jsFlush, jsRemoveBuffer, AddSourceBufferErrorCode,
     MediaType, ParsedSegmentInfo, ResourceId, SegmentParsingErrorCode, SourceBufferId,
     TimescaledTimestamp,
 };
-use crate::dispatcher::JsMemoryBlob;
 use crate::parser::{MediaPlaylistPermanentId, SegmentTimeInfo};
 use crate::utils::logger::*;
 

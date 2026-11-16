@@ -26,9 +26,7 @@ Its job is to:
 
 `api/mod.rs` contains the methods called to control playback and their
 WebAssembly exports.
-`event_listeners/mod.rs` receives callbacks and defines the playback observation
-and resource wrappers used here. `JsMemoryBlob` owns a handle to data kept in
-JavaScript memory and frees that resource when dropped.
+`event_listeners/mod.rs` receives events from JavaScript.
 
 `core/mod.rs` contains the main logic, with the steps to start playback in
 `core/startup.rs`. `playlist_refresh_manager.rs` keeps track of when to reload
