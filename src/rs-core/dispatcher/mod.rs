@@ -1,6 +1,6 @@
 use crate::{
     adaptive::AdaptiveQualitySelector,
-    bindings::MediaType,
+    bindings::{JsMemoryBlob, MediaType},
     dispatcher::playlist_refresh_manager::PlaylistRefreshManager,
     media_element::MediaElementReference,
     parser::AudioTrack,
@@ -19,7 +19,6 @@ mod utils;
 use segment_request_contexts::SegmentRequestContexts;
 
 pub(crate) use crate::bindings::{MediaSourceReadyState, PlaybackTickReason, StartingPositionType};
-pub(crate) use event_listeners::{JsMemoryBlob, JsTimeRanges, MediaObservation};
 
 /// The `Dispatcher` is the player Interface exported to the JavaScript-side,
 /// providing an API to load contents and influence various parameters about playback.
@@ -177,7 +176,7 @@ impl StartingPosition {
 struct ReadyProbeSegment {
     request: ProbeSegmentMetadata,
     media_type: MediaType,
-    data: event_listeners::JsMemoryBlob,
+    data: JsMemoryBlob,
 }
 
 #[derive(Default)]

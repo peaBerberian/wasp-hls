@@ -31,6 +31,7 @@ async function createProbeHarness({
   const removals = [];
   const offsets = [];
   const seeks = [];
+  const rebufferingEvents = [];
   const errors = [];
   let ended = 0;
   let mediaCommandNumber = 0;
@@ -108,6 +109,14 @@ async function createProbeHarness({
       seek(position) {
         seeks.push(position);
         return ++mediaCommandNumber;
+      },
+      startRebuffering() {
+        rebufferingEvents.push("start");
+        mediaCommandNumber++;
+      },
+      stopRebuffering() {
+        rebufferingEvents.push("stop");
+        mediaCommandNumber++;
       },
       endOfStream() {
         ended++;
@@ -240,6 +249,7 @@ async function createProbeHarness({
     removals,
     offsets,
     seeks,
+    rebufferingEvents,
     errors,
     buffers,
     get mediaCommandNumber() {
@@ -666,27 +676,217 @@ it.each([0, 2, 100])("seek positions, offset %s", async (mediaOffset) => {
   }
 });
 
-function observeBuffers(ctx, position, combined, audio, video) {
+function observeBuffers(
+  ctx,
+  position,
+  combined,
+  audio,
+  video,
+  {
+    reason = PlaybackTickReason.Requested,
+    lastMediaCommandNumber = ctx.mediaCommandNumber,
+    seeking = false,
+    readyState = 4,
+    duration = Number.MAX_VALUE,
+  } = {},
+) {
   const ranges = (bounds) =>
     bounds === undefined
       ? undefined
       : new JsTimeRanges(new Float64Array(bounds));
   ctx.dispatcher.on_playback_tick(
     new MediaObservation(
-      PlaybackTickReason.Requested,
+      reason,
       position,
-      4,
+      readyState,
       ranges(combined),
       false,
+      seeking,
       false,
-      false,
-      Number.MAX_VALUE,
+      duration,
       ranges(audio),
       ranges(video),
-      ctx.mediaCommandNumber,
+      lastMediaCommandNumber,
     ),
   );
 }
+
+it.each([0, 100])(
+  "resumes before a hole, then jumps within 0.5 seconds, offset %s",
+  async (mediaOffset) => {
+    const ctx = await createProbeHarness({ mediaDuration: 40, mediaOffset });
+    const mediaRanges = (bounds) => bounds.map((value) => value + mediaOffset);
+    const common = mediaRanges([0, 4, 12, 32]);
+    // The media-element snapshot still reports a shorter first range.
+    const stale = mediaRanges([0, 2.1, 12, 32]);
+    const observe = (position, options) =>
+      observeBuffers(
+        ctx,
+        position + mediaOffset,
+        stale,
+        common,
+        common,
+        options,
+      );
+    try {
+      ctx.start();
+      ctx.completeAppends();
+      for (let index = 1; index < 8; index++) {
+        ctx.finish(`first-video-${index}.ts`);
+        ctx.finish(`first-audio-${index}.ts`);
+        ctx.completeAppends();
+      }
+      ctx.dispatcher.set_buffer_goal(4);
+      expect(ctx.rebufferingEvents).toEqual(["start"]);
+
+      // Two seconds cannot satisfy the normal three-second resume threshold.
+      observe(2);
+      expect(ctx.rebufferingEvents).toEqual(["start", "stop"]);
+      for (const position of [2, 2, 3, 3.49]) observe(position);
+      expect(ctx.rebufferingEvents).toEqual(["start", "stop"]);
+      expect(ctx.seeks).toEqual([]);
+
+      const beforeJump = ctx.mediaCommandNumber;
+      observe(3.5);
+      expect(ctx.seeks).toEqual([mediaOffset + 12.01]);
+      expect(ctx.rebufferingEvents).toEqual(["start", "stop", "start"]);
+      // An older snapshot must neither resume playback nor cause another jump.
+      for (let index = 0; index < 3; index++) {
+        observe(2, { lastMediaCommandNumber: beforeJump });
+      }
+      expect(ctx.seeks).toEqual([mediaOffset + 12.01]);
+      expect(ctx.rebufferingEvents).toEqual(["start", "stop", "start"]);
+
+      observe(12.01);
+      expect(ctx.rebufferingEvents).toEqual(["start", "stop", "start", "stop"]);
+      expect(ctx.errors).toEqual([]);
+    } finally {
+      ctx.dispatcher.stop();
+      ctx.dispatcher.free();
+    }
+  },
+);
+
+it.each(
+  [false, true].flatMap((singleTrack) =>
+    [0, 100].flatMap((mediaOffset) =>
+      [false, true].map((hasHole) => ({ singleTrack, mediaOffset, hasHole })),
+    ),
+  ),
+)(
+  "recovers after loading completes and keeps final frames playing: %j",
+  async ({ singleTrack, mediaOffset, hasHole }) => {
+    const ctx = await createProbeHarness({
+      singleTrack,
+      mediaOffset,
+      mediaDuration: 20,
+    });
+    const ranges = (hasHole ? [0, 4, 8, 20] : [0, 19.95]).map(
+      (position) => position + mediaOffset,
+    );
+    const observe = (position) =>
+      observeBuffers(
+        ctx,
+        position + mediaOffset,
+        ranges,
+        singleTrack ? undefined : ranges,
+        ranges,
+        { readyState: 2, duration: 20 + mediaOffset },
+      );
+    try {
+      ctx.start();
+      ctx.completeAppends();
+      for (let index = 1; index < 5; index++) {
+        ctx.finish(`first-video-${index}.ts`);
+        if (!singleTrack) ctx.finish(`first-audio-${index}.ts`);
+        ctx.completeAppends();
+      }
+      expect(ctx.ended).toBeGreaterThan(0);
+      expect(ctx.rebufferingEvents).toEqual(["start"]);
+
+      if (hasHole) {
+        observe(2);
+        observe(3.49);
+        expect(ctx.seeks).toEqual([]);
+        expect(ctx.rebufferingEvents).toEqual(["start", "stop"]);
+
+        observe(3.5);
+        expect(ctx.seeks).toEqual([8.01 + mediaOffset]);
+        expect(ctx.rebufferingEvents).toEqual(["start", "stop", "start"]);
+        observe(8.01);
+        expect(ctx.rebufferingEvents).toEqual([
+          "start",
+          "stop",
+          "start",
+          "stop",
+        ]);
+      } else {
+        // The buffer ends before duration, but the final frames can still play.
+        observe(19.9);
+        observe(19.9);
+        expect(ctx.seeks).toEqual([]);
+        expect(ctx.rebufferingEvents).toEqual(["start", "stop"]);
+      }
+      expect(
+        ctx.requests.filter((request) => !request.finished && !request.aborted),
+      ).toEqual([]);
+      expect(ctx.errors).toEqual([]);
+    } finally {
+      ctx.dispatcher.stop();
+      ctx.dispatcher.free();
+    }
+  },
+);
+
+it.each([false, true])(
+  "checks gaps on a seeking observation after scheduling, refill %s",
+  async (refill) => {
+    const ctx = await createProbeHarness({
+      mediaDuration: 40,
+      mediaOffset: 0,
+      singleTrack: true,
+    });
+    const hole = refill ? [0, 4, 12, 32] : [0, 4, 4.1, 32];
+    const observe = (position, reason = PlaybackTickReason.Requested) =>
+      observeBuffers(ctx, position, hole, undefined, hole, { reason });
+    try {
+      ctx.start();
+      ctx.completeAppends();
+      for (let index = 1; index < 8; index++) {
+        ctx.finish(`first-video-${index}.ts`);
+        ctx.completeAppends();
+      }
+      ctx.dispatcher.set_buffer_goal(4);
+      observe(1);
+      expect(ctx.seeks).toEqual([]);
+
+      observe(refill ? 6 : 4, PlaybackTickReason.Seeking);
+      if (refill) {
+        // Seeking reconsiders the missing segment before recovery is evaluated.
+        expect(
+          ctx.requests.some(
+            (request) =>
+              !request.finished &&
+              !request.aborted &&
+              request.url.endsWith("first-video-1.ts"),
+          ),
+        ).toBe(true);
+        expect(ctx.seeks).toEqual([]);
+        ctx.finish("first-video-1.ts");
+        ctx.completeAppends([0, 32]);
+        observeBuffers(ctx, 6, [0, 32], undefined, [0, 32]);
+        expect(ctx.seeks).toEqual([]);
+      } else {
+        // This small initial hole does not cause the selector to retry.
+        expect(ctx.seeks).toEqual([4.1 + 0.01]);
+      }
+      expect(ctx.errors).toEqual([]);
+    } finally {
+      ctx.dispatcher.stop();
+      ctx.dispatcher.free();
+    }
+  },
+);
 
 it.each(
   [MediaType.Audio, MediaType.Video].flatMap((pendingType) =>
