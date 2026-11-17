@@ -686,6 +686,8 @@ function observeBuffers(
     reason = PlaybackTickReason.Requested,
     lastMediaCommandNumber = ctx.mediaCommandNumber,
     seeking = false,
+    readyState = 4,
+    duration = Number.MAX_VALUE,
   } = {},
 ) {
   const ranges = (bounds) =>
@@ -696,12 +698,12 @@ function observeBuffers(
     new MediaObservation(
       reason,
       position,
-      4,
+      readyState,
       ranges(combined),
       false,
       seeking,
       false,
-      Number.MAX_VALUE,
+      duration,
       ranges(audio),
       ranges(video),
       lastMediaCommandNumber,
@@ -757,6 +759,77 @@ it.each([0, 100])(
 
       observe(12.01);
       expect(ctx.rebufferingEvents).toEqual(["start", "stop", "start", "stop"]);
+      expect(ctx.errors).toEqual([]);
+    } finally {
+      ctx.dispatcher.stop();
+      ctx.dispatcher.free();
+    }
+  },
+);
+
+it.each(
+  [false, true].flatMap((singleTrack) =>
+    [0, 100].flatMap((mediaOffset) =>
+      [false, true].map((hasHole) => ({ singleTrack, mediaOffset, hasHole })),
+    ),
+  ),
+)(
+  "recovers after loading completes and keeps final frames playing: %j",
+  async ({ singleTrack, mediaOffset, hasHole }) => {
+    const ctx = await createProbeHarness({
+      singleTrack,
+      mediaOffset,
+      mediaDuration: 20,
+    });
+    const ranges = (hasHole ? [0, 4, 8, 20] : [0, 19.95]).map(
+      (position) => position + mediaOffset,
+    );
+    const observe = (position) =>
+      observeBuffers(
+        ctx,
+        position + mediaOffset,
+        ranges,
+        singleTrack ? undefined : ranges,
+        ranges,
+        { readyState: 2, duration: 20 + mediaOffset },
+      );
+    try {
+      ctx.start();
+      ctx.completeAppends();
+      for (let index = 1; index < 5; index++) {
+        ctx.finish(`first-video-${index}.ts`);
+        if (!singleTrack) ctx.finish(`first-audio-${index}.ts`);
+        ctx.completeAppends();
+      }
+      expect(ctx.ended).toBeGreaterThan(0);
+      expect(ctx.rebufferingEvents).toEqual(["start"]);
+
+      if (hasHole) {
+        observe(2);
+        observe(3.49);
+        expect(ctx.seeks).toEqual([]);
+        expect(ctx.rebufferingEvents).toEqual(["start", "stop"]);
+
+        observe(3.5);
+        expect(ctx.seeks).toEqual([8.01 + mediaOffset]);
+        expect(ctx.rebufferingEvents).toEqual(["start", "stop", "start"]);
+        observe(8.01);
+        expect(ctx.rebufferingEvents).toEqual([
+          "start",
+          "stop",
+          "start",
+          "stop",
+        ]);
+      } else {
+        // The buffer ends before duration, but the final frames can still play.
+        observe(19.9);
+        observe(19.9);
+        expect(ctx.seeks).toEqual([]);
+        expect(ctx.rebufferingEvents).toEqual(["start", "stop"]);
+      }
+      expect(
+        ctx.requests.filter((request) => !request.finished && !request.aborted),
+      ).toEqual([]);
       expect(ctx.errors).toEqual([]);
     } finally {
       ctx.dispatcher.stop();
