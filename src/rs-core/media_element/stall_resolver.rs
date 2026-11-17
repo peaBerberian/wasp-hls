@@ -90,28 +90,25 @@ pub(super) fn resolve(
             .buffer_gap(observation.current_time())
             .unwrap_or(0.),
     };
-    let gap = if loading_ready {
-        common
-            .as_ref()
-            .and_then(|ranges| find_next_gap(ranges, position))
-            .filter(|&(_, next_start)| {
-                !requester.has_pending_segment_before(next_start)
-                    && !media.has_pending_append_before(next_start)
-            })
-    } else {
-        None
-    };
+    let buffer_hole = common
+        .as_ref()
+        .and_then(|ranges| find_next_gap(ranges, position));
+    let can_skip_hole = loading_ready
+        && buffer_hole.is_some_and(|(_, next_start)| {
+            !requester.has_pending_segment_before(next_start)
+                && !media.has_pending_append_before(next_start)
+        });
 
     // readyState may stay at 2 while the last buffered frames are playing.
     let can_play_to_end = observation.ended()
-        || (observation.ready_state() >= 2 && media.buffers_ended())
+        || (observation.ready_state() >= 2 && media.buffers_ended() && buffer_hole.is_none())
         || (buffer_ahead > 0.
             && buffer_ahead >= observation.duration() - observation.current_time() - 0.001);
     let should_rebuffer = if can_play_to_end {
         false
-    } else if let Some((end, _)) = gap {
+    } else if can_skip_hole {
         // Play toward the hole even below the normal resume threshold.
-        end - position <= GAP_JUMP_DISTANCE
+        buffer_ahead <= GAP_JUMP_DISTANCE
     } else if media.stall_resolver.is_rebuffering {
         buffer_ahead <= 0. || buffer_ahead < media.stall_resolver.min_buffer_time
     } else {
@@ -119,8 +116,8 @@ pub(super) fn resolve(
     };
 
     media.stall_resolver.set_rebuffering(should_rebuffer);
-    if let Some((end, next_start)) = gap {
-        if should_rebuffer && end - position <= GAP_JUMP_DISTANCE {
+    if let Some((end, next_start)) = buffer_hole {
+        if can_skip_hole && should_rebuffer && end - position <= GAP_JUMP_DISTANCE {
             log_warn!(
                 "Stall: Jumping over a browser buffer hole (p:{}, e:{}, n:{})",
                 position,
