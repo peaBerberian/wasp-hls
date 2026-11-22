@@ -95,13 +95,20 @@ impl SegmentHistoryEntry {
 }
 
 impl SegmentLoadingHistory {
-    /// Return the earliest position to reconsider after data loss, a restart, or discarding
-    /// empty entries ahead of the retention limit. All positions are in playlist time.
+    /// Return the earliest position to reconsider after data loss, a restart, or forgetting
+    /// entries with no reported data starting after `forget_after`. All positions are in
+    /// playlist time.
+    ///
+    /// `forget_after` only limits memory. Forgetting an entry also loses its protection against
+    /// reload loops.
+    // TODO: Limit memory by count instead: keep at most N entries with no reported data,
+    // forgetting the ones furthest ahead of `needed_from` first. This would remove the last
+    // position limit given by the caller.
     pub(super) fn synchronize(
         &mut self,
         buffered: &[(f64, f64)],
         needed_from: f64,
-        needed_until: f64,
+        forget_after: f64,
     ) -> Option<f64> {
         let latest_buffered = self.latest_buffered.get_or_insert_default();
         latest_buffered.clear();
@@ -126,7 +133,7 @@ impl SegmentLoadingHistory {
                 }
             }
             if !has_current_coverage {
-                if entry.start > needed_until {
+                if entry.start > forget_after {
                     first_position =
                         Some(first_position.map_or(entry.start, |p| p.min(entry.start)));
                     return false;

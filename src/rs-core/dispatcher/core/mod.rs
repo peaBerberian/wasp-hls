@@ -25,7 +25,7 @@ use crate::{
     requester::{
         FinishedRequestType, PlaylistFileType, PlaylistRequestInfo, RetryResult, SegmentRequestInfo,
     },
-    segment_selector::SegmentSelectionCandidate,
+    segment_selector::{MostNeededSegmentInfo, NeededSegmentInfo, SegmentSelectionCandidate},
     utils::{logger::*, url::Url},
 };
 
@@ -536,11 +536,17 @@ impl Dispatcher {
     pub(super) fn on_observation(&mut self, observation: MediaObservation) {
         let reason = observation.reason();
         log_debug!("Tick received: {:?} {}", reason, observation.current_time());
-        for (media_type, buffered) in self.media_element_ref.synchronize_with(observation) {
+        let reported: Vec<_> = self
+            .media_element_ref
+            .synchronize_with(observation)
+            .collect();
+        // TODO: Use a separate memory setting, never lower than the buffer goal's end.
+        let forget_after = self.buffer_goal_end();
+        for (media_type, buffered) in reported {
             if let Some(buffered) = buffered {
                 self.segment_selectors
                     .get_mut(media_type)
-                    .check_for_removed_data(&buffered);
+                    .check_for_removed_data(&buffered, forget_after);
             }
         }
         match reason {
@@ -997,12 +1003,13 @@ impl Dispatcher {
         // Interrupt requests out of the wanted buffer window
         // TODO: requester method like `retain_requests` or something taking a callback instead?
         let wanted_position = self.media_element_ref.wanted_position();
+        let goal_end = self.buffer_goal_end();
         if self
             .requester
             .pending_segment_time_info(media_type)
             .is_some_and(|time_info| {
                 time_info.end() <= wanted_position - SEGMENT_SELECTION_MARGIN
-                    || time_info.start() >= wanted_position + self.buffer_goal.max(0.)
+                    || !starts_before_goal_end(time_info.start(), goal_end)
             })
         {
             self.abort_segment_requests_with_type(media_type);
@@ -1040,7 +1047,7 @@ impl Dispatcher {
                 replacement_candidate,
                 self.media_element_ref.inventory(media_type),
             );
-        let Some(needed) = selected.needed_segments() else {
+        let Some(needed) = needed_before(&selected, goal_end) else {
             let refresh_id = selected.playlist_to_refresh();
             let waiting_for_playlist = pl_store.media_playlist(&refresh_id).is_none();
             self.follow_media_playlist(media_type, refresh_id);
@@ -1159,6 +1166,7 @@ impl Dispatcher {
         let addition_variant_id = addition_candidate.variant_id;
         let addition_context = addition_candidate.context;
         let replacement_context = replacement_candidate.context;
+        let goal_end = self.buffer_goal_end();
         let selected = self
             .segment_selectors
             .get_mut(media_type)
@@ -1168,19 +1176,27 @@ impl Dispatcher {
                 self.media_element_ref.inventory(media_type),
             );
         let refresh_id = selected.playlist_to_refresh();
-        // Stays `Unknown` while a segment is needed, until a request for it is made below.
+        let needed_now = needed_before(&selected, goal_end);
+        // Stays `Unknown` while a segment is needed now, until a request for it is made below.
         let expected = if selected.loading_complete() {
             ExpectedMedia::Nothing
+        } else if needed_now.is_some() {
+            ExpectedMedia::Unknown
         } else {
+            // XXX TODO: When this start is inside a buffer hole but past/equal the buffer goal, it
+            // keeps the stall resolver waiting forever: the goal only moves with the playhead.
             selected
-                .next_addition_start()
-                .map_or(ExpectedMedia::Unknown, ExpectedMedia::From)
+                .needed_segments()
+                .and_then(|needed| needed.media_segment())
+                .map_or(ExpectedMedia::Unknown, |(media, _)| {
+                    ExpectedMedia::From(media.start())
+                })
         };
         self.media_element_ref
             .set_expected_media(media_type, expected);
         // Own the proposed metadata before following, which may request another playlist.
         // Only one resource is loaded at a time: initialization first, otherwise media.
-        let needed = selected.needed_segments().map(|needed| {
+        let needed = needed_now.map(|needed| {
             let (init, media) = if let Some(init) = needed.init_segment() {
                 (Some(init.clone()), None)
             } else {
@@ -1527,6 +1543,12 @@ impl Dispatcher {
             self.segment_request_contexts.take(req_id);
         }
     }
+
+    /// Where the buffer goal stops asking for media, in playlist seconds. See
+    /// `starts_before_goal_end` for segments at this boundary.
+    fn buffer_goal_end(&self) -> f64 {
+        self.media_element_ref.wanted_position() + self.buffer_goal.max(0.)
+    }
 }
 
 fn segment_selection_candidates(
@@ -1625,6 +1647,31 @@ fn sync_media_source_duration(pl_store: &PlaylistStore, media_element: &MediaEle
         // TODO: To perhaps isolate in compatibility related-code to make it clearer.
         media_element.set_duration(u32::MAX as f64);
     }
+}
+
+/// Return the selected segments only if they start before `goal_end`, in playlist seconds.
+fn needed_before<'s, 'a>(
+    selected: &'s MostNeededSegmentInfo<'a>,
+    goal_end: f64,
+) -> Option<&'s NeededSegmentInfo<'a>> {
+    selected.needed_segments().filter(|needed| {
+        needed
+            .media_segment()
+            .is_some_and(|(media, _)| starts_before_goal_end(media.start(), goal_end))
+    })
+}
+
+/// Whether a segment starting at `start` should be loaded under a buffer goal ending at
+/// `goal_end`, in playlist seconds.
+///
+/// Both scheduling and cancellation of pending requests use this, so a segment accepted by one
+/// is never rejected by the other. A segment starting exactly at `goal_end` adds nothing within
+/// the goal and is not loaded.
+// XXX TODO: With a buffer goal of 0, `goal_end` is the wanted position, so a segment starting
+// exactly there (e.g. at 0 on startup) is never loaded. The segment containing the wanted
+// position should always be loadable, e.g. `start <= wanted || start < goal_end`.
+fn starts_before_goal_end(start: f64, goal_end: f64) -> bool {
+    start < goal_end
 }
 
 #[cfg(test)]
@@ -2163,6 +2210,82 @@ video.m3u8
                 expected_start
             );
             assert!(dispatcher.check_requested_segment_still_needed(MediaType::Video));
+        }
+    }
+
+    #[test]
+    fn scheduling_and_cancellation_agree_at_the_buffer_goal_end() {
+        let mut text = String::from("#EXTM3U\n#EXT-X-TARGETDURATION:4\n");
+        for number in 0..10 {
+            text.push_str(&format!("#EXTINF:4,\nseg-{number}.m4s\n"));
+        }
+        text.push_str("#EXT-X-ENDLIST\n");
+        // The next segment to load starts at 8 and the playhead stays at 4.
+        for (buffer_goal, scheduled) in [(4., false), (4.1, true)] {
+            let mut dispatcher = dispatcher_with_abr_playlists(Some(4), 0.);
+            let store = dispatcher.playlist_store.as_mut().unwrap();
+            let variant_ids: Vec<_> = store.available_variants().iter().map(|v| v.id()).collect();
+            for variant_id in variant_ids {
+                let id = store
+                    .media_playlist_id_for_variant(variant_id, MediaType::Video)
+                    .unwrap();
+                store
+                    .update_media_playlist(
+                        &id,
+                        text.as_bytes(),
+                        Url::new("https://example.com/media.m3u8".into()),
+                    )
+                    .unwrap();
+                let list = store.media_playlist(&id).unwrap().segment_list();
+                for segment in &list.media()[..2] {
+                    dispatcher
+                        .segment_selectors
+                        .get_mut(MediaType::Video)
+                        .validate_media(
+                            id,
+                            segment.sequence_info(),
+                            segment.start(),
+                            segment.end(),
+                        );
+                }
+            }
+            dispatcher.buffer_goal = buffer_goal;
+            // This fixture has no media offset; provide the wanted playlist position.
+            dispatcher.media_element_ref.seek(4.);
+            dispatcher.requester.lock_segment_requests();
+            for _ in 0..3 {
+                let _ = dispatcher
+                    .media_element_ref
+                    .synchronize_with(MediaObservation::new(
+                        PlaybackTickReason::RegularInterval,
+                        4.,
+                        4,
+                        JsTimeRanges::new(vec![0., 8.]),
+                        false,
+                        false,
+                        false,
+                        40.,
+                        None,
+                        Some(JsTimeRanges::new(vec![0., 8.])),
+                        0,
+                    ));
+                dispatcher
+                    .segment_selectors
+                    .advance_position(4. - super::SEGMENT_SELECTION_MARGIN);
+                dispatcher.check_requested_segments_still_needed();
+                let recommendation = dispatcher.compute_optimal_variant();
+                dispatcher.schedule_next_segment_for_type(MediaType::Video, recommendation);
+                let pending_start = |dispatcher: &Dispatcher| {
+                    dispatcher
+                        .requester
+                        .pending_segment_time_info(MediaType::Video)
+                        .map(|time_info| time_info.start())
+                };
+                assert_eq!(pending_start(&dispatcher), scheduled.then_some(8.));
+                // A segment scheduled here must survive the next pending-request check.
+                dispatcher.check_requested_segments_still_needed();
+                assert_eq!(pending_start(&dispatcher), scheduled.then_some(8.));
+            }
         }
     }
 

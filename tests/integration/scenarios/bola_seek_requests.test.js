@@ -28,7 +28,8 @@ describe("BOLA requests after seeking", function () {
         );
       const ctx = await createPlayerHarness({
         initialBandwidth: 1_000_000,
-        playerConfig: { bufferGoal: 24 },
+        // Leave room for a segment after the low buffer when unlocking.
+        playerConfig: { bufferGoal: 26 },
         fetchRules: [
           createTopLevelFetchRule([
             {

@@ -34,7 +34,7 @@ impl Dispatcher {
             media_element_ref: MediaElementReference::new(),
             last_position: 0.,
             buffer_goal: 30.,
-            segment_selectors: NextSegmentSelectors::new(0., 30.),
+            segment_selectors: NextSegmentSelectors::new(0.),
             segment_request_contexts: SegmentRequestContexts::new(),
             playlist_refresh_manager: PlaylistRefreshManager::new(),
             ready_probe_segments: Default::default(),
@@ -110,7 +110,6 @@ impl Dispatcher {
     pub fn set_buffer_goal(&mut self, buffer_goal: f64) {
         self.buffer_goal = buffer_goal;
         self.update_buffering_settings();
-        self.segment_selectors.update_buffer_goal(buffer_goal);
         self.check_requested_segments_still_needed();
         self.check_segments_to_request();
     }

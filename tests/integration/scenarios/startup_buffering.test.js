@@ -66,7 +66,7 @@ it.each([
     );
     expect(
       ctx.requests.some((request) => request.url.endsWith("low-video-1.ts")),
-    ).toBe(goal >= 2);
+    ).toBe(goal > 2);
     ctx.dispatcher.stop();
     ctx.dispatcher.free();
   },

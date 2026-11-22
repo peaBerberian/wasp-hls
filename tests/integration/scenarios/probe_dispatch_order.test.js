@@ -399,7 +399,7 @@ it.each([0, 2, 100])("quota removal, offset %s", async (mediaOffset) => {
       ctx.completeAppends();
     }
     observe(mediaRanges([0, 32]));
-    ctx.dispatcher.set_buffer_goal(4);
+    ctx.dispatcher.set_buffer_goal(5);
     // The 4-8s segment loses its prefix; its old 6-8s data remains.
     observe(mediaRanges([0, 4, 6, 32]));
     expect(requestsFor("first-video-1.ts")).toHaveLength(2);
@@ -412,7 +412,7 @@ it.each([0, 2, 100])("quota removal, offset %s", async (mediaOffset) => {
       new JsTimeRanges(new Float64Array(mediaRanges([0, 4, 6, 32]))),
     );
     expect(ctx.removals).toEqual([
-      { bufferId, start: mediaOffset + 14, end: Number.MAX_VALUE },
+      { bufferId, start: mediaOffset + 15, end: Number.MAX_VALUE },
     ]);
     expect(ctx.errors).toEqual([]);
     // The empty prefix removal is skipped. Complete the tail removal.
@@ -473,7 +473,7 @@ it("requests a cancelled initialization again when recovery resumes after the fa
       ctx.completeAppends();
     }
     observe(2, [2, 34]);
-    ctx.dispatcher.set_buffer_goal(8);
+    ctx.dispatcher.set_buffer_goal(9);
     // Playlist 4-6s and 8-10s disappear. Queue their media and init appends again.
     const ranges = [2, 6, 8, 10, 12, 34];
     observe(2, ranges);
@@ -498,7 +498,7 @@ it("requests a cancelled initialization again when recovery resumes after the fa
     );
     const requestCount = ctx.requests.length;
     expect(ctx.removals).toHaveLength(1);
-    const afterCleanup = [2, 6, 8, 10, 12, 29];
+    const afterCleanup = [2, 6, 8, 10, 12, 30];
     for (const removal of ctx.removals) {
       ctx.dispatcher.on_source_buffer_update(
         removal.bufferId,

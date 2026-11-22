@@ -8,7 +8,9 @@ point is `NextSegmentSelectors` in `mod.rs`, which keeps a separate
 Its job is to:
 
 - Follow a chronological cursor from a base position, normally the wanted
-  playback position, up to a configurable buffer goal.
+  playback position, and propose the next segment to load however far it is.
+  The caller decides whether to load it now, e.g. by comparing its start to a
+  buffer goal.
 
 - Skip segments when equal- or higher-quality media already covers their range.
   Skipped ranges are checked again so they can be loaded if that coverage
@@ -30,6 +32,8 @@ Returning a segment doesn't advance the cursor past it. The caller has to
 
 `segment_loading_history.rs` remembers which segments were already supplied.
 It prevents repeated downloads and decides when removed data should be loaded again.
+The caller limits its memory with a position after which supplied segments with
+no reported data are forgotten.
 
 For regular playback, `advance_position` updates the base position while keeping
 the cursor. After a seek or buffer flush, `restart_from_position` makes selection
@@ -42,6 +46,7 @@ This code owns selection state: cursors, initialization status, skipped ranges
 and validation history. It borrows playlist segments and buffer inventory from
 the caller; it doesn't own or update those.
 
-It doesn't estimate bandwidth or choose the candidate qualities, perform
-requests, decide playlist refresh timing or change media buffers. It returns
-segment recommendations or a playlist to follow.
+It doesn't estimate bandwidth or choose the candidate qualities, decide when a
+segment should be loaded, perform requests, decide playlist refresh timing or
+change media buffers. It returns segment recommendations or a playlist to
+follow.
