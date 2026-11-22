@@ -156,6 +156,12 @@ pub(crate) struct NextSegmentSelector {
     /// Once we reached that point, we won't try to load load new segments.
     ///
     /// This can for example be used to limit memory and network bandwidth usage.
+    // XXX TODO: Move the buffer goal out of the selector. The selector would return the next
+    // segment to load (addition or replacement) without a window, and the caller would compare
+    // its start to `position + buffer_goal`, like `check_requested_segment_still_needed` already
+    // does for pending requests. The loading history's horizon would become an explicit
+    // `needed_until` argument of `check_for_removed_data`. Behavior change to review: the cursor
+    // would also pass supplied and covered segments past the current window.
     buffer_goal: f64,
 
     /// Status in the `NextSegmentSelector` regarding the initialization segment.
@@ -346,6 +352,7 @@ impl NextSegmentSelector {
             return MostNeededSegmentInfo {
                 needed_segments: None,
                 loading_complete: false,
+                next_addition_start: None,
                 playlist_to_refresh,
             };
         };
@@ -396,14 +403,13 @@ impl NextSegmentSelector {
             if let Some(val) = self.check_skipped_segments(context, inventory) {
                 self.segment_cursor.move_cursor(val);
             }
-            let Some(segment) = self.recursively_check_most_needed_media_segment(
-                segment_list.media(),
-                context,
-                inventory,
-            ) else {
-                return MostNeededSegmentInfo {
-                    needed_segments: None,
-                    loading_complete: selected_candidate.is_ended
+            let next_to_load =
+                self.advance_to_next_segment_to_load(segment_list.media(), context, inventory);
+            let maximum_position = self.base_pos + self.buffer_goal;
+            let segment = match next_to_load {
+                Some(segment) if segment.start() <= maximum_position => segment,
+                _ => {
+                    let loading_complete = selected_candidate.is_ended
                         && !segment_list.media().is_empty()
                         && segment_list.media().iter().all(|segment| {
                             segment.duration() <= 0.
@@ -419,9 +425,20 @@ impl NextSegmentSelector {
                                     context,
                                     inventory,
                                 )
-                        }),
-                    playlist_to_refresh,
-                };
+                        });
+                    // XXX TODO: When the playlist has no segment between a buffer hole and the
+                    // window end, but has one after it inside the hole, this position keeps the
+                    // stall resolver waiting forever: the window only moves with the playhead.
+                    let next_addition_start = next_to_load
+                        .filter(|_| !loading_complete)
+                        .map(|segment| segment.start());
+                    return MostNeededSegmentInfo {
+                        needed_segments: None,
+                        loading_complete,
+                        next_addition_start,
+                        playlist_to_refresh,
+                    };
+                }
             };
             segment
         };
@@ -440,6 +457,7 @@ impl NextSegmentSelector {
         };
         MostNeededSegmentInfo {
             loading_complete: false,
+            next_addition_start: None,
             needed_segments: Some(NeededSegmentInfo {
                 variant_id: selected_candidate.variant_id,
                 media_segment: Some((most_needed_segment, associated_init.map(|init| init.id()))),
@@ -578,12 +596,14 @@ impl NextSegmentSelector {
         None
     }
 
-    /// Returns the most needed segment according to the current situation.
-    /// Internally, this method may be validating and re-calling itself (hence its name) if it sees
-    /// that segments of a higher or similar quality are already present in the buffer, through a
-    /// project-specific optimization called "smart quality switching": skipping a request when
-    /// equal- or higher-quality media already covers its range.
-    fn recursively_check_most_needed_media_segment<'a>(
+    /// Returns the first segment from the cursor that needs loading, inside the loading window
+    /// or past it.
+    ///
+    /// Segments before it are passed when already supplied, or when equal- or higher-quality
+    /// media already covers them, through a project-specific optimization called "smart quality
+    /// switching". Only passed segments starting in the loading window move the cursor, and the
+    /// covered ones among them are remembered in `skipped_segments`.
+    fn advance_to_next_segment_to_load<'a>(
         &mut self,
         media_segments: &'a [MediaSegmentInfo],
         context: &SegmentQualityContext,
@@ -594,49 +614,49 @@ impl NextSegmentSelector {
         self.segment_cursor
             .move_cursor(self.segment_cursor.current_cursor.max(self.base_pos));
         let maximum_position = self.buffer_goal + self.base_pos;
-        let si = self
-            .segment_cursor
-            .get_next(media_segments, maximum_position)?;
-        let segment_end = si.end();
-
-        // As an extra safeguard against repeated downloads, also check SegmentLoadingHistory.
-        // Smart quality switching below relies on the inventory; history remembers supplied
-        // segments even when the inventory no longer contains them. Reload only if history
-        // detected removed data and allowed another attempt.
-        if !self.validated_segments.needs_loading(
-            context.playlist_id(),
-            si.sequence_info(),
-            self.base_pos,
-        ) {
-            self.segment_cursor.move_cursor(segment_end);
-            return self.recursively_check_most_needed_media_segment(
-                media_segments,
-                context,
-                inventory,
-            );
-        }
-
-        // Apply the project-specific "smart quality switching" optimization: skip the request
-        // when equal- or higher-quality media is already buffered for its range.
-        if self.can_be_skipped(si.start(), segment_end, context, inventory) {
-            log_debug!(
-                "Selector: Segment can be skipped (s:{}, d: {})",
-                si.start(),
-                si.duration()
-            );
-            let skipped = SegmentTimeInfo::new(si.start(), si.duration());
-            match self
-                .skipped_segments
+        let mut position = self.segment_cursor.current_cursor;
+        let mut in_window = true;
+        loop {
+            let si = media_segments
                 .iter()
-                .position(|sk| sk.start() > si.start())
-            {
-                Some(pos) => self.skipped_segments.insert(pos, skipped),
-                None => self.skipped_segments.push(skipped),
+                .find(|s| s.duration() > 0. && s.end() > position)?;
+            let segment_end = si.end();
+            in_window &= si.start() <= maximum_position;
+
+            // As an extra safeguard against repeated downloads, also check
+            // SegmentLoadingHistory. Smart quality switching below relies on the inventory;
+            // history remembers supplied segments even when the inventory no longer contains
+            // them. Reload only if history detected removed data and allowed another attempt.
+            let supplied = !self.validated_segments.needs_loading(
+                context.playlist_id(),
+                si.sequence_info(),
+                self.base_pos,
+            );
+            let covered =
+                !supplied && self.can_be_skipped(si.start(), segment_end, context, inventory);
+            if !supplied && !covered {
+                return Some(si);
             }
-            self.segment_cursor.move_cursor(segment_end);
-            self.recursively_check_most_needed_media_segment(media_segments, context, inventory)
-        } else {
-            Some(si)
+            if in_window {
+                if covered {
+                    log_debug!(
+                        "Selector: Segment can be skipped (s:{}, d: {})",
+                        si.start(),
+                        si.duration()
+                    );
+                    let skipped = SegmentTimeInfo::new(si.start(), si.duration());
+                    match self
+                        .skipped_segments
+                        .iter()
+                        .position(|sk| sk.start() > si.start())
+                    {
+                        Some(pos) => self.skipped_segments.insert(pos, skipped),
+                        None => self.skipped_segments.push(skipped),
+                    }
+                }
+                self.segment_cursor.move_cursor(segment_end);
+            }
+            position = segment_end;
         }
     }
 
@@ -765,6 +785,8 @@ pub(crate) struct MostNeededSegmentInfo<'a> {
     needed_segments: Option<NeededSegmentInfo<'a>>,
     /// All required media through the end of a finalized playlist has been supplied.
     loading_complete: bool,
+    /// See the `next_addition_start` method.
+    next_addition_start: Option<f64>,
     /// ID of the playlist that should be fetched or normally refreshed. It may differ from
     /// the playlist containing `needed_segments`.
     playlist_to_refresh: MediaPlaylistPermanentId,
@@ -773,6 +795,15 @@ pub(crate) struct MostNeededSegmentInfo<'a> {
 impl<'a> MostNeededSegmentInfo<'a> {
     pub(crate) fn loading_complete(&self) -> bool {
         self.loading_complete
+    }
+
+    /// When no segment is needed now, start in playlist seconds of the next known segment that
+    /// still needs loading, past the loading window.
+    ///
+    /// `None` when segments are needed now, when loading is complete, or when no known segment
+    /// still needs loading.
+    pub(crate) fn next_addition_start(&self) -> Option<f64> {
+        self.next_addition_start
     }
 
     pub(crate) fn needed_segments(&self) -> Option<&NeededSegmentInfo<'a>> {
@@ -1189,6 +1220,45 @@ mod tests {
             next_start(&mut selector, list, &context, &inventory),
             Some(4.)
         );
+    }
+
+    #[test]
+    fn next_addition_start_is_the_next_known_segment_past_the_window() {
+        let TopLevelPlaylist::DirectMedia(playlist) = playlist_starting_at(0, 5) else {
+            panic!("expected media playlist");
+        };
+        let list = playlist.playlist().segment_list();
+        let context = SegmentQualityContext::new(1., test_playlist_id(1));
+        let mut selector = NextSegmentSelector::new(0., 8.);
+        for segment in &list.media()[..3] {
+            validate(&mut selector, segment, &context);
+        }
+
+        // The next segment starts past the loading window.
+        let past_window =
+            selector.most_needed_segment(candidate(list, &context), candidate(list, &context), &[]);
+        assert!(past_window.needed_segments().is_none());
+        assert!(!past_window.loading_complete());
+        assert_eq!(past_window.next_addition_start(), Some(12.));
+
+        // No known segment is left at the end of a live playlist.
+        selector.buffer_goal = 100.;
+        for segment in &list.media()[3..] {
+            validate(&mut selector, segment, &context);
+        }
+        let live_end =
+            selector.most_needed_segment(candidate(list, &context), candidate(list, &context), &[]);
+        assert!(live_end.needed_segments().is_none());
+        assert_eq!(live_end.next_addition_start(), None);
+
+        // Nothing more is added once a finished playlist is fully loaded.
+        let ended = SegmentSelectionCandidate {
+            is_ended: true,
+            ..candidate(list, &context)
+        };
+        let complete = selector.most_needed_segment(ended, ended, &[]);
+        assert!(complete.loading_complete());
+        assert_eq!(complete.next_addition_start(), None);
     }
 
     #[test]

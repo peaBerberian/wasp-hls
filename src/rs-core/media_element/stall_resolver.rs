@@ -1,7 +1,6 @@
 use super::MediaElementReference;
 use crate::{
-    bindings::{jsStartRebuffering, jsStopRebuffering},
-    requester::Requester,
+    bindings::{jsStartRebuffering, jsStopRebuffering, MediaType},
     utils::{logger::*, time_ranges::find_next_gap},
 };
 
@@ -58,11 +57,7 @@ impl StallResolver {
 
 // TODO: Return playback actions (hold, resume or seek) and let the media element
 // apply them.
-pub(super) fn resolve(
-    media: &mut MediaElementReference,
-    requester: &Requester,
-    loading_ready: bool,
-) {
+pub(super) fn resolve(media: &mut MediaElementReference) {
     let Some(observation) = media.last_observation.as_ref() else {
         media.stall_resolver.set_rebuffering(true);
         return;
@@ -93,11 +88,13 @@ pub(super) fn resolve(
     let buffer_hole = common
         .as_ref()
         .and_then(|ranges| find_next_gap(ranges, position));
-    let can_skip_hole = loading_ready
-        && buffer_hole.is_some_and(|(_, next_start)| {
-            !requester.has_pending_segment_before(next_start)
-                && !media.has_pending_append_before(next_start)
-        });
+    let can_skip_hole = buffer_hole.is_some_and(|(_, next_start)| {
+        [MediaType::Audio, MediaType::Video]
+            .into_iter()
+            .filter_map(|media_type| media.expected_media(media_type))
+            .all(|expected| expected.adds_nothing_before(next_start))
+            && !media.has_pending_append_before(next_start)
+    });
 
     // readyState may stay at 2 while the last buffered frames are playing.
     let can_play_to_end = observation.ended()

@@ -16,7 +16,7 @@ use crate::{
         TimerId, TrackSelectionErrorCode,
     },
     dispatcher::segment_request_contexts::PendingSegmentRequest,
-    media_element::{MediaElementReference, MediaObservation, SegmentPushMetadata},
+    media_element::{ExpectedMedia, MediaElementReference, MediaObservation, SegmentPushMetadata},
     parser::PlaylistRefreshInfo,
     playlist_store::{
         AudioTrackChange, LockVariantResponse, MediaPlaylistPermanentId, PlaylistStore,
@@ -547,11 +547,12 @@ impl Dispatcher {
             PlaybackTickReason::Seeking => self.on_seek(),
             _ => self.on_regular_tick(),
         }
-        let loading_ready = self.ensure_ready_to_load_segments();
         if !matches!(self.ready_state, PlayerReadyState::Stopped) {
-            self.media_element_ref
-                .check_for_stalls(&self.requester, loading_ready);
+            self.media_element_ref.check_for_stalls();
         }
+        // XXX TODO: Merge with `check_for_stalls` into one media element method, called wherever
+        // `check_end_of_stream` is. Both decide from the same buffer state and expected media,
+        // and stalls would then also be checked right after buffer updates.
         self.media_element_ref.check_end_of_stream();
     }
 
@@ -569,6 +570,10 @@ impl Dispatcher {
     /// playhead advances etc.).
     pub(super) fn check_segments_to_request(&mut self) {
         if !self.ensure_ready_to_load_segments() {
+            for media_type in [MediaType::Video, MediaType::Audio] {
+                self.media_element_ref
+                    .set_expected_media(media_type, ExpectedMedia::Unknown);
+            }
             return;
         }
 
@@ -1123,15 +1128,30 @@ impl Dispatcher {
         recommendation: Option<AdaptiveVariantSelection>,
     ) {
         if self.requester.has_segment_request_pending(media_type) {
-            self.media_element_ref.set_end_when_done(media_type, false);
+            // XXX TODO: This reports what the pending request adds, not what loading may add.
+            // E.g. with a request for 20s pending, if the browser evicts 4s-8s, selection will
+            // reload it after that request, yet `From(20)` lets the stall resolver jump over it.
+            // Initialization requests have no timing information.
+            let expected = self
+                .requester
+                .pending_segment_time_info(media_type)
+                .map_or(ExpectedMedia::Unknown, |time_info| {
+                    ExpectedMedia::From(time_info.start())
+                });
+            self.media_element_ref
+                .set_expected_media(media_type, expected);
             return;
         }
         let Some(pl_store) = self.playlist_store.as_ref() else {
+            self.media_element_ref
+                .set_expected_media(media_type, ExpectedMedia::Unknown);
             return;
         };
         let Some((addition_candidate, replacement_candidate)) =
             segment_selection_candidates(pl_store, recommendation, media_type)
         else {
+            self.media_element_ref
+                .set_expected_media(media_type, ExpectedMedia::Unknown);
             return;
         };
         let addition_playlist_id = addition_candidate.context.playlist_id();
@@ -1148,8 +1168,16 @@ impl Dispatcher {
                 self.media_element_ref.inventory(media_type),
             );
         let refresh_id = selected.playlist_to_refresh();
+        // Stays `Unknown` while a segment is needed, until a request for it is made below.
+        let expected = if selected.loading_complete() {
+            ExpectedMedia::Nothing
+        } else {
+            selected
+                .next_addition_start()
+                .map_or(ExpectedMedia::Unknown, ExpectedMedia::From)
+        };
         self.media_element_ref
-            .set_end_when_done(media_type, selected.loading_complete());
+            .set_expected_media(media_type, expected);
         // Own the proposed metadata before following, which may request another playlist.
         // Only one resource is loaded at a time: initialization first, otherwise media.
         let needed = selected.needed_segments().map(|needed| {
@@ -1255,6 +1283,8 @@ impl Dispatcher {
                 });
             self.requester
                 .request_media_segment(media_type, &media, req_id);
+            self.media_element_ref
+                .set_expected_media(media_type, ExpectedMedia::From(media.start()));
         }
     }
 

@@ -8,9 +8,8 @@ use crate::bindings::{
     SourceBufferId, TimescaledTimestamp,
 };
 use crate::parser::{MediaPlaylistPermanentId, PlaylistSequenceInfo, SegmentTimeInfo};
-use crate::requester::Requester;
 use crate::utils::{logger::*, time_ranges::intersect_ranges};
-pub(crate) use source_buffers::{PushSegmentError, RemoveDataError};
+pub(crate) use source_buffers::{ExpectedMedia, PushSegmentError, RemoveDataError};
 
 pub(crate) use self::segment_inventory::{BufferedChunk, SegmentQualityContext};
 pub(crate) use observation::MediaObservation;
@@ -582,9 +581,10 @@ impl MediaElementReference {
             .into_iter()
     }
 
-    /// Check whether to hold, resume or seek, after the caller has scheduled loading.
-    pub(crate) fn check_for_stalls(&mut self, requester: &Requester, loading_ready: bool) {
-        stall_resolver::resolve(self, requester, loading_ready);
+    /// Check whether to hold, resume or seek, based on the media last set as expected through
+    /// `set_expected_media`.
+    pub(crate) fn check_for_stalls(&mut self) {
+        stall_resolver::resolve(self);
     }
 
     pub(crate) fn is_rebuffering(&self) -> bool {
@@ -664,7 +664,7 @@ impl MediaElementReference {
         let mut affected_media = Vec::new();
         if let Some(media_type) = self.media_type_for(source_buffer_id) {
             let cancelled = self.buffer_mut_for(media_type).map(|sb| {
-                sb.set_end_when_done(false);
+                sb.set_expected_media(ExpectedMedia::Unknown);
                 sb.cancel_current_operations()
             });
             if let Some(cancelled) = cancelled {
@@ -738,11 +738,17 @@ impl MediaElementReference {
         None
     }
 
-    /// Set whether this buffer should signal the end once its pending operations finish.
-    pub(crate) fn set_end_when_done(&mut self, media_type: MediaType, complete: bool) {
+    /// Set what loading may still add to this buffer. When `Nothing`, the buffer signals the end
+    /// once its pending operations finish.
+    pub(crate) fn set_expected_media(&mut self, media_type: MediaType, expected: ExpectedMedia) {
         if let Some(buffer) = self.buffer_mut_for(media_type) {
-            buffer.set_end_when_done(complete);
+            buffer.set_expected_media(expected);
         }
+    }
+
+    /// What loading may still add to this buffer, `None` if there is no buffer for this type.
+    fn expected_media(&self, media_type: MediaType) -> Option<ExpectedMedia> {
+        self.buffer_for(media_type).map(|sb| sb.expected_media())
     }
 
     /// Get reference to SourceBuffer attached to this `MediaElementReference` for this
@@ -813,7 +819,9 @@ impl MediaElementReference {
     fn is_buffer_ended(&self, media_type: MediaType) -> bool {
         match self.buffer_for(media_type) {
             None => true,
-            Some(sb) => sb.should_end_when_done() && !sb.has_operations_pending(),
+            Some(sb) => {
+                sb.expected_media() == ExpectedMedia::Nothing && !sb.has_operations_pending()
+            }
         }
     }
 
