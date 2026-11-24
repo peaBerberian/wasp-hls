@@ -705,17 +705,6 @@ impl Requester {
         }
     }
 
-    /// Returns `true` if there is still in-flight segment work that could plausibly fill a hole
-    /// before the given buffered range start.
-    ///
-    /// Media requests starting before `range_start` are treated as hole fillers. Initialization
-    /// requests for audio/video are also treated conservatively, because they may be a prerequisite
-    /// for a segment that would close that hole.
-    pub(crate) fn has_pending_segment_before(&self, range_start: f64) -> bool {
-        pending_segment_could_fill_before(self.pending_segment_requests.as_slice(), range_start)
-            || pending_segment_could_fill_before(self.segment_waiting_queue.as_slice(), range_start)
-    }
-
     pub(crate) fn abort_all(&mut self) {
         for elt in self.pending_playlist_requests.drain(..) {
             jsAbortRequest(elt.host_id);
@@ -1089,29 +1078,12 @@ fn log_segment_abort(seg: &impl RequesterSegmentInfo) {
     });
 }
 
-fn pending_segment_could_fill_before<T: RequesterSegmentInfo>(
-    requests: &[T],
-    range_start: f64,
-) -> bool {
-    requests.iter().any(
-        |req| match (req.lane_tag().media_type(), req.start_time()) {
-            (Some(_), None) => true,
-            (Some(_), Some(start)) => start < range_start,
-            (None, _) => false,
-        },
-    )
-}
-
 #[cfg(test)]
 mod tests {
     use super::{
-        pending_segment_could_fill_before, FinishedRequestType, PlaylistFileType,
-        PlaylistRequestInfo, Requester, RetryResult, WaitingSegmentInfo,
+        FinishedRequestType, PlaylistFileType, PlaylistRequestInfo, Requester, RetryResult,
     };
-    use crate::{
-        bindings::RequestErrorReason, parser::SegmentTimeInfo, requester::RequestLaneTag,
-        utils::url::Url,
-    };
+    use crate::{bindings::RequestErrorReason, utils::url::Url};
 
     #[test]
     fn prohibited_retry_finishes_only_the_failed_request_and_preserves_its_reason() {
@@ -1152,43 +1124,6 @@ mod tests {
             assert!(requester.pending_playlist_type(2).is_some());
             assert!(requester.retry_timers.is_empty());
         }
-    }
-
-    fn waiting_media(start: f64) -> WaitingSegmentInfo {
-        WaitingSegmentInfo {
-            lane_tag: RequestLaneTag::Video,
-            url: Url::new("https://example.com/seg.ts".to_string()),
-            byte_range: None,
-            time_info: Some(SegmentTimeInfo::new(start, 2.0)),
-            caller_id: 0,
-        }
-    }
-
-    fn waiting_init() -> WaitingSegmentInfo {
-        WaitingSegmentInfo {
-            lane_tag: RequestLaneTag::Video,
-            url: Url::new("https://example.com/init.mp4".to_string()),
-            byte_range: None,
-            time_info: None,
-            caller_id: 0,
-        }
-    }
-
-    #[test]
-    fn pending_media_before_range_blocks_gap_jump() {
-        assert!(pending_segment_could_fill_before(
-            &[waiting_media(9.5)],
-            12.0
-        ));
-        assert!(!pending_segment_could_fill_before(
-            &[waiting_media(12.0)],
-            12.0
-        ));
-    }
-
-    #[test]
-    fn pending_init_blocks_gap_jump_conservatively() {
-        assert!(pending_segment_could_fill_before(&[waiting_init()], 12.0));
     }
 
     #[test]

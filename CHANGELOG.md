@@ -7,10 +7,17 @@
 - When a non-aligned segment replacement leads to the loss of frames, reload a segment with those instead of skipping over it
 - Re-request the needed initialization segment after a `QuotaExceededError`, as its append might have been cancelled
 - Set a default track ID when transmuxing raw aac
+- Fix buffer removal and gap jumping when playlist positions differ from media timestamps
+- Don't jump over buffer holes while pending appends could still fill them
+- Don't get stuck on buffer holes after all segments have been loaded
+- Don't keep downloading the same segment if appending it leaves the same hole in the buffer
 
 ### Other
 
 - When a pushed segments leads to partial data in the buffer due to a `QuotaExceededError`, re-push that segment to prevent a hole in the buffer
+- Don't skip playable data before a buffer hole while rebuffering
+- When seeking, retry segments who have sensible partial data is missing from the buffer
+- Don't repeatedly jump over the same buffer hole while the previous seek is still pending
 
 ## v0.6.0 (2026-10-20)
 
